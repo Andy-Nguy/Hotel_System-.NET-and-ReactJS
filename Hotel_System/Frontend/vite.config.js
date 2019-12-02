@@ -32,8 +32,8 @@ export default defineConfig({
         secure: false,
       },
       "/images": {
-        target: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
-        // target: "https://localhost:5001",
+        // target: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
+        target: "https://localhost:5001",
         changeOrigin: true,
         secure: false,
       },

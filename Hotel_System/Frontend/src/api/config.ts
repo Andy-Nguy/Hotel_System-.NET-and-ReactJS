@@ -15,7 +15,8 @@ export const API_CONFIG = {
   RAILWAY: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
 
   // Environment flag - CHANGE THIS TO SWITCH ENVIRONMENTS
-  IS_PRODUCTION: true, // Set to true for production deployment
+  // Set to `false` for local development (uses `LOCAL`), `true` for production (uses `RAILWAY`)
+  IS_PRODUCTION: false, // default to local development
 
   // Current active API - automatically selected based on IS_PRODUCTION
   get CURRENT() {
