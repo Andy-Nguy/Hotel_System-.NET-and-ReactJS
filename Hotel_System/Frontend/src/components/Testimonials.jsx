@@ -48,10 +48,10 @@ const Testimonials = () => {
           <div className="uppercase font-tertiary tracking-[6px] text-accent mb-4">
             Đánh Giá Khách Hàng
           </div>
-          <h2 className="h2">
+          <h2 className="text-[40px] lg:text-[50px] font-primary leading-tight mb-4">
             Khách Hàng Nói Gì Về Chúng Tôi
           </h2>
-          <p className="max-w-2xl mx-auto">
+          <p className="text-gray-600 max-w-2xl mx-auto">
             Hơn 10,000+ khách hàng hài lòng đã trải nghiệm dịch vụ của chúng tôi
           </p>
         </div>
@@ -94,7 +94,7 @@ const Testimonials = () => {
                 </div>
 
                 {/* Comment */}
-                <p className="mb-6 leading-relaxed italic">
+                <p className="text-gray-600 mb-6 leading-relaxed italic">
                   "{testimonial.comment}"
                 </p>
 
@@ -106,10 +106,10 @@ const Testimonials = () => {
                     className="w-12 h-12 rounded-full object-cover"
                   />
                   <div>
-                    <h4 className="font-semibold">
+                    <h4 className="font-semibold text-gray-800">
                       {testimonial.name}
                     </h4>
-                    <p className="text-sm opacity-75">{testimonial.role}</p>
+                    <p className="text-sm text-gray-500">{testimonial.role}</p>
                   </div>
                 </div>
               </div>

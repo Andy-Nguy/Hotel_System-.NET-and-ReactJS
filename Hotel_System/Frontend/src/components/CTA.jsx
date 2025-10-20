@@ -20,11 +20,11 @@ const CTA = () => {
             Đặt Phòng Ngay
           </div>
 
-          <h2 className="font-primary text-[40px] lg:text-[60px] leading-tight mb-6">
+          <h2 className="text-[40px] lg:text-[60px] font-primary leading-tight mb-6">
             Trải Nghiệm Kỳ Nghỉ Tuyệt Vời
           </h2>
 
-          <p className="text-lg mb-8 max-w-2xl mx-auto leading-relaxed opacity-90">
+          <p className="text-lg text-gray-200 mb-8 max-w-2xl mx-auto leading-relaxed">
             Đặt phòng ngay hôm nay và tận hưởng những ưu đãi đặc biệt dành riêng
             cho bạn. Chúng tôi cam kết mang đến trải nghiệm nghỉ dưỡng đẳng cấp
             nhất.
@@ -32,7 +32,7 @@ const CTA = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <button className="btn btn-lg btn-primary">Đặt Phòng Ngay</button>
-            <button className="btn btn-lg btn-white">
+            <button className="btn btn-lg bg-white text-primary hover:bg-gray-100">
               Xem Các Gói Ưu Đãi
             </button>
           </div>

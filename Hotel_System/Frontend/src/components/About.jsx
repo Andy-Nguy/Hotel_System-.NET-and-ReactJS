@@ -30,16 +30,16 @@ const About = () => {
             <div className="uppercase font-tertiary tracking-[6px] text-accent mb-4">
               Về Chúng Tôi
             </div>
-            <h2 className="h2">
+            <h2 className="text-[40px] lg:text-[50px] font-primary leading-tight mb-6">
               Trải Nghiệm Sang Trọng & Đẳng Cấp
             </h2>
-            <p className="mb-6 leading-relaxed">
+            <p className="text-gray-600 mb-6 leading-relaxed">
               Chào mừng bạn đến với khách sạn của chúng tôi - nơi sự sang trọng
               kết hợp hoàn hảo với sự thoải mái. Với hơn 25 năm kinh nghiệm
               trong ngành dịch vụ khách sạn, chúng tôi cam kết mang đến cho bạn
               những trải nghiệm nghỉ dưỡng tuyệt vời nhất.
             </p>
-            <p className="mb-8 leading-relaxed">
+            <p className="text-gray-600 mb-8 leading-relaxed">
               Từng chi tiết được thiết kế tinh tế, từng dịch vụ được thực hiện
               với sự tận tâm, tất cả nhằm tạo nên một kỳ nghỉ đáng nhớ cho bạn
               và gia đình.
@@ -57,7 +57,7 @@ const About = () => {
               ].map((feature, idx) => (
                 <div key={idx} className="flex items-center gap-3">
                   <Check className="text-accent flex-shrink-0" size={20} />
-                  <span>{feature}</span>
+                  <span className="text-gray-700">{feature}</span>
                 </div>
               ))}
             </div>

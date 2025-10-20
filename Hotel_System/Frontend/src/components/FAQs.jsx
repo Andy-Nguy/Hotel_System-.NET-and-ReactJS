@@ -59,10 +59,10 @@ const FAQs = () => {
           <div className="uppercase font-tertiary tracking-[6px] text-accent mb-4">
             Câu Hỏi Thường Gặp
           </div>
-          <h2 className="h2">
+          <h2 className="text-[40px] lg:text-[50px] font-primary leading-tight mb-4">
             Có Thắc Mắc?
           </h2>
-          <p className="max-w-2xl mx-auto">
+          <p className="text-gray-600 max-w-2xl mx-auto">
             Tìm câu trả lời cho những câu hỏi phổ biến nhất về dịch vụ của chúng
             tôi
           </p>
@@ -79,7 +79,7 @@ const FAQs = () => {
                 onClick={() => toggleFAQ(idx)}
                 className="w-full px-6 py-5 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
               >
-                <span className="font-semibold text-lg pr-4">
+                <span className="font-semibold text-lg text-gray-800 pr-4">
                   {faq.question}
                 </span>
                 <ChevronDown
@@ -95,7 +95,7 @@ const FAQs = () => {
                   activeIndex === idx ? "max-h-96" : "max-h-0"
                 }`}
               >
-                <div className="px-6 pb-5 pt-2 leading-relaxed">
+                <div className="px-6 pb-5 pt-2 text-gray-600 leading-relaxed">
                   {faq.answer}
                 </div>
               </div>
@@ -105,7 +105,7 @@ const FAQs = () => {
 
         {/* Contact CTA */}
         <div className="text-center mt-12">
-          <p className="mb-4">
+          <p className="text-gray-600 mb-4">
             Không tìm thấy câu trả lời bạn cần?
           </p>
           <button className="btn btn-lg btn-primary">

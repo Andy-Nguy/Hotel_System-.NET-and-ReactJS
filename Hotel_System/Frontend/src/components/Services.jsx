@@ -44,10 +44,10 @@ const Services = () => {
           <div className="uppercase font-tertiary tracking-[6px] text-accent mb-4">
             Dịch Vụ Của Chúng Tôi
           </div>
-          <h2 className="h2">
+          <h2 className="text-[40px] lg:text-[50px] font-primary leading-tight mb-4">
             Tiện Nghi & Dịch Vụ
           </h2>
-          <p className="max-w-2xl mx-auto">
+          <p className="text-gray-600 max-w-2xl mx-auto">
             Khám phá các dịch vụ và tiện nghi cao cấp được thiết kế để mang lại
             trải nghiệm nghỉ dưỡng hoàn hảo nhất
           </p>
@@ -63,10 +63,10 @@ const Services = () => {
               <div className="text-accent mb-6 group-hover:scale-110 transition-transform duration-300">
                 {service.icon}
               </div>
-              <h3 className="h3">
+              <h3 className="text-2xl font-primary font-semibold mb-3">
                 {service.title}
               </h3>
-              <p className="leading-relaxed">
+              <p className="text-gray-600 leading-relaxed">
                 {service.description}
               </p>
             </div>
