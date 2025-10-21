@@ -138,7 +138,13 @@ const Rooms = () => {
     const fetchRooms = async () => {
       try {
         const data = await roomAPI.getAll();
-        setRooms(data);
+        // Filter featured rooms: use rating >= 4 as 'nổi bật' proxy,
+        // sort by rating desc and take top 6
+        const featured = data
+          .filter((r) => (r.xepHangSao ?? 0) >= 4)
+          .sort((a, b) => (b.xepHangSao ?? 0) - (a.xepHangSao ?? 0))
+          .slice(0, 6);
+        setRooms(featured);
       } catch (error) {
         console.error(error);
         message.error("Không thể tải danh sách phòng");
@@ -168,10 +174,10 @@ const Rooms = () => {
           <div className="uppercase font-tertiary tracking-[6px] text-accent mb-4">
             Phòng Nghỉ
           </div>
-          <h2 className="h2">Danh Sách Phòng</h2>
+          <h2 className="h2">Phòng Nổi Bật</h2>
           <p className="max-w-2xl mx-auto">
-            Khám phá những phòng nghỉ tuyệt vời với đầy đủ tiện nghi và dịch vụ
-            chất lượng cao
+            Những phòng được đánh giá cao — lựa chọn tốt nhất cho kỳ nghỉ của
+            bạn.
           </p>
         </div>
 

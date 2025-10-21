@@ -9,6 +9,7 @@ import {
   Testimonials,
   FAQs,
   CTA,
+  RoomTypes,
 } from "../components";
 
 const Home = () => {
@@ -28,6 +29,7 @@ const Home = () => {
 
       {/* About Section */}
       <About />
+      <RoomTypes />
 
       {/* Rooms Section */}
       <Rooms />

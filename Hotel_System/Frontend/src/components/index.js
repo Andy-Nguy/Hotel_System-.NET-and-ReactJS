@@ -8,6 +8,7 @@ export { default as CheckIn } from "./CheckIn";
 export { default as Footer } from "./Footer";
 export { default as Header } from "./Header";
 export { default as Rooms } from "./Rooms";
+export { default as RoomTypes } from "./RoomTypes";
 export { default as About } from "./About";
 export { default as Services } from "./Services";
 export { default as Gallery } from "./Gallery";
