@@ -44,7 +44,14 @@ app.UseCors("AllowFrontend");
 
 app.UseAuthorization();
 
+// Serve static files (the built frontend) and enable SPA fallback
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapControllers();
+
+// If no controller route matches, fallback to serve index.html for the SPA
+app.MapFallbackToFile("index.html");
 
 // ✅ Optional log
 Console.WriteLine("Swagger UI: https://localhost:5001/swagger");
