@@ -9,7 +9,19 @@ import Testimonial from "../components/Testimonial";
 import BlogSection from "../components/BlogSection";
 import FooterSection from "../components/FooterSection";
 
+import LoginPage from "./LoginPage";
+import RegisterPage from "./RegisterPage";
+
 const MainPage: React.FC = () => {
+  const [route, setRoute] = React.useState<string>(
+    () => window.location.hash || "#/"
+  );
+
+  React.useEffect(() => {
+    const onHash = () => setRoute(window.location.hash || "#/");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   useEffect(() => {
     const safejQueryPluginCall = (
       selector: string,
@@ -112,6 +124,28 @@ const MainPage: React.FC = () => {
       console.error("Lỗi offcanvas menu:", e);
     }
   }, []);
+
+  if (route === "#/login") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <LoginPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#/register") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <RegisterPage />
+        <FooterSection />
+      </>
+    );
+  }
 
   return (
     <>

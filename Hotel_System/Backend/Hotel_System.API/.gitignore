@@ -1,3 +1,19 @@
-# Build results
-[Bb]in/
-[Oo]bj/
+# Thư mục chứa các file được biên dịch/tạo ra
+# Rất quan trọng: Thư mục 'bin' chứa output biên dịch
+**/bin/
+# Rất quan trọng: Thư mục 'obj' chứa các file trung gian
+**/obj/
+
+# Các file được tạo tự động khác
+*.suo
+*.user
+*.pdb
+*.tlog
+*.g.cs  # File code được tạo tự động (Generated Code)
+*.json.log
+*.runtimeconfig.json
+/artifacts/
+
+# Nếu bạn đang dùng Docker
+/bin/
+/obj/
