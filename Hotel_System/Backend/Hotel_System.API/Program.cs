@@ -1,5 +1,9 @@
 using Hotel_System.API.Models;
+using Hotel_System.API.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +13,36 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Auth service (register/login/otp)
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Configure JWT authentication
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var jwtKey = jwtSection.GetValue<string>("Key");
+if (!string.IsNullOrEmpty(jwtKey))
+{
+    var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    }).AddJwtBearer(options =>
+    {
+        options.RequireHttpsMetadata = true;
+        options.SaveToken = true;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSection.GetValue<string>("Issuer"),
+            ValidAudience = jwtSection.GetValue<string>("Audience"),
+            IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
+        };
+    });
+}
 
 // ✅ Add CORS *BEFORE* Build()
 builder.Services.AddCors(options =>
@@ -42,6 +76,8 @@ app.UseHttpsRedirection();
 // ✅ Enable CORS here (AFTER Build)
 app.UseCors("AllowFrontend");
 
+// Authentication & Authorization
+app.UseAuthentication();
 app.UseAuthorization();
 
 // Serve static files (the built frontend) and enable SPA fallback

@@ -1,6 +1,76 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 const HeaderSection: React.FC = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userInfo, setUserInfo] = useState<any>(null);
+
+  useEffect(() => {
+    // Check if user is logged in by checking localStorage
+    const token = localStorage.getItem("hs_token");
+    if (token) {
+      setIsLoggedIn(true);
+      // Decode JWT to get user info (simple decode without verification for display purposes)
+      try {
+        // Use proper UTF-8 decoding
+        const base64Payload = token.split(".")[1];
+        const decodedPayload = decodeURIComponent(
+          atob(base64Payload)
+            .split("")
+            .map(function (c) {
+              return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+            })
+            .join("")
+        );
+        const payload = JSON.parse(decodedPayload);
+        setUserInfo(payload);
+      } catch (e) {
+        console.warn("Could not decode token:", e);
+      }
+    }
+
+    // Listen for storage changes (when user logs in from another tab)
+    const handleStorageChange = () => {
+      const newToken = localStorage.getItem("hs_token");
+      setIsLoggedIn(!!newToken);
+      if (newToken) {
+        try {
+          // Use proper UTF-8 decoding
+          const base64Payload = newToken.split(".")[1];
+          const decodedPayload = decodeURIComponent(
+            atob(base64Payload)
+              .split("")
+              .map(function (c) {
+                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+              })
+              .join("")
+          );
+          const payload = JSON.parse(decodedPayload);
+          setUserInfo(payload);
+        } catch (e) {
+          setUserInfo(null);
+        }
+      } else {
+        setUserInfo(null);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("hs_token");
+    setIsLoggedIn(false);
+    setUserInfo(null);
+    // Redirect to home page and remove hash from URL
+    try {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    } catch (e) {
+      window.location.hash = "";
+    }
+    window.location.reload();
+  };
+
   return (
     <header className="header-section">
       <div className="top-nav">
@@ -103,14 +173,57 @@ const HeaderSection: React.FC = () => {
                       <a href="#">Contact</a>
                     </li>
                     <li>
-                      <a href="#">Tài khoản</a>
+                      <a href="#">
+                        {isLoggedIn
+                          ? (() => {
+                              try {
+                                const fullName =
+                                  userInfo?.[
+                                    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+                                  ] ||
+                                  userInfo?.name ||
+                                  "User";
+                                const firstName =
+                                  String(fullName).trim().split(" ")[0] ||
+                                  "User";
+                                return `Xin chào ${firstName}`;
+                              } catch (e) {
+                                return "Tài khoản";
+                              }
+                            })()
+                          : "Tài khoản"}
+                      </a>
                       <ul className="dropdown">
-                        <li>
-                          <a href="#">Đăng nhập</a>
-                        </li>
-                        <li>
-                          <a href="#">Đăng ký</a>
-                        </li>
+                        {isLoggedIn ? (
+                          <>
+                            <li>
+                              <a href="#/profile">Thông tin cá nhân</a>
+                            </li>
+                            <li>
+                              <a href="#/bookings">Lịch sử đặt phòng</a>
+                            </li>
+                            <li>
+                              <a
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleLogout();
+                                }}
+                              >
+                                Đăng xuất
+                              </a>
+                            </li>
+                          </>
+                        ) : (
+                          <>
+                            <li>
+                              <a href="#/login">Đăng nhập</a>
+                            </li>
+                            <li>
+                              <a href="#/register">Đăng ký</a>
+                            </li>
+                          </>
+                        )}
                       </ul>
                     </li>
                   </ul>
