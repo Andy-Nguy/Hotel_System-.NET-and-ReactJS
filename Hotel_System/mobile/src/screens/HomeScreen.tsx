@@ -6,6 +6,8 @@ import Services from "../components/Services";
 import HomeRoom from "../components/HomeRoom";
 import Testimonial from "../components/Testimonial";
 import BlogSection from "../components/BlogSection";
+import Footer from "../components/Footer";
+import { COLORS } from "../constants/theme";
 
 const HomeScreen: React.FC = () => {
   return (
@@ -16,6 +18,7 @@ const HomeScreen: React.FC = () => {
       <HomeRoom />
       <Testimonial />
       <BlogSection />
+      <Footer />
     </ScrollView>
   );
 };
@@ -23,7 +26,7 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.white,
   },
 });
 

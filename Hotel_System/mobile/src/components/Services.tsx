@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, FlatList } from "react-native";
+import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 
 const servicesData = [
   {
@@ -47,82 +48,87 @@ const servicesData = [
 ];
 
 const Services: React.FC = () => {
+  const renderService = ({ item }: { item: (typeof servicesData)[0] }) => (
+    <View style={styles.serviceItem}>
+      <Text style={styles.icon}>{item.icon}</Text>
+      <Text style={styles.title}>{item.title}</Text>
+      <Text style={styles.description}>{item.description}</Text>
+    </View>
+  );
+
   return (
     <View style={styles.section}>
-      <View style={styles.container}>
-        <View style={styles.sectionTitle}>
-          <Text style={styles.span}>What We Do</Text>
-          <Text style={styles.h2}>Discover Our Services</Text>
-        </View>
-        <View style={styles.servicesGrid}>
-          {servicesData.map((service) => (
-            <View key={service.id} style={styles.serviceItem}>
-              <Text style={styles.icon}>{service.icon}</Text>
-              <Text style={styles.title}>{service.title}</Text>
-              <Text style={styles.description}>{service.description}</Text>
-            </View>
-          ))}
-        </View>
+      <View style={styles.sectionTitle}>
+        <Text style={styles.span}>What We Do</Text>
+        <Text style={styles.h2}>Discover Our Services</Text>
       </View>
+
+      <FlatList
+        data={servicesData}
+        renderItem={renderService}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2}
+        columnWrapperStyle={styles.row}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContainer}
+        scrollEnabled={false}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   section: {
-    paddingVertical: 50,
-    paddingHorizontal: 20,
-    backgroundColor: "#f5f5f5",
-  },
-  container: {
-    width: "100%",
+    paddingVertical: SIZES.padding * 3,
+    paddingHorizontal: SIZES.padding,
+    backgroundColor: COLORS.background,
   },
   sectionTitle: {
-    marginBottom: 40,
+    marginBottom: SIZES.margin * 2.5,
     alignItems: "center",
   },
   span: {
-    fontSize: 12,
-    color: "#dfa974",
+    ...FONTS.body5,
+    color: COLORS.primary,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 2,
     marginBottom: 8,
   },
   h2: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#19191a",
+    ...FONTS.h2,
+    color: COLORS.secondary,
     marginTop: 8,
     textAlign: "center",
   },
-  servicesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  listContainer: {
+    paddingBottom: SIZES.padding,
+  },
+  row: {
     justifyContent: "space-between",
   },
   serviceItem: {
     width: "48%",
-    backgroundColor: "#fff",
-    padding: 20,
-    marginBottom: 20,
-    borderRadius: 4,
+    backgroundColor: COLORS.white,
+    padding: SIZES.padding * 1.5,
+    marginBottom: SIZES.margin * 1.5,
+    borderRadius: SIZES.radiusLarge,
     alignItems: "center",
+    ...SHADOWS.light,
   },
   icon: {
-    fontSize: 40,
-    marginBottom: 15,
+    fontSize: 48,
+    marginBottom: SIZES.margin,
   },
   title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#19191a",
-    marginBottom: 10,
+    ...FONTS.h4,
+    color: COLORS.secondary,
+    marginBottom: SIZES.margin,
     textAlign: "center",
   },
   description: {
-    fontSize: 14,
-    color: "#707079",
+    ...FONTS.body3,
+    color: COLORS.gray,
     lineHeight: 22,
     textAlign: "center",
   },

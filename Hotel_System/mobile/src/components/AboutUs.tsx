@@ -1,44 +1,56 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
+import { View, Text, StyleSheet, Image } from "react-native";
+import { COLORS, SIZES, FONTS } from "../constants/theme";
 
 const AboutUs: React.FC = () => {
   return (
     <View style={styles.section}>
-      <View style={styles.container}>
-        <View style={styles.sectionTitle}>
-          <Text style={styles.span}>About Us</Text>
-          <Text style={styles.h2}>Intercontinental LA Westlake Hotel</Text>
-        </View>
-        <Text style={styles.paragraph}>
-          Robins Villa is a modern site template designed for hotels and related
-          businesses. The template is crafted with attention to detail and is
-          excellent for a booking site on any accommodation, from a simple hotel
-          to a complex resort with multiple dining options and a spa.
-        </Text>
-        <Text style={styles.paragraph}>
-          All components work seamlessly on all screen sizes and are designed to
-          provide a luxurious, yet functional experience for the user. The
-          template includes multiple layout options and can be easily customized
-          to suit your specific needs.
-        </Text>
-        <TouchableOpacity style={styles.primaryBtn}>
-          <Text style={styles.btnText}>Read More</Text>
-        </TouchableOpacity>
-        <View style={styles.imageRow}>
-          <Image
-            source={{
-              uri: "https://via.placeholder.com/320x240/dfa974/fff?text=About+1",
-            }}
-            style={styles.image}
-            resizeMode="cover"
-          />
-          <Image
-            source={{
-              uri: "https://via.placeholder.com/320x240/dfa974/fff?text=About+2",
-            }}
-            style={styles.image}
-            resizeMode="cover"
-          />
+      <View style={styles.sectionTitle}>
+        <Text style={styles.span}>About Us</Text>
+        <Text style={styles.h2}>Welcome to Robins Villa</Text>
+      </View>
+
+      <View style={styles.content}>
+        <Image
+          source={{
+            uri: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800",
+          }}
+          style={styles.image}
+          resizeMode="cover"
+        />
+
+        <View style={styles.textContainer}>
+          <Text style={styles.description}>
+            Robins Villa is a premier hotel providing exceptional hospitality
+            and luxury accommodations. We are dedicated to making your stay
+            unforgettable with our world-class services and amenities.
+          </Text>
+
+          <View style={styles.features}>
+            <View style={styles.featureItem}>
+              <Text style={styles.featureIcon}>🏆</Text>
+              <View style={styles.featureText}>
+                <Text style={styles.featureTitle}>Excellence</Text>
+                <Text style={styles.featureDesc}>Award-winning service</Text>
+              </View>
+            </View>
+
+            <View style={styles.featureItem}>
+              <Text style={styles.featureIcon}>🌟</Text>
+              <View style={styles.featureText}>
+                <Text style={styles.featureTitle}>Luxury</Text>
+                <Text style={styles.featureDesc}>Premium facilities</Text>
+              </View>
+            </View>
+
+            <View style={styles.featureItem}>
+              <Text style={styles.featureIcon}>💎</Text>
+              <View style={styles.featureText}>
+                <Text style={styles.featureTitle}>Comfort</Text>
+                <Text style={styles.featureDesc}>Unforgettable experience</Text>
+              </View>
+            </View>
+          </View>
         </View>
       </View>
     </View>
@@ -47,60 +59,74 @@ const AboutUs: React.FC = () => {
 
 const styles = StyleSheet.create({
   section: {
-    paddingVertical: 50,
-    paddingHorizontal: 20,
-    backgroundColor: "#fff",
-  },
-  container: {
-    width: "100%",
+    paddingVertical: SIZES.padding * 3,
+    paddingHorizontal: SIZES.padding,
+    backgroundColor: COLORS.white,
   },
   sectionTitle: {
-    marginBottom: 24,
+    marginBottom: SIZES.margin * 2,
+    alignItems: "center",
   },
   span: {
-    fontSize: 12,
-    color: "#dfa974",
+    ...FONTS.body5,
+    color: COLORS.primary,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 2,
     marginBottom: 8,
   },
   h2: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#19191a",
+    ...FONTS.h2,
+    color: COLORS.secondary,
     marginTop: 8,
+    textAlign: "center",
   },
-  paragraph: {
-    fontSize: 15,
-    color: "#707079",
-    lineHeight: 24,
-    marginBottom: 16,
-  },
-  primaryBtn: {
-    backgroundColor: "#dfa974",
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 4,
-    alignSelf: "flex-start",
-    marginBottom: 30,
-  },
-  btnText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 2,
-  },
-  imageRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
+  content: {
+    width: "100%",
   },
   image: {
-    width: "48%",
-    height: 180,
-    borderRadius: 4,
+    width: "100%",
+    height: 240,
+    borderRadius: SIZES.radiusLarge,
+    marginBottom: SIZES.margin * 1.5,
+  },
+  textContainer: {
+    width: "100%",
+  },
+  description: {
+    ...FONTS.body2,
+    color: COLORS.gray,
+    lineHeight: 28,
+    textAlign: "center",
+    marginBottom: SIZES.margin * 2,
+  },
+  features: {
+    width: "100%",
+  },
+  featureItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    padding: SIZES.padding,
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.margin,
+  },
+  featureIcon: {
+    fontSize: 32,
+    marginRight: SIZES.margin,
+  },
+  featureText: {
+    flex: 1,
+  },
+  featureTitle: {
+    ...FONTS.body2,
+    color: COLORS.secondary,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  featureDesc: {
+    ...FONTS.body3,
+    color: COLORS.gray,
   },
 });
 
