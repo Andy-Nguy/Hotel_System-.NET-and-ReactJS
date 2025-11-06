@@ -1,0 +1,46 @@
+# Node modules
+node_modules/
+.npm/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Mac / Windows files
+.DS_Store
+Thumbs.db
+
+# Expo files
+.expo/
+*.jks
+*.p12
+*.key
+*.pem
+*.keystore
+# Nếu bạn không muốn commit file cấu hình cục bộ:
+# app.json
+# app.config.js
+
+# Android
+android/build/
+android/.gradle/
+android/app/build/
+android/app/.cxx/
+android/app/src/main/assets/
+!android/app/src/main/assets/shell-app.json # Nếu bạn đang dùng Expo eject và cần file này
+android/local.properties
+android/.idea/
+android/app/.idea/
+
+# iOS
+ios/build/
+ios/*.xcworkspace/
+ios/*.xcuserstate
+ios/Podfile.lock
+ios/Pods/
+
+# Metro Bundler cache
+.yarn-cache/
+.expo-shared/
+.watchmanconfig # file này có thể được commit nếu bạn muốn

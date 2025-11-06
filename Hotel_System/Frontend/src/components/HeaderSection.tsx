@@ -64,7 +64,11 @@ const HeaderSection: React.FC = () => {
     setUserInfo(null);
     // Redirect to home page and remove hash from URL
     try {
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search
+      );
     } catch (e) {
       window.location.hash = "";
     }
