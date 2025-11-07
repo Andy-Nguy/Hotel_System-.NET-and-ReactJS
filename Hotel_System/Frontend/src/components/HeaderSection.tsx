@@ -3,6 +3,26 @@ import React, { useState, useEffect } from "react";
 const HeaderSection: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState<any>(null);
+  const [currentRoute, setCurrentRoute] = useState<string>("");
+
+  const resolveRoute = () => {
+    const p = window.location.pathname;
+    if (p && p !== "/") return p;
+    const h = window.location.hash;
+    if (h) return h;
+    return "/";
+  };
+
+  useEffect(() => {
+    setCurrentRoute(resolveRoute());
+    const onLocationChange = () => setCurrentRoute(resolveRoute());
+    window.addEventListener("hashchange", onLocationChange);
+    window.addEventListener("popstate", onLocationChange);
+    return () => {
+      window.removeEventListener("hashchange", onLocationChange);
+      window.removeEventListener("popstate", onLocationChange);
+    };
+  }, []);
 
   useEffect(() => {
     // Check if user is logged in by checking localStorage
@@ -134,8 +154,8 @@ const HeaderSection: React.FC = () => {
         <div className="container">
           <div className="row">
             <div className="col-lg-2">
-              <div className="logo">
-                <a href="#">
+                <div className="logo">
+                <a href="/" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/'; } }}>
                   <img src="/img/logo.png" alt="" />
                 </a>
               </div>
@@ -144,11 +164,15 @@ const HeaderSection: React.FC = () => {
               <div className="nav-menu">
                 <nav className="mainmenu">
                   <ul>
-                    <li className="active">
-                      <a href="#">Home</a>
+                    <li className={currentRoute === "/" || currentRoute === "#" ? "active" : ""}>
+                      <a href="/" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/'; } }}>
+                        Home
+                      </a>
                     </li>
-                    <li>
-                      <a href="#">Rooms</a>
+                    <li className={currentRoute === "/rooms" || currentRoute === "#rooms" ? "active" : ""}>
+                      <a href="/rooms" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/rooms'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/rooms'; } }}>
+                        Rooms
+                      </a>
                     </li>
                     <li>
                       <a href="#">About Us</a>
@@ -200,12 +224,12 @@ const HeaderSection: React.FC = () => {
                       <ul className="dropdown">
                         {isLoggedIn ? (
                           <>
-                            <li>
-                              <a href="#/profile">Thông tin cá nhân</a>
-                            </li>
-                            <li>
-                              <a href="#/bookings">Lịch sử đặt phòng</a>
-                            </li>
+                                    <li>
+                                      <a href="/profile" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/profile'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/profile'; } }}>Thông tin cá nhân</a>
+                                    </li>
+                                    <li>
+                                      <a href="/bookings" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/bookings'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/bookings'; } }}>Lịch sử đặt phòng</a>
+                                    </li>
                             <li>
                               <a
                                 href="#"
@@ -221,10 +245,10 @@ const HeaderSection: React.FC = () => {
                         ) : (
                           <>
                             <li>
-                              <a href="#/login">Đăng nhập</a>
+                              <a href="/login" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/login'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/login'; } }}>Đăng nhập</a>
                             </li>
                             <li>
-                              <a href="#/register">Đăng ký</a>
+                              <a href="/register" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/register'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/register'; } }}>Đăng ký</a>
                             </li>
                           </>
                         )}

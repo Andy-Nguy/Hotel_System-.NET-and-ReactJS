@@ -1,4 +1,18 @@
 import React, { useEffect, useState } from "react";
+// backend base for assets
+const BACKEND_BASE = ((import.meta as any).env?.VITE_API_BASE as string) || 'https://localhost:5001';
+
+function resolveImageUrl(u?: string | null) {
+  if (!u) return undefined;
+  const s = String(u).trim();
+  if (!s) return undefined;
+  if (s.startsWith('http') || s.startsWith('//')) return s;
+  if (s.startsWith('/assets')) return `${BACKEND_BASE}${s}`;
+  if (s.startsWith('/img')) return s; // served by frontend public
+  if (s.startsWith('/')) return `${BACKEND_BASE}${s}`;
+  // filename only
+  return `${BACKEND_BASE}/assets/room/${s}`;
+}
 import { getRooms } from "../api/roomsApi";
 
 type Room = {
@@ -97,10 +111,8 @@ const HomeRoom: React.FC = () => {
               >
                 <div
                   className="hp-room-item"
-                  style={{
-                    backgroundImage: `url(${
-                      room.urlAnhPhong ?? `/img/room/room-b1.jpg`
-                    })`,
+                    style={{
+                    backgroundImage: `url(${resolveImageUrl(room.urlAnhPhong) ?? `/img/room/room-b1.jpg`})`,
                   }}
                 >
                   <div className="hr-text">

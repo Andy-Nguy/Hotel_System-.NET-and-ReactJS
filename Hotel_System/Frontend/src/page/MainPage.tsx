@@ -11,18 +11,44 @@ import FooterSection from "../components/FooterSection";
 
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
+import RoomPage from "./RoomPage";
 
 const MainPage: React.FC = () => {
-  const [route, setRoute] = React.useState<string>(
-    () => window.location.hash || "#/"
-  );
+  // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
+  const resolveRoute = () => {
+    const p = window.location.pathname;
+    if (p && p !== "/") return p;
+    const h = window.location.hash;
+    if (h) return h;
+    return "#";
+  };
+
+  const [route, setRoute] = React.useState<string>(resolveRoute);
 
   React.useEffect(() => {
-    const onHash = () => setRoute(window.location.hash || "#/");
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    const onLocationChange = () => setRoute(resolveRoute());
+    window.addEventListener("hashchange", onLocationChange);
+    window.addEventListener("popstate", onLocationChange);
+    return () => {
+      window.removeEventListener("hashchange", onLocationChange);
+      window.removeEventListener("popstate", onLocationChange);
+    };
   }, []);
+  // If URL has only a single '#' (empty hash), remove it to keep clean URLs
+  React.useEffect(() => {
+    if (window.location.hash === "#") {
+      try {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      } catch (e) {
+        window.location.hash = "";
+      }
+    }
+  }, []);
+  // Re-run jQuery initializations when route becomes Home. This fixes missing
+  // images/slider when navigating back to Home via pushState (no full reload).
   useEffect(() => {
+    if (!(route === "#" || route === "/")) return;
+
     const safejQueryPluginCall = (
       selector: string,
       plugin: string,
@@ -31,6 +57,13 @@ const MainPage: React.FC = () => {
       try {
         const $ = (window as any).jQuery;
         if ($ && $.fn && $.fn[plugin]) {
+          // If already initialized, try to destroy then re-init to avoid dupes
+          try {
+            const instance = $(selector).data("owl.carousel");
+            if (instance && $.fn?.owlCarousel) {
+              $(selector).trigger("destroy.owl.carousel");
+            }
+          } catch {}
           $(selector)[plugin](options);
         } else {
           console.warn(`jQuery plugin "${plugin}" không khả dụng.`);
@@ -93,10 +126,10 @@ const MainPage: React.FC = () => {
     try {
       const $ = (window as any).jQuery;
       if ($) {
-        $(".search-switch").on("click", function () {
+        $(".search-switch").off("click").on("click", function () {
           $(".search-model").fadeIn(400);
         });
-        $(".search-close-switch").on("click", function () {
+        $(".search-close-switch").off("click").on("click", function () {
           $(".search-model").fadeOut(400, function () {
             $("#search-input").val("");
           });
@@ -109,11 +142,11 @@ const MainPage: React.FC = () => {
     try {
       const $ = (window as any).jQuery;
       if ($) {
-        $(".canvas-open").on("click", function () {
+        $(".canvas-open").off("click").on("click", function () {
           $(".offcanvas-menu-wrapper").addClass("show-offcanvas-menu-wrapper");
           $(".offcanvas-menu-overlay").addClass("active");
         });
-        $(".canvas-close, .offcanvas-menu-overlay").on("click", function () {
+        $(".canvas-close, .offcanvas-menu-overlay").off("click").on("click", function () {
           $(".offcanvas-menu-wrapper").removeClass(
             "show-offcanvas-menu-wrapper"
           );
@@ -123,9 +156,9 @@ const MainPage: React.FC = () => {
     } catch (e) {
       console.error("Lỗi offcanvas menu:", e);
     }
-  }, []);
+  }, [route]);
 
-  if (route === "#/login") {
+  if (route === "#login" || route === "/login") {
     return (
       <>
         <OffcanvasMenu />
@@ -136,12 +169,23 @@ const MainPage: React.FC = () => {
     );
   }
 
-  if (route === "#/register") {
+  if (route === "#register" || route === "/register") {
     return (
       <>
         <OffcanvasMenu />
         <HeaderSection />
         <RegisterPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#rooms" || route === "/rooms") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <RoomPage />
         <FooterSection />
       </>
     );
