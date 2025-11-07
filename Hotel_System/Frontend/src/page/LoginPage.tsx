@@ -121,7 +121,7 @@ const LoginPage: React.FC = () => {
                 >
                   <p>
                     Chưa có tài khoản?{" "}
-                    <a href="#/register" style={{ color: "#dfa974" }}>
+                    <a href="#register" style={{ color: "#dfa974" }}>
                       Đăng ký ngay
                     </a>
                   </p>

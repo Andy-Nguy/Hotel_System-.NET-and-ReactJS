@@ -1,6 +1,99 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 const OffcanvasMenu: React.FC = () => {
+  const [currentRoute, setCurrentRoute] = useState<string>("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userInfo, setUserInfo] = useState<any>(null);
+
+  const resolveRoute = () => {
+    const p = window.location.pathname;
+    if (p && p !== "/") return p;
+    const h = window.location.hash;
+    if (h) return h;
+    return "/";
+  };
+
+  useEffect(() => {
+    setCurrentRoute(resolveRoute());
+    const onLocationChange = () => setCurrentRoute(resolveRoute());
+    window.addEventListener("hashchange", onLocationChange);
+    window.addEventListener("popstate", onLocationChange);
+    return () => {
+      window.removeEventListener("hashchange", onLocationChange);
+      window.removeEventListener("popstate", onLocationChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Check if user is logged in by checking localStorage
+    const token = localStorage.getItem("hs_token");
+    if (token) {
+      setIsLoggedIn(true);
+      // Decode JWT to get user info (simple decode without verification for display purposes)
+      try {
+        // Use proper UTF-8 decoding
+        const base64Payload = token.split(".")[1];
+        const decodedPayload = decodeURIComponent(
+          atob(base64Payload)
+            .split("")
+            .map(function (c) {
+              return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+            })
+            .join("")
+        );
+        const payload = JSON.parse(decodedPayload);
+        setUserInfo(payload);
+      } catch (e) {
+        console.warn("Could not decode token:", e);
+      }
+    }
+
+    // Listen for storage changes (when user logs in from another tab)
+    const handleStorageChange = () => {
+      const newToken = localStorage.getItem("hs_token");
+      setIsLoggedIn(!!newToken);
+      if (newToken) {
+        try {
+          // Use proper UTF-8 decoding
+          const base64Payload = newToken.split(".")[1];
+          const decodedPayload = decodeURIComponent(
+            atob(base64Payload)
+              .split("")
+              .map(function (c) {
+                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+              })
+              .join("")
+          );
+          const payload = JSON.parse(decodedPayload);
+          setUserInfo(payload);
+        } catch (e) {
+          setUserInfo(null);
+        }
+      } else {
+        setUserInfo(null);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("hs_token");
+    setIsLoggedIn(false);
+    setUserInfo(null);
+    // Redirect to home page and remove hash from URL
+    try {
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search
+      );
+    } catch (e) {
+      window.location.hash = "";
+    }
+    window.location.reload();
+  };
   return (
     <>
       <div className="offcanvas-menu-overlay"></div>
@@ -37,11 +130,15 @@ const OffcanvasMenu: React.FC = () => {
         </div>
         <nav className="mainmenu mobile-menu">
           <ul>
-            <li className="active">
-              <a href="#">Home</a>
+            <li className={currentRoute === "/" || currentRoute === "#" ? "active" : ""}>
+              <a href="/" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/'; } }}>
+                Home
+              </a>
             </li>
-            <li>
-              <a href="#">Rooms</a>
+            <li className={currentRoute === "/rooms" || currentRoute === "#rooms" ? "active" : ""}>
+              <a href="/rooms" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/rooms'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/rooms'; } }}>
+                Rooms
+              </a>
             </li>
             <li>
               <a href="#">About Us</a>
@@ -70,14 +167,57 @@ const OffcanvasMenu: React.FC = () => {
               <a href="#">Contact</a>
             </li>
             <li>
-              <a href="#">Tài khoản</a>
+              <a href="#">
+                {isLoggedIn
+                  ? (() => {
+                      try {
+                        const fullName =
+                          userInfo?.[
+                            "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+                          ] ||
+                          userInfo?.name ||
+                          "User";
+                        const firstName =
+                          String(fullName).trim().split(" ")[0] ||
+                          "User";
+                        return `Xin chào ${firstName}`;
+                      } catch (e) {
+                        return "Tài khoản";
+                      }
+                    })()
+                  : "Tài khoản"}
+              </a>
               <ul className="dropdown">
-                <li>
-                  <a href="#">Đăng nhập</a>
-                </li>
-                <li>
-                  <a href="#">Đăng ký</a>
-                </li>
+                {isLoggedIn ? (
+                  <>
+                            <li>
+                              <a href="/profile" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/profile'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/profile'; } }}>Thông tin cá nhân</a>
+                            </li>
+                            <li>
+                              <a href="/bookings" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/bookings'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/bookings'; } }}>Lịch sử đặt phòng</a>
+                            </li>
+                    <li>
+                      <a
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleLogout();
+                        }}
+                      >
+                        Đăng xuất
+                      </a>
+                    </li>
+                  </>
+                ) : (
+                  <>
+                    <li>
+                      <a href="/login" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/login'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/login'; } }}>Đăng nhập</a>
+                    </li>
+                    <li>
+                      <a href="/register" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/register'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/register'; } }}>Đăng ký</a>
+                    </li>
+                  </>
+                )}
               </ul>
             </li>
           </ul>

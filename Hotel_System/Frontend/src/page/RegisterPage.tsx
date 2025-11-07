@@ -43,7 +43,7 @@ const RegisterPage: React.FC = () => {
       setMessage("Xác thực thành công! Đang chuyển đến trang đăng nhập...");
       // redirect to login after delay
       setTimeout(() => {
-        window.location.hash = "#/login";
+        window.location.hash = "#login";
       }, 2000);
     } catch (err: any) {
       setMessage(err?.message ?? String(err));
@@ -207,7 +207,7 @@ const RegisterPage: React.FC = () => {
                   <div className="col-lg-12" style={{ textAlign: "center" }}>
                     <p>
                       Đã có tài khoản?{" "}
-                      <a href="#/login" style={{ color: "#dfa974" }}>
+                      <a href="#login" style={{ color: "#dfa974" }}>
                         Đăng nhập ngay
                       </a>
                     </p>

@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.Extensions.FileProviders;
+using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -86,6 +88,18 @@ app.UseAuthorization();
 // Serve static files (the built frontend) and enable SPA fallback
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// Additionally serve the assets folder (e.g. assets/room/*) from the project root
+// so frontend can request images like: https://localhost:5001/assets/room/xxx.jpg
+var assetsPath = Path.Combine(builder.Environment.ContentRootPath, "assets");
+if (Directory.Exists(assetsPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(assetsPath),
+        RequestPath = "/assets"
+    });
+}
 
 app.MapControllers();
 
