@@ -17,6 +17,9 @@ builder.Services.AddSwaggerGen();
 // Auth service (register/login/otp)
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// Room service
+builder.Services.AddScoped<RoomService>();
+
 // Configure JWT authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwtSection.GetValue<string>("Key");
@@ -90,6 +93,6 @@ app.MapControllers();
 app.MapFallbackToFile("index.html");
 
 // ✅ Optional log
-Console.WriteLine("Swagger UI: https://localhost:5001/swagger");
+Console.WriteLine("📚 Swagger docs: https://localhost:5001/swagger");
 
 app.Run();
