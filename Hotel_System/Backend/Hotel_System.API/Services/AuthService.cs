@@ -128,7 +128,8 @@ namespace Hotel_System.API.Services
                     new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, kh.IdkhachHang.ToString()),
                     new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Email, kh.Email ?? string.Empty),
                     new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, kh.HoTen ?? string.Empty),
-                    new System.Security.Claims.Claim("role", acc.VaiTro.ToString())
+                    new System.Security.Claims.Claim("role", acc.VaiTro.ToString()),
+                    new System.Security.Claims.Claim("phone", kh.SoDienThoai ?? string.Empty)
                 };
 
                 var keyBytes = Encoding.UTF8.GetBytes(key);
