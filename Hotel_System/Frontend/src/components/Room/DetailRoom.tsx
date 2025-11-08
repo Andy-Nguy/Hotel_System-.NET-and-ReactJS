@@ -12,7 +12,7 @@ function resolveImageUrl(u?: string | null) {
 	return `${BACKEND_BASE}/assets/room/${s}`;
 }
 import { Modal, Button } from 'antd';
-import type { Room } from '../../../../Backend/Hotel_System.API/Services/roomService';
+import type { Room } from '../../../../Frontend/src/api/roomsApi';
 
 type Props = {
 	visible: boolean;
@@ -24,7 +24,6 @@ type Props = {
 const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 	if (!room) return null;
 
-	// Modal with proper white border and full-bleed image matching reference design
 	return (
 		<Modal 
 			visible={visible} 
@@ -32,13 +31,21 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 			footer={null} 
 			width={980} 
 			title={null} 
-			bodyStyle={{ padding: 20, background: '#fff' }} 
+			closable={false}
+			bodyStyle={{ background: '#fff' }} 
 			centered
 			style={{ top: 20 }}
 			maskStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.65)' }}
 		>
-			<div style={{ margin: '-20px', background: '#fff', borderRadius: 8, overflow: 'hidden' }}>
-				{/* Black header bar with title and close */}
+			{/* === FIX: Dùng margin âm để "ăn" hết padding của body === */}
+			<div style={{ 
+				margin: '-20px -24px', // Thay vì -20px hoặc 0
+				background: '#fff', 
+				borderRadius: 8, 
+				overflow: 'hidden' 
+			}}>
+				
+				{/* === ROW 1: HEADER (Không đổi) === */}
 				<div style={{ 
 					background: '#0b0b0b', 
 					color: '#fff', 
@@ -72,17 +79,22 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 					</button>
 				</div>
 
-				{/* Full-bleed image container */}
+				{/* === ROW 2: FULL-BLEED IMAGE (Giữ nguyên 16:9) === */}
 				<div style={{ 
 					width: '100%', 
-					height: 400, 
 					position: 'relative',
-					background: '#f5f5f5'
+					background: '#f5f5f5',
+					paddingTop: '56.25%' // Tỷ lệ 16:9
 				}}>
-					<DetailImage srcHint={room.urlAnhPhong} alt={room.tenPhong || 'phong'} />
+					<div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+						<DetailImage srcHint={room.urlAnhPhong} alt={room.tenPhong || 'phong'} />
+					</div>
 				</div>
 
-				{/* Details area with proper padding */}
+				{/* === ROW 3: ROOM INFORMATION (Thêm lại padding) === */}
+				{/* Vì margin âm đã "ăn" mất padding, chúng ta phải 
+					thêm padding 24px trở lại cho khu vực nội dung
+				*/}
 				<div style={{ padding: 24 }}>
 					<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
 						<h3 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>{room.tenPhong}</h3>
@@ -110,10 +122,16 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 					<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, marginBottom: 24 }}>
 						<div>
 							<h4 style={{ marginTop: 0, marginBottom: 12, fontSize: 16, fontWeight: 600 }}>Room Overview</h4>
-							{/* Show room type name if available */}
 							<div style={{ color: '#666', marginBottom: 8 }}>
-								{(room as any).tenLoaiPhong ?? (room.xepHangSao ? `${room.xepHangSao} sao` : '—')}
+								Loại phòng: {(room as any).tenLoaiPhong ?? (room.xepHangSao ? `${room.xepHangSao} sao` : '—')}
 							</div>
+							
+							{room.soPhong && (
+								<div style={{ color: '#666', marginBottom: 8 }}>
+									Số phòng: {room.soPhong}
+								</div>
+							)}
+							
 							<div style={{ color: '#666' }}>
 								Giá: {room.giaCoBanMotDem != null ? room.giaCoBanMotDem.toLocaleString('vi-VN') + '₫/đêm' : 'Liên hệ'}
 							</div>
@@ -143,33 +161,6 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 							</ul>
 						</div>
 					</div>
-
-					{/* Bottom actions */}
-					<div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid #eee' }}>
-						<Button 
-							type="primary" 
-							onClick={() => onBook(room)} 
-							style={{ 
-								background: '#1a365d', 
-								borderColor: '#1a365d',
-								borderRadius: 6,
-								padding: '10px 24px',
-								height: 'auto'
-							}}
-						>
-							Đặt phòng ngay
-						</Button>
-						<Button 
-							onClick={onClose}
-							style={{ 
-								borderRadius: 6,
-								padding: '10px 24px',
-								height: 'auto'
-							}}
-						>
-							Đóng
-						</Button>
-					</div>
 				</div>
 			</div>
 		</Modal>
@@ -177,6 +168,11 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 };
 
 export default DetailRoom;
+
+// ==================================================================
+// COMPONENT HIỂN THỊ HÌNH ẢNH (BÊN TRONG ROW 2)
+// (Không thay đổi)
+// ==================================================================
 
 type DetailImageProps = { srcHint?: string | null; alt?: string };
 
@@ -313,9 +309,9 @@ const DetailImage: React.FC<DetailImageProps> = ({ srcHint, alt }) => {
 				style={{ 
 					maxWidth: '100%', 
 					maxHeight: '100%', 
-					width: 'auto', 
-					height: 'auto',
-					objectFit: 'contain',
+					width: '100%', 
+					height: '100%',
+					objectFit: 'cover',
 					display: 'block'
 				}} 
 			/>

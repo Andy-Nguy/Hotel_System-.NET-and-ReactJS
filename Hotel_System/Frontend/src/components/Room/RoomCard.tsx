@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from 'antd';
-import type { Room } from '../../../../Backend/Hotel_System.API/Services/roomService';
+import type { Room } from '../../../../Frontend/src/api/roomsApi';
 
 // Backend base URL for assets. You can set VITE_API_BASE in .env to override.
 const BACKEND_BASE = ((import.meta as any).env?.VITE_API_BASE as string) || 'https://localhost:5001';
@@ -126,61 +126,79 @@ const RoomCard: React.FC<Props> = ({ room, onOpenDetail, onBook }) => {
     };
   }, [imageWebp, imageFallback, imageBase]);
 
-  return (
-    <div style={{
-      border: '1px solid #eee',
-      borderRadius: 8,
-      overflow: 'hidden',
-      background: '#fff',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.06)'
-    }}>
-      {/* Render image as a background to ensure consistent cover/crop like image2 */}
-      <div
-        role="img"
-        aria-label={room.tenPhong ?? 'Phòng'}
-        style={{
-          width: '100%',
-          height: 220,
-          overflow: 'hidden',
-          backgroundImage: `url(${selectedSrc})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
-      />
+return (
+    <div style={{
+      border: '1px solid #eee',
+      borderRadius: 8,
+      overflow: 'hidden',
+      background: '#fff',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+      // THAY ĐỔI 1: Biến thẻ (card) thành flex-column
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%' // Đảm bảo thẻ lấp đầy ô grid/flex cha
+    }}>
+      {/* Render image as a background */}
+      <div
+        role="img"
+        aria-label={room.tenPhong ?? 'Phòng'}
+        style={{
+          width: '100%',
+          height: 220,
+          overflow: 'hidden',
+          backgroundImage: `url(${selectedSrc})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          flexShrink: 0 // Ngăn ảnh bị co lại
+        }}
+      />
 
-      <div style={{ padding: 18 }}>
-        <h2 style={{ margin: 0, fontSize: 30, fontWeight: 'bold' }}>{room.tenPhong ?? 'Phòng nghỉ'}</h2>
+      <div style={{ 
+          padding: 18,
+          // THAY ĐỔI 2: Biến khu vực nội dung thành flex-column
+          display: 'flex',
+          flexDirection: 'column',
+          flexGrow: 1 // Yêu cầu nó lấp đầy không gian còn lại
+        }}>
 
-        <a onClick={() => onOpenDetail(room)} style={{display: 'inline-block', marginBottom: 12, color: '#dfa974', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold'}}>
-          Xem thông tin phòng chi tiết
-        </a>
+        {/* THAY ĐỔI 3: Tạo một wrapper cho nội dung trên */}
+        {/* Wrapper này sẽ giãn ra để đẩy "footer" xuống */}
+        <div style={{ flexGrow: 1 }}>
+          <h2 style={{ margin: 0, fontSize: 30, fontWeight: 'bold' }}>{room.tenPhong ?? 'Phòng nghỉ'}</h2>
 
-        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-          <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
-            <li>Ngủ {room.soNguoiToiDa ?? 2} người</li>
-            <li>Phù phiếm kép</li>
-          </ul>
-          <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
-            <li>Không gian làm việc</li>
-            <li>Tủ lạnh mini</li>
-          </ul>
+          <a onClick={() => onOpenDetail(room)} style={{display: 'inline-block', marginBottom: 12, color: '#dfa974', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold'}}>
+            Xem thông tin phòng chi tiết
+          </a>
+
+          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+            <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
+              <li>Ngủ {room.soNguoiToiDa ?? 2} người</li>
+              <li>Phù phiếm kép</li>
+            </ul>
+            <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
+              <li>Không gian làm việc</li>
+              <li>Tủ lạnh mini</li>
+            </ul>
+          </div>
         </div>
 
-        <div style={{ marginBottom: 10 }}>
-          <Button type="primary" block onClick={() => onBook(room)} style={{ background: '#dfa974', borderColor: '#dfa974', height: 64, fontSize: 18 }}>
-            Đặt phòng ngay
-          </Button>
-        </div>
+        {/* THAY ĐỔI 4: Tạo một wrapper cho "footer" */}
+        {/* Wrapper này sẽ KHÔNG giãn ra (flexShrink: 0) */}
+        <div>
+          <div style={{ marginBottom: 10 }}>
+            <Button type="primary" block onClick={() => onBook(room)} style={{ background: '#dfa974', borderColor: '#dfa974', height: 64, fontSize: 18 }}>
+              Đặt phòng ngay
+            </Button>
+          </div>
 
-        <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
-          Giá bao gồm phí dịch vụ 5% mỗi lần lưu trú, nhưng không bao gồm thuế
+          <div style={{ fontSize: 12, color: '#666' /* Bỏ margin bottom ở đây */ }}>
+            Giá bao gồm phí dịch vụ 5% mỗi lần lưu trú, nhưng không bao gồm thuế
+          </div>
         </div>
-
-        {/* main CTA already provided above */}
-      </div>
-    </div>
-  );
+      </div>
+    </div>
+  );
 };
 
 export default RoomCard;
