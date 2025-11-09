@@ -1,85 +1,70 @@
 import React, { useEffect, useState } from "react";
-// backend base for assets
-const BACKEND_BASE = ((import.meta as any).env?.VITE_API_BASE as string) || 'https://localhost:5001';
 
 function resolveImageUrl(u?: string | null) {
   if (!u) return undefined;
   const s = String(u).trim();
   if (!s) return undefined;
   if (s.startsWith('http') || s.startsWith('//')) return s;
-  if (s.startsWith('/assets')) return `${BACKEND_BASE}${s}`;
-  if (s.startsWith('/img')) return s; // served by frontend public
-  if (s.startsWith('/')) return `${BACKEND_BASE}${s}`;
-  // filename only
-  return `${BACKEND_BASE}/assets/room/${s}`;
+  if (s.startsWith('/img')) return s; // already relative img path
+  if (s.startsWith('/assets')) return s; // keep relative
+  if (s.startsWith('/')) return s; // other relative path
+  // filename only -> use relative path to /img/room so dev proxy forwards to backend
+  return `/img/room/${s}`;
 }
-import { getRooms } from "../api/roomsApi";
+import { getRoomTypes } from "../api/roomsApi";
 
-type Room = {
-  idphong: string;
-  tenPhong?: string;
-  soPhong?: string;
-  moTa?: string;
-  soNguoiToiDa?: number;
-  giaCoBanMotDem?: number;
-  xepHangSao?: number;
-  urlAnhPhong?: string;
+type RoomType = {
+  idLoaiPhong: string;
+  tenLoaiPhong?: string | null;
+  moTa?: string | null;
+  urlAnhLoaiPhong?: string | null;
   [key: string]: any;
 };
 
 const HomeRoom: React.FC = () => {
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [types, setTypes] = useState<RoomType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchRooms = async () => {
+    let mounted = true;
+    const fetchTypes = async () => {
       try {
-        // use centralized API helper
-        const data = await getRooms();
-
-        // Normalize properties (API may return camelCase)
-        const normalized = (data || [])
-          .map((r: any) => ({
-            idphong: r.idphong ?? r.idPhong ?? r.Idphong ?? r.IdPhong,
-            tenPhong: r.tenPhong ?? r.TenPhong ?? r.TenPhong,
-            soPhong: r.soPhong ?? r.SoPhong,
-            moTa: r.moTa ?? r.MoTa,
-            soNguoiToiDa:
-              r.soNguoiToiDa ??
-              r.SoNguoiToiDa ??
-              r.soNguoiToiDa ??
-              r.SoNguoiToiDa,
-            giaCoBanMotDem:
-              r.giaCoBanMotDem ??
-              r.GiaCoBanMotDem ??
-              r.giaCoBanMotDem ??
-              r.GiaCoBanMotDem,
-            xepHangSao:
-              r.xepHangSao ?? r.XepHangSao ?? r.xepHangSao ?? r.XepHangSao ?? 0,
-            urlAnhPhong:
-              r.urlAnhPhong ?? r.UrlAnhPhong ?? r.urlAnhPhong ?? r.UrlAnhPhong,
-            ...r,
-          }))
-          // filter only rooms with rating >= 4
-          .filter((r: any) => Number(r.xepHangSao ?? 0) >= 4);
-
-        setRooms(normalized);
+        const data = await getRoomTypes();
+        if (!mounted) return;
+        const normalized = (data || []).map((t: any) => ({
+          idLoaiPhong: t.idLoaiPhong ?? t.IdloaiPhong ?? t.IdLoaiPhong ?? t.idLoaiPhong,
+          tenLoaiPhong: t.tenLoaiPhong ?? t.TenLoaiPhong ?? t.tenLoaiPhong,
+          moTa: t.moTa ?? t.MoTa,
+          urlAnhLoaiPhong: t.urlAnhLoaiPhong ?? t.UrlAnhLoaiPhong,
+          ...t,
+        }));
+        setTypes(normalized);
       } catch (e: any) {
-        setError(e?.message ?? "Failed to load rooms");
+        if (!mounted) return;
+        setError(e?.message ?? "Failed to load room types");
       } finally {
+        if (!mounted) return;
         setLoading(false);
       }
     };
 
-    fetchRooms();
+    fetchTypes();
+    return () => {
+      mounted = false;
+    };
   }, []);
+
+  const goToRoomPage = (id?: string) => {
+    if (!id) return;
+    window.location.hash = `#rooms?loaiId=${encodeURIComponent(id)}`;
+  };
 
   if (loading) {
     return (
       <section className="hp-room-section">
         <div className="container-fluid">
-          <div>Loading rooms...</div>
+          <div>Loading room types...</div>
         </div>
       </section>
     );
@@ -89,7 +74,7 @@ const HomeRoom: React.FC = () => {
     return (
       <section className="hp-room-section">
         <div className="container-fluid">
-          <div className="text-danger">Error loading rooms: {error}</div>
+          <div className="text-danger">Error loading room types: {error}</div>
         </div>
       </section>
     );
@@ -100,53 +85,26 @@ const HomeRoom: React.FC = () => {
       <div className="container-fluid">
         <div className="hp-room-items">
           <div className="row">
-            {rooms.length === 0 && (
-              <div className="col-12">No rooms with 4+ stars found.</div>
+            {types.length === 0 && (
+              <div className="col-12">No room types found.</div>
             )}
 
-            {rooms.map((room) => (
-              <div
-                className="col-lg-3 col-md-6"
-                key={room.idphong ?? room.soPhong}
-              >
+            {types.map((type) => (
+              <div className="col-lg-3 col-md-6" key={type.idLoaiPhong}>
                 <div
                   className="hp-room-item"
-                    style={{
-                    backgroundImage: `url(${resolveImageUrl(room.urlAnhPhong) ?? `/img/room/room-b1.jpg`})`,
+                  style={{
+                    backgroundImage: `url(${resolveImageUrl(type.urlAnhLoaiPhong) ?? `/img/room/room-b1.jpg`})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
                   }}
                 >
                   <div className="hr-text">
-                    <h3>{room.tenPhong ?? `Room ${room.soPhong ?? ""}`}</h3>
-                    <h2>
-                      {room.giaCoBanMotDem !== undefined &&
-                      room.giaCoBanMotDem !== null
-                        ? `$${Number(room.giaCoBanMotDem).toLocaleString()}`
-                        : "Contact"}
-                      <span>/Pernight</span>
-                    </h2>
-                    <table>
-                      <tbody>
-                        <tr>
-                          <td className="r-o">Size:</td>
-                          <td>{room.moTa ?? "-"}</td>
-                        </tr>
-                        <tr>
-                          <td className="r-o">Capacity:</td>
-                          <td>Max person {room.soNguoiToiDa ?? "-"}</td>
-                        </tr>
-                        <tr>
-                          <td className="r-o">Rating:</td>
-                          <td>{room.xepHangSao ?? "-"} ⭐</td>
-                        </tr>
-                        <tr>
-                          <td className="r-o">Services:</td>
-                          <td>Wifi, Television, Bathroom,...</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <a href="#" className="primary-btn">
-                      More Details
-                    </a>
+                    <h3>{type.tenLoaiPhong ?? `Loại phòng`}</h3>
+                    <p style={{ minHeight: 40 }}>{type.moTa ?? ''}</p>
+                    <div style={{ marginTop: 8 }}>
+                      <button className="primary-btn" onClick={() => goToRoomPage(type.idLoaiPhong)}>Xem chi tiết</button>
+                    </div>
                   </div>
                 </div>
               </div>

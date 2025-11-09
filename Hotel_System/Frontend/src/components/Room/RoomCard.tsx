@@ -19,8 +19,7 @@ function formatPrice(v?: number | null) {
 const RoomCard: React.FC<Props> = ({ room, onOpenDetail, onBook }) => {
   // Default fallback (served from Frontend `public/` -> available at /img/...)
   // Use an existing image from Frontend/public/img/room to avoid 404.
-  const defaultJpg = '/img/room/room-1.jpg';
-  const defaultWebp = defaultJpg; // we don't have webp default in public, use jpg path
+  const defaultWebp = '/img/room/room-1.jpg'; // fallback to existing jpg in public
 
   let imageBase = '';
   if (room.urlAnhPhong) {
@@ -28,45 +27,28 @@ const RoomCard: React.FC<Props> = ({ room, onOpenDetail, onBook }) => {
     if (u.startsWith('http') || u.startsWith('//')) {
       imageBase = u;
     } else if (u.startsWith('/')) {
-      // absolute path already pointing to public or backend path
+      // absolute/relative path already pointing to public or backend path
       imageBase = u;
     } else {
-      // stored as filename in backend assets folder
-      imageBase = `${BACKEND_BASE}/assets/room/${u}`;
+      // stored as filename in backend wwwroot/img/room
+      // use relative path so dev proxy can forward requests and browser won't trigger CORS
+      imageBase = `/img/room/${u}`;
     }
   }
 
-  // Construct paths for <picture>: prefer webp source, fallback to jpg or default
-  const makeWebp = (base: string) => {
-    try {
-      // if base already has an extension, replace it with .webp
-      const idx = base.lastIndexOf('.');
-      if (idx > base.lastIndexOf('/')) return base.substring(0, idx) + '.webp';
-    } catch {}
-    return base + '.webp';
-  };
+  // Only work with webp files - no jpg conversion
+  const imageWebp = imageBase; // use the original path (already .webp from database)
 
-  const makeJpg = (base: string) => {
-    try {
-      const idx = base.lastIndexOf('.');
-      if (idx > base.lastIndexOf('/')) return base.substring(0, idx) + '.jpg';
-    } catch {}
-    return base + '.jpg';
-  };
-
-  const imageWebp = imageBase ? makeWebp(imageBase) : defaultWebp;
-  const imageFallback = imageBase ? makeJpg(imageBase) : defaultJpg;
-
-  const [selectedSrc, setSelectedSrc] = useState<string>(imageFallback);
+  const [selectedSrc, setSelectedSrc] = useState<string>(imageWebp || defaultWebp);
   const [loaded, setLoaded] = useState(false);
 
-  // Try to preload webp first, then jpg, then default. Log useful info to console
+  // Only try webp files - no jpg conversion needed
   useEffect(() => {
     let canceled = false;
     const tryLoad = (srcs: string[]) => {
       if (srcs.length === 0) {
         if (!canceled) {
-          setSelectedSrc(defaultJpg);
+          setSelectedSrc(defaultWebp);
           setLoaded(true);
         }
         return;
@@ -88,34 +70,14 @@ const RoomCard: React.FC<Props> = ({ room, onOpenDetail, onBook }) => {
       img.src = s;
     };
 
-    // Start with webp -> jpg -> original backend path -> possible http fallback for localhost -> defaults
+    // Only try webp files - database stores .webp filenames
     const candidates = [] as string[];
-    if (imageWebp) candidates.push(imageWebp);
-    if (imageFallback) candidates.push(imageFallback);
-    if (imageBase) {
-      // try the backend path as-is too (in case urlAnhPhong already includes extension)
-      candidates.push(imageBase);
-
-      // If backend is localhost (dev), also try common alternate port/protocol (http://localhost:5000)
-      try {
-        const url = new URL(imageBase);
-        if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-          // try same path on http://localhost:5000
-          const alt = `${url.protocol === 'https:' ? 'http:' : 'https:'}//${url.hostname}:5000${url.pathname}${url.search}`;
-          // also add webp/jpg variants for alt
-          const altBase = alt.replace(/\.[a-zA-Z0-9]+$/, '');
-          candidates.push(alt);
-          try {
-            const altWebp = makeWebp(alt);
-            const altJpg = makeJpg(alt);
-            candidates.push(altWebp, altJpg);
-          } catch {}
-        }
-      } catch {}
+    if (imageWebp) {
+      candidates.push(imageWebp);
     }
-
-    // finally try frontend defaults
-    candidates.push(defaultWebp, defaultJpg);
+    
+    // fallback to default if webp fails
+    candidates.push(defaultWebp);
 
     console.debug('RoomCard: image candidates', candidates);
 
@@ -124,7 +86,7 @@ const RoomCard: React.FC<Props> = ({ room, onOpenDetail, onBook }) => {
     return () => {
       canceled = true;
     };
-  }, [imageWebp, imageFallback, imageBase]);
+  }, [imageWebp]);
 
 return (
     <div style={{

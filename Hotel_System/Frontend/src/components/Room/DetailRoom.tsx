@@ -6,10 +6,11 @@ function resolveImageUrl(u?: string | null) {
 	const s = String(u).trim();
 	if (!s) return undefined;
 	if (s.startsWith('http') || s.startsWith('//')) return s;
-	if (s.startsWith('/assets')) return `${BACKEND_BASE}${s}`;
-	if (s.startsWith('/img')) return s;
-	if (s.startsWith('/')) return `${BACKEND_BASE}${s}`;
-	return `${BACKEND_BASE}/assets/room/${s}`;
+	// If already an absolute URL or protocol-relative, return as-is
+	if (s.startsWith('/img')) return s; // already a relative img path
+	if (s.startsWith('/')) return s; // other relative path
+	// otherwise treat as filename stored in backend img/room
+	return `/img/room/${s}`;
 }
 import { Modal, Button } from 'antd';
 import type { Room } from '../../../../Frontend/src/api/roomsApi';
@@ -208,23 +209,16 @@ const DetailImage: React.FC<DetailImageProps> = ({ srcHint, alt }) => {
 			out.push(s);
 			return out;
 		}
-		if (s.startsWith('/assets')) {
-			out.push(`${BACKEND_BASE}${s}`);
-			out.push(`${BACKEND_BASE}${s}`.replace('https:', 'http:').replace(':5001', ':5000'));
-			return out;
-		}
 		if (s.startsWith('/img')) {
 			out.push(s);
 			return out;
 		}
 		if (s.startsWith('/')) {
-			out.push(`${BACKEND_BASE}${s}`);
-			out.push(`${BACKEND_BASE}${s}`.replace('https:', 'http:').replace(':5001', ':5000'));
+			out.push(s);
 			return out;
 		}
-		// filename only
-		out.push(`${BACKEND_BASE}/assets/room/${s}`);
-		out.push(`${BACKEND_BASE.replace('https:', 'http:').replace(':5001', ':5000')}/assets/room/${s}`);
+		// filename only -> prefer /img/room/<file>
+		out.push(`/img/room/${s}`);
 		return out;
 	};
 

@@ -24,50 +24,71 @@ namespace Hotel_System.API.Controllers
         {
             var roomTypes = await _context.LoaiPhongs.ToListAsync();
 
-            // Normalize UrlAnhLoaiPhong to absolute URLs so frontend can fetch assets reliably.
-            var baseUrl = $"{Request.Scheme}://{Request.Host.Value}";
+            // Normalize UrlAnhLoaiPhong to relative paths (prefer /img/room/) so frontend can request them
             var transformed = roomTypes.Select(rt => new
             {
                 rt.IdloaiPhong,
                 rt.TenLoaiPhong,
                 rt.MoTa,
-                UrlAnhLoaiPhong = ResolveImageUrl(rt.UrlAnhLoaiPhong, baseUrl),
+                UrlAnhLoaiPhong = ResolveImageUrl(rt.UrlAnhLoaiPhong),
             }).ToList();
 
             return Ok(transformed);
         }
 
-        private string? ResolveImageUrl(string? raw, string baseUrl)
+        private string? ResolveImageUrl(string? raw)
         {
             if (string.IsNullOrWhiteSpace(raw)) return null;
             var s = raw.Trim();
             // If already an absolute URL or protocol-relative, return as-is
             if (s.StartsWith("http://") || s.StartsWith("https://") || s.StartsWith("//")) return s;
-
-            // If s contains a path (starts with /), resolve to backend base
-            if (s.StartsWith("/"))
+            // If it's already a relative path under /img or /assets, return it as-is (relative)
+            if (s.StartsWith("/img") || s.StartsWith("/assets") || s.StartsWith("/"))
             {
-                // If it's already under /assets, we can use it directly
-                return baseUrl + s;
+                return s;
             }
 
-            // s is likely a filename stored in DB. Try to find it under wwwroot/assets/roomtype or assets/roomtype
-            // Prefer wwwroot/assets/roomtype when present
+            // s is likely a filename stored in DB. Prefer files under wwwroot/img/room (webp files live there).
             var fileName = s;
-            var wwwrootRoomType = Path.Combine(_env.ContentRootPath, "wwwroot", "assets", "roomtype", fileName);
-            if (System.IO.File.Exists(wwwrootRoomType))
+
+            // Exact match in wwwroot/img/room
+            var wwwrootImgRoom = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "room", fileName);
+            if (System.IO.File.Exists(wwwrootImgRoom))
             {
-                return baseUrl + "/assets/roomtype/" + fileName;
+                return "/img/room/" + fileName;
             }
 
-            var assetsRoomType = Path.Combine(_env.ContentRootPath, "assets", "roomtype", fileName);
-            if (System.IO.File.Exists(assetsRoomType))
+            // Try wildcard match by base name inside wwwroot/img/room (e.g. base -> base-101.webp)
+            var baseName = Path.GetFileNameWithoutExtension(fileName);
+            var dirImg = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "room");
+            if (Directory.Exists(dirImg))
             {
-                return baseUrl + "/assets/roomtype/" + fileName;
+                var match = Directory.GetFiles(dirImg).FirstOrDefault(f => Path.GetFileName(f).StartsWith(baseName, System.StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    return "/img/room/" + Path.GetFileName(match);
+                }
             }
 
-            // If not found on disk, still return a constructed URL (frontend will fallback if 404)
-            return baseUrl + "/assets/roomtype/" + fileName;
+            // Fallback: look into wwwroot/assets/room
+            var wwwrootAssetsRoom = Path.Combine(_env.ContentRootPath, "wwwroot", "assets", "room", fileName);
+            if (System.IO.File.Exists(wwwrootAssetsRoom))
+            {
+                return "/assets/room/" + fileName;
+            }
+
+            var dirAssets = Path.Combine(_env.ContentRootPath, "wwwroot", "assets", "room");
+            if (Directory.Exists(dirAssets))
+            {
+                var match = Directory.GetFiles(dirAssets).FirstOrDefault(f => Path.GetFileName(f).StartsWith(baseName, System.StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    return "/assets/room/" + Path.GetFileName(match);
+                }
+            }
+
+            // Last resort: return a relative path under /img/room using provided filename
+            return "/img/room/" + fileName;
         }
     }
 }

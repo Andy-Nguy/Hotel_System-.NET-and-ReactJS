@@ -116,6 +116,7 @@ const RoomPage: React.FC = () => {
                 onChange={setFilterDates}
                 value={filterDates}
                 disabled 
+                allowEmpty={[true, true]}
               />
             </Col>
             <Col xs={12} md={6} lg={3}>
@@ -140,7 +141,7 @@ const RoomPage: React.FC = () => {
                 allowClear
                 onChange={setFilterRoomType}
               >
-                {roomTypes.map(rt => (
+                {roomTypes.filter(rt => rt.idLoaiPhong).map(rt => (
                   <Select.Option key={rt.idLoaiPhong} value={rt.idLoaiPhong}>
                     {rt.tenLoaiPhong}
                   </Select.Option>
@@ -174,7 +175,9 @@ const RoomPage: React.FC = () => {
                   // 2. Ép kiểu 'value' thành [number, number] (theo yêu cầu của state)
                   setFilterPriceRange(value as [number, number]);
                 }}
-                tipFormatter={(value) => `${value?.toLocaleString()}đ`}
+                tooltip={{
+                  formatter: (value) => `${value?.toLocaleString()}đ`
+                }}
               />
             </Col>
           </Row>

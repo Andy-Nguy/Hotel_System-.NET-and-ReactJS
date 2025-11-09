@@ -12,6 +12,16 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      "/img": {
+        target: "https://localhost:5001",
+        changeOrigin: true,
+        secure: false,
+      },
+      "/assets": {
+        target: "https://localhost:5001",
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   // Build output goes directly into the backend wwwroot so the .NET app can serve it
