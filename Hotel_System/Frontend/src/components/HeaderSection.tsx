@@ -156,7 +156,7 @@ const HeaderSection: React.FC = () => {
             <div className="col-lg-2">
                 <div className="logo">
                 <a href="/" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/'; } }}>
-                  <img src="/img/logo.png" alt="" />
+                  <img src="/img/logo.webp" alt="" />
                 </a>
               </div>
             </div>

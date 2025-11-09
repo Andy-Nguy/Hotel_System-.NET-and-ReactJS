@@ -114,13 +114,83 @@ export async function getRoomTypes(): Promise<RoomType[]> {
   
   // Tự động chuẩn hóa
   const normalizedTypes: RoomType[] = (data as any[]).map(rt => ({
-    idLoaiPhong: rt.idLoaiPhong ?? rt.IdLoaiPhong,
-    tenLoaiPhong: rt.tenLoaiPhong ?? rt.TenLoaiPhong,
-    moTa: rt.moTa ?? rt.MoTa,
-    urlAnhLoaiPhong: rt.urlAnhLoaiPhong ?? rt.UrlAnhLoaiPhong,
+    // backend may serialize the id using different camel/pascal variants
+    idLoaiPhong: rt.idLoaiPhong ?? rt.IdloaiPhong ?? rt.IdLoaiPhong ?? rt.idLoaiPhong ?? rt.IdLoaiPhong ?? rt.idloaiPhong,
+    tenLoaiPhong: rt.tenLoaiPhong ?? rt.TenLoaiPhong ?? rt.tenLoaiPhong ?? rt.TenLoaiPhong,
+    moTa: rt.moTa ?? rt.MoTa ?? rt.moTa,
+    urlAnhLoaiPhong: rt.urlAnhLoaiPhong ?? rt.UrlAnhLoaiPhong ?? rt.urlAnhLoaiPhong,
   }));
   
   return normalizedTypes;
+}
+// THÊM CÁC HÀM CRUD CHO RoomType VÀ Room Ở ĐÂY
+// === CRUD for RoomType ===
+export async function createRoomType(payload: Partial<RoomType>): Promise<RoomType> {
+  const res = await fetch(`/api/LoaiPhong`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Failed to create room type: ${res.status}`);
+  const data = await res.json();
+  return {
+    idLoaiPhong: data.idLoaiPhong ?? data.IdloaiPhong ?? String(data.id),
+    tenLoaiPhong: data.tenLoaiPhong ?? data.TenLoaiPhong,
+    moTa: data.moTa ?? data.MoTa,
+    urlAnhLoaiPhong: data.urlAnhLoaiPhong ?? data.UrlAnhLoaiPhong,
+  };
+}
+
+export async function updateRoomType(id: string, payload: Partial<RoomType>): Promise<void> {
+  const res = await fetch(`/api/LoaiPhong/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Failed to update room type: ${res.status}`);
+}
+
+export async function deleteRoomType(id: string): Promise<void> {
+  const res = await fetch(`/api/LoaiPhong/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Failed to delete room type: ${res.status}`);
+}
+
+// === CRUD for Room ===
+export async function createRoom(payload: Partial<Room>): Promise<Room> {
+  const res = await fetch(`/api/Phong`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Failed to create room: ${res.status}`);
+  const data = await res.json();
+  return {
+    idphong: data.idphong ?? data.Idphong ?? String(data.id),
+    idloaiPhong: data.idloaiPhong ?? data.IdloaiPhong,
+    tenPhong: data.tenPhong ?? data.TenPhong,
+    tenLoaiPhong: data.tenLoaiPhong ?? data.TenLoaiPhong,
+    soPhong: data.soPhong ?? data.SoPhong,
+    moTa: data.moTa ?? data.MoTa,
+    soNguoiToiDa: data.soNguoiToiDa ?? data.SoNguoiToiDa,
+    giaCoBanMotDem: data.giaCoBanMotDem ?? data.GiaCoBanMotDem,
+    xepHangSao: data.xepHangSao ?? data.XepHangSao,
+    trangThai: data.trangThai ?? data.TrangThai,
+    urlAnhPhong: data.urlAnhPhong ?? data.UrlAnhPhong,
+  };
+}
+
+export async function updateRoom(id: string, payload: Partial<Room>): Promise<void> {
+  const res = await fetch(`/api/Phong/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Failed to update room: ${res.status}`);
+}
+
+export async function deleteRoom(id: string): Promise<void> {
+  const res = await fetch(`/api/Phong/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Failed to delete room: ${res.status}`);
 }
 
 // === 4. EXPORT MẶC ĐỊNH ===

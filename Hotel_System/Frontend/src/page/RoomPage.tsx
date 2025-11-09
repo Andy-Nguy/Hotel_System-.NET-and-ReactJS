@@ -34,6 +34,15 @@ const RoomPage: React.FC = () => {
 
   useEffect(() => {
     setLoading(true);
+    
+    // Read loaiId from URL hash to pre-filter by room type
+    const hash = window.location.hash;
+    const urlParams = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : '');
+    const loaiIdParam = urlParams.get('loaiId');
+    if (loaiIdParam) {
+      setFilterRoomType(loaiIdParam);
+    }
+    
     Promise.all([
       getRooms(),
       getRoomTypes()

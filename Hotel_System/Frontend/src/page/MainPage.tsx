@@ -12,14 +12,21 @@ import FooterSection from "../components/FooterSection";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
 import RoomPage from "./RoomPage";
+import AdminDashboard from "../admin/pages/dashboard";
+import RoomManager from "../admin/pages/RoomManager";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
   const resolveRoute = () => {
-    const p = window.location.pathname;
-    if (p && p !== "/") return p;
-    const h = window.location.hash;
-    if (h) return h;
+    // Prefer pathname when present (clean URLs like /admin/rooms). Fall back to hash.
+    try {
+      const p = window.location.pathname;
+      if (p && p !== "/") return p;
+    } catch (e) {}
+    try {
+      const h = window.location.hash;
+      if (h && h !== "#") return h;
+    } catch (e) {}
     return "#";
   };
 
@@ -189,6 +196,16 @@ const MainPage: React.FC = () => {
         <FooterSection />
       </>
     );
+  }
+
+  // Admin dashboard route (accessible at /admin/dashboard or #admin/dashboard)
+  if (route === "#admin/dashboard" || route === "/admin/dashboard" || route === "#/admin/dashboard") {
+    return <AdminDashboard />;
+  }
+
+  // Admin room manager route (accessible at /admin/rooms or #admin/rooms)
+  if (route === "#admin/rooms" || route === "/admin/rooms" || route === "#/admin/rooms") {
+    return <RoomManager />;
   }
 
   return (

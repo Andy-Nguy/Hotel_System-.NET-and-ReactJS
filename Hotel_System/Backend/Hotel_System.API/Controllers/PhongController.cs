@@ -127,5 +127,57 @@ namespace Hotel_System.API.Controllers
             return Ok(rooms);
         }
        
+        // POST: api/Phong
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] Phong payload)
+        {
+            if (payload == null) return BadRequest("Invalid payload");
+            if (string.IsNullOrWhiteSpace(payload.Idphong)) payload.Idphong = Guid.NewGuid().ToString();
+
+            _context.Phongs.Add(payload);
+            await _context.SaveChangesAsync();
+
+            // Return created resource (simple shape)
+            return CreatedAtAction(nameof(GetAll), new { id = payload.Idphong }, payload);
+        }
+
+        // PUT: api/Phong/{id}
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(string id, [FromBody] Phong payload)
+        {
+            if (payload == null) return BadRequest("Invalid payload");
+            var existing = await _context.Phongs.FindAsync(id);
+            if (existing == null) return NotFound();
+
+            // Map updatable fields
+            existing.IdloaiPhong = payload.IdloaiPhong;
+            existing.TenPhong = payload.TenPhong;
+            existing.SoPhong = payload.SoPhong;
+            existing.MoTa = payload.MoTa;
+            existing.SoNguoiToiDa = payload.SoNguoiToiDa;
+            existing.GiaCoBanMotDem = payload.GiaCoBanMotDem;
+            existing.XepHangSao = payload.XepHangSao;
+            existing.TrangThai = payload.TrangThai;
+            existing.UrlAnhPhong = payload.UrlAnhPhong;
+
+            _context.Phongs.Update(existing);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        // DELETE: api/Phong/{id}
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(string id)
+        {
+            var existing = await _context.Phongs.FindAsync(id);
+            if (existing == null) return NotFound();
+
+            _context.Phongs.Remove(existing);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+       
     }
 }
