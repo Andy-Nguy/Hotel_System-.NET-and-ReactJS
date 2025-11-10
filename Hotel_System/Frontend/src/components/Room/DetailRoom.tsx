@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getAmenitiesForRoom } from '../../api/amenticsApi';
 const BACKEND_BASE = ((import.meta as any).env?.VITE_API_BASE as string) || 'https://localhost:5001';
 
 function resolveImageUrl(u?: string | null) {
@@ -140,7 +141,8 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 
 						<div>
 							<h4 style={{ marginTop: 0, marginBottom: 12, fontSize: 16, fontWeight: 600 }}>Special Benefits</h4>
-							<div style={{ color: '#666' }}>Business services, for a fee</div>
+							{/* Render amenities for this room */}
+							<AmenitiesForRoom roomId={room.idphong} />
 						</div>
 					</div>
 
@@ -167,6 +169,59 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 		</Modal>
 	);
 };
+
+// Small subcomponent that fetches and displays amenities for a given room
+type AmenitySmall = { idtienNghi: string; tenTienNghi: string };
+
+function AmenitiesForRoom({ roomId }: { roomId?: string | null }) {
+	const [items, setItems] = useState<AmenitySmall[]>([]);
+	const [loading, setLoading] = useState(false);
+
+	useEffect(() => {
+		let cancelled = false;
+		if (!roomId) {
+			setItems([]);
+			return;
+		}
+
+		setLoading(true);
+		getAmenitiesForRoom(roomId)
+			.then((data) => {
+				if (cancelled) return;
+				// normalize a bit: ensure objects have tenTienNghi
+				const norm = (data || []).map((d: any) => ({
+					idtienNghi: d.idtienNghi || d.IdtienNghi || d.idTienNghi || '',
+					tenTienNghi: d.tenTienNghi || d.TenTienNghi || ''
+				}));
+				setItems(norm);
+			})
+			.catch((err) => {
+				console.error('Failed to load amenities for room', roomId, err);
+				if (!cancelled) setItems([]);
+			})
+			.finally(() => { if (!cancelled) setLoading(false); });
+
+		return () => { cancelled = true; };
+	}, [roomId]);
+
+	if (loading) return <div style={{ color: '#666' }}>Loading amenities…</div>;
+	if (!items || items.length === 0) return <div style={{ color: '#666' }}>—</div>;
+
+	return (
+		<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+			{items.map(it => (
+				<span key={it.idtienNghi || it.tenTienNghi} style={{
+					background: '#f1f5f9',
+					color: '#111827',
+					padding: '6px 10px',
+					borderRadius: 999,
+					fontSize: 13,
+					border: '1px solid #e2e8f0'
+				}}>{it.tenTienNghi || it.idtienNghi}</span>
+			))}
+		</div>
+	);
+}
 
 export default DetailRoom;
 
