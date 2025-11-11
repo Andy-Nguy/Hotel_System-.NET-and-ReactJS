@@ -13,6 +13,14 @@ public partial class DichVu
 
     public string? HinhDichVu { get; set; }
 
+    // New columns from updated schema
+    // SQL TIME maps to TimeSpan in .NET
+    public TimeSpan? ThoiGianBatDau { get; set; }
+    public TimeSpan? ThoiGianKetThuc { get; set; }
+
+    // Status: "Đang hoạt động" or "Ngưng hoạt động"
+    public string? TrangThai { get; set; }
+
     public virtual ICollection<Cthddv> Cthddvs { get; set; } = new List<Cthddv>();
 
     public virtual ICollection<TtdichVu> TtdichVus { get; set; } = new List<TtdichVu>();
