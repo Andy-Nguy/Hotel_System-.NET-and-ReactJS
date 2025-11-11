@@ -15,6 +15,7 @@ import RoomPage from "./RoomPage";
 import AdminDashboard from "../admin/pages/dashboard";
 import RoomManager from "../admin/pages/RoomManager";
 import AmenticsManager from "../admin/pages/AmenticsManager";
+import ServiceManager from "../admin/pages/ServiceManager";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
@@ -212,6 +213,11 @@ const MainPage: React.FC = () => {
   // Admin amenities page route (accessible at /admin/amenities or #admin/amenities)
   if (route === "#admin/amenities" || route === "/admin/amenities" || route === "#/admin/amenities") {
     return <AmenticsManager />;
+  }
+
+  // Admin services page route (accessible at /admin/services or #admin/services)
+  if (route === "#admin/services" || route === "/admin/services" || route === "#/admin/services") {
+    return <ServiceManager />;
   }
 
   return (

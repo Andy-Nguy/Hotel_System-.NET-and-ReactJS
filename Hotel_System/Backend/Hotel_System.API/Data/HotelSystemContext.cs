@@ -151,6 +151,11 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.TienDichVu)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ThoiGianBatDau).HasColumnName("ThoiGianBatDau");
+            entity.Property(e => e.ThoiGianKetThuc).HasColumnName("ThoiGianKetThuc");
+            entity.Property(e => e.TrangThai)
+                .HasMaxLength(50)
+                .HasColumnName("TrangThai");
         });
 
         modelBuilder.Entity<HoaDon>(entity =>

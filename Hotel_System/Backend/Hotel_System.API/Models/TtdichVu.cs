@@ -11,5 +11,9 @@ public partial class TtdichVu
 
     public string? ThongTinDv { get; set; }
 
+    // New columns from updated schema
+    public int? ThoiLuongUocTinh { get; set; }
+    public string? GhiChu { get; set; }
+
     public virtual DichVu IddichVuNavigation { get; set; } = null!;
 }
