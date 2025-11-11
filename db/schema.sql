@@ -329,6 +329,20 @@ CREATE TABLE DatPhong (
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+-- Thêm dữ liệu mẫu cho DatPhong để test
+INSERT INTO DatPhong (
+    IDDatPhong, IDKhachHang, IDPhong, NgayDatPhong,
+    NgayNhanPhong, NgayTraPhong, SoDem,
+    TongTien, TienCoc, TrangThai, TrangThaiThanhToan
+)
+VALUES
+('DP003', 1, 'P102', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 4, 2),  -- Hoàn thành (quá khứ)
+('DP002', 1, 'P301', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 2, 2),  -- Hoàn thành (quá khứ)
+
+('DP004', 2, 'P101', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 2, 1); -- Đã xác nhận (tương lai)
+
+GO
+
 -------------------------------------------
 -- 5) HÓA ĐƠN + DỊCH VỤ
 -------------------------------------------
