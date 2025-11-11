@@ -22,14 +22,51 @@ namespace Hotel_System.API.Services
             var allRooms = await _context.Phongs.Include(p => p.IdloaiPhongNavigation).ToListAsync();
             _logger.LogInformation($"Total rooms in DB: {allRooms.Count}");
 
+            // Convert DateTime to DateOnly for comparison
+            var checkInDate = DateOnly.FromDateTime(checkIn);
+            var checkOutDate = DateOnly.FromDateTime(checkOut);
+
+            // Get booked room IDs from both old (DatPhong.IDPhong) and new (ChiTietDatPhong) structure
+            var bookedRoomIds = new HashSet<string>();
+
+            // Check từ DatPhong.IDPhong (cấu trúc cũ - 1 đơn = 1 phòng)
+            var bookedFromDatPhong = await _context.DatPhongs
+                .Where(dp =>
+                    dp.Idphong != null &&
+                    new[] { 1, 2, 3 }.Contains(dp.TrangThai) && // 1:Chờ XN, 2:Đã XN, 3:Đang dùng
+                    dp.NgayNhanPhong < checkOutDate &&
+                    dp.NgayTraPhong > checkInDate)
+                .Select(dp => dp.Idphong)
+                .ToListAsync();
+
+            foreach (var roomId in bookedFromDatPhong)
+            {
+                if (roomId != null) bookedRoomIds.Add(roomId);
+            }
+
+            // Check từ ChiTietDatPhong (cấu trúc mới - 1 đơn = nhiều phòng)
+            var bookedFromChiTiet = await _context.ChiTietDatPhongs
+                .Include(ct => ct.DatPhong)
+                .Where(ct =>
+                    ct.DatPhong != null &&
+                    new[] { 1, 2, 3 }.Contains(ct.DatPhong.TrangThai) &&
+                    ct.DatPhong.NgayNhanPhong < checkOutDate &&
+                    ct.DatPhong.NgayTraPhong > checkInDate)
+                .Select(ct => ct.IDPhong)
+                .ToListAsync();
+
+            foreach (var roomId in bookedFromChiTiet)
+            {
+                bookedRoomIds.Add(roomId);
+            }
+
+            _logger.LogInformation($"Booked room IDs: {string.Join(", ", bookedRoomIds)}");
+
+            // Filter available rooms
             var availableRooms = allRooms.Where(p =>
-                 p.TrangThai == "Trống" &&  
+                p.TrangThai == "Trống" &&  
                 p.SoNguoiToiDa >= numberOfGuests &&
-                !_context.DatPhongs.Any(dp =>
-                    dp.Idphong == p.Idphong &&
-                    new[] { 1, 2, 3 }.Contains(dp.TrangThai) &&
-                    dp.NgayNhanPhong < DateOnly.FromDateTime(checkOut) &&
-                    dp.NgayTraPhong > DateOnly.FromDateTime(checkIn))
+                !bookedRoomIds.Contains(p.Idphong)
             ).ToList();
 
             _logger.LogInformation($"Available rooms after filter: {availableRooms.Count}");

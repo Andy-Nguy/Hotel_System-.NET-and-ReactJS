@@ -13,6 +13,8 @@ import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
 import RoomPage from "./RoomPage";
 import ProfilePage from "./ProfilePage";
+import SelectRoomPage from "./SelectRoomPage";
+import CheckoutPage from "./CheckoutPage";
 import AdminDashboard from "../admin/pages/dashboard";
 import RoomManager from "../admin/pages/RoomManager";
 import AmenticsManager from "../admin/pages/AmenticsManager";
@@ -221,6 +223,28 @@ const MainPage: React.FC = () => {
         <OffcanvasMenu />
         <HeaderSection />
         <ProfilePage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#select-room" || route === "/select-room") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <SelectRoomPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#checkout" || route === "/checkout") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <CheckoutPage />
         <FooterSection />
       </>
     );

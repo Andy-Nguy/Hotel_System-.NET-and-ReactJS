@@ -4,7 +4,12 @@ import RoomCard from "./Room/RoomCard";
 type BookingFormProps = {
   horizontal?: boolean; // compact inline layout to save vertical space
   fullWidth?: boolean; // stretch across the full row with larger inputs (hero/room bar style)
-  onResults?: (results: any[], message?: string) => void; // callback to pass results instead of showing modal
+  // onResults now accepts optional metadata as 3rd argument: { rooms }
+  onResults?: (
+    results: any[],
+    message?: string,
+    meta?: { rooms?: number }
+  ) => void; // callback to pass results instead of showing modal
 };
 
 const BookingForm: React.FC<BookingFormProps> = ({
@@ -134,24 +139,21 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
         const normalized = resData.map(normalize);
 
-        if (onResults) {
-          onResults(normalized);
-        } else {
-          // If no onResults (homepage), store normalized results so RoomPage can render immediately
-          try {
-            sessionStorage.setItem(
-              "bookingResults",
-              JSON.stringify(normalized)
-            );
-          } catch {}
-          const params = new URLSearchParams({
-            checkIn: new Date(checkIn).toISOString().slice(0, 10),
-            checkOut: new Date(checkOut).toISOString().slice(0, 10),
-            guests: String(guests ?? 1),
-            rooms: String(rooms ?? 1),
-          });
-          window.location.href = `/rooms?${params.toString()}`;
-        }
+        // Always store results in sessionStorage for later use
+        try {
+          sessionStorage.setItem("bookingResults", JSON.stringify(normalized));
+        } catch {}
+
+        const params = new URLSearchParams({
+          checkIn: new Date(checkIn).toISOString().slice(0, 10),
+          checkOut: new Date(checkOut).toISOString().slice(0, 10),
+          guests: String(guests ?? 1),
+          rooms: String(rooms ?? 1),
+        });
+
+        // Always redirect to select-room page for any rooms count (>=1)
+        // Save normalized results in sessionStorage first.
+        window.location.href = `/select-room?${params.toString()}`;
       }
     } catch (err: any) {
       const msg = err?.message ?? String(err);

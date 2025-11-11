@@ -36,4 +36,7 @@ public partial class DatPhong
     public virtual ICollection<LichSuDatPhong> LichSuDatPhongs { get; set; } = new List<LichSuDatPhong>();
 
     public virtual ICollection<ThongKeDoanhThuKhachSan> ThongKeDoanhThuKhachSans { get; set; } = new List<ThongKeDoanhThuKhachSan>();
+
+    // Chi tiết các phòng trong đơn đặt
+    public virtual ICollection<ChiTietDatPhong> ChiTietDatPhongs { get; set; } = new List<ChiTietDatPhong>();
 }

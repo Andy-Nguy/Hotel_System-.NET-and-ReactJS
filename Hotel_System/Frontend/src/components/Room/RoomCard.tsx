@@ -11,6 +11,7 @@ type Props = {
   room: Room;
   onOpenDetail: (room: Room) => void;
   onBook: (room: Room) => void;
+  bookButtonText?: string; // Thêm prop này
 };
 
 function formatPrice(v?: number | null) {
@@ -18,7 +19,12 @@ function formatPrice(v?: number | null) {
   return v.toLocaleString("vi-VN", { style: "currency", currency: "VND" });
 }
 
-const RoomCard: React.FC<Props> = ({ room, onOpenDetail, onBook }) => {
+const RoomCard: React.FC<Props> = ({
+  room,
+  onOpenDetail,
+  onBook,
+  bookButtonText = "Đặt phòng ngay",
+}) => {
   // Default fallback (served from Frontend `public/` -> available at /img/...)
   // Use an existing image from Frontend/public/img/room to avoid 404.
   // Use a fallback image that exists in public/img/room to avoid 404 spam
@@ -212,7 +218,7 @@ const RoomCard: React.FC<Props> = ({ room, onOpenDetail, onBook }) => {
                 width: "min(420px, 85%)",
               }}
             >
-              Đặt phòng ngay
+              {bookButtonText}
             </Button>
           </div>
                  {" "}
