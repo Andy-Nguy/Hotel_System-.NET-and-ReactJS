@@ -17,6 +17,8 @@ public partial class HotelSystemContext : DbContext
 
     public virtual DbSet<Cthddv> Cthddvs { get; set; }
 
+    public virtual DbSet<ChiTietDatPhong> ChiTietDatPhongs { get; set; }
+
     public virtual DbSet<DanhGium> DanhGia { get; set; }
 
     public virtual DbSet<DatPhong> DatPhongs { get; set; }
@@ -79,6 +81,40 @@ public partial class HotelSystemContext : DbContext
             entity.HasOne(d => d.IdhoaDonNavigation).WithMany(p => p.Cthddvs)
                 .HasForeignKey(d => d.IdhoaDon)
                 .HasConstraintName("FK_CTHDDV_HoaDon");
+        });
+
+        modelBuilder.Entity<ChiTietDatPhong>(entity =>
+        {
+            entity.HasKey(e => e.IDChiTiet).HasName("PK__ChiTietD__ADBF4F65A1234567");
+
+            entity.ToTable("ChiTietDatPhong");
+
+            entity.HasIndex(e => new { e.IDDatPhong, e.IDPhong }, "UQ_DatPhong_Phong").IsUnique();
+
+            entity.Property(e => e.IDChiTiet).HasColumnName("IDChiTiet");
+            entity.Property(e => e.IDDatPhong)
+                .HasMaxLength(50)
+                .HasColumnName("IDDatPhong");
+            entity.Property(e => e.IDPhong)
+                .HasMaxLength(50)
+                .HasColumnName("IDPhong");
+            entity.Property(e => e.SoDem).HasColumnName("SoDem");
+            entity.Property(e => e.GiaPhong)
+                .HasColumnType("decimal(18, 2)")
+                .HasColumnName("GiaPhong");
+            entity.Property(e => e.ThanhTien)
+                .HasColumnType("decimal(18, 2)")
+                .HasColumnName("ThanhTien");
+            entity.Property(e => e.GhiChu).HasColumnName("GhiChu");
+
+            entity.HasOne(d => d.DatPhong).WithMany(p => p.ChiTietDatPhongs)
+                .HasForeignKey(d => d.IDDatPhong)
+                .HasConstraintName("FK_ChiTietDatPhong_DatPhong");
+
+            entity.HasOne(d => d.Phong).WithMany()
+                .HasForeignKey(d => d.IDPhong)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ChiTietDatPhong_Phong");
         });
 
         modelBuilder.Entity<DanhGium>(entity =>

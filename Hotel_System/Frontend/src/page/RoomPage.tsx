@@ -129,9 +129,36 @@ const RoomPage: React.FC = () => {
     );
   };
 
-  const handleBookingResults = (results: any[], message?: string) => {
-    setAvailableRooms(results);
-    setBookingMessage(message || null);
+  const handleBookingResults = (
+    results: any[],
+    message?: string,
+    meta?: { rooms?: number }
+  ) => {
+    // Prefer rooms count from the callback metadata; fallback to URL param.
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomsCount = Number(
+      meta?.rooms ?? parseInt(urlParams.get("rooms") || "1")
+    );
+
+    if (roomsCount > 1 && results.length > 0) {
+      // Redirect to select-room only when explicitly requested (rooms > 1)
+      const checkIn = urlParams.get("checkIn") || "";
+      const checkOut = urlParams.get("checkOut") || "";
+      const guests = urlParams.get("guests") || "1";
+
+      const params = new URLSearchParams({
+        checkIn,
+        checkOut,
+        guests,
+        rooms: roomsCount.toString(),
+      });
+
+      window.location.href = `/select-room?${params.toString()}`;
+    } else {
+      // Single room: show inline results
+      setAvailableRooms(results);
+      setBookingMessage(message || null);
+    }
   };
 
   // Reset availableRooms when filters change
