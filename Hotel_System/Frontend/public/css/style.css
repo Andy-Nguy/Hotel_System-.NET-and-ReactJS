@@ -626,6 +626,136 @@ ol {
   height: 46px;
   margin-top: 30px;
 }
+
+/* Full-width booking bar style (hero/room header style) */
+.booking-form--full {
+  background: transparent;
+  padding: 0;
+}
+.booking-form--full form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+/* Date box styling - large day number with small meta info below */
+.booking-form--full .date-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+  min-width: 140px;
+}
+.booking-form--full .date-box:hover {
+  border-color: #9ca3af;
+}
+.booking-form--full .date-large {
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  color: #1f2937;
+  font-family: "Lora", serif;
+}
+.booking-form--full .date-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.booking-form--full .date-month {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.booking-form--full .date-weekday {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Outlined button style for room/guest selector and special pricing */
+.booking-form--full .outlined-btn {
+  padding: 12px 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  position: relative;
+  height: 52px;
+}
+.booking-form--full .outlined-btn:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+/* Dark navy CTA button */
+.booking-form--full .cta-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  background: #dfa974;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  height: 52px;
+}
+.booking-form--full .cta-btn:hover {
+  background: #1a4d7a;
+}
+
+/* Hide native select controls visually but keep date inputs interactive. */
+.booking-form--full select {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .booking-form--full form {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .booking-form--full .date-box {
+    min-width: 120px;
+  }
+  .booking-form--full .date-large {
+    font-size: 36px;
+  }
+}
+
+@media (max-width: 768px) {
+  .booking-form--full form {
+    gap: 8px;
+  }
+  .booking-form--full .date-box,
+  .booking-form--full .outlined-btn,
+  .booking-form--full .cta-btn {
+    height: 46px;
+    padding: 8px 14px;
+  }
+  .booking-form--full .date-large {
+    font-size: 30px;
+  }
+}
+
 .hero-slider {
   position: absolute;
   width: 100%;

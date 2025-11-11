@@ -10,7 +10,7 @@ const FooterSection: React.FC = () => {
               <div className="ft-about">
                 <div className="logo">
                   <a href="#">
-                    <img src="/img/footer-logo.png" alt="" />
+                    <img src="/img/footer-logo.webp" alt="" />
                   </a>
                 </div>
                 <p>

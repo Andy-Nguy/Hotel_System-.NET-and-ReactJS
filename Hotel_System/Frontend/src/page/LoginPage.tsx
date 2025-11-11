@@ -22,18 +22,21 @@ const LoginPage: React.FC = () => {
         setMessage("Đăng nhập thành công! Đang chuyển về trang chủ...");
         // return to home page after a short delay
         setTimeout(() => {
-          // remove hash from URL while keeping path and query
+          // Prefer client-side SPA navigation: push '/' and dispatch popstate so
+          // MainPage will re-evaluate route without a full reload.
           try {
-            window.history.replaceState(
-              null,
-              "",
-              window.location.pathname + window.location.search
-            );
+            window.history.pushState(null, "", "/");
+            // notify listeners (MainPage listens for popstate)
+            window.dispatchEvent(new PopStateEvent("popstate"));
           } catch (e) {
-            // fallback to clearing hash if replaceState is not available
-            window.location.hash = "";
+            // fallback to full navigation if history API isn't available
+            try {
+              window.location.href = "/";
+            } catch {
+              // last resort: reload current page
+              window.location.reload();
+            }
           }
-          window.location.reload();
         }, 1500);
       } else {
         setMessage("Không nhận được token từ server");

@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Button } from 'antd';
-import type { Room } from '../../../../Backend/Hotel_System.API/Services/roomService';
+import React, { useEffect, useState } from "react";
+import { Button } from "antd";
+import type { Room } from "../../../../Frontend/src/api/roomsApi";
 
 // Backend base URL for assets. You can set VITE_API_BASE in .env to override.
-const BACKEND_BASE = ((import.meta as any).env?.VITE_API_BASE as string) || 'https://localhost:5001';
+const BACKEND_BASE =
+  ((import.meta as any).env?.VITE_API_BASE as string) ||
+  "https://localhost:5001";
 
 type Props = {
   room: Room;
@@ -12,61 +14,52 @@ type Props = {
 };
 
 function formatPrice(v?: number | null) {
-  if (v == null) return 'Liên hệ';
-  return v.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+  if (v == null) return "Liên hệ";
+  return v.toLocaleString("vi-VN", { style: "currency", currency: "VND" });
 }
 
 const RoomCard: React.FC<Props> = ({ room, onOpenDetail, onBook }) => {
   // Default fallback (served from Frontend `public/` -> available at /img/...)
   // Use an existing image from Frontend/public/img/room to avoid 404.
-  const defaultJpg = '/img/room/room-1.jpg';
-  const defaultWebp = defaultJpg; // we don't have webp default in public, use jpg path
+  // Use a fallback image that exists in public/img/room to avoid 404 spam
+  const defaultWebp = "/img/room/room-6.jpg"; // room-6.jpg exists in public
 
-  let imageBase = '';
-  if (room.urlAnhPhong) {
-    const u = String(room.urlAnhPhong).trim();
-    if (u.startsWith('http') || u.startsWith('//')) {
+  // Support several possible field names returned by backend (roomImageUrl, urlAnhPhong, UrlAnhPhong)
+  const rawImageField =
+    (room as any).roomImageUrl ??
+    (room as any).RoomImageUrl ??
+    (room as any).urlAnhPhong ??
+    (room as any).UrlAnhPhong ??
+    (room as any).UrlAnhPhong ??
+    (room as any).urlAnhPhong;
+  let imageBase = "";
+  if (rawImageField) {
+    const u = String(rawImageField).trim();
+    if (u.startsWith("http") || u.startsWith("//")) {
       imageBase = u;
-    } else if (u.startsWith('/')) {
-      // absolute path already pointing to public or backend path
+    } else if (u.startsWith("/")) {
       imageBase = u;
     } else {
-      // stored as filename in backend assets folder
-      imageBase = `${BACKEND_BASE}/assets/room/${u}`;
+      // try relative path under /img/room and also backend base if configured
+      imageBase = `/img/room/${u}`;
     }
   }
 
-  // Construct paths for <picture>: prefer webp source, fallback to jpg or default
-  const makeWebp = (base: string) => {
-    try {
-      // if base already has an extension, replace it with .webp
-      const idx = base.lastIndexOf('.');
-      if (idx > base.lastIndexOf('/')) return base.substring(0, idx) + '.webp';
-    } catch {}
-    return base + '.webp';
-  };
+  // Only work with webp files - no jpg conversion
+  const imageWebp = imageBase; // use the original path (already .webp from database)
 
-  const makeJpg = (base: string) => {
-    try {
-      const idx = base.lastIndexOf('.');
-      if (idx > base.lastIndexOf('/')) return base.substring(0, idx) + '.jpg';
-    } catch {}
-    return base + '.jpg';
-  };
-
-  const imageWebp = imageBase ? makeWebp(imageBase) : defaultWebp;
-  const imageFallback = imageBase ? makeJpg(imageBase) : defaultJpg;
-
-  const [selectedSrc, setSelectedSrc] = useState<string>(imageFallback);
+  const [selectedSrc, setSelectedSrc] = useState<string>(
+    imageWebp || defaultWebp
+  );
   const [loaded, setLoaded] = useState(false);
 
-  // Try to preload webp first, then jpg, then default. Log useful info to console
+  // Only try webp files - no jpg conversion needed
   useEffect(() => {
     let canceled = false;
     const tryLoad = (srcs: string[]) => {
       if (srcs.length === 0) {
         if (!canceled) {
-          setSelectedSrc(defaultJpg);
+          setSelectedSrc(defaultWebp);
           setLoaded(true);
         }
         return;
@@ -74,111 +67,165 @@ const RoomCard: React.FC<Props> = ({ room, onOpenDetail, onBook }) => {
       const s = srcs[0];
       const img = new Image();
       // allow CORS image loading if backend serves with CORS headers
-      img.crossOrigin = 'anonymous';
+      img.crossOrigin = "anonymous";
       img.onload = () => {
         if (canceled) return;
-        console.debug('RoomCard: image loaded', s);
+        console.debug("RoomCard: image loaded", s);
         setSelectedSrc(s);
         setLoaded(true);
       };
       img.onerror = (e) => {
-        console.warn('RoomCard: failed to load image, trying next', s, e);
+        // only log first failure to reduce console noise
+        try {
+          console.debug &&
+            console.debug("RoomCard: failed to load image, trying next", s);
+        } catch {}
         tryLoad(srcs.slice(1));
       };
       img.src = s;
     };
 
-    // Start with webp -> jpg -> original backend path -> possible http fallback for localhost -> defaults
+    // Build unique candidate list (try explicit imageBase, backend-prefixed, then fallback)
     const candidates = [] as string[];
+    const apiBase = ((import.meta as any).env?.VITE_API_BASE as string) || "";
     if (imageWebp) candidates.push(imageWebp);
-    if (imageFallback) candidates.push(imageFallback);
-    if (imageBase) {
-      // try the backend path as-is too (in case urlAnhPhong already includes extension)
-      candidates.push(imageBase);
-
-      // If backend is localhost (dev), also try common alternate port/protocol (http://localhost:5000)
-      try {
-        const url = new URL(imageBase);
-        if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-          // try same path on http://localhost:5000
-          const alt = `${url.protocol === 'https:' ? 'http:' : 'https:'}//${url.hostname}:5000${url.pathname}${url.search}`;
-          // also add webp/jpg variants for alt
-          const altBase = alt.replace(/\.[a-zA-Z0-9]+$/, '');
-          candidates.push(alt);
-          try {
-            const altWebp = makeWebp(alt);
-            const altJpg = makeJpg(alt);
-            candidates.push(altWebp, altJpg);
-          } catch {}
-        }
-      } catch {}
+    // if image is a filename-relative (no leading slash) we already prefixed to /img/room/<file>
+    // additionally try backend absolute URL if VITE_API_BASE is set
+    if (apiBase && imageWebp && !imageWebp.startsWith("http")) {
+      const trimmed = imageWebp.startsWith("/")
+        ? imageWebp.slice(1)
+        : imageWebp;
+      candidates.push(`${apiBase.replace(/\/$/, "")}/${trimmed}`);
     }
+    if (!candidates.includes(defaultWebp)) candidates.push(defaultWebp);
+    // final fallback: small inline SVG data URL to avoid any network request
+    const svgFallback = `data:image/svg+xml;utf8,${encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450"><rect width="100%" height="100%" fill="#eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#999" font-family="Arial" font-size="24">No image</text></svg>'
+    )}`;
+    candidates.push(svgFallback);
 
-    // finally try frontend defaults
-    candidates.push(defaultWebp, defaultJpg);
-
-    console.debug('RoomCard: image candidates', candidates);
+    console.debug("RoomCard: image candidates", candidates);
 
     tryLoad(candidates);
 
     return () => {
       canceled = true;
     };
-  }, [imageWebp, imageFallback, imageBase]);
+  }, [imageWebp]);
 
   return (
-    <div style={{
-      border: '1px solid #eee',
-      borderRadius: 8,
-      overflow: 'hidden',
-      background: '#fff',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.06)'
-    }}>
-      {/* Render image as a background to ensure consistent cover/crop like image2 */}
+    <div
+      style={{
+        border: "1px solid #eee",
+        borderRadius: 8,
+        overflow: "hidden",
+        background: "#fff",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+        // THAY ĐỔI 1: Biến thẻ (card) thành flex-column
+        display: "flex",
+        flexDirection: "column",
+        height: "100%", // Đảm bảo thẻ lấp đầy ô grid/flex cha
+      }}
+    >
+            {/* Render image as a background */}     {" "}
       <div
         role="img"
-        aria-label={room.tenPhong ?? 'Phòng'}
+        aria-label={room.tenPhong ?? "Phòng"}
         style={{
-          width: '100%',
+          width: "100%",
           height: 220,
-          overflow: 'hidden',
+          overflow: "hidden",
           backgroundImage: `url(${selectedSrc})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          flexShrink: 0, // Ngăn ảnh bị co lại
         }}
       />
-
-      <div style={{ padding: 18 }}>
-        <h2 style={{ margin: 0, fontSize: 30, fontWeight: 'bold' }}>{room.tenPhong ?? 'Phòng nghỉ'}</h2>
-
-        <a onClick={() => onOpenDetail(room)} style={{display: 'inline-block', marginBottom: 12, color: '#dfa974', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold'}}>
-          Xem thông tin phòng chi tiết
-        </a>
-
-        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-          <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
-            <li>Ngủ {room.soNguoiToiDa ?? 2} người</li>
-            <li>Phù phiếm kép</li>
-          </ul>
-          <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
-            <li>Không gian làm việc</li>
-            <li>Tủ lạnh mini</li>
-          </ul>
+           {" "}
+      <div
+        style={{
+          padding: 18,
+          // THAY ĐỔI 2: Biến khu vực nội dung thành flex-column
+          display: "flex",
+          flexDirection: "column",
+          flexGrow: 1, // Yêu cầu nó lấp đầy không gian còn lại
+        }}
+      >
+        {/* THAY ĐỔI 3: Tạo một wrapper cho nội dung trên */}
+        {/* Wrapper này sẽ giãn ra để đẩy "footer" xuống */}
+        <div style={{ flexGrow: 1 }}>
+                 {" "}
+          <h2 style={{ margin: 0, fontSize: 30, fontWeight: "bold" }}>
+            {room.tenPhong ?? "Phòng nghỉ"}
+          </h2>
+                 {" "}
+          <a
+            onClick={() => onOpenDetail(room)}
+            style={{
+              display: "inline-block",
+              marginBottom: 12,
+              color: "#dfa974",
+              textDecoration: "none",
+              borderBottom: "2px solid #dfa974",
+              paddingBottom: 2,
+              cursor: "pointer",
+              fontWeight: "bold",
+              lineHeight: 1.2,
+            }}
+          >
+            Xem thông tin phòng chi tiết
+          </a>
+                 {" "}
+          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                     {" "}
+            <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
+                          <li>Ngủ {room.soNguoiToiDa ?? 2} người</li>           {" "}
+              <li>Phù phiếm kép</li>         {" "}
+            </ul>
+                     {" "}
+            <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
+                          <li>Không gian làm việc</li>           {" "}
+              <li>Tủ lạnh mini</li>         {" "}
+            </ul>
+                   {" "}
+          </div>
         </div>
-
-        <div style={{ marginBottom: 10 }}>
-          <Button type="primary" block onClick={() => onBook(room)} style={{ background: '#dfa974', borderColor: '#dfa974', height: 64, fontSize: 18 }}>
-            Đặt phòng ngay
-          </Button>
+        {/* THAY ĐỔI 4: Tạo một wrapper cho "footer" */}
+        {/* Wrapper này sẽ KHÔNG giãn ra (flexShrink: 0) */}
+        <div>
+          <div
+            style={{
+              marginBottom: 10,
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <Button
+              type="primary"
+              onClick={() => onBook(room)}
+              style={{
+                background: "#dfa974",
+                borderColor: "#dfa974",
+                height: 64,
+                fontSize: 18,
+                width: "min(420px, 85%)",
+              }}
+            >
+              Đặt phòng ngay
+            </Button>
+          </div>
+                 {" "}
+          <div
+            style={{ fontSize: 12, color: "#666" /* Bỏ margin bottom ở đây */ }}
+          >
+                      Giá bao gồm phí dịch vụ 5% mỗi lần lưu trú, nhưng không
+            bao gồm thuế        {" "}
+          </div>
         </div>
-
-        <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
-          Giá bao gồm phí dịch vụ 5% mỗi lần lưu trú, nhưng không bao gồm thuế
-        </div>
-
-        {/* main CTA already provided above */}
+             {" "}
       </div>
+         {" "}
     </div>
   );
 };

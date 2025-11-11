@@ -23,7 +23,7 @@ namespace Hotel_System.API.Services
             _logger.LogInformation($"Total rooms in DB: {allRooms.Count}");
 
             var availableRooms = allRooms.Where(p =>
-                 p.TrangThai == "Sẵn sàng" &&  
+                 p.TrangThai == "Trống" &&  
                 p.SoNguoiToiDa >= numberOfGuests &&
                 !_context.DatPhongs.Any(dp =>
                     dp.Idphong == p.Idphong &&
