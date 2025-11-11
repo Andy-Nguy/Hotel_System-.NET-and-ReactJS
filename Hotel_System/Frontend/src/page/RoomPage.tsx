@@ -1,12 +1,24 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Spin, Alert, Row, Col, Card, Select, Slider, DatePicker, Typography, Layout } from 'antd';
-import RoomCard from '../components/Room/RoomCard';
-import DetailRoom from '../components/Room/DetailRoom';
-import type { Dayjs } from 'dayjs';
+import React, { useEffect, useState, useMemo } from "react";
+import {
+  Spin,
+  Alert,
+  Row,
+  Col,
+  Card,
+  Select,
+  Slider,
+  DatePicker,
+  Typography,
+  Layout,
+} from "antd";
+import RoomCard from "../components/Room/RoomCard";
+import DetailRoom from "../components/Room/DetailRoom";
+import BookingForm from "../components/BookingForm";
+import type { Dayjs } from "dayjs";
 
 // Import từ file api.ts đã gộp
-import { getRooms, getRoomTypes } from '../api/roomsApi'; 
-import type { Room, RoomType } from '../api/roomsApi';
+import { getRooms, getRoomTypes } from "../api/roomsApi";
+import type { Room, RoomType } from "../api/roomsApi";
 
 const { Content } = Layout;
 const { Title } = Typography;
@@ -16,7 +28,7 @@ type RangeValue = [Dayjs | null, Dayjs | null] | null;
 
 const RoomPage: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]); 
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,48 +39,54 @@ const RoomPage: React.FC = () => {
   const [filterGuests, setFilterGuests] = useState<number | null>(null);
   const [filterRoomType, setFilterRoomType] = useState<string | null>(null);
   const [filterRating, setFilterRating] = useState<number | null>(null);
-  
-  const [priceBounds, setPriceBounds] = useState<[number, number]>([0, 50000000]);
-  const [filterPriceRange, setFilterPriceRange] = useState<[number, number]>([0, 50000000]);
 
+  const [priceBounds, setPriceBounds] = useState<[number, number]>([
+    0, 50000000,
+  ]);
+  const [filterPriceRange, setFilterPriceRange] = useState<[number, number]>([
+    0, 50000000,
+  ]);
+
+  const [availableRooms, setAvailableRooms] = useState<Room[] | null>(null);
+  const [bookingMessage, setBookingMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    
+
     // Read loaiId from URL hash to pre-filter by room type
     const hash = window.location.hash;
-    const urlParams = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : '');
-    const loaiIdParam = urlParams.get('loaiId');
+    const urlParams = new URLSearchParams(
+      hash.includes("?") ? hash.split("?")[1] : ""
+    );
+    const loaiIdParam = urlParams.get("loaiId");
     if (loaiIdParam) {
       setFilterRoomType(loaiIdParam);
     }
-    
-    Promise.all([
-      getRooms(),
-      getRoomTypes()
-    ])
-    .then(([roomsData, roomTypesData]) => {
-      
-      // api.ts đã tự động chuẩn hóa
-      setRooms(roomsData);
-      setRoomTypes(roomTypesData);
 
-      if (roomsData.length > 0) {
-        const prices = roomsData.map(r => r.giaCoBanMotDem ?? 0).filter(p => p > 0);
-        if (prices.length > 0) {
-          const min = Math.min(...prices);
-          const max = Math.max(...prices);
-          setPriceBounds([min, max]);
-          setFilterPriceRange([min, max]);
+    Promise.all([getRooms(), getRoomTypes()])
+      .then(([roomsData, roomTypesData]) => {
+        // api.ts đã tự động chuẩn hóa
+        setRooms(roomsData);
+        setRoomTypes(roomTypesData);
+
+        if (roomsData.length > 0) {
+          const prices = roomsData
+            .map((r) => r.giaCoBanMotDem ?? 0)
+            .filter((p) => p > 0);
+          if (prices.length > 0) {
+            const min = Math.min(...prices);
+            const max = Math.max(...prices);
+            setPriceBounds([min, max]);
+            setFilterPriceRange([min, max]);
+          }
         }
-      }
-    })
-    .catch((e) => setError(e.message || 'Lỗi khi tải dữ liệu'))
-    .finally(() => setLoading(false));
+      })
+      .catch((e) => setError(e.message || "Lỗi khi tải dữ liệu"))
+      .finally(() => setLoading(false));
   }, []);
 
   const filteredRooms = useMemo(() => {
-    return rooms.filter(room => {
+    return rooms.filter((room) => {
       if (filterRoomType && room.idloaiPhong !== filterRoomType) {
         return false;
       }
@@ -84,8 +102,14 @@ const RoomPage: React.FC = () => {
       }
       return true;
     });
-  }, [rooms, filterRoomType, filterGuests, filterRating, filterPriceRange, filterDates]);
-
+  }, [
+    rooms,
+    filterRoomType,
+    filterGuests,
+    filterRating,
+    filterPriceRange,
+    filterDates,
+  ]);
 
   // Handlers cho Modal
   const openDetail = (room: Room) => {
@@ -99,40 +123,104 @@ const RoomPage: React.FC = () => {
   };
 
   const onBook = (room: Room) => {
-    console.log('Booking room', room.idphong);
-    alert(`Tiếp tục đặt phòng: ${room.tenPhong ?? room.soPhong ?? room.idphong}`);
+    console.log("Booking room", room.idphong);
+    alert(
+      `Tiếp tục đặt phòng: ${room.tenPhong ?? room.soPhong ?? room.idphong}`
+    );
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>;
-  if (error) return <div style={{ padding: 20 }}><Alert type="error" message="Lỗi tải dữ liệu" description={error} /></div>;
+  const handleBookingResults = (results: any[], message?: string) => {
+    setAvailableRooms(results);
+    setBookingMessage(message || null);
+  };
+
+  // Reset availableRooms when filters change
+  useEffect(() => {
+    setAvailableRooms(null);
+    setBookingMessage(null);
+  }, [
+    filterDates,
+    filterGuests,
+    filterRoomType,
+    filterRating,
+    filterPriceRange,
+  ]);
+
+  if (loading)
+    return (
+      <div style={{ textAlign: "center", padding: 40 }}>
+        <Spin size="large" />
+      </div>
+    );
+  if (error)
+    return (
+      <div style={{ padding: 20 }}>
+        <Alert type="error" message="Lỗi tải dữ liệu" description={error} />
+      </div>
+    );
 
   return (
     <Layout>
-      <Content style={{ 
-        padding: '24px 50px', 
-        maxWidth: '1600px', 
-        margin: 'auto',
-        width: '100%'
-      }}>
+      <Content
+        style={{
+          padding: "24px 50px",
+          maxWidth: "1600px",
+          margin: "auto",
+          width: "100%",
+        }}
+      >
         {/* <Title level={1} style={{ marginBottom: 24, paddingLeft: 10 }}>Danh sách phòng</Title> */}
 
-        <Card style={{ marginBottom: 24 }}>
-          <Row gutter={[16, 16]} align="bottom">
-            <Col xs={24} md={12} lg={6}>
-              <label>Chọn ngày (Chưa hoạt động)</label>
-              <RangePicker 
-                style={{ width: '100%' }} 
-                onChange={setFilterDates}
-                value={filterDates}
-                disabled 
-                allowEmpty={[true, true]}
+        <Card style={{ marginBottom: 24, padding: "20px 30px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 30,
+            }}
+          >
+            {/* Left: Hotel name and address */}
+            <div style={{ flex: "0 0 auto", minWidth: 200 }}>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 24,
+                  fontWeight: 600,
+                  color: "#1f2937",
+                  fontFamily: '"Lora", serif',
+                }}
+              >
+                Robins Villa
+              </h2>
+              <p
+                style={{
+                  margin: "4px 0 0 0",
+                  fontSize: 14,
+                  color: "#6b7280",
+                  lineHeight: 1.4,
+                }}
+              >
+                11 Cong Truong Me Linh, Sai Gon Ward, Ho Chi Minh City, Vietnam
+              </p>
+            </div>
+
+            {/* Right: Booking form */}
+            <div style={{ flex: "1 1 auto" }}>
+              <BookingForm
+                horizontal
+                fullWidth
+                onResults={handleBookingResults}
               />
-            </Col>
+            </div>
+          </div>
+
+          <Row gutter={[16, 16]} align="bottom" style={{ marginTop: 20 }}>
             <Col xs={12} md={6} lg={3}>
               <label>Số người</label>
               <Select
                 placeholder="Tất cả"
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 allowClear
                 onChange={setFilterGuests}
               >
@@ -146,22 +234,24 @@ const RoomPage: React.FC = () => {
               <label>Loại phòng</label>
               <Select
                 placeholder="Tất cả"
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 allowClear
                 onChange={setFilterRoomType}
               >
-                {roomTypes.filter(rt => rt.idLoaiPhong).map(rt => (
-                  <Select.Option key={rt.idLoaiPhong} value={rt.idLoaiPhong}>
-                    {rt.tenLoaiPhong}
-                  </Select.Option>
-                ))}
+                {roomTypes
+                  .filter((rt) => rt.idLoaiPhong)
+                  .map((rt) => (
+                    <Select.Option key={rt.idLoaiPhong} value={rt.idLoaiPhong}>
+                      {rt.tenLoaiPhong}
+                    </Select.Option>
+                  ))}
               </Select>
             </Col>
             <Col xs={12} md={6} lg={3}>
               <label>Hạng sao</label>
               <Select
                 placeholder="Tất cả"
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
                 allowClear
                 onChange={setFilterRating}
               >
@@ -178,19 +268,16 @@ const RoomPage: React.FC = () => {
                 max={priceBounds[1]}
                 step={100000}
                 value={filterPriceRange}
-                // === LỖI ĐÃ SỬA TẠI ĐÂY ===
-                // 1. Đổi type của 'value' thành 'number[]' (theo yêu cầu của AntD)
                 onChange={(value: number[]) => {
-                  // 2. Ép kiểu 'value' thành [number, number] (theo yêu cầu của state)
                   setFilterPriceRange(value as [number, number]);
                 }}
                 tooltip={{
-                  formatter: (value) => `${value?.toLocaleString()}đ`
+                  formatter: (value) => `${value?.toLocaleString()}đ`,
                 }}
               />
             </Col>
           </Row>
-          
+
           <Alert
             type="info"
             message="Các bộ lọc nâng cao (Tiện nghi, Đánh giá, Khuyến mãi) sẽ sớm được cập nhật khi có dữ liệu."
@@ -199,54 +286,52 @@ const RoomPage: React.FC = () => {
           />
         </Card>
 
-        {/* <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', 
-          gap: 30 
-        }}>
-          {filteredRooms.length === 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 30,
+          }}
+        >
+          {bookingMessage && (
             <Alert
-              message="Không tìm thấy phòng"
-              description="Không có phòng nào phù hợp với tiêu chí tìm kiếm của bạn. Vui lòng thử lại."
-              type="warning"
+              message={bookingMessage}
+              type={
+                availableRooms && availableRooms.length > 0 ? "info" : "warning"
+              }
+              showIcon
+              style={{ marginBottom: 16, gridColumn: "1 / -1" }}
             />
           )}
 
-          {filteredRooms.map((r) => (
-            <RoomCard key={r.idphong} room={r} onOpenDetail={openDetail} onBook={onBook} />
-          ))}
+          {(() => {
+            const roomsToDisplay =
+              availableRooms !== null ? availableRooms : filteredRooms;
+            return roomsToDisplay.length === 0 ? (
+              <Alert
+                message="Không tìm thấy phòng"
+                description="Không có phòng nào phù hợp với tiêu chí tìm kiếm của bạn. Vui lòng thử lại."
+                type="warning"
+              />
+            ) : (
+              roomsToDisplay.map((r) => (
+                <RoomCard
+                  key={r.idphong}
+                  room={r}
+                  onOpenDetail={openDetail}
+                  onBook={onBook}
+                />
+              ))
+            );
+          })()}
         </div>
 
-        <DetailRoom visible={detailVisible} room={selected ?? undefined} onClose={closeDetail} onBook={onBook} />
-      </Content>
-    </Layout>
-  );
-};
-
-export default RoomPage; */}
-
-<div style={{ 
-          display: 'grid', 
-          // Thay đổi từ 'auto-fill' sang 'repeat(4, 1fr)'
-          gridTemplateColumns: 'repeat(4, 1fr)', 
-          gap: 30 
-        }}>
-          {filteredRooms.length === 0 && (
-            <Alert
-              message="Không tìm thấy phòng"
-              description="Không có phòng nào phù hợp với tiêu chí tìm kiếm của bạn. Vui lòng thử lại."
-              type="warning"
-              // Thêm style để Alert chiếm trọn 4 cột
-              style={{ gridColumn: '1 / -1' }} 
-            />
-          )}
-
-          {filteredRooms.map((r) => (
-            <RoomCard key={r.idphong} room={r} onOpenDetail={openDetail} onBook={onBook} />
-          ))}
-        </div>
-
-        <DetailRoom visible={detailVisible} room={selected ?? undefined} onClose={closeDetail} onBook={onBook} />
+        <DetailRoom
+          visible={detailVisible}
+          room={selected ?? undefined}
+          onClose={closeDetail}
+          onBook={onBook}
+        />
       </Content>
     </Layout>
   );

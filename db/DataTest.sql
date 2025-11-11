@@ -57,4 +57,16 @@ VALUES
 ('DP001', 1, 'P001', '2025-11-01', '2025-11-10', '2025-11-12', 2, 1000000, 200000, 2, 1),  -- Đã xác nhận, đang đặt P001
 ('DP002', 2, 'P003', '2025-11-05', '2025-11-15', '2025-11-16', 1, 300000, 50000, 1, 1);   -- Chờ xác nhận, đang đặt P003
 
+-- Thêm dữ liệu mẫu cho DatPhong để test
+INSERT INTO DatPhong (
+    IDDatPhong, IDKhachHang, IDPhong, NgayDatPhong,
+    NgayNhanPhong, NgayTraPhong, SoDem,
+    TongTien, TienCoc, TrangThai, TrangThaiThanhToan
+)
+VALUES
+('DP003', 1, 'P002', '2025-10-01', '2025-10-05', '2025-10-07', 2, 1000000, 200000, 4, 2),  -- Hoàn thành (quá khứ)
+('DP004', 2, 'P001', '2025-11-08', '2025-11-20', '2025-11-22', 2, 1000000, 200000, 2, 1),  -- Đã xác nhận (tương lai)
+('DP005', 1, 'P003', '2025-11-12', '2025-11-25', '2025-11-26', 1, 300000, 50000, 1, 0),   -- Chờ xác nhận, đã cọc
+('DP006', NULL, 'P002', '2025-11-10', '2025-11-18', '2025-11-20', 2, 1000000, 0, 0, -1);   -- Đã hủy, chưa cọc
+
 GO
