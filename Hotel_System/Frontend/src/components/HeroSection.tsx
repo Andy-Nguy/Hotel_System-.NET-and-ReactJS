@@ -12,13 +12,61 @@ const HeroSection: React.FC = () => {
                 Here are the best hotel booking sites, including recommendations
                 for international travel and for finding low-priced hotel rooms.
               </p>
-              <a href="#" className="primary-btn">
-                Discover Now
-              </a>
+
+              {/* Direct booking button: go to /rooms with sensible defaults */}
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => {
+                  const today = new Date();
+                  const tomorrow = new Date(
+                    today.getTime() + 24 * 60 * 60 * 1000
+                  );
+                  const params = new URLSearchParams({
+                    checkIn: today.toISOString().slice(0, 10),
+                    checkOut: tomorrow.toISOString().slice(0, 10),
+                    guests: "1",
+                    rooms: "1",
+                  });
+                  window.location.href = `/rooms?${params.toString()}`;
+                }}
+                style={{
+                  marginLeft: 12,
+                  background: "#dfa974",
+                  border: "2px solid #dfa974",
+                  padding: "14px 32px",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  color: "#ffffff",
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  borderRadius: "8px",
+                  boxShadow: "0 4px 15px rgba(223, 169, 116, 0.3)",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#c89461";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 20px rgba(223, 169, 116, 0.5)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#dfa974";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 15px rgba(223, 169, 116, 0.3)";
+                }}
+              >
+                Kiểm Tra Phòng Trống
+              </button>
             </div>
           </div>
+          {/* Keep column space to preserve hero image sizing but hide the form visually */}
           <div className="col-xl-4 col-lg-5 offset-xl-2 offset-lg-1">
-            <BookingForm />
+            <div style={{ visibility: "hidden" }}>
+              <BookingForm />
+            </div>
           </div>
         </div>
       </div>

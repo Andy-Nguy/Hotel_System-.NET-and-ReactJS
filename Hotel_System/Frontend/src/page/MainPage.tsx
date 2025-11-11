@@ -12,6 +12,7 @@ import FooterSection from "../components/FooterSection";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
 import RoomPage from "./RoomPage";
+import ProfilePage from "./ProfilePage";
 import AdminDashboard from "../admin/pages/dashboard";
 import RoomManager from "../admin/pages/RoomManager";
 import AmenticsManager from "../admin/pages/AmenticsManager";
@@ -47,7 +48,11 @@ const MainPage: React.FC = () => {
   React.useEffect(() => {
     if (window.location.hash === "#") {
       try {
-        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search
+        );
       } catch (e) {
         window.location.hash = "";
       }
@@ -135,14 +140,18 @@ const MainPage: React.FC = () => {
     try {
       const $ = (window as any).jQuery;
       if ($) {
-        $(".search-switch").off("click").on("click", function () {
-          $(".search-model").fadeIn(400);
-        });
-        $(".search-close-switch").off("click").on("click", function () {
-          $(".search-model").fadeOut(400, function () {
-            $("#search-input").val("");
+        $(".search-switch")
+          .off("click")
+          .on("click", function () {
+            $(".search-model").fadeIn(400);
           });
-        });
+        $(".search-close-switch")
+          .off("click")
+          .on("click", function () {
+            $(".search-model").fadeOut(400, function () {
+              $("#search-input").val("");
+            });
+          });
       }
     } catch (e) {
       console.error("Lỗi search model:", e);
@@ -151,16 +160,22 @@ const MainPage: React.FC = () => {
     try {
       const $ = (window as any).jQuery;
       if ($) {
-        $(".canvas-open").off("click").on("click", function () {
-          $(".offcanvas-menu-wrapper").addClass("show-offcanvas-menu-wrapper");
-          $(".offcanvas-menu-overlay").addClass("active");
-        });
-        $(".canvas-close, .offcanvas-menu-overlay").off("click").on("click", function () {
-          $(".offcanvas-menu-wrapper").removeClass(
-            "show-offcanvas-menu-wrapper"
-          );
-          $(".offcanvas-menu-overlay").removeClass("active");
-        });
+        $(".canvas-open")
+          .off("click")
+          .on("click", function () {
+            $(".offcanvas-menu-wrapper").addClass(
+              "show-offcanvas-menu-wrapper"
+            );
+            $(".offcanvas-menu-overlay").addClass("active");
+          });
+        $(".canvas-close, .offcanvas-menu-overlay")
+          .off("click")
+          .on("click", function () {
+            $(".offcanvas-menu-wrapper").removeClass(
+              "show-offcanvas-menu-wrapper"
+            );
+            $(".offcanvas-menu-overlay").removeClass("active");
+          });
       }
     } catch (e) {
       console.error("Lỗi offcanvas menu:", e);
@@ -200,23 +215,50 @@ const MainPage: React.FC = () => {
     );
   }
 
+  if (route === "#profile" || route === "/profile") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <ProfilePage />
+        <FooterSection />
+      </>
+    );
+  }
+
   // Admin dashboard route (accessible at /admin/dashboard or #admin/dashboard)
-  if (route === "#admin/dashboard" || route === "/admin/dashboard" || route === "#/admin/dashboard") {
+  if (
+    route === "#admin/dashboard" ||
+    route === "/admin/dashboard" ||
+    route === "#/admin/dashboard"
+  ) {
     return <AdminDashboard />;
   }
 
   // Admin room manager route (accessible at /admin/rooms or #admin/rooms)
-  if (route === "#admin/rooms" || route === "/admin/rooms" || route === "#/admin/rooms") {
+  if (
+    route === "#admin/rooms" ||
+    route === "/admin/rooms" ||
+    route === "#/admin/rooms"
+  ) {
     return <RoomManager />;
   }
 
   // Admin amenities page route (accessible at /admin/amenities or #admin/amenities)
-  if (route === "#admin/amenities" || route === "/admin/amenities" || route === "#/admin/amenities") {
+  if (
+    route === "#admin/amenities" ||
+    route === "/admin/amenities" ||
+    route === "#/admin/amenities"
+  ) {
     return <AmenticsManager />;
   }
 
   // Admin services page route (accessible at /admin/services or #admin/services)
-  if (route === "#admin/services" || route === "/admin/services" || route === "#/admin/services") {
+  if (
+    route === "#admin/services" ||
+    route === "/admin/services" ||
+    route === "#/admin/services"
+  ) {
     return <ServiceManager />;
   }
 

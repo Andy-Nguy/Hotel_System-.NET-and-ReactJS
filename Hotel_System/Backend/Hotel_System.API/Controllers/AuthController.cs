@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Hotel_System.API.Services;
 using Hotel_System.API.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace Hotel_System.API.Controllers
 {
@@ -41,6 +43,19 @@ namespace Hotel_System.API.Controllers
             var (success, error, token) = await _auth.LoginAsync(req);
             if (!success) return BadRequest(new { error });
             return Ok(new { token });
+        }
+
+        [Authorize]
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetProfile()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                return Unauthorized(new { error = "Invalid token" });
+
+            var (success, error, profile) = await _auth.GetUserProfileAsync(userId);
+            if (!success) return BadRequest(new { error });
+            return Ok(profile);
         }
 
     // login-OTP endpoints removed to keep a simpler register + password login flow

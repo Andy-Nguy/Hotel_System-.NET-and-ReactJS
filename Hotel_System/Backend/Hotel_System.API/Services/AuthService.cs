@@ -107,6 +107,25 @@ namespace Hotel_System.API.Services
             return Task.FromResult<(bool, string?, string?)>((true, null, token));
         }
 
+        public Task<(bool success, string? error, UserProfileResponse? profile)> GetUserProfileAsync(int userId)
+        {
+            var kh = _db.KhachHangs.FirstOrDefault(k => k.IdkhachHang == userId);
+            if (kh == null) return Task.FromResult<(bool, string?, UserProfileResponse?)>((false, "User not found", null));
+
+            var profile = new UserProfileResponse
+            {
+                IdkhachHang = kh.IdkhachHang,
+                HoTen = kh.HoTen,
+                NgaySinh = kh.NgaySinh,
+                SoDienThoai = kh.SoDienThoai,
+                Email = kh.Email,
+                NgayDangKy = kh.NgayDangKy,
+                TichDiem = kh.TichDiem
+            };
+
+            return Task.FromResult<(bool, string?, UserProfileResponse?)>((true, null, profile));
+        }
+
         private string GenerateJwtToken(KhachHang kh, TaiKhoanNguoiDung acc)
         {
             try
