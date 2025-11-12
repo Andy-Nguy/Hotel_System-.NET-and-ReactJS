@@ -79,9 +79,17 @@ if (!string.IsNullOrEmpty(jwtKey))
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
-              .AllowAnyHeader()
-              .AllowAnyMethod());
+        policy.WithOrigins(
+            "http://localhost:5173",     // Vite dev server
+            "http://localhost:3000",     // React dev server
+            "http://10.0.2.2:8080",      // Android emulator accessing host
+            "http://192.168.1.3:8080",   // Physical device on same network
+            "http://localhost:19006",    // Expo dev server
+            "http://localhost:19000"     // Expo dev tools
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
 });
 
 // ✅ Connect to SQL Server
@@ -102,7 +110,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// Comment out HTTPS redirect for mobile development
+// app.UseHttpsRedirection();
 
 // ✅ Enable CORS here (AFTER Build)
 app.UseCors("AllowFrontend");

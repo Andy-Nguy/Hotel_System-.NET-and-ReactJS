@@ -9,13 +9,13 @@ import {
   Pressable,
   Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../App";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 
-type HeaderNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type HeaderNavigationProp = NativeStackNavigationProp<any>;
 
 const Header: React.FC = () => {
   const navigation = useNavigation<HeaderNavigationProp>();
@@ -25,7 +25,7 @@ const Header: React.FC = () => {
   const handleLogout = async () => {
     await logout();
     setMenuVisible(false);
-    navigation.navigate("Home");
+    navigation.navigate("Login");
   };
 
   const getUserName = () => {
@@ -44,38 +44,36 @@ const Header: React.FC = () => {
   };
 
   return (
-    <View style={styles.header}>
-      <View style={styles.topBar}>
-        <View style={styles.contactInfo}>
-          <Text style={styles.contactText}>📞 (12) 345 67890</Text>
-        </View>
-        <TouchableOpacity style={styles.bookingBtn}>
-          <Text style={styles.bookingBtnText}>Booking Now</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.mainHeader}>
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Home")}
-          style={styles.logoContainer}
-        >
-          <Image
-            source={require("../assets/robins-villa-logo.png")}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuButton}
-          onPress={() => setMenuVisible(true)}
-        >
-          <View style={styles.menuIcon}>
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+      <View style={styles.header}>
+        <View style={styles.topBar}>
+          <View style={styles.contactInfo}>
+            <Text style={styles.contactText}>📞 (12) 345 67890</Text>
           </View>
-        </TouchableOpacity>
+        </View>
+
+        <View style={styles.mainHeader}>
+          <TouchableOpacity
+            style={styles.logoContainer}
+          >
+            <Image
+              source={require("../assets/robins-villa-logo.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => setMenuVisible(true)}
+          >
+            <View style={styles.menuIcon}>
+              <View style={styles.menuLine} />
+              <View style={styles.menuLine} />
+              <View style={styles.menuLine} />
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Menu Modal */}
@@ -85,105 +83,112 @@ const Header: React.FC = () => {
         animationType="slide"
         onRequestClose={() => setMenuVisible(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setMenuVisible(false)}
-        >
+        <SafeAreaView style={styles.modalSafeArea} edges={["top", "bottom", "left", "right"]}>
           <Pressable
-            style={styles.menuModal}
-            onPress={(e) => e.stopPropagation()}
+            style={styles.modalOverlay}
+            onPress={() => setMenuVisible(false)}
           >
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.menuHeader}>
-                <Text style={styles.menuTitle}>Menu</Text>
-                <TouchableOpacity onPress={() => setMenuVisible(false)}>
-                  <Text style={styles.closeButton}>✕</Text>
+            <Pressable
+              style={styles.menuModal}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.menuHeader}>
+                  <Text style={styles.menuTitle}>Menu</Text>
+                  <TouchableOpacity onPress={() => setMenuVisible(false)}>
+                    <Text style={styles.closeButton}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setMenuVisible(false);
+                  }}
+                >
+                  <Text style={styles.menuItemText}>Home</Text>
                 </TouchableOpacity>
-              </View>
 
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  navigation.navigate("Home");
-                  setMenuVisible(false);
-                }}
-              >
-                <Text style={styles.menuItemText}>Home</Text>
-              </TouchableOpacity>
+                {isLoggedIn ? (
+                  <>
+                    <View style={styles.menuDivider} />
+                    <View style={styles.userSection}>
+                      <Text style={styles.userGreeting}>
+                        Xin chào, {getUserName()}!
+                      </Text>
+                    </View>
 
-              {isLoggedIn ? (
-                <>
-                  <View style={styles.menuDivider} />
-                  <View style={styles.userSection}>
-                    <Text style={styles.userGreeting}>
-                      Xin chào, {getUserName()}!
-                    </Text>
-                  </View>
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={() => {
+                        setMenuVisible(false);
+                      }}
+                    >
+                      <Text style={styles.menuItemText}>
+                        👤 Thông tin cá nhân
+                      </Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => {
-                      navigation.navigate("Profile");
-                      setMenuVisible(false);
-                    }}
-                  >
-                    <Text style={styles.menuItemText}>
-                      👤 Thông tin cá nhân
-                    </Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={() => {
+                        setMenuVisible(false);
+                      }}
+                    >
+                      <Text style={styles.menuItemText}>
+                        📋 Lịch sử đặt phòng
+                      </Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => {
-                      navigation.navigate("Bookings");
-                      setMenuVisible(false);
-                    }}
-                  >
-                    <Text style={styles.menuItemText}>
-                      📋 Lịch sử đặt phòng
-                    </Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.menuItem, styles.logoutItem]}
+                      onPress={handleLogout}
+                    >
+                      <Text style={styles.logoutText}>🚪 Đăng xuất</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.menuDivider} />
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={() => {
+                        navigation.navigate("Login");
+                        setMenuVisible(false);
+                      }}
+                    >
+                      <Text style={styles.menuItemText}>🔑 Đăng nhập</Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[styles.menuItem, styles.logoutItem]}
-                    onPress={handleLogout}
-                  >
-                    <Text style={styles.logoutText}>🚪 Đăng xuất</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <View style={styles.menuDivider} />
-                  <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => {
-                      navigation.navigate("Login");
-                      setMenuVisible(false);
-                    }}
-                  >
-                    <Text style={styles.menuItemText}>🔑 Đăng nhập</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => {
-                      navigation.navigate("Register");
-                      setMenuVisible(false);
-                    }}
-                  >
-                    <Text style={styles.menuItemText}>📝 Đăng ký</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </ScrollView>
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={() => {
+                        navigation.navigate("Register");
+                        setMenuVisible(false);
+                      }}
+                    >
+                      <Text style={styles.menuItemText}>📝 Đăng ký</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </ScrollView>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </SafeAreaView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    backgroundColor: COLORS.white,
+    flex: 0,
+  },
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: COLORS.overlay,
+  },
   header: {
     backgroundColor: COLORS.white,
     ...SHADOWS.light,

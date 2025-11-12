@@ -59,10 +59,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         } catch (e) {
           console.warn("Could not decode token:", e);
         }
+      } else {
+        // Auto-login with demo user for development
+        await loginWithDemoUser();
       }
     } catch (error) {
       console.error("Error checking auth:", error);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithDemoUser = async () => {
+    try {
+      // Create a mock JWT token for demo user
+      const demoUser = {
+        name: "Nguyen",
+        email: "demo@robinsvilla.com",
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name": "Demo Nguyen",
+        userId: "demo-user-123",
+      };
+      
+      // Simple mock token (in production, this should come from API)
+      const mockToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(JSON.stringify(demoUser))}.mock_signature`;
+      
+      await AsyncStorage.setItem("hs_token", mockToken);
+      setToken(mockToken);
+      setUserInfo(demoUser);
+      setIsLoggedIn(true);
+    } catch (error) {
+      console.error("Error logging in with demo user:", error);
       setLoading(false);
     }
   };
