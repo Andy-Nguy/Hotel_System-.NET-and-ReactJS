@@ -13,7 +13,10 @@ import {
   Spin,
   Row,
   Col,
+  Upload,
+  Image,
 } from "antd";
+import { UploadOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import {
   Promotion,
@@ -21,6 +24,7 @@ import {
   UpdatePromotionRequest,
   createPromotion,
   updatePromotion,
+  uploadBanner,
 } from "../../api/promotionApi";
 
 interface PromotionFormProps {
@@ -44,6 +48,8 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
+  const [bannerImage, setBannerImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     // Load rooms from API
@@ -84,10 +90,14 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
       // Set selected rooms
       const selectedPhongIds = promotion.khuyenMaiPhongs.map((kmp) => kmp.idphong);
       setSelectedRooms(selectedPhongIds);
+
+      // Set banner image
+      setBannerImage(promotion.hinhAnhBanner || null);
     } else {
       // Create mode: reset form
       form.resetFields();
       setSelectedRooms([]);
+      setBannerImage(null);
     }
   }, [promotion, form]);
 
@@ -103,6 +113,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
         ngayBatDau: values.ngayBatDau.format("YYYY-MM-DD"),
         ngayKetThuc: values.ngayKetThuc.format("YYYY-MM-DD"),
         phongIds: selectedRooms,
+        hinhAnhBanner: bannerImage,
         ...(promotion && { trangThai: values.trangThai || promotion.trangThai }),
       };
 
@@ -126,6 +137,30 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUploadBanner = async (file: File) => {
+    try {
+      setUploading(true);
+      const result = await uploadBanner(file);
+      // store the backend relative path (e.g. "/img/promotion/xxx.jpg") so
+      // the server-side rename logic can locate the file and the DB stores
+      // the correct path
+      setBannerImage(result.relativePath || result.fileName);
+      message.success("Upload banner thành công");
+      return false; // Prevent default upload behavior
+    } catch (error) {
+      console.error("[PROMOTION_FORM] Error uploading banner:", error);
+      message.error(`Lỗi upload: ${error instanceof Error ? error.message : "Lỗi không xác định"}`);
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveBanner = () => {
+    setBannerImage(null);
+    message.success("Đã xóa banner");
   };
 
   return (
@@ -223,6 +258,47 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               maxLength={500}
               showCount
             />
+          </Form.Item>
+
+          <Form.Item label="Hình Ảnh Banner">
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Upload
+                accept="image/*"
+                beforeUpload={handleUploadBanner}
+                showUploadList={false}
+                disabled={uploading}
+              >
+                <Button icon={<UploadOutlined />} loading={uploading}>
+                  {uploading ? "Đang upload..." : "Chọn hình ảnh banner"}
+                </Button>
+              </Upload>
+
+              {bannerImage && (
+                <div style={{ position: "relative", display: "inline-block" }}>
+                  <Image
+                    // bannerImage may already be a relative path returned from backend
+                    src={bannerImage.startsWith("/") ? bannerImage : `/img/promotion/${bannerImage}`}
+                    alt="Banner preview"
+                    style={{ maxWidth: "300px", maxHeight: "150px", objectFit: "cover" }}
+                    fallback="/img/placeholder.png"
+                  />
+                  <Button
+                    type="primary"
+                    danger
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    onClick={handleRemoveBanner}
+                    style={{
+                      position: "absolute",
+                      top: 8,
+                      right: 8,
+                    }}
+                  >
+                    Xóa
+                  </Button>
+                </div>
+              )}
+            </Space>
           </Form.Item>
 
           {promotion && (

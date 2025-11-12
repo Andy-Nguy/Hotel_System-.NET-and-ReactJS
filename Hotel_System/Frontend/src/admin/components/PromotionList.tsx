@@ -12,6 +12,7 @@ import {
   DatePicker,
   Popconfirm,
   Tooltip,
+  Image,
 } from "antd";
 import { EyeOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -92,6 +93,28 @@ const PromotionList: React.FC<PromotionListProps> = ({
       dataIndex: "tenKhuyenMai",
       key: "tenKhuyenMai",
       width: 200,
+    },
+    {
+      title: "Banner",
+      key: "banner",
+      width: 120,
+      render: (_: any, record: Promotion) =>
+        record.hinhAnhBanner ? (
+          <Image
+            // If backend returns a full relative path (starts with '/'), use it directly.
+            // Otherwise assume it's a filename and prepend the folder.
+            src={
+              record.hinhAnhBanner.startsWith("/") || record.hinhAnhBanner.includes("/img/promotion")
+                ? record.hinhAnhBanner
+                : `/img/promotion/${record.hinhAnhBanner}`
+            }
+            alt="Banner"
+            style={{ width: 80, height: 40, objectFit: "cover", borderRadius: 4 }}
+            fallback="/img/placeholder.png"
+          />
+        ) : (
+          <span style={{ color: "#999", fontSize: "12px" }}>Không có</span>
+        ),
     },
     {
       title: "Loại Giảm Giá",

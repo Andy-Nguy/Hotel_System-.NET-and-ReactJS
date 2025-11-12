@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
+using Hotel_System.API.DTOs;
 using Hotel_System.API.DTOs.Promotions;
+using Microsoft.AspNetCore.Hosting;
+using System.IO;
 
 namespace Hotel_System.API.Controllers;
 
@@ -11,11 +14,13 @@ public class KhuyenMaiController : ControllerBase
 {
     private readonly HotelSystemContext _context;
     private readonly ILogger<KhuyenMaiController> _logger;
+    private readonly IWebHostEnvironment _env;
 
-    public KhuyenMaiController(HotelSystemContext context, ILogger<KhuyenMaiController> logger)
+    public KhuyenMaiController(HotelSystemContext context, ILogger<KhuyenMaiController> logger, IWebHostEnvironment env)
     {
         _context = context;
         _logger = logger;
+        _env = env;
     }
 
     // GET: api/KhuyenMai
@@ -29,7 +34,10 @@ public class KhuyenMaiController : ControllerBase
     {
         try
         {
-            var query = _context.KhuyenMais.Include(k => k.KhuyenMaiPhongs).AsQueryable();
+            var query = _context.KhuyenMais
+                .Include(k => k.KhuyenMaiPhongs)
+                    .ThenInclude(kp => kp.IdphongNavigation)
+                .AsQueryable();
 
             // Filter by status
             if (!string.IsNullOrEmpty(status))
@@ -84,6 +92,62 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
+    // POST: api/KhuyenMai/upload-banner
+    // Upload hình ảnh banner cho khuyến mãi
+    [HttpPost("upload-banner")]
+    public async Task<ActionResult<UploadResultDto>> UploadBanner(IFormFile file)
+    {
+        try
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "Không có file được upload" });
+
+            // Validate file type
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+            var fileExtension = Path.GetExtension(file.FileName).ToLower();
+            if (!allowedExtensions.Contains(fileExtension))
+                return BadRequest(new { message = "Chỉ chấp nhận file ảnh JPG, PNG, WebP" });
+
+            // Validate file size (max 5MB)
+            if (file.Length > 5 * 1024 * 1024)
+                return BadRequest(new { message = "Kích thước file không được vượt quá 5MB" });
+
+            // Tạo tên file unique
+            var fileName = $"{Guid.NewGuid()}{fileExtension}";
+            var promotionPath = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "promotion");
+            
+            // Đảm bảo thư mục tồn tại
+            if (!Directory.Exists(promotionPath))
+                Directory.CreateDirectory(promotionPath);
+
+            var filePath = Path.Combine(promotionPath, fileName);
+
+            // Lưu file
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var relativePath = $"/img/promotion/{fileName}";
+            
+            _logger.LogInformation($"Upload banner thành công: {relativePath}");
+            
+            return Ok(new UploadResultDto
+            {
+                FileName = fileName,
+                RelativePath = relativePath,
+                FullPath = filePath,
+                Size = file.Length,
+                ContentType = file.ContentType
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi upload banner");
+            return StatusCode(500, new { message = "Lỗi khi upload banner", error = ex.Message });
+        }
+    }
+
     // POST: api/KhuyenMai
     // Tạo khuyến mãi mới
     [HttpPost]
@@ -102,7 +166,14 @@ public class KhuyenMaiController : ControllerBase
                 return BadRequest(new { message = "Giá trị giảm phải lớn hơn 0" });
 
             // Tạo ID tự động
-            var id = GeneratePromotionId();
+            var id = await GeneratePromotionId();
+
+            // Xử lý hình ảnh banner nếu có
+            string? finalBannerPath = dto.HinhAnhBanner;
+            if (!string.IsNullOrEmpty(dto.HinhAnhBanner))
+            {
+                finalBannerPath = await RenameBannerImage(dto.HinhAnhBanner, dto.TenKhuyenMai);
+            }
 
             var promotion = new KhuyenMai
             {
@@ -114,6 +185,7 @@ public class KhuyenMaiController : ControllerBase
                 NgayBatDau = dto.NgayBatDau,
                 NgayKetThuc = dto.NgayKetThuc,
                 TrangThai = DetermineStatus(dto.NgayBatDau, dto.NgayKetThuc),
+                HinhAnhBanner = finalBannerPath,
                 CreatedAt = DateTime.Now,
                 UpdatedAt = DateTime.Now
             };
@@ -177,6 +249,13 @@ public class KhuyenMaiController : ControllerBase
             if (dto.NgayBatDau > dto.NgayKetThuc)
                 return BadRequest(new { message = "Ngày bắt đầu phải trước ngày kết thúc" });
 
+            // Xử lý hình ảnh banner nếu có thay đổi
+            string? finalBannerPath = dto.HinhAnhBanner;
+            if (!string.IsNullOrEmpty(dto.HinhAnhBanner) && dto.HinhAnhBanner != promotion.HinhAnhBanner)
+            {
+                finalBannerPath = await RenameBannerImage(dto.HinhAnhBanner, dto.TenKhuyenMai);
+            }
+
             // Cập nhật thông tin chính
             promotion.TenKhuyenMai = dto.TenKhuyenMai;
             promotion.MoTa = dto.MoTa;
@@ -185,6 +264,7 @@ public class KhuyenMaiController : ControllerBase
             promotion.NgayBatDau = dto.NgayBatDau;
             promotion.NgayKetThuc = dto.NgayKetThuc;
             promotion.TrangThai = dto.TrangThai;
+            promotion.HinhAnhBanner = finalBannerPath;
             promotion.UpdatedAt = DateTime.Now;
 
             // Cập nhật danh sách phòng
@@ -355,9 +435,78 @@ public class KhuyenMaiController : ControllerBase
     }
 
     // Helper methods
-    private string GeneratePromotionId()
+    private async Task<string> GeneratePromotionId()
     {
-        return $"KM_{DateTime.Now:yyyyMMddHHmmss}_{new Random().Next(1000, 9999)}";
+        // Tìm ID khuyến mãi lớn nhất hiện tại
+        var lastPromotion = await _context.KhuyenMais
+            .Where(k => k.IdkhuyenMai.StartsWith("KM"))
+            .OrderByDescending(k => k.IdkhuyenMai)
+            .FirstOrDefaultAsync();
+
+        int nextNumber = 1;
+        if (lastPromotion != null)
+        {
+            // Trích xuất số từ ID cuối cùng (KM001 -> 1)
+            var numberPart = lastPromotion.IdkhuyenMai.Substring(2);
+            if (int.TryParse(numberPart, out int lastNumber))
+            {
+                nextNumber = lastNumber + 1;
+            }
+        }
+
+        return $"KM{nextNumber:D3}"; // KM001, KM002, etc.
+    }
+
+    private async Task<string?> RenameBannerImage(string currentPath, string tenKhuyenMai)
+    {
+        try
+        {
+            // Đường dẫn vật lý hiện tại
+            var currentFullPath = Path.Combine(_env.ContentRootPath, "wwwroot", currentPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+
+            // Nếu file không tồn tại tại đường dẫn được cung cấp, thử fallback vào thư mục img/promotion
+            if (!System.IO.File.Exists(currentFullPath))
+            {
+                var fallbackPath = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "promotion", Path.GetFileName(currentPath));
+                if (System.IO.File.Exists(fallbackPath))
+                {
+                    currentFullPath = fallbackPath;
+                }
+                else
+                {
+                    _logger.LogWarning($"File không tồn tại: {currentFullPath} và không tìm thấy tại {fallbackPath}");
+                    return currentPath; // Giữ nguyên nếu file không tồn tại
+                }
+            }
+
+            // Tạo tên file mới: KM_tên khuyến mãi (thay thế ký tự không hợp lệ bằng _)
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitizedName = new string(tenKhuyenMai.Select(c => invalidChars.Contains(c) ? '_' : c).ToArray()).Replace(" ", "_").Trim('_');
+            var extension = Path.GetExtension(currentFullPath);
+            var newFileName = $"KM_{sanitizedName}{extension}";
+            var newFullPath = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "promotion", newFileName);
+
+            // Nếu file mới đã tồn tại, thêm số vào cuối
+            int counter = 1;
+            var baseName = Path.GetFileNameWithoutExtension(newFileName);
+            while (System.IO.File.Exists(newFullPath))
+            {
+                newFileName = $"{baseName}_{counter}{extension}";
+                newFullPath = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "promotion", newFileName);
+                counter++;
+            }
+
+            // Đổi tên file
+            System.IO.File.Move(currentFullPath, newFullPath);
+
+            // Trả về đường dẫn tương đối mới
+            return $"/img/promotion/{newFileName}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Lỗi khi đổi tên file banner: {currentPath}");
+            return currentPath; // Giữ nguyên nếu có lỗi
+        }
     }
 
     private string DetermineStatus(DateOnly startDate, DateOnly endDate)
@@ -380,13 +529,14 @@ public class KhuyenMaiController : ControllerBase
             NgayBatDau = promotion.NgayBatDau,
             NgayKetThuc = promotion.NgayKetThuc,
             TrangThai = promotion.TrangThai,
+            HinhAnhBanner = promotion.HinhAnhBanner,
             CreatedAt = promotion.CreatedAt,
             UpdatedAt = promotion.UpdatedAt,
             KhuyenMaiPhongs = promotion.KhuyenMaiPhongs.Select(kmp => new KhuyenMaiPhongDto
             {
                 Id = kmp.Id,
                 Idphong = kmp.Idphong,
-                TenPhong = kmp.IdphongNavigation?.TenPhong ?? "N/A",
+                    TenPhong = kmp.IdphongNavigation?.TenPhong ?? kmp.Idphong ?? "N/A",
                 IsActive = kmp.IsActive,
                 NgayApDung = kmp.NgayApDung,
                 NgayKetThuc = kmp.NgayKetThuc

@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import OffcanvasMenu from "../components/OffcanvasMenu";
 import HeaderSection from "../components/HeaderSection";
 import HeroSection from "../components/HeroSection";
+import PromotionSection from "../components/PromotionSection";
 import AboutUs from "../components/AboutUs";
 import Services from "../components/Services";
 import HomeRoom from "../components/HomeRoom";
@@ -300,8 +301,10 @@ const MainPage: React.FC = () => {
     <>
       <OffcanvasMenu />
       <HeaderSection />
+      
       <HeroSection />
       <AboutUs />
+      <PromotionSection />
       <Services />
       <HomeRoom />
       <Testimonial />

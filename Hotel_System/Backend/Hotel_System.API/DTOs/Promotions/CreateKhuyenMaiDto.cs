@@ -8,6 +8,7 @@ public class CreateKhuyenMaiDto
     public decimal GiaTriGiam { get; set; }
     public DateOnly NgayBatDau { get; set; }
     public DateOnly NgayKetThuc { get; set; }
+    public string? HinhAnhBanner { get; set; } // Đường dẫn tương đối đến hình ảnh banner
     public List<string> PhongIds { get; set; } = new(); // Danh sách ID phòng áp dụng
 }
 
@@ -20,5 +21,6 @@ public class UpdateKhuyenMaiDto
     public DateOnly NgayBatDau { get; set; }
     public DateOnly NgayKetThuc { get; set; }
     public string TrangThai { get; set; } = "active"; // active, inactive, expired
+    public string? HinhAnhBanner { get; set; } // Đường dẫn tương đối đến hình ảnh banner
     public List<string> PhongIds { get; set; } = new();
 }

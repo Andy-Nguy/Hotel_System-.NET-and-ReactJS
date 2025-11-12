@@ -18,6 +18,7 @@ export interface Promotion {
   ngayBatDau: string; // DateOnly format YYYY-MM-DD
   ngayKetThuc: string; // DateOnly format YYYY-MM-DD
   trangThai?: string; // "active", "inactive", "expired"
+  hinhAnhBanner?: string;
   createdAt?: string;
   updatedAt?: string;
   khuyenMaiPhongs: PromotionRoom[];
@@ -31,6 +32,7 @@ export interface CreatePromotionRequest {
   ngayBatDau: string;
   ngayKetThuc: string;
   phongIds: string[];
+  hinhAnhBanner?: string;
 }
 
 export interface UpdatePromotionRequest {
@@ -42,6 +44,7 @@ export interface UpdatePromotionRequest {
   ngayKetThuc: string;
   trangThai: string;
   phongIds: string[];
+  hinhAnhBanner?: string;
 }
 
 // Get all promotions with filters
@@ -139,4 +142,38 @@ export const updateExpiredStatus = async (): Promise<{ message: string; count: n
     throw new Error(error.message || "Failed to update expired status");
   }
   return response.json();
+};
+
+export interface UploadResult {
+  fileName: string;
+  relativePath: string;
+  fullPath: string;
+  size: number;
+  contentType: string;
+}
+
+// Upload banner image
+export const uploadBanner = async (file: File): Promise<UploadResult> => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/upload-banner`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to upload banner");
+  }
+
+  // Backend returns { FileName, RelativePath, FullPath, Size, ContentType }
+  const data = await response.json();
+  return {
+    fileName: data.fileName || data.FileName,
+    relativePath: data.relativePath || data.RelativePath,
+    fullPath: data.fullPath || data.FullPath,
+    size: data.size || data.Size,
+    contentType: data.contentType || data.ContentType,
+  } as UploadResult;
 };

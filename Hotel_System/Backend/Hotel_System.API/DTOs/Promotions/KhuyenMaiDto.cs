@@ -10,6 +10,7 @@ public class KhuyenMaiDto
     public DateOnly NgayBatDau { get; set; }
     public DateOnly NgayKetThuc { get; set; }
     public string? TrangThai { get; set; } // "active", "inactive", "expired"
+    public string? HinhAnhBanner { get; set; } // Đường dẫn tương đối đến hình ảnh banner
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public List<KhuyenMaiPhongDto> KhuyenMaiPhongs { get; set; } = new();
