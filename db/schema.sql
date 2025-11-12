@@ -500,6 +500,60 @@ CREATE TABLE KhuyenMaiPhong (
         FOREIGN KEY (IDPhong) REFERENCES Phong(IDPhong)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+CREATE PROCEDURE sp_CapNhatTrangThaiKhuyenMai
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Chuyển những khuyến mãi đã hết hạn sang 'expired'
+    UPDATE KhuyenMai
+    SET TrangThai = 'expired',
+        updated_at = GETDATE()
+    WHERE TrangThai = 'active'
+      AND NgayKetThuc < CONVERT(date, GETDATE());
+
+    -- (Tuỳ chọn) Cập nhật KhuyenMaiPhong tương ứng
+    UPDATE KP
+    SET KP.IsActive = 0,
+        KP.updated_at = GETDATE()
+    FROM KhuyenMaiPhong KP
+    INNER JOIN KhuyenMai K ON KP.IDKhuyenMai = K.IDKhuyenMai
+    WHERE K.TrangThai = 'expired'
+      AND KP.IsActive = 1;
+END;
+GO
+
+INSERT INTO KhuyenMai
+    (IDKhuyenMai, TenKhuyenMai, MoTa, LoaiGiamGia, GiaTriGiam, NgayBatDau, NgayKetThuc, TrangThai)
+VALUES
+('KM001', N'Giảm 20% dịch vụ Spa mùa hè 2025', 
+ N'Áp dụng cho khách đặt phòng Deluxe hoặc Executive từ 01/06 đến 31/08/2025.', 
+ 'percent', 20.00, '2025-06-01', '2025-08-31', 'active'),
+
+('KM002', N'Giảm 300.000đ khi thuê xe Limousine Hà Nội', 
+ N'Khách đặt Tour Hà Nội 3 giờ bằng Limousine nhận giảm 300.000đ mỗi lượt.', 
+ 'amount', 300000.00, '2025-07-01', '2025-09-30', 'active'),
+
+('KM003', N'Combo Buffet sáng & In-room Dining', 
+ N'Giảm 15% khi kết hợp Buffet sáng tại JW Café và ăn tại phòng vào cuối tuần.', 
+ 'percent', 15.00, '2025-01-01', '2025-12-31', 'active');
+
+INSERT INTO KhuyenMaiPhong
+    (IDKhuyenMai, IDPhong, IsActive, NgayApDung, NgayKetThuc)
+VALUES
+-- Spa mùa hè áp dụng cho Deluxe & Executive
+('KM001', 'P101', 1, '2025-06-01', '2025-08-31'),
+('KM001', 'P102', 1, '2025-06-01', '2025-08-31'),
+('KM001', 'P201', 1, '2025-06-01', '2025-08-31'),
+
+-- Thuê xe Limousine áp dụng cho Executive Suite
+('KM002', 'P301', 1, '2025-07-01', '2025-09-30'),
+
+-- Combo Buffet sáng + In-room Dining áp dụng cho các phòng cao cấp
+('KM003', 'P401', 1, '2025-01-01', '2025-12-31'),
+('KM003', 'P501', 1, '2025-01-01', '2025-12-31'),
+('KM003', 'P601', 1, '2025-01-01', '2025-12-31');
 /* =========================================
    9) THỐNG KÊ DOANH THU KHÁCH SẠN (LIÊN KẾT TRỰC TIẾP)
 ========================================= */
