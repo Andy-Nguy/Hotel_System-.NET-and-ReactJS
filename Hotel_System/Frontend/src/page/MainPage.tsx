@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import OffcanvasMenu from "../components/OffcanvasMenu";
 import HeaderSection from "../components/HeaderSection";
 import HeroSection from "../components/HeroSection";
+import PromotionSection from "../components/PromotionSection";
 import AboutUs from "../components/AboutUs";
 import Services from "../components/Services";
 import HomeRoom from "../components/HomeRoom";
@@ -12,14 +13,27 @@ import FooterSection from "../components/FooterSection";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
 import RoomPage from "./RoomPage";
+import ProfilePage from "./ProfilePage";
+import SelectRoomPage from "./SelectRoomPage";
+import CheckoutPage from "./CheckoutPage";
+import AdminDashboard from "../admin/pages/dashboard";
+import RoomManager from "../admin/pages/RoomManager";
+import AmenticsManager from "../admin/pages/AmenticsManager";
+import ServiceManager from "../admin/pages/ServiceManager";
+import PromotionManager from "../admin/pages/PromotionManager";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
   const resolveRoute = () => {
-    const p = window.location.pathname;
-    if (p && p !== "/") return p;
-    const h = window.location.hash;
-    if (h) return h;
+    // Prefer pathname when present (clean URLs like /admin/rooms). Fall back to hash.
+    try {
+      const p = window.location.pathname;
+      if (p && p !== "/") return p;
+    } catch (e) {}
+    try {
+      const h = window.location.hash;
+      if (h && h !== "#") return h;
+    } catch (e) {}
     return "#";
   };
 
@@ -38,7 +52,11 @@ const MainPage: React.FC = () => {
   React.useEffect(() => {
     if (window.location.hash === "#") {
       try {
-        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search
+        );
       } catch (e) {
         window.location.hash = "";
       }
@@ -126,14 +144,18 @@ const MainPage: React.FC = () => {
     try {
       const $ = (window as any).jQuery;
       if ($) {
-        $(".search-switch").off("click").on("click", function () {
-          $(".search-model").fadeIn(400);
-        });
-        $(".search-close-switch").off("click").on("click", function () {
-          $(".search-model").fadeOut(400, function () {
-            $("#search-input").val("");
+        $(".search-switch")
+          .off("click")
+          .on("click", function () {
+            $(".search-model").fadeIn(400);
           });
-        });
+        $(".search-close-switch")
+          .off("click")
+          .on("click", function () {
+            $(".search-model").fadeOut(400, function () {
+              $("#search-input").val("");
+            });
+          });
       }
     } catch (e) {
       console.error("Lỗi search model:", e);
@@ -142,16 +164,22 @@ const MainPage: React.FC = () => {
     try {
       const $ = (window as any).jQuery;
       if ($) {
-        $(".canvas-open").off("click").on("click", function () {
-          $(".offcanvas-menu-wrapper").addClass("show-offcanvas-menu-wrapper");
-          $(".offcanvas-menu-overlay").addClass("active");
-        });
-        $(".canvas-close, .offcanvas-menu-overlay").off("click").on("click", function () {
-          $(".offcanvas-menu-wrapper").removeClass(
-            "show-offcanvas-menu-wrapper"
-          );
-          $(".offcanvas-menu-overlay").removeClass("active");
-        });
+        $(".canvas-open")
+          .off("click")
+          .on("click", function () {
+            $(".offcanvas-menu-wrapper").addClass(
+              "show-offcanvas-menu-wrapper"
+            );
+            $(".offcanvas-menu-overlay").addClass("active");
+          });
+        $(".canvas-close, .offcanvas-menu-overlay")
+          .off("click")
+          .on("click", function () {
+            $(".offcanvas-menu-wrapper").removeClass(
+              "show-offcanvas-menu-wrapper"
+            );
+            $(".offcanvas-menu-overlay").removeClass("active");
+          });
       }
     } catch (e) {
       console.error("Lỗi offcanvas menu:", e);
@@ -191,12 +219,92 @@ const MainPage: React.FC = () => {
     );
   }
 
+  if (route === "#profile" || route === "/profile") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <ProfilePage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#select-room" || route === "/select-room") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <SelectRoomPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#checkout" || route === "/checkout") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <CheckoutPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  // Admin dashboard route (accessible at /admin/dashboard or #admin/dashboard)
+  if (
+    route === "#admin/dashboard" ||
+    route === "/admin/dashboard" ||
+    route === "#/admin/dashboard"
+  ) {
+    return <AdminDashboard />;
+  }
+
+  // Admin room manager route (accessible at /admin/rooms or #admin/rooms)
+  if (
+    route === "#admin/rooms" ||
+    route === "/admin/rooms" ||
+    route === "#/admin/rooms"
+  ) {
+    return <RoomManager />;
+  }
+
+  // Admin amenities page route (accessible at /admin/amenities or #admin/amenities)
+  if (
+    route === "#admin/amenities" ||
+    route === "/admin/amenities" ||
+    route === "#/admin/amenities"
+  ) {
+    return <AmenticsManager />;
+  }
+
+  // Admin services page route (accessible at /admin/services or #admin/services)
+  if (
+    route === "#admin/services" ||
+    route === "/admin/services" ||
+    route === "#/admin/services"
+  ) {
+    return <ServiceManager />;
+  }
+
+  // Admin promotions page route (accessible at /admin/promotions or #admin/promotions)
+  if (
+    route === "#admin/promotions" ||
+    route === "/admin/promotions" ||
+    route === "#/admin/promotions"
+  ) {
+    return <PromotionManager />;
+  }
+
   return (
     <>
       <OffcanvasMenu />
       <HeaderSection />
+      
       <HeroSection />
       <AboutUs />
+      <PromotionSection />
       <Services />
       <HomeRoom />
       <Testimonial />

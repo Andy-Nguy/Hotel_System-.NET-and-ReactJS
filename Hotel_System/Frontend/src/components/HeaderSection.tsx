@@ -13,25 +13,11 @@ const HeaderSection: React.FC = () => {
     return "/";
   };
 
-  useEffect(() => {
-    setCurrentRoute(resolveRoute());
-    const onLocationChange = () => setCurrentRoute(resolveRoute());
-    window.addEventListener("hashchange", onLocationChange);
-    window.addEventListener("popstate", onLocationChange);
-    return () => {
-      window.removeEventListener("hashchange", onLocationChange);
-      window.removeEventListener("popstate", onLocationChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    // Check if user is logged in by checking localStorage
+  const refreshAuth = () => {
     const token = localStorage.getItem("hs_token");
+    setIsLoggedIn(!!token);
     if (token) {
-      setIsLoggedIn(true);
-      // Decode JWT to get user info (simple decode without verification for display purposes)
       try {
-        // Use proper UTF-8 decoding
         const base64Payload = token.split(".")[1];
         const decodedPayload = decodeURIComponent(
           atob(base64Payload)
@@ -45,35 +31,33 @@ const HeaderSection: React.FC = () => {
         setUserInfo(payload);
       } catch (e) {
         console.warn("Could not decode token:", e);
-      }
-    }
-
-    // Listen for storage changes (when user logs in from another tab)
-    const handleStorageChange = () => {
-      const newToken = localStorage.getItem("hs_token");
-      setIsLoggedIn(!!newToken);
-      if (newToken) {
-        try {
-          // Use proper UTF-8 decoding
-          const base64Payload = newToken.split(".")[1];
-          const decodedPayload = decodeURIComponent(
-            atob(base64Payload)
-              .split("")
-              .map(function (c) {
-                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-              })
-              .join("")
-          );
-          const payload = JSON.parse(decodedPayload);
-          setUserInfo(payload);
-        } catch (e) {
-          setUserInfo(null);
-        }
-      } else {
         setUserInfo(null);
       }
-    };
+    } else {
+      setUserInfo(null);
+    }
+  };
 
+  useEffect(() => {
+    setCurrentRoute(resolveRoute());
+    // ensure auth state is read on mount
+    refreshAuth();
+    const onLocationChange = () => {
+      setCurrentRoute(resolveRoute());
+      refreshAuth();
+    };
+    window.addEventListener("hashchange", onLocationChange);
+    window.addEventListener("popstate", onLocationChange);
+    return () => {
+      window.removeEventListener("hashchange", onLocationChange);
+      window.removeEventListener("popstate", onLocationChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    // initialize auth and listen for storage changes (other tabs)
+    refreshAuth();
+    const handleStorageChange = () => refreshAuth();
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
@@ -154,9 +138,20 @@ const HeaderSection: React.FC = () => {
         <div className="container">
           <div className="row">
             <div className="col-lg-2">
-                <div className="logo">
-                <a href="/" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/'; } }}>
-                  <img src="/img/logo.png" alt="" />
+              <div className="logo">
+                <a
+                  href="/"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    try {
+                      window.history.pushState(null, "", "/");
+                      window.dispatchEvent(new PopStateEvent("popstate"));
+                    } catch {
+                      window.location.href = "/";
+                    }
+                  }}
+                >
+                  <img src="/img/logo.webp" alt="" />
                 </a>
               </div>
             </div>
@@ -164,13 +159,47 @@ const HeaderSection: React.FC = () => {
               <div className="nav-menu">
                 <nav className="mainmenu">
                   <ul>
-                    <li className={currentRoute === "/" || currentRoute === "#" ? "active" : ""}>
-                      <a href="/" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/'; } }}>
+                    <li
+                      className={
+                        currentRoute === "/" || currentRoute === "#"
+                          ? "active"
+                          : ""
+                      }
+                    >
+                      <a
+                        href="/"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          try {
+                            window.history.pushState(null, "", "/");
+                            window.dispatchEvent(new PopStateEvent("popstate"));
+                          } catch {
+                            window.location.href = "/";
+                          }
+                        }}
+                      >
                         Home
                       </a>
                     </li>
-                    <li className={currentRoute === "/rooms" || currentRoute === "#rooms" ? "active" : ""}>
-                      <a href="/rooms" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/rooms'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/rooms'; } }}>
+                    <li
+                      className={
+                        currentRoute === "/rooms" || currentRoute === "#rooms"
+                          ? "active"
+                          : ""
+                      }
+                    >
+                      <a
+                        href="/rooms"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          try {
+                            window.history.pushState(null, "", "/rooms");
+                            window.dispatchEvent(new PopStateEvent("popstate"));
+                          } catch {
+                            window.location.href = "/rooms";
+                          }
+                        }}
+                      >
                         Rooms
                       </a>
                     </li>
@@ -224,12 +253,50 @@ const HeaderSection: React.FC = () => {
                       <ul className="dropdown">
                         {isLoggedIn ? (
                           <>
-                                    <li>
-                                      <a href="/profile" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/profile'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/profile'; } }}>Thông tin cá nhân</a>
-                                    </li>
-                                    <li>
-                                      <a href="/bookings" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/bookings'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/bookings'; } }}>Lịch sử đặt phòng</a>
-                                    </li>
+                            <li>
+                              <a
+                                href="/profile"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  try {
+                                    window.history.pushState(
+                                      null,
+                                      "",
+                                      "/profile"
+                                    );
+                                    window.dispatchEvent(
+                                      new PopStateEvent("popstate")
+                                    );
+                                  } catch {
+                                    window.location.href = "/profile";
+                                  }
+                                }}
+                              >
+                                Thông tin cá nhân
+                              </a>
+                            </li>
+                            <li>
+                              <a
+                                href="/bookings"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  try {
+                                    window.history.pushState(
+                                      null,
+                                      "",
+                                      "/bookings"
+                                    );
+                                    window.dispatchEvent(
+                                      new PopStateEvent("popstate")
+                                    );
+                                  } catch {
+                                    window.location.href = "/bookings";
+                                  }
+                                }}
+                              >
+                                Lịch sử đặt phòng
+                              </a>
+                            </li>
                             <li>
                               <a
                                 href="#"
@@ -245,10 +312,48 @@ const HeaderSection: React.FC = () => {
                         ) : (
                           <>
                             <li>
-                              <a href="/login" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/login'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/login'; } }}>Đăng nhập</a>
+                              <a
+                                href="/login"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  try {
+                                    window.history.pushState(
+                                      null,
+                                      "",
+                                      "/login"
+                                    );
+                                    window.dispatchEvent(
+                                      new PopStateEvent("popstate")
+                                    );
+                                  } catch {
+                                    window.location.href = "/login";
+                                  }
+                                }}
+                              >
+                                Đăng nhập
+                              </a>
                             </li>
                             <li>
-                              <a href="/register" onClick={(e) => { e.preventDefault(); try { window.history.pushState(null, '', '/register'); window.dispatchEvent(new PopStateEvent('popstate')); } catch { window.location.href = '/register'; } }}>Đăng ký</a>
+                              <a
+                                href="/register"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  try {
+                                    window.history.pushState(
+                                      null,
+                                      "",
+                                      "/register"
+                                    );
+                                    window.dispatchEvent(
+                                      new PopStateEvent("popstate")
+                                    );
+                                  } catch {
+                                    window.location.href = "/register";
+                                  }
+                                }}
+                              >
+                                Đăng ký
+                              </a>
                             </li>
                           </>
                         )}

@@ -15,6 +15,11 @@ public partial class Cthddv
 
     public DateTime? ThoiGianThucHien { get; set; }
 
+    // New columns from updated schema
+    public DateTime? ThoiGianBatDau { get; set; }
+    public DateTime? ThoiGianKetThuc { get; set; }
+    public string? TrangThai { get; set; }
+
     public virtual DichVu IddichVuNavigation { get; set; } = null!;
 
     public virtual HoaDon IdhoaDonNavigation { get; set; } = null!;

@@ -26,61 +26,108 @@ namespace Hotel_System.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            var rooms = await _context.Phongs
-                .Include(p => p.IdloaiPhongNavigation)
-                .ToListAsync();
-
-            // Normalize UrlAnhPhong to absolute URLs so frontend can fetch assets reliably.
-            var baseUrl = $"{Request.Scheme}://{Request.Host.Value}";
-            var transformed = rooms.Select(r => new
+            try
             {
-                r.Idphong,
-                r.IdloaiPhong,
-                r.TenPhong,
-                TenLoaiPhong = r.IdloaiPhongNavigation != null ? r.IdloaiPhongNavigation.TenLoaiPhong : null,
-                r.SoPhong,
-                r.MoTa,
-                r.SoNguoiToiDa,
-                r.GiaCoBanMotDem,
-                r.XepHangSao,
-                r.TrangThai,
-                UrlAnhPhong = ResolveImageUrl(r.UrlAnhPhong, baseUrl),
-            }).ToList();
+                Console.WriteLine("🔍 PhongController: Getting all rooms...");
+                var rooms = await _context.Phongs
+                    .Include(p => p.IdloaiPhongNavigation)
+                    .ToListAsync();
+                
+                Console.WriteLine($"📊 Found {rooms.Count} rooms in database");
 
-            return Ok(transformed);
+                // Get current date for status check
+                var currentDate = DateOnly.FromDateTime(DateTime.Now);
+
+                // Get list of occupied room IDs based on active bookings
+                var occupiedRoomIds = await _context.DatPhongs
+                    .Where(dp => dp.TrangThai == 1 && // Assuming 1 means active/confirmed booking
+                                 dp.NgayNhanPhong <= currentDate && 
+                                 dp.NgayTraPhong > currentDate)
+                    .Select(dp => dp.Idphong)
+                    .Distinct()
+                    .ToListAsync();
+
+                Console.WriteLine($"🏨 Found {occupiedRoomIds.Count} occupied rooms");
+
+                // Normalize UrlAnhPhong to relative paths (prefer /img/room/) so frontend can request them
+                var transformed = rooms.Select(r => new
+                {
+                    r.Idphong,
+                    r.IdloaiPhong,
+                    r.TenPhong,
+                    TenLoaiPhong = r.IdloaiPhongNavigation != null ? r.IdloaiPhongNavigation.TenLoaiPhong : null,
+                    r.SoPhong,
+                    r.MoTa,
+                    r.SoNguoiToiDa,
+                    r.GiaCoBanMotDem,
+                    r.XepHangSao,
+                    TrangThai = occupiedRoomIds.Contains(r.Idphong) ? "Occupied" : "Available",
+                    UrlAnhPhong = ResolveImageUrl(r.UrlAnhPhong),
+                }).ToList();
+
+                Console.WriteLine($"✅ Returning {transformed.Count} transformed rooms");
+                return Ok(transformed);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error in GetAll: {ex.Message}");
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
 
-        private string? ResolveImageUrl(string? raw, string baseUrl)
+        private string? ResolveImageUrl(string? raw)
         {
             if (string.IsNullOrWhiteSpace(raw)) return null;
             var s = raw.Trim();
             // If already an absolute URL or protocol-relative, return as-is
             if (s.StartsWith("http://") || s.StartsWith("https://") || s.StartsWith("//")) return s;
-
-            // If s contains a path (starts with /), resolve to backend base
-            if (s.StartsWith("/"))
+            // If it's already a relative path under /img or /assets, return it as-is (relative)
+            if (s.StartsWith("/img") || s.StartsWith("/assets") || s.StartsWith("/"))
             {
-                // If it's already under /assets, we can use it directly
-                return baseUrl + s;
+                return s;
             }
 
-            // s is likely a filename stored in DB. Try to find it under wwwroot/assets/room or assets/room
-            // Prefer wwwroot/assets/room when present
+            // s is likely a filename stored in DB. Prefer files under wwwroot/img/room (webp files live there).
             var fileName = s;
-            var wwwrootRoom = Path.Combine(_env.ContentRootPath, "wwwroot", "assets", "room", fileName);
-            if (System.IO.File.Exists(wwwrootRoom))
+
+            // Exact match in wwwroot/img/room
+            var wwwrootImgRoom = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "room", fileName);
+            if (System.IO.File.Exists(wwwrootImgRoom))
             {
-                return baseUrl + "/assets/room/" + fileName;
+                return "/img/room/" + fileName;
             }
 
-            var assetsRoom = Path.Combine(_env.ContentRootPath, "assets", "room", fileName);
-            if (System.IO.File.Exists(assetsRoom))
+            // Try wildcard match by base name inside wwwroot/img/room (e.g. base -> base-101.webp)
+            var baseName = Path.GetFileNameWithoutExtension(fileName);
+            var dirImg = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "room");
+            if (Directory.Exists(dirImg))
             {
-                return baseUrl + "/assets/room/" + fileName;
+                var match = Directory.GetFiles(dirImg).FirstOrDefault(f => Path.GetFileName(f).StartsWith(baseName, System.StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    return "/img/room/" + Path.GetFileName(match);
+                }
             }
 
-            // If not found on disk, still return a constructed URL (frontend will fallback if 404)
-            return baseUrl + "/assets/room/" + fileName;
+            // Fallback: look into wwwroot/assets/room
+            var wwwrootAssetsRoom = Path.Combine(_env.ContentRootPath, "wwwroot", "assets", "room", fileName);
+            if (System.IO.File.Exists(wwwrootAssetsRoom))
+            {
+                return "/assets/room/" + fileName;
+            }
+
+            var dirAssets = Path.Combine(_env.ContentRootPath, "wwwroot", "assets", "room");
+            if (Directory.Exists(dirAssets))
+            {
+                var match = Directory.GetFiles(dirAssets).FirstOrDefault(f => Path.GetFileName(f).StartsWith(baseName, System.StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    return "/assets/room/" + Path.GetFileName(match);
+                }
+            }
+
+            // Last resort: return a relative path under /img/room using provided filename
+            return "/img/room/" + fileName;
         }
         // POST: api/Phong/check-available-rooms-duyanh
         [HttpPost("check-available-rooms")]
@@ -104,6 +151,58 @@ namespace Hotel_System.API.Controllers
             }
 
             return Ok(rooms);
+        }
+       
+        // POST: api/Phong
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] Phong payload)
+        {
+            if (payload == null) return BadRequest("Invalid payload");
+            if (string.IsNullOrWhiteSpace(payload.Idphong)) payload.Idphong = Guid.NewGuid().ToString();
+
+            _context.Phongs.Add(payload);
+            await _context.SaveChangesAsync();
+
+            // Return created resource (simple shape)
+            return CreatedAtAction(nameof(GetAll), new { id = payload.Idphong }, payload);
+        }
+
+        // PUT: api/Phong/{id}
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(string id, [FromBody] Phong payload)
+        {
+            if (payload == null) return BadRequest("Invalid payload");
+            var existing = await _context.Phongs.FindAsync(id);
+            if (existing == null) return NotFound();
+
+            // Map updatable fields
+            existing.IdloaiPhong = payload.IdloaiPhong;
+            existing.TenPhong = payload.TenPhong;
+            existing.SoPhong = payload.SoPhong;
+            existing.MoTa = payload.MoTa;
+            existing.SoNguoiToiDa = payload.SoNguoiToiDa;
+            existing.GiaCoBanMotDem = payload.GiaCoBanMotDem;
+            existing.XepHangSao = payload.XepHangSao;
+            existing.TrangThai = payload.TrangThai;
+            existing.UrlAnhPhong = payload.UrlAnhPhong;
+
+            _context.Phongs.Update(existing);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        // DELETE: api/Phong/{id}
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(string id)
+        {
+            var existing = await _context.Phongs.FindAsync(id);
+            if (existing == null) return NotFound();
+
+            _context.Phongs.Remove(existing);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
         }
        
     }
