@@ -25,5 +25,7 @@ public partial class KhuyenMai
 
     public DateTime? UpdatedAt { get; set; }
 
+    public string? HinhAnhBanner { get; set; }
+
     public virtual ICollection<KhuyenMaiPhong> KhuyenMaiPhongs { get; set; } = new List<KhuyenMaiPhong>();
 }

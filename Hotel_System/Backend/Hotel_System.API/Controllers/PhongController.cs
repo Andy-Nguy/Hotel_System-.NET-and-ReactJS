@@ -26,27 +26,53 @@ namespace Hotel_System.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            var rooms = await _context.Phongs
-                .Include(p => p.IdloaiPhongNavigation)
-                .ToListAsync();
-
-            // Normalize UrlAnhPhong to relative paths (prefer /img/room/) so frontend can request them
-            var transformed = rooms.Select(r => new
+            try
             {
-                r.Idphong,
-                r.IdloaiPhong,
-                r.TenPhong,
-                TenLoaiPhong = r.IdloaiPhongNavigation != null ? r.IdloaiPhongNavigation.TenLoaiPhong : null,
-                r.SoPhong,
-                r.MoTa,
-                r.SoNguoiToiDa,
-                r.GiaCoBanMotDem,
-                r.XepHangSao,
-                r.TrangThai,
-                UrlAnhPhong = ResolveImageUrl(r.UrlAnhPhong),
-            }).ToList();
+                Console.WriteLine("🔍 PhongController: Getting all rooms...");
+                var rooms = await _context.Phongs
+                    .Include(p => p.IdloaiPhongNavigation)
+                    .ToListAsync();
+                
+                Console.WriteLine($"📊 Found {rooms.Count} rooms in database");
 
-            return Ok(transformed);
+                // Get current date for status check
+                var currentDate = DateOnly.FromDateTime(DateTime.Now);
+
+                // Get list of occupied room IDs based on active bookings
+                var occupiedRoomIds = await _context.DatPhongs
+                    .Where(dp => dp.TrangThai == 1 && // Assuming 1 means active/confirmed booking
+                                 dp.NgayNhanPhong <= currentDate && 
+                                 dp.NgayTraPhong > currentDate)
+                    .Select(dp => dp.Idphong)
+                    .Distinct()
+                    .ToListAsync();
+
+                Console.WriteLine($"🏨 Found {occupiedRoomIds.Count} occupied rooms");
+
+                // Normalize UrlAnhPhong to relative paths (prefer /img/room/) so frontend can request them
+                var transformed = rooms.Select(r => new
+                {
+                    r.Idphong,
+                    r.IdloaiPhong,
+                    r.TenPhong,
+                    TenLoaiPhong = r.IdloaiPhongNavigation != null ? r.IdloaiPhongNavigation.TenLoaiPhong : null,
+                    r.SoPhong,
+                    r.MoTa,
+                    r.SoNguoiToiDa,
+                    r.GiaCoBanMotDem,
+                    r.XepHangSao,
+                    TrangThai = occupiedRoomIds.Contains(r.Idphong) ? "Occupied" : "Available",
+                    UrlAnhPhong = ResolveImageUrl(r.UrlAnhPhong),
+                }).ToList();
+
+                Console.WriteLine($"✅ Returning {transformed.Count} transformed rooms");
+                return Ok(transformed);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error in GetAll: {ex.Message}");
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
 
         private string? ResolveImageUrl(string? raw)
