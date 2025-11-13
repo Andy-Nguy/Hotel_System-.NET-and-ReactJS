@@ -48,6 +48,15 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 // Room service
 builder.Services.AddScoped<RoomService>();
 
+// Payment service
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+
+// Promotion service
+builder.Services.AddScoped<PromotionService>();
+
+// Email service (used to send confirmation emails)
+builder.Services.AddScoped<IEmailService, EmailService>();
+
 // Configure JWT authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwtSection.GetValue<string>("Key");

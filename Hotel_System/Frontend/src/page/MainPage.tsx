@@ -15,6 +15,8 @@ import RoomPage from "./RoomPage";
 import ProfilePage from "./ProfilePage";
 import SelectRoomPage from "./SelectRoomPage";
 import CheckoutPage from "./CheckoutPage";
+import PaymentPage from "./PaymentPage";
+import BookingSuccessPage from "./BookingSuccessPage";
 import AdminDashboard from "../admin/pages/dashboard";
 import RoomManager from "../admin/pages/RoomManager";
 import AmenticsManager from "../admin/pages/AmenticsManager";
@@ -245,6 +247,28 @@ const MainPage: React.FC = () => {
         <OffcanvasMenu />
         <HeaderSection />
         <CheckoutPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#payment" || route === "/payment") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <PaymentPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#booking-success" || route === "/booking-success") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <BookingSuccessPage />
         <FooterSection />
       </>
     );

@@ -22,6 +22,7 @@ import {
   CheckCircleOutlined,
 } from "@ant-design/icons";
 import BookingProgress from "../components/BookingProgress";
+import PromotionsAvailable from "../components/PromotionsAvailable";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -91,43 +92,83 @@ const CheckoutPage: React.FC = () => {
 
     setLoading(true);
     try {
-      // TODO: Gọi API để tạo đơn đặt phòng
-      // const response = await createBooking({
-      //   ...values,
-      //   rooms: bookingInfo.selectedRooms.map(sr => sr.room.idphong),
-      //   checkIn: bookingInfo.checkIn,
-      //   checkOut: bookingInfo.checkOut,
-      //   guests: bookingInfo.guests,
-      // });
+      // Lưu thông tin khách hàng
+      const customerInfo = {
+        hoTen: values.fullName,
+        email: values.email,
+        soDienThoai: values.phone,
+        cmnd: values.idNumber,
+        diaChi: values.address,
+        ghiChu: values.notes,
+      };
 
-      // Giả lập thành công
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // GỌI API TẠO BOOKING THẬT
+      const bookingPayload = {
+        hoTen: values.fullName,
+        email: values.email,
+        soDienThoai: values.phone,
+        ngayNhanPhong: bookingInfo.checkIn,
+        ngayTraPhong: bookingInfo.checkOut,
+        soLuongKhach: bookingInfo.guests,
+        rooms: bookingInfo.selectedRooms.map(sr => ({
+          IdPhong: sr.room.idphong,
+          SoPhong: sr.roomNumber,
+          GiaCoBanMotDem: sr.room.giaCoBanMotDem
+        }))
+      };
 
-      Modal.success({
-        title: "Đặt phòng thành công!",
-        content: (
-          <div>
-            <p>
-              Cảm ơn bạn đã đặt phòng tại <strong>Robins Villa</strong>
-            </p>
-            <p>
-              Chúng tôi đã gửi email xác nhận đến:{" "}
-              <strong>{values.email}</strong>
-            </p>
-            <p>
-              Mã đặt phòng của bạn:{" "}
-              <strong>BK{Date.now().toString().slice(-8)}</strong>
-            </p>
-          </div>
-        ),
-        onOk: () => {
-          // Xóa thông tin đặt phòng từ sessionStorage
-          sessionStorage.removeItem("bookingInfo");
-          sessionStorage.removeItem("bookingResults");
-          window.location.href = "/";
-        },
+      console.log("📞 Calling Booking API:", bookingPayload);
+
+      const response = await fetch("/api/Booking/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bookingPayload),
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Booking API Error:", errorText);
+        throw new Error("Không thể tạo đặt phòng. Vui lòng thử lại!");
+      }
+
+      const result = await response.json();
+      console.log("✅ Booking created:", result);
+
+      if (!result.success) {
+        throw new Error(result.message || "Tạo đặt phòng thất bại!");
+      }
+
+      // Lưu thông tin ĐẶT PHÒNG (chưa có hóa đơn ở bước này)
+      const invoiceInfo = {
+        // idHoaDon sẽ được tạo sau ở PaymentPage
+        idDatPhong: result.data.idDatPhong,
+        idKhachHang: result.data.idKhachHang,
+        rooms: bookingInfo.selectedRooms,
+        checkIn: bookingInfo.checkIn,
+        checkOut: bookingInfo.checkOut,
+        nights: calculateNights(),
+        guests: bookingInfo.guests,
+        totalPrice: result.data.tongTien,
+        tax: result.data.thue,
+        grandTotal: result.data.tongCong,
+        customer: customerInfo,
+        paymentMethod: values.paymentMethod,
+      };
+
+      sessionStorage.setItem("customerInfo", JSON.stringify(customerInfo));
+      sessionStorage.setItem("invoiceInfo", JSON.stringify(invoiceInfo));
+
+      console.log("✅ Booking success! Redirecting to payment page...");
+      console.log("📦 Invoice info saved:", invoiceInfo);
+      
+      // Tắt loading
+      setLoading(false);
+      
+      // Navigate to payment page
+      window.location.href = "/#payment";
+
     } catch (err: any) {
+      console.error("❌ Error in handleSubmit:", err);
       Modal.error({
         title: "Đặt phòng thất bại",
         content: err.message || "Đã có lỗi xảy ra. Vui lòng thử lại.",
@@ -389,6 +430,17 @@ const CheckoutPage: React.FC = () => {
                     </div>
                   </Card>
                 ))}
+              </div>
+
+              <Divider />
+
+              {/* Khuyến mãi hiện có */}
+              <div style={{ marginBottom: 16 }}>
+                <PromotionsAvailable
+                  roomIds={bookingInfo.selectedRooms.map(sr => sr.room?.idphong || sr.room?.idPhong).filter(Boolean)}
+                  title="Khuyến mãi hiện có"
+                  compact
+                />
               </div>
 
               <Divider />
