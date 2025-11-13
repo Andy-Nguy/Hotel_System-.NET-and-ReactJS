@@ -92,6 +92,12 @@ builder.Services.AddCors(options =>
         .AllowCredentials());
 });
 
+// Add response compression
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
+
 // ✅ Connect to SQL Server
 builder.Services.AddDbContext<HotelSystemContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -115,6 +121,9 @@ if (app.Environment.IsDevelopment())
 
 // ✅ Enable CORS here (AFTER Build)
 app.UseCors("AllowFrontend");
+
+// Enable response compression
+app.UseResponseCompression();
 
 // Authentication & Authorization
 app.UseAuthentication();

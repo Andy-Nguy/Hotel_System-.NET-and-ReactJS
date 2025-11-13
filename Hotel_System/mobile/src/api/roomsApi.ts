@@ -8,16 +8,55 @@ const BASE_URLS = [
   "http://127.0.0.1:8080", // Alternative localhost
 ];
 
+const TIMEOUT_MS = 2000; // Reduced from 5000ms to 2000ms
+
+// Simple cache for API responses
+const apiCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 30000; // 30 seconds cache
+
+function getCacheKey(url: string, options?: any): string {
+  return `${url}_${JSON.stringify(options || {})}`;
+}
+
+function getCachedData(key: string): any | null {
+  const cached = apiCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log(`📋 Using cached data for: ${key}`);
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedData(key: string, data: any): void {
+  apiCache.set(key, { data, timestamp: Date.now() });
+}
+
 export type Room = {
   idphong: string;
-  tenPhong?: string;
-  soPhong?: string;
-  moTa?: string;
-  soNguoiToiDa?: number;
-  giaCoBanMotDem?: number;
-  xepHangSao?: number;
-  urlAnhPhong?: string;
-  [key: string]: any;
+  tenPhong: string;
+  soPhong: string;
+  moTa: string;
+  soNguoiToiDa: number;
+  giaCoBanMotDem: number;
+  xepHangSao: number;
+  trangThai: string;
+  urlAnhPhong: string;
+};
+
+export type AvailableRoom = {
+  roomId: string;
+  roomNumber: string;
+  description: string;
+  basePricePerNight: number;
+  roomImageUrl: string;
+  roomTypeName: string;
+  maxOccupancy: number;
+};
+
+export type CheckAvailableRoomsRequest = {
+  checkIn: string; // ISO date string
+  checkOut: string; // ISO date string
+  numberOfGuests: number;
 };
 
 async function handleRes(res: Response) {
@@ -61,7 +100,7 @@ async function tryFetchRooms(): Promise<Room[] | null> {
       console.log(`🌐 Trying: ${baseUrl}/api/Phong`);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // Reduce timeout to 5s
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS); // Reduce timeout to 2s
 
       const res = await fetch(`${baseUrl}/api/Phong`, {
         method: "GET",
@@ -113,7 +152,7 @@ async function tryFetchRooms(): Promise<Room[] | null> {
       }
     } catch (error: any) {
       if (error.name === "AbortError") {
-        console.warn(`⏰ Timeout with ${baseUrl} after 5 seconds`);
+        console.warn(`⏰ Timeout with ${baseUrl} after ${TIMEOUT_MS}ms`);
       } else {
         console.warn(`❌ Failed with ${baseUrl}:`, error?.name, error?.message);
       }
@@ -126,9 +165,17 @@ async function tryFetchRooms(): Promise<Room[] | null> {
 export async function getRooms(): Promise<Room[]> {
   console.log("🎯 Fetching rooms from database (no mock fallback)");
 
+  // Check cache first
+  const cacheKey = getCacheKey("getRooms");
+  const cachedData = getCachedData(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
+
   const apiData = await tryFetchRooms();
   if (apiData && apiData.length > 0) {
     console.log("✅ Successfully loaded rooms from database:", apiData.length);
+    setCachedData(cacheKey, apiData);
     return apiData;
   }
 
@@ -154,4 +201,68 @@ export async function getRoomById(id: string): Promise<Room> {
   throw new Error("Failed to fetch room by ID from all endpoints");
 }
 
-export default { getRooms, getRoomById };
+export async function checkAvailableRooms(
+  request: CheckAvailableRoomsRequest
+): Promise<AvailableRoom[]> {
+  // Create cache key based on request parameters
+  const cacheKey = getCacheKey("checkAvailableRooms", request);
+  const cachedData = getCachedData(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
+
+  for (const baseUrl of BASE_URLS) {
+    try {
+      console.log(
+        `🌐 Trying check available rooms: ${baseUrl}/api/Phong/check-available-rooms`
+      );
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+      const res = await fetch(`${baseUrl}/api/Phong/check-available-rooms`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          CheckIn: request.checkIn,
+          CheckOut: request.checkOut,
+          NumberOfGuests: request.numberOfGuests,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await handleRes(res);
+        console.log(`✅ Available rooms from ${baseUrl}:`, data);
+
+        // Normalize image URLs for mobile app
+        const processedData = (data || []).map((room: any) => ({
+          ...room,
+          roomImageUrl: normalizeImageUrl(room.roomImageUrl, baseUrl),
+        }));
+
+        // Cache the result
+        setCachedData(cacheKey, processedData || []);
+
+        return processedData || [];
+      } else {
+        console.warn(`⚠️ ${baseUrl} returned:`, res.status, res.statusText);
+      }
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        console.warn(`⏰ Timeout with ${baseUrl} after ${TIMEOUT_MS}ms`);
+      } else {
+        console.warn(`❌ Failed with ${baseUrl}:`, error?.name, error?.message);
+      }
+      continue;
+    }
+  }
+  throw new Error("Failed to check available rooms from all endpoints");
+}
+
+export default { getRooms, getRoomById, checkAvailableRooms };
