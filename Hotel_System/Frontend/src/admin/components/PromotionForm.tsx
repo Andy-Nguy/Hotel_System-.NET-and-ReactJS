@@ -8,13 +8,14 @@ import {
   InputNumber,
   Card,
   Space,
-  Transfer,
+  // Transfer, (no longer used)
   message,
   Spin,
   Row,
   Col,
   Upload,
   Image,
+  Modal,
 } from "antd";
 import { UploadOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -48,6 +49,8 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
+  const [roomObjects, setRoomObjects] = useState<any[]>([]);
+  const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [bannerImage, setBannerImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -63,6 +66,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
           title: `${room.tenPhong} (${room.idphong})`,
         }));
         setRooms(roomList);
+        setRoomObjects(data);
       } catch (error) {
         console.error("[PROMOTION_FORM] Error loading rooms:", error);
         message.error("Lỗi khi tải danh sách phòng");
@@ -319,16 +323,57 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
           )}
 
           <Form.Item label="Chọn Phòng Áp Dụng">
-            <Transfer
-              dataSource={rooms}
-              titles={["Phòng Có Sẵn", "Phòng Áp Dụng"]}
-              targetKeys={selectedRooms}
-              onChange={(newTargetKeys) => {
-                setSelectedRooms(newTargetKeys as string[]);
-              }}
-              render={(item) => item.title}
-              listStyle={{ width: "100%", height: "300px" }}
-            />
+            <div>
+              <Button onClick={() => setAssignModalVisible(true)}>Gán Phòng</Button>
+
+              {/* Assigned rooms list */}
+              <div style={{ marginTop: 12 }}>
+                {selectedRooms.length === 0 ? (
+                  <div style={{ color: '#888' }}>Chưa có phòng nào được gán</div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {selectedRooms.map((id) => (
+                      <div key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: '1px solid #e6e6e6', borderRadius: 20, background: '#fff' }}>
+                        <div style={{ fontWeight: 700 }}>{id}</div>
+                        <Button size="small" danger onClick={() => setSelectedRooms((s) => s.filter(x => x !== id))}>X</Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Modal
+                title="Gán Phòng cho Khuyến Mãi"
+                open={assignModalVisible}
+                onCancel={() => setAssignModalVisible(false)}
+                footer={null}
+                width={900}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+                  {roomObjects.map((r) => (
+                    <div key={r.idphong} style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ height: 120, backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url(${(r?.urlAnhPhong && (r.urlAnhPhong.startsWith('http') ? r.urlAnhPhong : `/img/room/${r.urlAnhPhong}`)) || '/img/placeholder.png'})` }} />
+                      <div style={{ padding: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{r.tenPhong}</div>
+                        <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>{r.idphong}</div>
+                        <div>
+                          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <input type="checkbox" checked={selectedRooms.includes(r.idphong)} onChange={(e) => {
+                              if (e.target.checked) setSelectedRooms((s) => (s.includes(r.idphong) ? s : [...s, r.idphong]));
+                              else setSelectedRooms((s) => s.filter(x => x !== r.idphong));
+                            }} />
+                            <span style={{ fontSize: 13 }}>Gán phòng</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 12, textAlign: 'right' }}>
+                  <Button onClick={() => setAssignModalVisible(false)}>Hoàn tất</Button>
+                </div>
+              </Modal>
+            </div>
           </Form.Item>
 
           <Space>

@@ -154,12 +154,6 @@ const PromotionList: React.FC<PromotionListProps> = ({
       render: (_: any, record: Promotion) => getStatusTag(record.trangThai),
     },
     {
-      title: "Phòng Áp Dụng",
-      key: "roomCount",
-      width: 120,
-      render: (_: any, record: Promotion) => `${record.khuyenMaiPhongs.length} phòng`,
-    },
-    {
       title: "Hành Động",
       key: "action",
       width: 200,

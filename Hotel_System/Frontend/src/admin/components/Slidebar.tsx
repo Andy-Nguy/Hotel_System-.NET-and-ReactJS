@@ -206,6 +206,12 @@ const Slidebar: React.FC = () => {
           label="Quản lý khuyến mãi"
         />
 
+					{/* Invoices manager link */}
+					<NavItem key="invoices" routeFragment="admin/invoices" label="Quản lý hóa đơn" />
+
+					{/* Loyalty / points manager link */}
+					<NavItem key="loyalty" routeFragment="admin/loyalty" label="Quản lý tích điểm" />
+
         {/* Bookings manager link */}
         <NavItem
           key="bookings"
