@@ -305,9 +305,9 @@ const MainPage: React.FC = () => {
       <HeroSection />
       <AboutUs />
       <PromotionSection />
-      <Services />
+      {/* <Services /> */}
       <HomeRoom />
-      <Testimonial />
+      {/* <Testimonial /> */}
       <BlogSection />
       <FooterSection />
     </>

@@ -11,7 +11,8 @@ function resolveImageUrl(u?: string | null) {
   // filename only -> use relative path to /img/room so dev proxy forwards to backend
   return `/img/room/${s}`;
 }
-import { getRoomTypes } from "../api/roomsApi";
+import { getRoomTypes, getRoomsByType, checkRoomAvailability, Room } from "../api/roomsApi";
+import RoomTypeModal from "./RoomTypeModal";
 
 type RoomType = {
   idLoaiPhong: string;
@@ -26,46 +27,24 @@ const HomeRoom: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const sliderRef = useRef<HTMLDivElement | null>(null);
-  const isDragging = useRef(false);
-  const startX = useRef(0);
-  const startScroll = useRef(0);
-  const dragged = useRef(false);
   const [visibleCount, setVisibleCount] = useState<number>(4);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const progressRef = useRef<HTMLDivElement | null>(null);
   const handleDragging = useRef(false);
 
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const el = sliderRef.current;
-    if (!el) return;
-    isDragging.current = true;
-    dragged.current = false;
-    startX.current = e.clientX;
-    startScroll.current = el.scrollLeft;
-    el.setPointerCapture(e.pointerId);
-    el.style.cursor = 'grabbing';
-  };
+  // Modal states
+  const [showModal, setShowModal] = useState(false);
+  const [selectedType, setSelectedType] = useState<RoomType | null>(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [checkin, setCheckin] = useState<string>('');
+  const [checkout, setCheckout] = useState<string>('');
+  const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [expandedRoom, setExpandedRoom] = useState<string | null>(null);
+  const [hasCheckedAvailability, setHasCheckedAvailability] = useState(false);
 
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const el = sliderRef.current;
-    if (!el || !isDragging.current) return;
-    const x = e.clientX;
-    const walk = x - startX.current;
-    if (Math.abs(walk) > 5) dragged.current = true;
-    el.scrollLeft = startScroll.current - walk;
-  };
-
-  const endDrag = (e?: React.PointerEvent<HTMLDivElement>) => {
-    const el = sliderRef.current;
-    if (!el) return;
-    isDragging.current = false;
-    try {
-      if (e && e.pointerId) el.releasePointerCapture(e.pointerId);
-    } catch {}
-    el.style.cursor = 'grab';
-    // small timeout reset
-    setTimeout(() => { dragged.current = false; }, 50);
-  };
+  // Note: native scroll is used for the slider. Custom pointer-capture drag handlers removed
+  // to avoid press-and-hold drag behavior that interferes clicks.
 
   // determine visible count by breakpoint
   useEffect(() => {
@@ -171,9 +150,41 @@ const HomeRoom: React.FC = () => {
     };
   }, []);
 
-  const goToRoomPage = (id?: string) => {
-    if (!id) return;
-    window.location.hash = `#rooms?loaiId=${encodeURIComponent(id)}`;
+  const openModal = async (type: RoomType) => {
+    setSelectedType(type);
+    setShowModal(true);
+    setCheckin('');
+    setCheckout('');
+    setAvailableRooms([]);
+    setExpandedRoom(null);
+    setHasCheckedAvailability(false);
+    try {
+      const roomsData = await getRoomsByType(type.idLoaiPhong);
+      setRooms(roomsData);
+    } catch (e) {
+      console.error('Failed to load rooms:', e);
+      setRooms([]);
+    }
+  };
+
+  const handleCheckAvailability = async (guests?: number, roomsCount?: number) => {
+    if (!selectedType || !checkin || !checkout) return;
+    setLoadingAvailability(true);
+    setHasCheckedAvailability(true);
+    try {
+      const g = guests ?? 1;
+      const available = await checkRoomAvailability(selectedType.idLoaiPhong, checkin, checkout, g);
+      setAvailableRooms(available);
+    } catch (e) {
+      console.error('Failed to check availability:', e);
+      setAvailableRooms([]);
+    } finally {
+      setLoadingAvailability(false);
+    }
+  };
+
+  const toggleExpand = (roomId: string) => {
+    setExpandedRoom(expandedRoom === roomId ? null : roomId);
   };
 
   if (loading) {
@@ -225,11 +236,29 @@ const HomeRoom: React.FC = () => {
             transform: translateY(20px) !important;
           }
           
+          /* Show content on hover (keep button hidden until hover) */
           .room-card:hover .room-content {
             opacity: 1 !important;
             visibility: visible !important;
             transform: translateY(0) !important;
           }
+
+          /* Hide the 'Xem chi tiết' button by default; show on hover */
+          .room-card .room-content button {
+            opacity: 0;
+            transform: translateY(6px);
+            transition: opacity 180ms ease, transform 180ms ease;
+            pointer-events: none;
+          }
+
+          .room-card:hover .room-content button {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+          }
+
+          /* Let overlay be decorative only so buttons remain clickable */
+          .room-overlay { pointer-events: none !important; }
           
           .room-card:hover .room-title {
             color: #dfa974 !important;
@@ -277,16 +306,16 @@ const HomeRoom: React.FC = () => {
                 color: '#333',
                 marginBottom: '20px',
                 position: 'relative'
-              }}>
-                Loại phòng của chúng tôi
-              </h2>
-              <div style={{
-                width: '100px',
-                height: '3px',
-                backgroundColor: '#dfa974',
-                margin: '0 auto 30px',
-                borderRadius: '2px'
-              }}></div>
+                }}>
+                  Loại phòng của chúng tôi
+                </h2>
+                <div style={{
+                  width: '100px',
+                  height: '3px',
+                  backgroundColor: '#dfa974',
+                  margin: '0 auto 30px',
+                  borderRadius: '2px'
+                }}></div>
               <p style={{ 
                 fontSize: '1.1rem', 
                 color: '#666',
@@ -336,13 +365,8 @@ const HomeRoom: React.FC = () => {
 
             <div
               className="slider-track"
-              ref={sliderRef}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-              onPointerLeave={endDrag}
-              onScroll={onScroll}
+                ref={sliderRef}
+                onScroll={onScroll}
               style={{
                 overflow: 'hidden',
                 scrollBehavior: 'smooth',
@@ -356,13 +380,7 @@ const HomeRoom: React.FC = () => {
                 )}
 
                 {types.map((type) => (
-                  <div key={type.idLoaiPhong} className="slide" style={{ flex: '0 0 25%' }} onClick={(e) => {
-                    // Prevent accidental click when user was dragging
-                    if (dragged.current && e.target === e.currentTarget) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }
-                  }}>
+                  <div key={type.idLoaiPhong} className="slide" style={{ flex: '0 0 25%' }}>
                     <div
                       className="hp-room-item room-card"
                       style={{
@@ -418,7 +436,7 @@ const HomeRoom: React.FC = () => {
                         </p>
                         <div style={{ marginTop: '16px' }}>
                           <button
-                            onClick={() => goToRoomPage(type.idLoaiPhong)}
+                            onClick={(e) => { e.stopPropagation(); openModal(type); }}
                             style={{
                               background: 'linear-gradient(135deg, #dfa974 0%, #c8956d 100%)',
                               border: 'none',
@@ -518,8 +536,28 @@ const HomeRoom: React.FC = () => {
         </div>
       </div>
     </section>
+    {showModal && selectedType && (
+      <RoomTypeModal
+        visible={showModal}
+        roomType={selectedType}
+        rooms={rooms}
+        availableRooms={availableRooms}
+        checkin={checkin}
+        checkout={checkout}
+        loadingAvailability={loadingAvailability}
+        expandedRoom={expandedRoom}
+        hasCheckedAvailability={hasCheckedAvailability}
+        onClose={() => setShowModal(false)}
+        setCheckin={setCheckin}
+        setCheckout={setCheckout}
+        onCheckAvailability={handleCheckAvailability}
+        toggleExpand={toggleExpand}
+        onBook={(room: Room) => { console.log('Book', room); }}
+      />
+    )}
     </>
   );
+
 };
 
 export default HomeRoom;
