@@ -1,10 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Base URL - set this to your backend URL
-// For Android emulator: http://10.0.2.2:5000
-// For iOS simulator: http://localhost:5000
-// For physical device: http://YOUR_IP:5000
-const BASE_URL = "http://10.0.2.2:5000";
+// Force backend host for mobile testing (use this IP for iPhone/device)
+// All requests will go to: http://192.168.1.129:8080
+const BASE_URL = "http://192.168.1.129:8080";
 
 // Type definitions
 export type RegisterRequest = {
@@ -37,7 +35,13 @@ export type RegisterResponse = {
 
 async function handleRes(res: Response) {
   const text = await res.text().catch(() => "");
-  const content = text ? JSON.parse(text) : null;
+  let content = null;
+  try {
+    content = text ? JSON.parse(text) : null;
+  } catch (e) {
+    // non-JSON response
+    content = text;
+  }
   if (!res.ok) {
     const err =
       (content && (content.error || content.message)) || `HTTP ${res.status}`;
@@ -46,10 +50,34 @@ async function handleRes(res: Response) {
   return content;
 }
 
+// Simple fetch wrapper with timeout to avoid hanging requests
+async function fetchWithTimeout(
+  input: RequestInfo,
+  init?: RequestInit,
+  timeout = 8000
+) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const res = await fetch(input, {
+      ...(init || {}),
+      signal: controller.signal,
+    });
+    return res;
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error("Request timed out");
+    throw err;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 export async function register(
   req: RegisterRequest
 ): Promise<RegisterResponse> {
-  const res = await fetch(`${BASE_URL}/api/Auth/register`, {
+  const url = `${BASE_URL}/api/Auth/register`;
+  console.log("authApi.register ->", url, req?.Email);
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -58,7 +86,8 @@ export async function register(
 }
 
 export async function verifyOtp(req: VerifyOtpRequest): Promise<LoginResponse> {
-  const res = await fetch(`${BASE_URL}/api/Auth/verify`, {
+  const url = `${BASE_URL}/api/Auth/verify`;
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -67,21 +96,39 @@ export async function verifyOtp(req: VerifyOtpRequest): Promise<LoginResponse> {
 }
 
 export async function login(req: LoginRequest): Promise<LoginResponse> {
-  const res = await fetch(`${BASE_URL}/api/Auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-  });
-  return handleRes(res);
+  const url = `${BASE_URL}/api/Auth/login`;
+  console.log("authApi.login ->", url, req?.Email);
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    return handleRes(res);
+  } catch (err: any) {
+    console.error("authApi.login error:", err?.message || err);
+    throw err;
+  }
 }
 
 export async function getProfile() {
   const token = await AsyncStorage.getItem("hs_token");
-  const res = await fetch(`${BASE_URL}/api/Auth/profile`, {
-    method: "GET",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  return handleRes(res);
+  const url = `${BASE_URL}/api/Auth/profile`;
+  console.log("authApi.getProfile ->", url, "token?", !!token);
+  try {
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+      10000
+    );
+    return handleRes(res);
+  } catch (err: any) {
+    console.error("authApi.getProfile error:", err?.message || err);
+    throw err;
+  }
 }
 
 export async function getBookings() {

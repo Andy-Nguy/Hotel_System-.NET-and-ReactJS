@@ -24,14 +24,19 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(string? loaiPhongId = null)
         {
             try
             {
                 Console.WriteLine("🔍 PhongController: Getting all rooms...");
-                var rooms = await _context.Phongs
-                    .Include(p => p.IdloaiPhongNavigation)
-                    .ToListAsync();
+                IQueryable<Phong> query = _context.Phongs.Include(p => p.IdloaiPhongNavigation);
+
+                if (!string.IsNullOrEmpty(loaiPhongId))
+                {
+                    query = query.Where(p => p.IdloaiPhong == loaiPhongId);
+                }
+
+                var rooms = await query.ToListAsync();
                 
                 Console.WriteLine($"📊 Found {rooms.Count} rooms in database");
 
@@ -151,6 +156,63 @@ namespace Hotel_System.API.Controllers
             }
 
             return Ok(rooms);
+        }
+
+        // GET: api/Phong/kiem-tra-trong?loaiPhongId={id}&checkin={date}&checkout={date}
+        [HttpGet("kiem-tra-trong-theo-loai-phong")]
+        public async Task<IActionResult> CheckAvailability(string loaiPhongId, string checkin, string checkout, int numberOfGuests = 1)
+        {
+            try
+            {
+                // Parse incoming dates. The frontend commonly sends either ISO (YYYY-MM-DD)
+                // or local Vietnamese format (dd/MM/yyyy). Try both so API is tolerant.
+                DateOnly checkInDate, checkOutDate;
+                if (!DateOnly.TryParse(checkin, out checkInDate) || !DateOnly.TryParse(checkout, out checkOutDate))
+                {
+                    // Try parsing with Vietnamese culture as a fallback (dd/MM/yyyy)
+                    var vi = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+                    if (!DateTime.TryParse(checkin, vi, System.Globalization.DateTimeStyles.None, out var dtIn) ||
+                        !DateTime.TryParse(checkout, vi, System.Globalization.DateTimeStyles.None, out var dtOut))
+                    {
+                        return BadRequest("Invalid date format. Use YYYY-MM-DD or dd/MM/yyyy.");
+                    }
+
+                    checkInDate = DateOnly.FromDateTime(dtIn);
+                    checkOutDate = DateOnly.FromDateTime(dtOut);
+                }
+
+                // Validate: Check-in must not be in the past
+                var today = DateOnly.FromDateTime(DateTime.Now);
+                if (checkInDate < today)
+                {
+                    return BadRequest("Check-in date cannot be in the past. Please select today or a future date.");
+                }
+
+                // Validate: Check-out must be at least 1 day after check-in
+                if (checkOutDate <= checkInDate)
+                {
+                    return BadRequest("Check-out date must be at least 1 day after check-in date.");
+                }
+
+                // Convert to DateTime for service method (keep times at midnight; service converts to DateOnly)
+                var checkInDt = checkInDate.ToDateTime(new TimeOnly(0, 0));
+                var checkOutDt = checkOutDate.ToDateTime(new TimeOnly(0, 0));
+
+                // Delegate to RoomService which contains optimized availability logic
+                var rooms = await _roomService.CheckAvailableRoomsByTypeAsync(checkInDt, checkOutDt, loaiPhongId, numberOfGuests);
+
+                if (rooms == null || rooms.Count == 0)
+                {
+                    return Ok(new { message = "No available rooms for this type ❌" });
+                }
+
+                return Ok(rooms);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error in CheckAvailability: {ex.Message}");
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
        
         // POST: api/Phong

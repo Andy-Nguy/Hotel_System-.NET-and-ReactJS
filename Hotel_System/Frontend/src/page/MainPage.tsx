@@ -21,6 +21,7 @@ import RoomManager from "../admin/pages/RoomManager";
 import AmenticsManager from "../admin/pages/AmenticsManager";
 import ServiceManager from "../admin/pages/ServiceManager";
 import PromotionManager from "../admin/pages/PromotionManager";
+import BookingManager from "../admin/pages/BookingManager";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
@@ -297,17 +298,27 @@ const MainPage: React.FC = () => {
     return <PromotionManager />;
   }
 
+  // Admin bookings page route (accessible at /admin/bookings or #admin/bookings)
+  if (
+    route === "#admin/bookings" ||
+    route === "/admin/bookings" ||
+    route === "#/admin/bookings"
+  ) {
+    return <BookingManager />;
+  }
+
   return (
     <>
       <OffcanvasMenu />
       <HeaderSection />
-      
+
       <HeroSection />
       <AboutUs />
       <PromotionSection />
-      <Services />
+      
       <HomeRoom />
-      <Testimonial />
+      <Services />
+      {/* <Testimonial /> */}
       <BlogSection />
       <FooterSection />
     </>

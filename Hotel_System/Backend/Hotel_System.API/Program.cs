@@ -47,6 +47,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Room service
 builder.Services.AddScoped<RoomService>();
+// Email service
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Configure JWT authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -83,13 +85,19 @@ builder.Services.AddCors(options =>
             "http://localhost:5173",     // Vite dev server
             "http://localhost:3000",     // React dev server
             "http://10.0.2.2:8080",      // Android emulator accessing host
-            "http://192.168.1.3:8080",   // Physical device on same network
+            "http://192.168.1.129:8080",   // Physical device on same network
             "http://localhost:19006",    // Expo dev server
             "http://localhost:19000"     // Expo dev tools
         )
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials());
+});
+
+// Add response compression
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
 });
 
 // ✅ Connect to SQL Server
@@ -115,6 +123,9 @@ if (app.Environment.IsDevelopment())
 
 // ✅ Enable CORS here (AFTER Build)
 app.UseCors("AllowFrontend");
+
+// Enable response compression
+app.UseResponseCompression();
 
 // Authentication & Authorization
 app.UseAuthentication();

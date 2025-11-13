@@ -72,7 +72,11 @@ async function fetchApi(endpoint: string): Promise<any[]> {
   }
 
   const data = await res.json();
-  
+
+  // If the API returned an informational message (e.g. { message: 'No rooms...' })
+  // treat that as an empty result set so callers get a consistent array shape.
+  if (data && (data.message || data.Message)) return [];
+
   // Chuẩn hóa dữ liệu trả về (logic từ file roomsApi.ts cũ)
   if (Array.isArray(data)) return data;
   if (data && Array.isArray((data as any).items)) return (data as any).items;
@@ -193,9 +197,99 @@ export async function deleteRoom(id: string): Promise<void> {
   if (!res.ok) throw new Error(`Failed to delete room: ${res.status}`);
 }
 
-// === 4. EXPORT MẶC ĐỊNH ===
+/**
+ * Lấy phòng theo loại phòng
+ */
+export async function getRoomsByType(loaiPhongId: string): Promise<Room[]> {
+  const data = await fetchApi(`/api/Phong?loaiPhongId=${encodeURIComponent(loaiPhongId)}`);
+  
+  // Chuẩn hóa tương tự getRooms
+  const normalizedRooms: Room[] = (data as any[]).map(r => ({
+    idphong: r.idphong ?? r.Idphong,
+    idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
+    tenPhong: r.tenPhong ?? r.TenPhong,
+    tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong,
+    soPhong: r.soPhong ?? r.SoPhong,
+    moTa: r.moTa ?? r.MoTa,
+    soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa,
+    giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
+    xepHangSao: r.xepHangSao ?? r.XepHangSao,
+    trangThai: r.trangThai ?? r.TrangThai,
+    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong
+  }));
+  
+  return normalizedRooms;
+}
 
-export default {
-  getRooms,
-  getRoomTypes
-};
+/**
+ * Kiểm tra phòng trống theo loại phòng và khoảng thời gian
+ */
+export async function checkRoomAvailability(loaiPhongId: string, checkin: string, checkout: string, numberOfGuests: number = 1): Promise<Room[]> {
+  const data = await fetchApi(`/api/Phong/kiem-tra-trong-theo-loai-phong?loaiPhongId=${encodeURIComponent(loaiPhongId)}&checkin=${encodeURIComponent(checkin)}&checkout=${encodeURIComponent(checkout)}&numberOfGuests=${encodeURIComponent(String(numberOfGuests))}`);
+  
+  // Chuẩn hóa tương tự, nhưng thêm support cho AvailableRoomResponse shape
+  // (API có thể trả về RoomId, RoomName, RoomNumber, BasePricePerNight, RoomImageUrl, RoomTypeName, MaxOccupancy)
+  const normalizedRooms: Room[] = (data as any[]).map(r => ({
+    idphong: r.idphong ?? r.Idphong ?? r.roomId ?? r.RoomId,
+    idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
+    tenPhong: r.tenPhong ?? r.TenPhong ?? r.roomName ?? r.RoomName ?? r.roomNumber ?? r.RoomNumber,
+    tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong ?? r.roomTypeName ?? r.RoomTypeName,
+    soPhong: r.soPhong ?? r.SoPhong ?? r.roomNumber ?? r.RoomNumber,
+    moTa: r.moTa ?? r.MoTa ?? r.description ?? r.Description,
+    soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa ?? r.maxOccupancy ?? r.MaxOccupancy,
+    giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.basePricePerNight ?? r.BasePricePerNight,
+    xepHangSao: r.xepHangSao ?? r.XepHangSao,
+    trangThai: r.trangThai ?? r.TrangThai,
+    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong ?? r.roomImageUrl ?? r.RoomImageUrl
+  }));
+  
+  return normalizedRooms;
+}
+
+/**
+ * Kiểm tra phòng trống với request tổng quát (từ CheckAvailableRoomsRequest)
+ * Dùng API: POST /api/Phong/check-available-rooms
+ */
+export async function postCheckAvailableRooms(
+  checkIn: string,
+  checkOut: string,
+  numberOfGuests: number = 1
+): Promise<Room[]> {
+  const url = `${API_BASE}/api/Phong/check-available-rooms`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      CheckIn: checkIn,
+      CheckOut: checkOut,
+      NumberOfGuests: numberOfGuests,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => null);
+    throw new Error(`API error ${res.status}${text ? `: ${text}` : ""}`);
+  }
+
+  const data = await res.json();
+
+  // If backend returns { message: "No rooms available..." }, treat as empty array
+  if (data && (data.message || data.Message)) return [];
+
+  // Chuẩn hóa dữ liệu
+  const normalizedRooms: Room[] = (Array.isArray(data) ? data : [data]).map((r: any) => ({
+    idphong: r.idphong ?? r.Idphong ?? r.roomId ?? r.RoomId,
+    idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
+    tenPhong: r.tenPhong ?? r.TenPhong ?? r.roomName ?? r.RoomName ?? r.roomNumber ?? r.RoomNumber,
+    tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong ?? r.roomTypeName ?? r.RoomTypeName,
+    soPhong: r.soPhong ?? r.SoPhong ?? r.roomNumber ?? r.RoomNumber,
+    moTa: r.moTa ?? r.MoTa ?? r.description ?? r.Description,
+    soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa ?? r.maxOccupancy ?? r.MaxOccupancy,
+    giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.basePricePerNight ?? r.BasePricePerNight,
+    xepHangSao: r.xepHangSao ?? r.XepHangSao,
+    trangThai: r.trangThai ?? r.TrangThai,
+    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong ?? r.roomImageUrl ?? r.RoomImageUrl,
+  }));
+
+  return normalizedRooms;
+}
