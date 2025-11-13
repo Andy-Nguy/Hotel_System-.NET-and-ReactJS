@@ -29,7 +29,12 @@ namespace Hotel_System.API.Controllers
             try
             {
                 Console.WriteLine("🔍 PhongController: Getting all rooms...");
-                IQueryable<Phong> query = _context.Phongs.Include(p => p.IdloaiPhongNavigation);
+                IQueryable<Phong> query = _context.Phongs
+                    .Include(p => p.IdloaiPhongNavigation)
+                    .Include(p => p.TienNghiPhongs)
+                        .ThenInclude(tnp => tnp.IdtienNghiNavigation)
+                    .Include(p => p.KhuyenMaiPhongs)
+                        .ThenInclude(kmp => kmp.IdkhuyenMaiNavigation);
 
                 if (!string.IsNullOrEmpty(loaiPhongId))
                 {
@@ -68,6 +73,29 @@ namespace Hotel_System.API.Controllers
                     r.XepHangSao,
                     TrangThai = occupiedRoomIds.Contains(r.Idphong) ? "Occupied" : "Available",
                     UrlAnhPhong = ResolveImageUrl(r.UrlAnhPhong),
+                    // Add amenities
+                    amenities = r.TienNghiPhongs
+                        .Select(tnp => new {
+                            id = tnp.IdtienNghi,
+                            name = tnp.IdtienNghiNavigation != null ? tnp.IdtienNghiNavigation.TenTienNghi : ""
+                        })
+                        .ToList(),
+                    // Add active promotions only
+                    promotions = r.KhuyenMaiPhongs
+                        .Where(kmp => kmp.IdkhuyenMaiNavigation != null &&
+                                      kmp.IdkhuyenMaiNavigation.TrangThai == "active" &&
+                                      kmp.IdkhuyenMaiNavigation.NgayBatDau <= currentDate &&
+                                      kmp.IdkhuyenMaiNavigation.NgayKetThuc >= currentDate)
+                        .Select(kmp => new {
+                            id = kmp.IdkhuyenMai,
+                            name = kmp.IdkhuyenMaiNavigation.TenKhuyenMai,
+                            description = kmp.IdkhuyenMaiNavigation.MoTa,
+                            type = kmp.IdkhuyenMaiNavigation.LoaiGiamGia,
+                            value = kmp.IdkhuyenMaiNavigation.GiaTriGiam,
+                            startDate = kmp.IdkhuyenMaiNavigation.NgayBatDau,
+                            endDate = kmp.IdkhuyenMaiNavigation.NgayKetThuc
+                        })
+                        .ToList()
                 }).ToList();
 
                 Console.WriteLine($"✅ Returning {transformed.Count} transformed rooms");

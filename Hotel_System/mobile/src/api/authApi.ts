@@ -1,8 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// Force backend host for mobile testing (use this IP for iPhone/device)
-// All requests will go to: http://192.168.1.129:8080
-const BASE_URL = "http://192.168.1.129:8080";
+import apiConfig from "../config/apiConfig";
+const BASE_URL = apiConfig.BASE_URL;
 
 // Type definitions
 export type RegisterRequest = {

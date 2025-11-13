@@ -367,7 +367,7 @@ const Services: React.FC = () => {
           <div className="service-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(900px, 95%)', background: '#fff', borderRadius: 8, overflow: 'hidden', maxHeight: '90%', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', gap: 16 }}>
               <div style={{ flex: 1 }}>
-                <img src={selected.HinhDichVu || placeholderImg} alt={selected.TenDichVu} style={{ width: '100%', height: 360, objectFit: 'cover' }} />
+                <img src={selected.HinhDichVu || placeholderImg} alt={selected.TenDichVu} style={{ width: '100%', height: 360, objectFit: 'cover', padding: 18}} />
               </div>
               <div style={{ flex: 1, padding: 18, overflow: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>

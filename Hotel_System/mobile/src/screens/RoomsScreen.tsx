@@ -7,17 +7,30 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  ScrollView,
+  Modal,
+  Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getRooms, Room } from "../api/roomsApi";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 
+interface RoomType {
+  loaiPhong: string;
+  tenLoaiPhong: string;
+  moTa?: string;
+  rooms: Room[];
+}
+
 const RoomsScreen: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     loadRooms();
@@ -31,6 +44,23 @@ const RoomsScreen: React.FC = () => {
       const data = await getRooms();
       console.log("✅ Rooms loaded:", data);
       setRooms(Array.isArray(data) ? data : []);
+
+      // Group rooms by type
+      const grouped = new Map<string, RoomType>();
+      (Array.isArray(data) ? data : []).forEach((room: Room) => {
+        const key = room.idloaiPhong || "Unknown";
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            loaiPhong: room.idloaiPhong || "Unknown",
+            tenLoaiPhong: room.tenLoaiPhong || "Unknown Room Type",
+            moTa: room.moTa, // Use room description if available
+            rooms: [],
+          });
+        }
+        grouped.get(key)!.rooms.push(room);
+      });
+
+      setRoomTypes(Array.from(grouped.values()));
     } catch (e: any) {
       console.error("❌ Failed to load rooms:", e);
       setError(e?.message || "Failed to load rooms");
@@ -62,92 +92,222 @@ const RoomsScreen: React.FC = () => {
     return stars.join("");
   };
 
-  const renderRoomCard = ({ item }: { item: Room }) => (
-    <TouchableOpacity style={styles.card}>
-      {/* Room Image */}
-      <View style={styles.imageContainer}>
-        {item.urlAnhPhong ? (
-          <Image
-            source={{ uri: item.urlAnhPhong }}
-            style={styles.roomImage}
-            contentFit="cover"
-            onError={(e) => console.log('Image load error:', item.urlAnhPhong, e)}
-            onLoad={() => console.log('Image loaded successfully:', item.urlAnhPhong)}
-          />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>🏨</Text>
+  const renderRoomCard = (room: Room) => (
+    <TouchableOpacity
+      key={room.idphong}
+      style={styles.roomCard}
+      onPress={() => {
+        setSelectedRoom(room);
+        setShowDetails(true);
+      }}
+    >
+      <View style={styles.roomCardImageContainer}>
+        <Image
+          source={{ uri: room.urlAnhPhong }}
+          style={styles.roomCardImage}
+          contentFit="cover"
+        />
+        {/* Promotion badge */}
+        {room.promotions && room.promotions.length > 0 && (
+          <View style={styles.promotionBadge}>
+            <Text style={styles.promotionBadgeText}>
+              {room.promotions[0].type === 'percent' 
+                ? `-${room.promotions[0].value}%` 
+                : `- $${room.promotions[0].value}`}
+            </Text>
           </View>
         )}
-        {/* Status Badge */}
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor:
-                item.trangThai === "Available" || item.trangThai === "Còn phòng" ? "#4CAF50" : "#f44336",
-            },
-          ]}
-        >
-          <Text style={styles.statusText}>
-            {item.trangThai === "Available" || item.trangThai === "Còn phòng" ? "Còn phòng" : "Hết phòng"}
-          </Text>
-        </View>
       </View>
-
-      {/* Room Info */}
-      <View style={styles.content}>
-        {/* Title Section */}
-        <View style={styles.titleSection}>
-          <Text style={styles.roomName} numberOfLines={2}>
-            {item.tenPhong || "Unknown Room"}
-          </Text>
-          <Text style={styles.roomNumber}>Phòng {item.soPhong || "-"}</Text>
-        </View>
-
-        {/* Rating */}
-        <View style={styles.ratingSection}>
-          <Text style={styles.stars}>{renderStars(item.xepHangSao || 0)}</Text>
-          <Text style={styles.ratingText}>
-            {(item.xepHangSao || 0).toFixed(1)}/5
-          </Text>
-        </View>
-
-        {/* Description/Features */}
-        {item.moTa && (
-          <Text style={styles.description} numberOfLines={2}>
-            {item.moTa}
-          </Text>
-        )}
-
-        {/* Amenities - Key Features */}
-        <View style={styles.amenitiesSection}>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>📶 Wi-Fi</Text>
-          </View>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>🛏️ {item.soNguoiToiDa || "-"} guests</Text>
-          </View>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>🏊 Pool</Text>
-          </View>
-        </View>
-
-        {/* Price Section */}
-        <View style={styles.priceSection}>
-          <Text style={styles.priceLabel}>Giá/đêm:</Text>
-          <Text style={styles.price}>
-            ${Number(item.giaCoBanMotDem || 0).toLocaleString()}
-          </Text>
-        </View>
-
-        {/* View Details Button */}
-        <TouchableOpacity style={styles.detailButton}>
-          <Text style={styles.detailButtonText}>Xem chi tiết</Text>
-        </TouchableOpacity>
+      <View style={styles.roomCardContent}>
+        <Text style={styles.roomCardTitle} numberOfLines={1}>
+          {room.tenPhong}
+        </Text>
+        <Text style={styles.roomCardPrice}>
+          ${Number(room.giaCoBanMotDem).toLocaleString()}
+        </Text>
       </View>
     </TouchableOpacity>
   );
+
+  const renderRoomType = ({ item }: { item: RoomType }) => (
+    <View key={item.loaiPhong} style={styles.roomTypeSection}>
+      <View style={styles.roomTypeHeader}>
+        <View>
+          <Text style={styles.roomTypeName}>{item.tenLoaiPhong}</Text>
+          {item.moTa && (
+            <Text style={styles.roomTypeDesc} numberOfLines={1}>
+              {item.moTa}
+            </Text>
+          )}
+        </View>
+        <Text style={styles.roomCount}>{item.rooms.length}</Text>
+      </View>
+      
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        style={styles.roomScroll}
+        contentContainerStyle={styles.roomScrollContent}
+      >
+        {item.rooms.map((room) => renderRoomCard(room))}
+      </ScrollView>
+    </View>
+  );
+
+  const renderDetailsModal = () => {
+    if (!selectedRoom) return null;
+
+    // Calculate discount price if promotion exists
+    let discountPrice = selectedRoom.giaCoBanMotDem;
+    let hasDiscount = false;
+    
+    if (selectedRoom.promotions && selectedRoom.promotions.length > 0) {
+      const promo = selectedRoom.promotions[0];
+      hasDiscount = true;
+      if (promo.type === 'percent') {
+        discountPrice = selectedRoom.giaCoBanMotDem * (1 - promo.value / 100);
+      } else {
+        discountPrice = selectedRoom.giaCoBanMotDem - promo.value;
+      }
+    }
+
+    return (
+      <Modal
+        visible={showDetails}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDetails(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowDetails(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Chi tiết phòng</Text>
+            <View style={{ width: 30 }} />
+          </View>
+
+          <ScrollView
+            style={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Image
+              source={{ uri: selectedRoom.urlAnhPhong }}
+              style={styles.modalImage}
+              contentFit="cover"
+            />
+
+            <View style={styles.detailsSection}>
+              <Text style={styles.detailTitle}>{selectedRoom.tenPhong}</Text>
+              <Text style={styles.detailSubtitle}>
+                Phòng {selectedRoom.soPhong}
+              </Text>
+
+              <View style={styles.ratingRow}>
+                <Text style={styles.stars}>
+                  {renderStars(selectedRoom.xepHangSao || 0)}
+                </Text>
+                <Text style={styles.ratingText}>
+                  {(selectedRoom.xepHangSao || 0).toFixed(1)}/5
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Loại phòng:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedRoom.tenLoaiPhong || "N/A"}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Số người tối đa:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedRoom.soNguoiToiDa} người
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Trạng thái:</Text>
+                <Text
+                  style={[
+                    styles.detailValue,
+                    selectedRoom.trangThai === "Available"
+                      ? { color: "#4CAF50" }
+                      : { color: "#FF9800" },
+                  ]}
+                >
+                  {selectedRoom.trangThai === "Available" ? "Trống" : "Đã đặt"}
+                </Text>
+              </View>
+
+              <View style={styles.descriptionSection}>
+                <Text style={styles.sectionLabel}>Mô tả</Text>
+                <Text style={styles.descriptionText}>
+                  {selectedRoom.moTa || "Không có mô tả"}
+                </Text>
+              </View>
+
+              {/* Amenities Section */}
+              {selectedRoom.amenities && selectedRoom.amenities.length > 0 && (
+                <View style={styles.amenitiesSection}>
+                  <Text style={styles.sectionLabel}>Tiện nghi</Text>
+                  <View style={styles.amenitiesList}>
+                    {selectedRoom.amenities.map((amenity) => (
+                      <View key={amenity.id} style={styles.amenityItem}>
+                        <Text style={styles.amenityBullet}>✓</Text>
+                        <Text style={styles.amenityText}>{amenity.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Promotions Section */}
+              {selectedRoom.promotions && selectedRoom.promotions.length > 0 && (
+                <View style={styles.promotionSection}>
+                  <Text style={styles.sectionLabel}>Khuyến mãi</Text>
+                  {selectedRoom.promotions.map((promo) => (
+                    <View key={promo.id} style={styles.promotionItem}>
+                      <Text style={styles.promotionName}>{promo.name}</Text>
+                      {promo.description && (
+                        <Text style={styles.promotionDesc}>{promo.description}</Text>
+                      )}
+                      <Text style={styles.promotionValue}>
+                        {promo.type === 'percent' 
+                          ? `Giảm ${promo.value}%` 
+                          : `Giảm $${promo.value}`}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <View style={styles.priceSection}>
+                <View>
+                  <Text style={styles.priceLabel}>Giá mỗi đêm</Text>
+                  {hasDiscount && (
+                    <Text style={styles.originalPrice}>
+                      ${Number(selectedRoom.giaCoBanMotDem).toLocaleString()}
+                    </Text>
+                  )}
+                </View>
+                <Text style={[styles.priceValue, { color: hasDiscount ? COLORS.primary : COLORS.primary }]}>
+                  ${Number(discountPrice).toLocaleString()}
+                </Text>
+              </View>
+
+              <TouchableOpacity style={styles.bookButton}>
+                <Text style={styles.bookButtonText}>Đặt phòng ngay</Text>
+              </TouchableOpacity>
+
+              <View style={{ height: SIZES.padding * 2 }} />
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    );
+  };
 
   if (loading) {
     return (
@@ -178,13 +338,15 @@ const RoomsScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Các phòng có sẵn</Text>
-        <Text style={styles.subtitle}>{rooms.length} phòng</Text>
+        <Text style={styles.subtitle}>
+          {roomTypes.reduce((sum, rt) => sum + rt.rooms.length, 0)} phòng
+        </Text>
       </View>
 
       <FlatList
-        data={rooms}
-        renderItem={renderRoomCard}
-        keyExtractor={(item) => item.idphong}
+        data={roomTypes}
+        renderItem={renderRoomType}
+        keyExtractor={(item) => item.loaiPhong}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -202,6 +364,8 @@ const RoomsScreen: React.FC = () => {
           </View>
         }
       />
+
+      {renderDetailsModal()}
     </SafeAreaView>
   );
 };
@@ -235,133 +399,284 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
   },
   listContainer: {
-    paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding,
-    gap: SIZES.padding,
   },
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    overflow: "hidden",
-    marginBottom: 8,
-    ...SHADOWS.medium,
+  // Room Type Section Styles
+  roomTypeSection: {
+    marginBottom: SIZES.padding * 2,
   },
-  imageContainer: {
-    position: "relative",
-    width: "100%",
-    aspectRatio: 16 / 9,
-    backgroundColor: "#f0f0f0",
-  },
-  roomImage: {
-    width: "100%",
-    height: "100%",
-  },
-  imagePlaceholder: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
+  roomTypeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#f0f0f0",
+    paddingHorizontal: SIZES.padding,
+    marginBottom: SIZES.padding,
   },
-  imagePlaceholderText: {
-    fontSize: 48,
-  },
-  statusBadge: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#4CAF50",
-  },
-  statusText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  content: {
-    padding: SIZES.padding,
-  },
-  titleSection: {
-    marginBottom: 12,
-  },
-  roomName: {
+  roomTypeName: {
     fontSize: 18,
     fontWeight: "700",
     color: COLORS.secondary,
     marginBottom: 4,
   },
-  roomNumber: {
+  roomTypeDesc: {
     fontSize: 12,
     color: COLORS.gray,
   },
-  ratingSection: {
+  roomCount: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.primary,
+    backgroundColor: "#f0f0f0",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  roomScroll: {
+    paddingHorizontal: SIZES.padding,
+  },
+  roomScrollContent: {
+    gap: SIZES.padding,
+  },
+  // Room Card Styles (for horizontal scroll)
+  roomCard: {
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: COLORS.white,
+    width: 140,
+    ...SHADOWS.medium,
+  },
+  roomCardImageContainer: {
+    position: "relative",
+    width: "100%",
+    height: 100,
+  },
+  roomCardImage: {
+    width: "100%",
+    height: 100,
+  },
+  promotionBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "#FF6B6B",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  promotionBadgeText: {
+    color: COLORS.white,
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  roomCardContent: {
+    padding: 10,
+  },
+  roomCardTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.secondary,
+    marginBottom: 6,
+  },
+  roomCardPrice: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  modalHeader: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  closeButton: {
+    fontSize: 24,
+    color: COLORS.secondary,
+    fontWeight: "600",
+    width: 30,
+    textAlign: "center",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.secondary,
+  },
+  modalContent: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  modalImage: {
+    width: Dimensions.get("window").width,
+    height: 250,
+  },
+  detailsSection: {
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding,
+  },
+  detailTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    marginBottom: 4,
+  },
+  detailSubtitle: {
+    fontSize: 14,
+    color: COLORS.gray,
     marginBottom: 12,
   },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
   stars: {
-    fontSize: 16,
+    fontSize: 18,
     marginRight: 8,
   },
   ratingText: {
+    fontSize: 14,
+    color: COLORS.secondary,
+    fontWeight: "600",
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  detailLabel: {
+    fontSize: 13,
+    color: COLORS.gray,
+    fontWeight: "500",
+  },
+  detailValue: {
     fontSize: 13,
     color: COLORS.secondary,
     fontWeight: "600",
   },
-  description: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginBottom: 12,
-    lineHeight: 16,
+  descriptionSection: {
+    marginTop: 16,
+    marginBottom: 16,
   },
-  amenitiesSection: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-    flexWrap: "wrap",
-  },
-  amenityBadge: {
-    backgroundColor: "#f0f0f0",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  amenityText: {
-    fontSize: 11,
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: "700",
     color: COLORS.secondary,
-    fontWeight: "500",
+    marginBottom: 8,
+  },
+  descriptionText: {
+    fontSize: 13,
+    color: COLORS.gray,
+    lineHeight: 20,
   },
   priceSection: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
-    marginBottom: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    backgroundColor: "#f9f9f9",
+    borderRadius: 8,
+    marginBottom: 16,
   },
   priceLabel: {
     fontSize: 13,
     color: COLORS.gray,
     fontWeight: "500",
   },
-  price: {
-    fontSize: 20,
+  originalPrice: {
+    fontSize: 14,
+    color: COLORS.gray,
+    fontWeight: "500",
+    textDecorationLine: "line-through",
+    marginBottom: 4,
+  },
+  priceValue: {
+    fontSize: 24,
     fontWeight: "700",
     color: COLORS.primary,
   },
-  detailButton: {
-    backgroundColor: COLORS.primary,
+  // Amenities Styles
+  amenitiesSection: {
+    marginTop: 16,
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  amenitiesList: {
+    gap: 12,
+  },
+  amenityItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  amenityBullet: {
+    fontSize: 16,
+    color: "#4CAF50",
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  amenityText: {
+    fontSize: 13,
+    color: COLORS.secondary,
+    flex: 1,
+    lineHeight: 18,
+  },
+  // Promotions Styles
+  promotionSection: {
+    marginTop: 16,
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  promotionItem: {
+    backgroundColor: "#FFF3E0",
+    paddingHorizontal: 12,
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: "center",
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: "#FF6B6B",
   },
-  detailButtonText: {
+  promotionName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    marginBottom: 4,
+  },
+  promotionDesc: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  promotionValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FF6B6B",
+  },
+  bookButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  bookButtonText: {
     color: COLORS.white,
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
   },
   loadingText: {
     marginTop: 12,

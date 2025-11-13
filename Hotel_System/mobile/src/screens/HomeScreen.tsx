@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -14,6 +14,9 @@ import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
 import Icon from "react-native-vector-icons/FontAwesome";
+import AboutUs from "../components/AboutUs";
+import BlogSection from "../components/BlogSection";
+import Promotion from "../components/Promotion";
 
 const HomeScreen: React.FC = () => {
   const { userInfo } = useAuth();
@@ -97,7 +100,14 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.bottomArrow}>›</Text>
         </TouchableOpacity>
       </View>
+      
+      <AboutUs />
 
+
+      {/* Promotion: Promotion will fetch latest promotion itself when no props provided */}
+      <Promotion
+        
+      />
       {/* Check Available Rooms Button */}
       <View style={styles.checkRoomsContainer}>
         <TouchableOpacity
@@ -111,6 +121,8 @@ const HomeScreen: React.FC = () => {
 
       {/* Bottom Spacing */}
       <View style={styles.spacing} />
+
+      <BlogSection />
     </ScrollView>
   );
 };

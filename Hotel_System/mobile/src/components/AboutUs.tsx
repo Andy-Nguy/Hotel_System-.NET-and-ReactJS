@@ -25,32 +25,6 @@ const AboutUs: React.FC = () => {
             and luxury accommodations. We are dedicated to making your stay
             unforgettable with our world-class services and amenities.
           </Text>
-
-          <View style={styles.features}>
-            <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>🏆</Text>
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>Excellence</Text>
-                <Text style={styles.featureDesc}>Award-winning service</Text>
-              </View>
-            </View>
-
-            <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>🌟</Text>
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>Luxury</Text>
-                <Text style={styles.featureDesc}>Premium facilities</Text>
-              </View>
-            </View>
-
-            <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>💎</Text>
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>Comfort</Text>
-                <Text style={styles.featureDesc}>Unforgettable experience</Text>
-              </View>
-            </View>
-          </View>
         </View>
       </View>
     </View>
@@ -59,7 +33,7 @@ const AboutUs: React.FC = () => {
 
 const styles = StyleSheet.create({
   section: {
-    paddingVertical: SIZES.padding * 3,
+    paddingTop: SIZES.padding * 3,
     paddingHorizontal: SIZES.padding,
     backgroundColor: COLORS.white,
   },
@@ -98,7 +72,7 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     lineHeight: 28,
     textAlign: "center",
-    marginBottom: SIZES.margin * 2,
+    // marginBottom: SIZES.margin,
   },
   features: {
     width: "100%",

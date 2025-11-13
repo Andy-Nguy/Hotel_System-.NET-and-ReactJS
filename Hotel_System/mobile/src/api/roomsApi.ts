@@ -1,8 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Force backend host for mobile testing (use this IP for iPhone/device)
-// All requests will go to: http://192.168.1.129:8080
-const BASE_URLS = ["http://192.168.1.129:8080"]; // single preferred host
+// All requests will go to: http://192.168.1.3:8080
+const BASE_URLS = ["http://192.168.1.3:8080"]; // single preferred host
 
 const TIMEOUT_MS = 2000; // Reduced from 5000ms to 2000ms
 
@@ -27,9 +27,26 @@ function setCachedData(key: string, data: any): void {
   apiCache.set(key, { data, timestamp: Date.now() });
 }
 
+export type Amenity = {
+  id: string;
+  name: string;
+};
+
+export type Promotion = {
+  id: string;
+  name: string;
+  description?: string;
+  type: 'percent' | 'amount';
+  value: number;
+  startDate: string;
+  endDate: string;
+};
+
 export type Room = {
   idphong: string;
+  idloaiPhong?: string;
   tenPhong: string;
+  tenLoaiPhong?: string;
   soPhong: string;
   moTa: string;
   soNguoiToiDa: number;
@@ -37,6 +54,8 @@ export type Room = {
   xepHangSao: number;
   trangThai: string;
   urlAnhPhong: string;
+  amenities?: Amenity[];
+  promotions?: Promotion[];
 };
 
 export type AvailableRoom = {
@@ -130,18 +149,25 @@ async function tryFetchRooms(): Promise<Room[] | null> {
 
           return {
             idphong: r.idphong ?? r.idPhong ?? r.Idphong ?? r.IdPhong,
+            idloaiPhong: r.idloaiPhong ?? r.idLoaiPhong ?? r.IdloaiPhong ?? r.IdLoaiPhong,
             tenPhong: r.tenPhong ?? r.TenPhong,
+            tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong,
             soPhong: r.soPhong ?? r.SoPhong,
             moTa: r.moTa ?? r.MoTa,
             soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa,
             giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
             xepHangSao: r.xepHangSao ?? r.XepHangSao ?? 0,
-            trangThai: r.trangThai ?? r.TrangThai ?? "Còn phòng",
+            trangThai: r.trangThai ?? r.TrangThai,
             urlAnhPhong: normalizedUrl, // Force normalized URL last
+            // Add amenities and promotions from API
+            amenities: r.amenities ?? [],
+            promotions: r.promotions ?? [],
           };
         });
 
         console.log("🔄 Processed data sample:", processedData[0]?.urlAnhPhong);
+        console.log("🎁 Sample room amenities:", processedData[0]?.amenities?.length || 0);
+        console.log("🏷️ Sample room promotions:", processedData[0]?.promotions?.length || 0);
         return processedData;
       } else {
         console.warn(`⚠️ ${baseUrl} returned:`, res.status, res.statusText);
