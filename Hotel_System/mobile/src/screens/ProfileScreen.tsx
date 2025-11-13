@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useIsFocused } from "@react-navigation/native";
 import authApi from "../api/authApi";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
@@ -16,19 +16,25 @@ import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 const ProfileScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const { logout, userInfo } = useAuth();
+  const { logout, userInfo, isLoggedIn } = useAuth();
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
 
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (isFocused && isLoggedIn) {
+      loadProfile();
+    }
+  }, [isFocused, isLoggedIn]);
 
   const loadProfile = async () => {
     try {
+      console.log("ProfileScreen: loading profile...");
       setLoading(true);
       const data = await authApi.getProfile();
+      console.log("ProfileScreen: got profile:", data);
       setProfile(data);
     } catch (e) {
+      console.error("ProfileScreen: error fetching profile", e);
       // fallback: try decode token
       const token = await AsyncStorage.getItem("hs_token");
       if (token) {
@@ -43,6 +49,9 @@ const ProfileScreen: React.FC = () => {
           setProfile(JSON.parse(decoded));
         } catch (e) {
           console.error("Error decoding token:", e);
+          // show user-friendly message
+          // eslint-disable-next-line no-alert
+          alert("Không thể tải thông tin tài khoản. Vui lòng thử lại.");
         }
       }
     } finally {
@@ -58,6 +67,7 @@ const ProfileScreen: React.FC = () => {
   const getDisplayName = () => {
     return (
       profile?.name ||
+      profile?.hoTen ||
       profile?.HoTen ||
       profile?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] ||
       userInfo?.name ||
@@ -69,6 +79,8 @@ const ProfileScreen: React.FC = () => {
     return (
       profile?.email ||
       profile?.Email ||
+      profile?.eMail ||
+      profile?.["emailAddress"] ||
       profile?.[
         "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
       ] ||
@@ -82,6 +94,34 @@ const ProfileScreen: React.FC = () => {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
+
+  // If user is not logged in, show prompt to login/register
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.notLoggedContainer}>
+        <Text style={styles.notLoggedTitle}>Bạn chưa đăng nhập</Text>
+        <Text style={styles.notLoggedSubtitle}>
+          Vui lòng đăng nhập để xem thông tin tài khoản
+        </Text>
+
+        <View style={styles.notLoggedActions}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => navigation.navigate("Login" as never)}
+          >
+            <Text style={styles.primaryBtnText}>Đăng nhập</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkBtn}
+            onPress={() => navigation.navigate("Register" as never)}
+          >
+            <Text style={styles.linkBtnText}>Đăng ký</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -121,7 +161,10 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Số điện thoại</Text>
             <Text style={styles.infoValue}>
-              {profile?.Sodienthoai || profile?.phone || "-"}
+              {profile?.soDienThoai ||
+                profile?.Sodienthoai ||
+                profile?.phone ||
+                "-"}
             </Text>
           </View>
 
@@ -130,7 +173,10 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Ngày sinh</Text>
             <Text style={styles.infoValue}>
-              {profile?.Ngaysinh || profile?.birthday || "-"}
+              {profile?.ngaySinh ||
+                profile?.Ngaysinh ||
+                profile?.birthday ||
+                "-"}
             </Text>
           </View>
         </View>
@@ -277,6 +323,48 @@ const styles = StyleSheet.create({
     ...FONTS.body2,
     color: COLORS.white,
     flex: 1,
+    fontWeight: "600",
+  },
+  notLoggedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SIZES.padding * 2,
+    backgroundColor: COLORS.background,
+  },
+  notLoggedTitle: {
+    ...FONTS.h2,
+    color: COLORS.secondary,
+    marginBottom: SIZES.margin,
+  },
+  notLoggedSubtitle: {
+    ...FONTS.body3,
+    color: COLORS.gray,
+    textAlign: "center",
+    marginBottom: SIZES.margin * 2,
+  },
+  notLoggedActions: {
+    width: "100%",
+    alignItems: "center",
+  },
+  primaryBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.margin,
+  },
+  primaryBtnText: {
+    color: COLORS.white,
+    ...FONTS.body3,
+    fontWeight: "700",
+  },
+  linkBtn: {
+    paddingVertical: 10,
+  },
+  linkBtnText: {
+    color: COLORS.primary,
+    ...FONTS.body3,
     fontWeight: "600",
   },
 });
