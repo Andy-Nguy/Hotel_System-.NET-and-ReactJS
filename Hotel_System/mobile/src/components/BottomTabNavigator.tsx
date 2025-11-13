@@ -1,8 +1,10 @@
 import React from "react";
 import { View, StyleSheet, Text } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { COLORS, SIZES } from "../constants/theme";
 import HomeScreen from "../screens/HomeScreen";
+import CheckAvailableRoomsScreen from "../screens/CheckAvailableRoomsScreen";
 import RoomsScreen from "../screens/RoomsScreen";
 import BookingsScreen from "../screens/BookingsScreen";
 import OffersScreen from "../screens/OffersScreen";
@@ -16,7 +18,25 @@ export type TabParamList = {
   Account: undefined;
 };
 
+export type HomeStackParamList = {
+  Home: undefined;
+  CheckAvailableRooms: undefined;
+};
+
 const Tab = createBottomTabNavigator<TabParamList>();
+const HomeStack = createNativeStackNavigator<HomeStackParamList>();
+
+const HomeStackNavigator: React.FC = () => {
+  return (
+    <HomeStack.Navigator screenOptions={{ headerShown: false }}>
+      <HomeStack.Screen name="Home" component={HomeScreen} />
+      <HomeStack.Screen
+        name="CheckAvailableRooms"
+        component={CheckAvailableRoomsScreen}
+      />
+    </HomeStack.Navigator>
+  );
+};
 
 interface TabIconProps {
   focused: boolean;
@@ -45,7 +65,7 @@ const BottomTabNavigator: React.FC = () => {
     >
       <Tab.Screen
         name="HomeTab"
-        component={HomeScreen}
+        component={HomeStackNavigator}
         options={{
           title: "Home",
           tabBarIcon: ({ focused, color }) => (
@@ -65,12 +85,7 @@ const BottomTabNavigator: React.FC = () => {
         options={{
           title: "Book",
           tabBarIcon: ({ focused, color }) => (
-            <TabIcon
-              focused={focused}
-              color={color}
-              size={24}
-              icon="📅"
-            />
+            <TabIcon focused={focused} color={color} size={24} icon="📅" />
           ),
         }}
       />

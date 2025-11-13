@@ -10,12 +10,14 @@ import {
   FlatList,
   Image,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
 import Icon from "react-native-vector-icons/FontAwesome";
 
 const HomeScreen: React.FC = () => {
   const { userInfo } = useAuth();
+  const navigation = useNavigation();
   const [searchText, setSearchText] = useState("");
 
   const getUserName = () => {
@@ -93,6 +95,17 @@ const HomeScreen: React.FC = () => {
         <TouchableOpacity style={styles.bottomRight}>
           <Text style={styles.bottomStats}>0 Nights • 0 Pts</Text>
           <Text style={styles.bottomArrow}>›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Check Available Rooms Button */}
+      <View style={styles.checkRoomsContainer}>
+        <TouchableOpacity
+          style={styles.checkRoomsButton}
+          onPress={() => navigation.navigate("CheckAvailableRooms" as never)}
+        >
+          <Text style={styles.checkRoomsText}>Check Available Rooms</Text>
+          <Icon name="search" size={20} color={COLORS.white} />
         </TouchableOpacity>
       </View>
 
@@ -228,6 +241,30 @@ const styles = StyleSheet.create({
   },
   spacing: {
     height: SIZES.padding * 3,
+  },
+  checkRoomsContainer: {
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding,
+  },
+  checkRoomsButton: {
+    backgroundColor: "#d47153ff",
+    borderRadius: 25,
+    paddingVertical: SIZES.padding,
+    paddingHorizontal: SIZES.padding * 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  checkRoomsText: {
+    ...FONTS.h4,
+    color: COLORS.white,
+    fontWeight: "600",
+    marginRight: 10,
   },
 });
 
