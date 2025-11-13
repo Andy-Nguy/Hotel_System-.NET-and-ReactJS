@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Button } from "antd";
+import { Button, Tag } from "antd";
 import type { Room } from "../../../../Frontend/src/api/roomsApi";
+import type { Promotion } from "../../../../Frontend/src/api/promotionApi";
+import { getAllPromotions } from "../../../../Frontend/src/api/promotionApi";
 
 // Backend base URL for assets. You can set VITE_API_BASE in .env to override.
 const BACKEND_BASE =
@@ -58,6 +60,7 @@ const RoomCard: React.FC<Props> = ({
     imageWebp || defaultWebp
   );
   const [loaded, setLoaded] = useState(false);
+  const [promotion, setPromotion] = useState<Promotion | null>(null);
 
   // Only try webp files - no jpg conversion needed
   useEffect(() => {
@@ -119,6 +122,29 @@ const RoomCard: React.FC<Props> = ({
     };
   }, [imageWebp]);
 
+  // Fetch any active promotion that applies to this room (if any)
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const promos = await getAllPromotions("active");
+        if (cancelled) return;
+        const found = promos.find((p) =>
+          Array.isArray(p.khuyenMaiPhongs) &&
+          p.khuyenMaiPhongs.some((r) => String(r.idphong) === String(room.idphong))
+        );
+        if (!cancelled) setPromotion(found || null);
+      } catch (err) {
+        // ignore errors silently — promotions are optional
+        console.debug("RoomCard: failed to load promotions", err);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [room.idphong]);
+
   return (
     <div
       style={{
@@ -146,8 +172,40 @@ const RoomCard: React.FC<Props> = ({
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
           flexShrink: 0, // Ngăn ảnh bị co lại
+          position: "relative",
         }}
-      />
+      >
+        {/* Promotion badge */}
+        {promotion && (
+          <div
+            style={{
+              position: "absolute",
+              top: 10,
+              left: 10,
+              zIndex: 20,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Tag color="volcano" style={{ fontWeight: 700 }}>
+              KM
+            </Tag>
+            <div
+              style={{
+                background: "rgba(0,0,0,0.6)",
+                color: "#fff",
+                padding: "6px 10px",
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              {promotion.tenKhuyenMai || "Khuyến mãi"}
+            </div>
+          </div>
+        )}
+      </div>
            {" "}
       <div
         style={{
@@ -182,20 +240,6 @@ const RoomCard: React.FC<Props> = ({
           >
             Xem thông tin phòng chi tiết
           </a>
-                 {" "}
-          <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-                     {" "}
-            <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
-                          <li>Ngủ {room.soNguoiToiDa ?? 2} người</li>           {" "}
-              <li>Phù phiếm kép</li>         {" "}
-            </ul>
-                     {" "}
-            <ul style={{ margin: 0, paddingLeft: 18, flex: 1 }}>
-                          <li>Không gian làm việc</li>           {" "}
-              <li>Tủ lạnh mini</li>         {" "}
-            </ul>
-                   {" "}
-          </div>
         </div>
         {/* THAY ĐỔI 4: Tạo một wrapper cho "footer" */}
         {/* Wrapper này sẽ KHÔNG giãn ra (flexShrink: 0) */}

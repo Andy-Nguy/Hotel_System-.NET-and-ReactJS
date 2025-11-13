@@ -38,6 +38,12 @@ interface BookingInfo {
   checkOut: string;
   guests: number;
   totalRooms: number;
+  promotion?: {
+    idkhuyenMai?: string;
+    tenKhuyenMai?: string;
+    loaiGiamGia?: string;
+    giaTriGiam?: number;
+  } | null;
 }
 
 const CheckoutPage: React.FC = () => {
@@ -170,9 +176,30 @@ const CheckoutPage: React.FC = () => {
     );
   }
 
-  const totalPrice = calculateTotal();
+  const totalBefore = calculateTotal();
   const nights = calculateNights();
-  const tax = totalPrice * 0.1; // 10% thuế
+
+  const promotion = (bookingInfo as any).promotion;
+
+  // Calculate total after applying promotion per-room per-night
+  let totalAfter = 0;
+  bookingInfo.selectedRooms.forEach((sr) => {
+    const original = Number(sr.room.giaCoBanMotDem || 0);
+    let discountedPerNight = original;
+    if (promotion) {
+      if (promotion.loaiGiamGia === "percent") {
+        discountedPerNight = Math.round(original * (1 - Number(promotion.giaTriGiam || 0) / 100));
+      } else {
+        // assume fixed amount off per night
+        discountedPerNight = Math.max(0, original - Number(promotion.giaTriGiam || 0));
+      }
+    }
+    totalAfter += discountedPerNight * nights;
+  });
+
+  const discountAmount = Math.max(0, totalBefore - totalAfter);
+  const totalPrice = totalAfter; // Show total as price after promotion x nights
+  const tax = totalPrice * 0.1; // 10% thuế on discounted price
   const grandTotal = totalPrice + tax;
 
   return (
@@ -392,7 +419,6 @@ const CheckoutPage: React.FC = () => {
               </div>
 
               <Divider />
-
               <div style={{ marginBottom: 16 }}>
                 <div
                   style={{
@@ -404,6 +430,17 @@ const CheckoutPage: React.FC = () => {
                   <Text>Tổng tiền phòng:</Text>
                   <Text strong>{totalPrice.toLocaleString()}đ</Text>
                 </div>
+
+                {promotion && (
+                  <div style={{ marginTop: 8, marginBottom: 8, padding: 12, background: '#fff7e6', borderRadius: 6 }}>
+                    <Text strong style={{ color: '#b45309' }}>{promotion.tenKhuyenMai || 'Khuyến mãi'}</Text>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                      <Text type="secondary">Giảm:</Text>
+                      <Text strong style={{ color: '#ff4d4f' }}>{discountAmount.toLocaleString()}đ</Text>
+                    </div>
+                  </div>
+                )}
+
                 <div
                   style={{
                     display: "flex",
