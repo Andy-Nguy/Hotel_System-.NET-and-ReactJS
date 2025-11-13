@@ -62,11 +62,10 @@ const API_BASE = '/api/Booking';
 // ============================================
 
 export interface BookingDetail {
-  idChiTiet: number;
+   idChiTiet: number;
   idPhong: string;
   tenPhongChiTiet?: string;
   soPhongChiTiet?: string;
-  soDem: number;
   giaPhong: number;
   thanhTien: number;
   ghiChu?: string;
@@ -82,6 +81,7 @@ export interface BookingDetail {
   ngayDatPhong?: string;
   ngayNhanPhong: string;
   ngayTraPhong: string;
+  soDem: number;
   tongTien: number;
   tienCoc?: number;
   trangThai: number;
@@ -151,32 +151,48 @@ function handleJson(response: Response): Promise<any> {
  * Normalize booking detail response
  */
 function normalizeBookingDetail(data: any): BookingDetail {
-  return {
-    // Line-item fields – you probably don't have them → generate or fetch
-    idChiTiet: data.idChiTiet ?? 0,
-    idPhong: data.rooms?.[0]?.idPhong ?? data.idPhong ?? '',
-    tenPhongChiTiet: data.rooms?.[0]?.tenPhong,
-    soPhongChiTiet: data.rooms?.[0]?.soPhong,
-    soDem: data.rooms?.[0]?.soDem ?? data.soDem ?? 0,
-    giaPhong: data.rooms?.[0]?.giaPhong ?? 0,
-    thanhTien: data.rooms?.[0]?.thanhTien ?? 0,
-    ghiChu: undefined,
+  // Fallback to first room if exists, otherwise default
+  const firstRoom = (data.rooms || data.Rooms || [])[0] || {};
 
-    // Booking-level fields
-    idDatPhong: data.idDatPhong ?? data.IddatPhong ?? '',
-    idHoaDon: data.idHoaDon ?? data.IdhoaDon,
-    bookingCode: data.bookingCode ?? data.BookingCode ?? data.idDatPhong ?? '',
-    customer: { /* ... */ },
-    ngayDatPhong: data.ngayDatPhong ?? data.NgayDatPhong,
-    ngayNhanPhong: data.ngayNhanPhong ?? data.NgayNhanPhong ?? '',
-    ngayTraPhong: data.ngayTraPhong ?? data.NgayTraPhong ?? '',
-    tongTien: data.tongTien ?? data.TongTien ?? 0,
-    tienCoc: data.tienCoc ?? data.TienCoc,
+  return {
+    // Required fields - now included!
+    idChiTiet: data.idChiTiet ?? data.IdChiTiet ?? 0,
+    idPhong: data.idPhong || data.IdPhong || firstRoom.idPhong || firstRoom.IdPhong || "",
+    giaPhong: data.giaPhong || data.GiaPhong || firstRoom.giaPhong || firstRoom.GiaPhong || 0,
+    thanhTien: data.thanhTien || data.ThanhTien || firstRoom.thanhTien || firstRoom.ThanhTien || 0,
+
+    // Existing fields
+    idDatPhong: data.idDatPhong || data.IddatPhong || "",
+    idHoaDon: data.idHoaDon || data.IdhoaDon,
+    bookingCode: data.bookingCode || data.BookingCode || "",
+    customer: {
+      id: data.customer?.id || data.Customer?.Id,
+      hoTen: data.customer?.hoTen || data.Customer?.HoTen,
+      email: data.customer?.email || data.Customer?.Email,
+      soDienThoai: data.customer?.soDienThoai || data.Customer?.SoDienThoai,
+    },
+    ngayDatPhong: data.ngayDatPhong || data.NgayDatPhong,
+    ngayNhanPhong: data.ngayNhanPhong || data.NgayNhanPhong || "",
+    ngayTraPhong: data.ngayTraPhong || data.NgayTraPhong || "",
+    soDem: data.soDem || data.SoDem || 0,
+    tongTien: data.tongTien || data.TongTien || 0,
+    tienCoc: data.tienCoc || data.TienCoc,
     trangThai: data.trangThai ?? data.TrangThai ?? 0,
-    trangThaiText: data.trangThaiText ?? data.TrangThaiText ?? 'Không xác định',
+    trangThaiText: data.trangThaiText || data.TrangThaiText || "Không xác định",
     trangThaiThanhToan: data.trangThaiThanhToan ?? data.TrangThaiThanhToan ?? 0,
-    trangThaiThanhToanText: data.trangThaiThanhToanText ?? data.TrangThaiThanhToanText ?? 'Không xác định',
-    rooms: (data.rooms ?? data.Rooms ?? []).map((r: any) => ({ /* ... */ })),
+    trangThaiThanhToanText:
+      data.trangThaiThanhToanText ||
+      data.TrangThaiThanhToanText ||
+      "Không xác định",
+    ghiChu: data.ghiChu || data.GhiChu,
+    rooms: (data.rooms || data.Rooms || []).map((r: any) => ({
+      idPhong: r.idPhong || r.IdPhong || "",
+      soPhong: r.soPhong || r.SoPhong || "",
+      tenPhong: r.tenPhong || r.TenPhong,
+      giaPhong: r.giaPhong || r.GiaPhong || 0,
+      soDem: r.soDem || r.SoDem || 0,
+      thanhTien: r.thanhTien || r.ThanhTien || 0,
+    })),
   };
 }
 
