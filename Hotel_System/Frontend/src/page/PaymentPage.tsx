@@ -47,6 +47,8 @@ interface BookingInfo {
   checkOut: string;
   guests: number;
   totalRooms: number;
+  selectedServices?: any[];
+  servicesTotal?: number;
 }
 
 const PaymentPage: React.FC = () => {
@@ -219,9 +221,12 @@ const PaymentPage: React.FC = () => {
         return sum + (sr.room.giaCoBanMotDem || 0) * nights;
       }, 0);
 
-  const discountedBase = promoResult ? promoResult.tongTienSauGiam : totalPrice;
-  const tax = discountedBase * 0.1;
-  const grandTotal = discountedBase + tax;
+      const servicesTotal = booking.servicesTotal || 0;
+
+      const discountedBase = promoResult ? promoResult.tongTienSauGiam : totalPrice;
+      const baseWithServices = discountedBase + servicesTotal;
+      const tax = baseWithServices * 0.1;
+      const grandTotal = baseWithServices + tax;
   // apply client-side redeem preview (1 point = 1000đ)
   const POINT_VALUE = 1000;
   const redeemValueClient = Math.min(redeemPoints * POINT_VALUE, grandTotal);
@@ -249,6 +254,7 @@ const PaymentPage: React.FC = () => {
       const hoaDonPayload = {
         IDDatPhong: idDatPhong,
         TienPhong: tienPhongInt,
+        TienDichVu: Math.round(servicesTotal || 0),
         SoLuongNgay: Number.isFinite(Number(nights)) ? Number(nights) : 1,
         TongTien: tongTienDecimal,
         TrangThaiThanhToan: Number.isFinite(Number(trangThaiThanhToan)) ? Number(trangThaiThanhToan) : 0,
@@ -653,10 +659,12 @@ const PaymentPage: React.FC = () => {
   }
 
   const totalPrice = calculateTotal();
+  const servicesTotal = bookingInfo?.servicesTotal || 0;
   const nights = calculateNights();
-  const discountedBase = promoResult ? promoResult.tongTienSauGiam : totalPrice;
-  const tax = discountedBase * 0.1;
-  const grandTotal = discountedBase + tax;
+  const discountedBase = promoResult ? promoResult.tongTienSauGiam : totalPrice; // rooms after promo
+  const baseWithServices = discountedBase + servicesTotal;
+  const tax = baseWithServices * 0.1;
+  const grandTotal = baseWithServices + tax;
 
   return (
     <Layout>

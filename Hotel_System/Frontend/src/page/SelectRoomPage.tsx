@@ -14,6 +14,7 @@ import { CheckCircleOutlined, UserOutlined } from "@ant-design/icons";
 import RoomCard from "../components/Room/RoomCard";
 import DetailRoom from "../components/Room/DetailRoom";
 import BookingProgress from "../components/BookingProgress";
+import ServicesSelector from "../components/ServicesSelector";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -21,6 +22,13 @@ const { Title, Text } = Typography;
 interface SelectedRoom {
   roomNumber: number;
   room: any;
+}
+
+interface SelectedService {
+  serviceId: string;
+  serviceName: string;
+  price: number;
+  quantity: number;
 }
 
 const SelectRoomPage: React.FC = () => {
@@ -38,6 +46,9 @@ const SelectRoomPage: React.FC = () => {
   const [currentRoomNumber, setCurrentRoomNumber] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedServices, setSelectedServices] = useState<SelectedService[]>([]);
+  const [servicesTotal, setServicesTotal] = useState(0);
+  const [selectionComplete, setSelectionComplete] = useState(false);
 
   // Modal detail room
   const [detailVisible, setDetailVisible] = useState(false);
@@ -83,20 +94,12 @@ const SelectRoomPage: React.FC = () => {
     ];
     setSelectedRooms(newSelectedRooms);
 
-    // Nếu đã chọn đủ số phòng, chuyển sang trang thanh toán
-    if (currentRoomNumber >= totalRooms) {
-      // Lưu thông tin đặt phòng vào sessionStorage
-      sessionStorage.setItem(
-        "bookingInfo",
-        JSON.stringify({
-          selectedRooms: newSelectedRooms,
-          checkIn,
-          checkOut,
-          guests,
-          totalRooms,
-        })
-      );
-      window.location.href = "/checkout";
+    // Nếu đã chọn đủ số phòng, đánh dấu hoàn tất nhưng không chuyển ngay —
+    // cho phép người dùng chọn dịch vụ hoặc bấm Thanh toán để tiếp tục.
+    if (newSelectedRooms.length >= totalRooms) {
+      setSelectionComplete(true);
+      // keep currentRoomNumber at last room for review
+      setCurrentRoomNumber(totalRooms);
     } else {
       // Chuyển sang chọn phòng tiếp theo
       setCurrentRoomNumber(currentRoomNumber + 1);
@@ -110,6 +113,8 @@ const SelectRoomPage: React.FC = () => {
     setSelectedRooms(newSelectedRooms);
     // Quay lại chọn phòng vừa xóa
     setCurrentRoomNumber(roomNumber);
+    // Update completion flag if user removed a room
+    setSelectionComplete(newSelectedRooms.length >= totalRooms);
   };
 
   const handleOpenDetail = (room: any) => {
@@ -129,6 +134,8 @@ const SelectRoomPage: React.FC = () => {
         "bookingInfo",
         JSON.stringify({
           selectedRooms,
+          selectedServices,
+          servicesTotal,
           checkIn,
           checkOut,
           guests,
@@ -140,6 +147,24 @@ const SelectRoomPage: React.FC = () => {
     }
     const roomNum = parseInt(key);
     setCurrentRoomNumber(roomNum);
+  };
+
+  const handleProceedToCheckout = () => {
+    // Only allow when selectionComplete is true
+    if (!selectionComplete || selectedRooms.length < totalRooms) return;
+    sessionStorage.setItem(
+      "bookingInfo",
+      JSON.stringify({
+        selectedRooms,
+        selectedServices,
+        servicesTotal,
+        checkIn,
+        checkOut,
+        guests,
+        totalRooms,
+      })
+    );
+    window.location.href = "/checkout";
   };
 
   const calculateTotal = () => {
@@ -157,6 +182,12 @@ const SelectRoomPage: React.FC = () => {
 
     return totalPrice;
   };
+
+  const handleServicesChange = (services: SelectedService[], total: number) => {
+    setSelectedServices(services);
+    setServicesTotal(total);
+  };
+
 
   if (loading) {
     return (
@@ -317,9 +348,29 @@ const SelectRoomPage: React.FC = () => {
                 );
               })}
               <Divider />
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <Text strong>Tổng chi phí của lần lưu trú:</Text>
+
+              {/* Services Selector */}
+              <ServicesSelector onServicesChange={handleServicesChange} />
+
+              <Divider />
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                <Text strong>Tiền phòng:</Text>
                 <Text strong>{calculateTotal().toLocaleString()}đ</Text>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                <Text strong>Tiền dịch vụ:</Text>
+                <Text strong>{servicesTotal.toLocaleString()}đ</Text>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: 12, background: "#f5f5f5", borderRadius: 6 }}>
+                <Text strong style={{ fontSize: 16 }}>Tổng chi phí:</Text>
+                <Text strong style={{ fontSize: 16, color: "#dfa974" }}>
+                  {(calculateTotal() + servicesTotal).toLocaleString()}đ
+                </Text>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <Button type="primary" block disabled={selectedRooms.length < totalRooms} onClick={handleProceedToCheckout}>
+                  Thanh toán
+                </Button>
               </div>
             </Card>
           </Col>

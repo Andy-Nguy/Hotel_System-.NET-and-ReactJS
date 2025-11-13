@@ -44,6 +44,9 @@ interface BookingInfo {
     loaiGiamGia?: string;
     giaTriGiam?: number;
   } | null;
+  // optional services selected on the previous step
+  selectedServices?: any[];
+  servicesTotal?: number;
 }
 
 const CheckoutPage: React.FC = () => {
@@ -156,6 +159,9 @@ const CheckoutPage: React.FC = () => {
         totalPrice: result.data.tongTien,
         tax: result.data.thue,
         grandTotal: result.data.tongCong,
+        // carry through any selected services from booking step so PaymentPage can include them
+        services: bookingInfo.selectedServices || [],
+        servicesTotal: bookingInfo.servicesTotal || 0,
         customer: customerInfo,
         paymentMethod: values.paymentMethod,
       };
@@ -239,8 +245,12 @@ const CheckoutPage: React.FC = () => {
 
   const discountAmount = Math.max(0, totalBefore - totalAfter);
   const totalPrice = totalAfter; // Show total as price after promotion x nights
-  const tax = totalPrice * 0.1; // 10% thuế on discounted price
-  const grandTotal = totalPrice + tax;
+  const servicesTotal = (bookingInfo as any).servicesTotal || 0;
+  const servicesList = (bookingInfo as any).selectedServices || [];
+
+  // Tax should apply on rooms + services
+  const tax = (totalPrice + servicesTotal) * 0.1;
+  const grandTotal = totalPrice + servicesTotal + tax;
 
   return (
     <Layout>
@@ -458,6 +468,24 @@ const CheckoutPage: React.FC = () => {
                 ))}
               </div>
 
+              {servicesList.length > 0 && (
+                <>
+                  <Divider />
+                  <div style={{ marginBottom: 16 }}>
+                    <Text strong>Dịch vụ đã chọn</Text>
+                    {servicesList.map((s: any, idx: number) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                        <div>
+                          <Text>{s.serviceName}</Text>
+                          <div style={{ fontSize: 12, color: '#666' }}>{s.quantity} x {Number(s.price).toLocaleString()}đ</div>
+                        </div>
+                        <div style={{ fontWeight: 700 }}>{(Number(s.price) * Number(s.quantity)).toLocaleString()}đ</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
               <Divider />
               <div style={{ marginBottom: 16 }}>
                 <div
@@ -480,6 +508,11 @@ const CheckoutPage: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <Text>Tiền dịch vụ:</Text>
+                  <Text strong>{servicesTotal.toLocaleString()}đ</Text>
+                </div>
 
                 <div
                   style={{

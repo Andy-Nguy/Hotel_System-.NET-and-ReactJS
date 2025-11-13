@@ -169,7 +169,7 @@ const RoomCard: React.FC<Props> = ({
               position: "absolute",
               top: 10,
               left: 10,
-              zIndex: 20,
+              // zIndex: 20,
               display: "flex",
               alignItems: "center",
               gap: 8,
