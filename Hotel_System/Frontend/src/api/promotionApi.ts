@@ -152,6 +152,17 @@ export interface UploadResult {
   contentType: string;
 }
 
+// Response shape when applying promotions to an invoice amount
+export interface ApplyPromotionResponse {
+  tongTienSauGiam: number; // total after discount, before tax
+  discountAmount: number; // amount discounted from base
+  // legacy alias used by some UI components
+  soTienGiam?: number;
+  appliedPromotionId?: string | null;
+  appliedPromotionName?: string | null;
+  pointsEstimated?: number; // estimated loyalty points earned for this order
+}
+
 // Upload banner image
 export const uploadBanner = async (file: File): Promise<UploadResult> => {
   const formData = new FormData();

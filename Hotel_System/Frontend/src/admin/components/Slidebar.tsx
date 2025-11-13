@@ -92,6 +92,12 @@ const Slidebar: React.FC = () => {
 
 					{/* Promotions manager link */}
 					<NavItem key="promotions" routeFragment="admin/promotions" label="Quản lý khuyến mãi" />
+
+					{/* Invoices manager link */}
+					<NavItem key="invoices" routeFragment="admin/invoices" label="Quản lý hóa đơn" />
+
+					{/* Loyalty / points manager link */}
+					<NavItem key="loyalty" routeFragment="admin/loyalty" label="Quản lý tích điểm" />
 				<MenuItem icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 6h18v2H3zM3 12h18v2H3zM3 18h18v2H3z" fill="#4b5563"/></svg>} label="Product" badge="+3" />
 				<MenuItem icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 4h16v12H4zM4 20h16v-2H4z" fill="#4b5563"/></svg>} label="Blog" />
 				<MenuItem icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 13h12v7H6z" fill="#4b5563"/></svg>} label="Sign in" />

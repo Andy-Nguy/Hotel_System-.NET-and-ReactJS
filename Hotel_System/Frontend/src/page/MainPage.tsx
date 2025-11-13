@@ -16,11 +16,15 @@ import RoomPage from "./RoomPage";
 import ProfilePage from "./ProfilePage";
 import SelectRoomPage from "./SelectRoomPage";
 import CheckoutPage from "./CheckoutPage";
+import PaymentPage from "./PaymentPage";
 import AdminDashboard from "../admin/pages/dashboard";
 import RoomManager from "../admin/pages/RoomManager";
 import AmenticsManager from "../admin/pages/AmenticsManager";
 import ServiceManager from "../admin/pages/ServiceManager";
 import PromotionManager from "../admin/pages/PromotionManager";
+import InvoicesManager from "../admin/pages/InvoicesManager";
+import LoyaltyManager from "../admin/pages/LoyaltyManager";
+import BookingSuccessPage from "./BookingSuccessPage";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
@@ -252,6 +256,28 @@ const MainPage: React.FC = () => {
     );
   }
 
+  if (route === "#payment" || route === "/payment") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <PaymentPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#booking-success" || route === "/booking-success") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <BookingSuccessPage />
+        <FooterSection />
+      </>
+    );
+  }
+
   // Admin dashboard route (accessible at /admin/dashboard or #admin/dashboard)
   if (
     route === "#admin/dashboard" ||
@@ -295,6 +321,24 @@ const MainPage: React.FC = () => {
     route === "#/admin/promotions"
   ) {
     return <PromotionManager />;
+  }
+
+  // Admin invoices page route (accessible at /admin/invoices or #admin/invoices)
+  if (
+    route === "#admin/invoices" ||
+    route === "/admin/invoices" ||
+    route === "#/admin/invoices"
+  ) {
+    return <InvoicesManager />;
+  }
+
+  // Admin loyalty / points management route (accessible at /admin/loyalty or #admin/loyalty)
+  if (
+    route === "#admin/loyalty" ||
+    route === "/admin/loyalty" ||
+    route === "#/admin/loyalty"
+  ) {
+    return <LoyaltyManager />;
   }
 
   return (

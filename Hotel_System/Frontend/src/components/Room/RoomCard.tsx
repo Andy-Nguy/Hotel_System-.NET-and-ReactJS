@@ -119,7 +119,8 @@ const RoomCard: React.FC<Props> = ({
     };
   }, [imageWebp]);
 
-  return (
+
+    return (
     <div
       style={{
         border: "1px solid #eee",
@@ -148,6 +149,7 @@ const RoomCard: React.FC<Props> = ({
           flexShrink: 0, // Ngăn ảnh bị co lại
         }}
       />
+      {/* promo badge removed: promotions are not shown on room cards per UX request */}
            {" "}
       <div
         style={{

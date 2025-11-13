@@ -1,5 +1,6 @@
 using Hotel_System.API.Models;
 using Hotel_System.API.Services;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -13,7 +14,12 @@ var builder = WebApplication.CreateBuilder(args);
 // ==========================================
 // 1️⃣ Add services to the container
 // ==========================================
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(opts =>
+    {
+        // Use camelCase for JSON
+        opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -44,7 +50,8 @@ builder.Services.AddSwaggerGen(options =>
 
 // Auth service (register/login/otp)
 builder.Services.AddScoped<IAuthService, AuthService>();
-
+// đăng ký email service
+builder.Services.AddScoped<IEmailService, EmailService>();
 // Room service
 builder.Services.AddScoped<RoomService>();
 
