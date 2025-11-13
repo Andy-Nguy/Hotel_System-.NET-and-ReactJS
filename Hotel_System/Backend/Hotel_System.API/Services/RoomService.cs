@@ -101,26 +101,36 @@ namespace Hotel_System.API.Services
 
             _logger.LogInformation($"Booked room IDs count: {bookedRoomIds.Count}");
 
-            // Get available rooms directly from database with filtering
-            var availableRooms = await _context.Phongs
+            var availableRoomsQuery = await _context.Phongs
                 .Include(p => p.IdloaiPhongNavigation)
                 .Where(p =>
                     p.TrangThai == "Trống" &&
                     p.SoNguoiToiDa >= numberOfGuests &&
                     !bookedRoomIds.Contains(p.Idphong)
                 )
-                .Select(p => new AvailableRoomResponse
+                .Select(p => new
                 {
                     RoomId = p.Idphong,
                     RoomNumber = p.SoPhong,
                     Description = p.MoTa ?? "",
                     BasePricePerNight = p.GiaCoBanMotDem ?? 0,
-                    RoomImageUrl = ResolveImageUrl(p.UrlAnhPhong) ?? "",
+                    RawImageUrl = p.UrlAnhPhong,
                     RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong ?? "" : "",
                     MaxOccupancy = p.SoNguoiToiDa ?? 0
                 })
                 .OrderBy(p => p.RoomNumber)
                 .ToListAsync();
+
+            var availableRooms = availableRoomsQuery.Select(r => new AvailableRoomResponse
+            {
+                RoomId = r.RoomId,
+                RoomNumber = r.RoomNumber,
+                Description = r.Description,
+                BasePricePerNight = r.BasePricePerNight,
+                RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                RoomTypeName = r.RoomTypeName,
+                MaxOccupancy = r.MaxOccupancy
+            }).ToList();
 
             _logger.LogInformation($"Available rooms count: {availableRooms.Count}");
 
