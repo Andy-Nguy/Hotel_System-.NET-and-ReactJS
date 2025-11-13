@@ -1,12 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Try multiple base URLs for different environments
-const BASE_URLS = [
-  "http://10.0.2.2:8080", // For Android emulator (PRIORITY)
-  "http://192.168.1.129:8080", // Local network IP
-  "http://localhost:8080", // For web/Expo web
-  "http://127.0.0.1:8080", // Alternative localhost
-];
+// Force backend host for mobile testing (use this IP for iPhone/device)
+// All requests will go to: http://192.168.1.129:8080
+const BASE_URLS = ["http://192.168.1.129:8080"]; // single preferred host
 
 const TIMEOUT_MS = 2000; // Reduced from 5000ms to 2000ms
 
@@ -112,7 +108,7 @@ async function tryFetchRooms(): Promise<Room[] | null> {
       });
 
       clearTimeout(timeoutId);
-      console.log(`📡 Response from ${baseUrl}:`, res.status, res.statusText);
+      console.log(`Response from ${baseUrl}: ${res.status}`);
 
       if (res.ok) {
         const data = await handleRes(res);

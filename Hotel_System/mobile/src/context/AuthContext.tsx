@@ -6,6 +6,7 @@ import React, {
   ReactNode,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import authApi from "../api/authApi";
 
 interface UserInfo {
   name?: string;
@@ -42,22 +43,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       if (storedToken) {
         setToken(storedToken);
         setIsLoggedIn(true);
-        // Decode JWT to get user info
+        // Try to fetch profile from API to populate userInfo
         try {
-          const base64Payload = storedToken.split(".")[1];
-          const decodedPayload = JSON.parse(
-            decodeURIComponent(
-              atob(base64Payload)
-                .split("")
-                .map(
-                  (c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
-                )
-                .join("")
-            )
-          );
-          setUserInfo(decodedPayload);
-        } catch (e) {
-          console.warn("Could not decode token:", e);
+          const profile = await authApi.getProfile();
+          if (profile) setUserInfo(profile);
+        } catch (err) {
+          // If fetching profile fails, try decoding token as fallback
+          try {
+            const base64Payload = storedToken.split(".")[1];
+            const decodedPayload = JSON.parse(
+              decodeURIComponent(
+                // atob may not exist in RN environment; keep in try/catch
+                atob(base64Payload)
+                  .split("")
+                  .map(
+                    (c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+                  )
+                  .join("")
+              )
+            );
+            setUserInfo(decodedPayload);
+          } catch (e) {
+            console.warn("Could not decode token or fetch profile:", e, err);
+          }
         }
       } else {
         // Auto-login with demo user for development
@@ -76,13 +84,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       const demoUser = {
         name: "Nguyen",
         email: "demo@robinsvilla.com",
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name": "Demo Nguyen",
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name":
+          "Demo Nguyen",
         userId: "demo-user-123",
       };
-      
+
       // Simple mock token (in production, this should come from API)
-      const mockToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(JSON.stringify(demoUser))}.mock_signature`;
-      
+      const mockToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(
+        JSON.stringify(demoUser)
+      )}.mock_signature`;
+
       await AsyncStorage.setItem("hs_token", mockToken);
       setToken(mockToken);
       setUserInfo(demoUser);
@@ -98,20 +109,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       await AsyncStorage.setItem("hs_token", newToken);
       setToken(newToken);
       setIsLoggedIn(true);
-      // Decode JWT
+      // After login, fetch user profile from API to populate userInfo
       try {
-        const base64Payload = newToken.split(".")[1];
-        const decodedPayload = JSON.parse(
-          decodeURIComponent(
-            atob(base64Payload)
-              .split("")
-              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-              .join("")
-          )
-        );
-        setUserInfo(decodedPayload);
-      } catch (e) {
-        console.warn("Could not decode token:", e);
+        const profile = await authApi.getProfile();
+        if (profile) setUserInfo(profile);
+      } catch (err) {
+        console.warn("login: failed to fetch profile, token saved:", err);
+        // As fallback try to decode token
+        try {
+          const base64Payload = newToken.split(".")[1];
+          const decodedPayload = JSON.parse(
+            decodeURIComponent(
+              atob(base64Payload)
+                .split("")
+                .map(
+                  (c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+                )
+                .join("")
+            )
+          );
+          setUserInfo(decodedPayload);
+        } catch (e) {
+          console.warn("Could not decode token:", e);
+        }
       }
     } catch (error) {
       console.error("Error saving token:", error);

@@ -62,7 +62,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
       >
         <View style={styles.formContainer}>
           <View style={styles.logoContainer}>
