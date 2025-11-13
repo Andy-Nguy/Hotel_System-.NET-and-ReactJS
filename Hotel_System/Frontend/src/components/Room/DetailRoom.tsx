@@ -17,6 +17,9 @@ function resolveImageUrl(u?: string | null) {
 }
 import { Modal, Button } from "antd";
 import type { Room } from "../../../../Frontend/src/api/roomsApi";
+import type { Promotion } from "../../../../Frontend/src/api/promotionApi";
+import { getAllPromotions } from "../../../../Frontend/src/api/promotionApi";
+import dayjs from "dayjs";
 
 type Props = {
   visible: boolean;
@@ -27,6 +30,41 @@ type Props = {
 
 const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
   if (!room) return null;
+
+  const [promotion, setPromotion] = React.useState<Promotion | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!room?.idphong) return;
+      try {
+        const promos = await getAllPromotions("active");
+        if (cancelled) return;
+        const found = promos.find((p) =>
+          Array.isArray(p.khuyenMaiPhongs) &&
+          p.khuyenMaiPhongs.some((r) => String(r.idphong) === String(room.idphong))
+        );
+        // also verify date range if present
+        if (found && found.ngayBatDau && found.ngayKetThuc) {
+          const now = dayjs();
+          const start = dayjs(found.ngayBatDau);
+          const end = dayjs(found.ngayKetThuc).endOf("day");
+          if (now.isBefore(start) || now.isAfter(end)) {
+            // out of date range
+            setPromotion(null);
+            return;
+          }
+        }
+        setPromotion(found || null);
+      } catch (err) {
+        console.debug("DetailRoom: failed to load promotions", err);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [room?.idphong]);
 
   return (
     <Modal
@@ -132,7 +170,19 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
             </h3>
             <Button
               type="default"
-              onClick={() => onBook(room)}
+              onClick={() => {
+                try {
+                  if (promotion) {
+                    sessionStorage.setItem(
+                      "pendingPromotion",
+                      JSON.stringify(promotion)
+                    );
+                  }
+                } catch (e) {
+                  /* ignore */
+                }
+                onBook(room);
+              }}
               style={{
                 borderRadius: 6,
                 background: "#4a5a4a",
@@ -185,10 +235,22 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
               )}
 
               <div style={{ color: "#666" }}>
-                Giá:{" "}
-                {room.giaCoBanMotDem != null
-                  ? room.giaCoBanMotDem.toLocaleString("vi-VN") + "₫/đêm"
-                  : "Liên hệ"}
+                Giá: {room.giaCoBanMotDem != null ? (
+                  <>
+                    {room.giaCoBanMotDem.toLocaleString("vi-VN")}₫/đêm
+                    {promotion && room.giaCoBanMotDem != null && (
+                      <div style={{ marginTop: 6, color: "#d83737", fontWeight: 700 }}>
+                        Giá sau khuyến mãi: {(
+                          promotion.loaiGiamGia === "percent"
+                            ? Math.max(0, Math.round((room.giaCoBanMotDem || 0) * (1 - (promotion.giaTriGiam || 0) / 100)))
+                            : Math.max(0, Math.round((room.giaCoBanMotDem || 0) - (promotion.giaTriGiam || 0)))
+                        ).toLocaleString("vi-VN")}₫/đêm
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  "Liên hệ"
+                )}
               </div>
             </div>
 
@@ -241,22 +303,40 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
             </div>
 
             <div>
-              <h5
-                style={{
-                  marginTop: 0,
-                  marginBottom: 8,
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                Room Features
-              </h5>
-              <ul style={{ color: "#666", paddingLeft: 16, margin: 0 }}>
-                <li style={{ marginBottom: 4 }}>
-                  {room.moTa?.split(",")[0]?.trim() ?? "Premium amenities"}
-                </li>
-                <li>Air-conditioned</li>
-              </ul>
+                <h5
+                  style={{
+                    marginTop: 0,
+                    marginBottom: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  {promotion ? "Khuyến mãi" : "Room Features"}
+                </h5>
+                {promotion ? (
+                  <div style={{ color: "#666" }}>
+                    <div style={{ marginBottom: 6, fontWeight: 600 }}>
+                      {promotion.tenKhuyenMai}
+                    </div>
+                    {/* <div style={{ marginBottom: 6 }}>
+                      {promotion.loaiGiamGia === "percent"
+                        ? `Giảm ${promotion.giaTriGiam}% cho mỗi đêm` 
+                        : promotion.giaTriGiam != null
+                        ? `Giảm ${promotion.giaTriGiam.toLocaleString("vi-VN")} đ mỗi đêm`
+                        : "Ưu đãi đặc biệt"}
+                    </div> */}
+                    {promotion.moTa && (
+                      <div style={{ color: "#555" }}>{promotion.moTa}</div>
+                    )}
+                  </div>
+                ) : (
+                  <ul style={{ color: "#666", paddingLeft: 16, margin: 0 }}>
+                    <li style={{ marginBottom: 4 }}>
+                      {room.moTa?.split(",")[0]?.trim() ?? "Premium amenities"}
+                    </li>
+                    <li>Air-conditioned</li>
+                  </ul>
+                )}
             </div>
           </div>
         </div>
