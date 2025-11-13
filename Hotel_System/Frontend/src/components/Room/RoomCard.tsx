@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button, Tag } from "antd";
+
 import type { Room } from "../../../../Frontend/src/api/roomsApi";
 import type { Promotion } from "../../../../Frontend/src/api/promotionApi";
 import { getAllPromotions } from "../../../../Frontend/src/api/promotionApi";
@@ -13,7 +14,7 @@ type Props = {
   room: Room;
   onOpenDetail: (room: Room) => void;
   onBook: (room: Room) => void;
-  bookButtonText?: string; // Thêm prop này
+  bookButtonText?: string;
 };
 
 function formatPrice(v?: number | null) {
@@ -27,19 +28,14 @@ const RoomCard: React.FC<Props> = ({
   onBook,
   bookButtonText = "Đặt phòng ngay",
 }) => {
-  // Default fallback (served from Frontend `public/` -> available at /img/...)
-  // Use an existing image from Frontend/public/img/room to avoid 404.
-  // Use a fallback image that exists in public/img/room to avoid 404 spam
-  const defaultWebp = "/img/room/room-6.jpg"; // room-6.jpg exists in public
+  const defaultWebp = "/img/room/room-6.jpg";
 
-  // Support several possible field names returned by backend (roomImageUrl, urlAnhPhong, UrlAnhPhong)
   const rawImageField =
     (room as any).roomImageUrl ??
     (room as any).RoomImageUrl ??
     (room as any).urlAnhPhong ??
-    (room as any).UrlAnhPhong ??
-    (room as any).UrlAnhPhong ??
-    (room as any).urlAnhPhong;
+    (room as any).UrlAnhPhong;
+
   let imageBase = "";
   if (rawImageField) {
     const u = String(rawImageField).trim();
@@ -48,13 +44,11 @@ const RoomCard: React.FC<Props> = ({
     } else if (u.startsWith("/")) {
       imageBase = u;
     } else {
-      // try relative path under /img/room and also backend base if configured
       imageBase = `/img/room/${u}`;
     }
   }
 
-  // Only work with webp files - no jpg conversion
-  const imageWebp = imageBase; // use the original path (already .webp from database)
+  const imageWebp = imageBase;
 
   const [selectedSrc, setSelectedSrc] = useState<string>(
     imageWebp || defaultWebp
@@ -62,9 +56,10 @@ const RoomCard: React.FC<Props> = ({
   const [loaded, setLoaded] = useState(false);
   const [promotion, setPromotion] = useState<Promotion | null>(null);
 
-  // Only try webp files - no jpg conversion needed
+  // LOAD IMAGE
   useEffect(() => {
     let canceled = false;
+
     const tryLoad = (srcs: string[]) => {
       if (srcs.length === 0) {
         if (!canceled) {
@@ -75,45 +70,36 @@ const RoomCard: React.FC<Props> = ({
       }
       const s = srcs[0];
       const img = new Image();
-      // allow CORS image loading if backend serves with CORS headers
       img.crossOrigin = "anonymous";
       img.onload = () => {
         if (canceled) return;
-        console.debug("RoomCard: image loaded", s);
         setSelectedSrc(s);
         setLoaded(true);
       };
-      img.onerror = (e) => {
-        // only log first failure to reduce console noise
-        try {
-          console.debug &&
-            console.debug("RoomCard: failed to load image, trying next", s);
-        } catch {}
+      img.onerror = () => {
         tryLoad(srcs.slice(1));
       };
       img.src = s;
     };
 
-    // Build unique candidate list (try explicit imageBase, backend-prefixed, then fallback)
-    const candidates = [] as string[];
+    const candidates: string[] = [];
     const apiBase = ((import.meta as any).env?.VITE_API_BASE as string) || "";
+
     if (imageWebp) candidates.push(imageWebp);
-    // if image is a filename-relative (no leading slash) we already prefixed to /img/room/<file>
-    // additionally try backend absolute URL if VITE_API_BASE is set
+
     if (apiBase && imageWebp && !imageWebp.startsWith("http")) {
       const trimmed = imageWebp.startsWith("/")
         ? imageWebp.slice(1)
         : imageWebp;
       candidates.push(`${apiBase.replace(/\/$/, "")}/${trimmed}`);
     }
+
     if (!candidates.includes(defaultWebp)) candidates.push(defaultWebp);
-    // final fallback: small inline SVG data URL to avoid any network request
+
     const svgFallback = `data:image/svg+xml;utf8,${encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450"><rect width="100%" height="100%" fill="#eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#999" font-family="Arial" font-size="24">No image</text></svg>'
     )}`;
     candidates.push(svgFallback);
-
-    console.debug("RoomCard: image candidates", candidates);
 
     tryLoad(candidates);
 
@@ -122,20 +108,24 @@ const RoomCard: React.FC<Props> = ({
     };
   }, [imageWebp]);
 
-  // Fetch any active promotion that applies to this room (if any)
+  // LOAD PROMOTION
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
         const promos = await getAllPromotions("active");
         if (cancelled) return;
-        const found = promos.find((p) =>
-          Array.isArray(p.khuyenMaiPhongs) &&
-          p.khuyenMaiPhongs.some((r) => String(r.idphong) === String(room.idphong))
+
+        const found = promos.find(
+          (p) =>
+            Array.isArray(p.khuyenMaiPhongs) &&
+            p.khuyenMaiPhongs.some(
+              (r) => String(r.idphong) === String(room.idphong)
+            )
         );
+
         if (!cancelled) setPromotion(found || null);
       } catch (err) {
-        // ignore errors silently — promotions are optional
         console.debug("RoomCard: failed to load promotions", err);
       }
     };
@@ -153,13 +143,11 @@ const RoomCard: React.FC<Props> = ({
         overflow: "hidden",
         background: "#fff",
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-        // THAY ĐỔI 1: Biến thẻ (card) thành flex-column
         display: "flex",
         flexDirection: "column",
-        height: "100%", // Đảm bảo thẻ lấp đầy ô grid/flex cha
+        height: "100%",
       }}
     >
-            {/* Render image as a background */}     {" "}
       <div
         role="img"
         aria-label={room.tenPhong ?? "Phòng"}
@@ -171,11 +159,10 @@ const RoomCard: React.FC<Props> = ({
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
-          flexShrink: 0, // Ngăn ảnh bị co lại
+          flexShrink: 0,
           position: "relative",
         }}
       >
-        {/* Promotion badge */}
         {promotion && (
           <div
             style={{
@@ -206,24 +193,20 @@ const RoomCard: React.FC<Props> = ({
           </div>
         )}
       </div>
-           {" "}
+
       <div
         style={{
           padding: 18,
-          // THAY ĐỔI 2: Biến khu vực nội dung thành flex-column
           display: "flex",
           flexDirection: "column",
-          flexGrow: 1, // Yêu cầu nó lấp đầy không gian còn lại
+          flexGrow: 1,
         }}
       >
-        {/* THAY ĐỔI 3: Tạo một wrapper cho nội dung trên */}
-        {/* Wrapper này sẽ giãn ra để đẩy "footer" xuống */}
         <div style={{ flexGrow: 1 }}>
-                 {" "}
           <h2 style={{ margin: 0, fontSize: 30, fontWeight: "bold" }}>
             {room.tenPhong ?? "Phòng nghỉ"}
           </h2>
-                 {" "}
+
           <a
             onClick={() => onOpenDetail(room)}
             style={{
@@ -241,8 +224,7 @@ const RoomCard: React.FC<Props> = ({
             Xem thông tin phòng chi tiết
           </a>
         </div>
-        {/* THAY ĐỔI 4: Tạo một wrapper cho "footer" */}
-        {/* Wrapper này sẽ KHÔNG giãn ra (flexShrink: 0) */}
+
         <div>
           <div
             style={{
@@ -265,17 +247,12 @@ const RoomCard: React.FC<Props> = ({
               {bookButtonText}
             </Button>
           </div>
-                 {" "}
-          <div
-            style={{ fontSize: 12, color: "#666" /* Bỏ margin bottom ở đây */ }}
-          >
-                      Giá bao gồm phí dịch vụ 5% mỗi lần lưu trú, nhưng không
-            bao gồm thuế        {" "}
+
+          <div style={{ fontSize: 12, color: "#666" }}>
+            Giá bao gồm phí dịch vụ 5% nhưng không bao gồm thuế
           </div>
         </div>
-             {" "}
       </div>
-         {" "}
     </div>
   );
 };

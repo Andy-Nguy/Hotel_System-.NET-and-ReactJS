@@ -113,7 +113,7 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
           background: active ? "#e6f0ff" : "transparent",
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
+justifyContent: "center",
         }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -212,6 +212,11 @@ const Slidebar: React.FC = () => {
           routeFragment="admin/bookings"
           label="Quản lý đặt phòng"
         />
+        <NavItem
+          key="invoices"
+          routeFragment="admin/invoices"
+          label="Quản lý hoá đơn"
+        />
         <MenuItem
           icon={
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -223,7 +228,7 @@ const Slidebar: React.FC = () => {
         />
         <MenuItem
           icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M4 4h16v12H4zM4 20h16v-2H4z" fill="#4b5563" />
             </svg>
           }
@@ -260,6 +265,7 @@ const Slidebar: React.FC = () => {
           label="Not found"
         />
       </nav>
+      
     </aside>
   );
 };
