@@ -245,3 +245,51 @@ export async function checkRoomAvailability(loaiPhongId: string, checkin: string
   
   return normalizedRooms;
 }
+
+/**
+ * Kiểm tra phòng trống với request tổng quát (từ CheckAvailableRoomsRequest)
+ * Dùng API: POST /api/Phong/check-available-rooms
+ */
+export async function postCheckAvailableRooms(
+  checkIn: string,
+  checkOut: string,
+  numberOfGuests: number = 1
+): Promise<Room[]> {
+  const url = `${API_BASE}/api/Phong/check-available-rooms`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      CheckIn: checkIn,
+      CheckOut: checkOut,
+      NumberOfGuests: numberOfGuests,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => null);
+    throw new Error(`API error ${res.status}${text ? `: ${text}` : ""}`);
+  }
+
+  const data = await res.json();
+
+  // If backend returns { message: "No rooms available..." }, treat as empty array
+  if (data && (data.message || data.Message)) return [];
+
+  // Chuẩn hóa dữ liệu
+  const normalizedRooms: Room[] = (Array.isArray(data) ? data : [data]).map((r: any) => ({
+    idphong: r.idphong ?? r.Idphong ?? r.roomId ?? r.RoomId,
+    idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
+    tenPhong: r.tenPhong ?? r.TenPhong ?? r.roomName ?? r.RoomName ?? r.roomNumber ?? r.RoomNumber,
+    tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong ?? r.roomTypeName ?? r.RoomTypeName,
+    soPhong: r.soPhong ?? r.SoPhong ?? r.roomNumber ?? r.RoomNumber,
+    moTa: r.moTa ?? r.MoTa ?? r.description ?? r.Description,
+    soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa ?? r.maxOccupancy ?? r.MaxOccupancy,
+    giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.basePricePerNight ?? r.BasePricePerNight,
+    xepHangSao: r.xepHangSao ?? r.XepHangSao,
+    trangThai: r.trangThai ?? r.TrangThai,
+    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong ?? r.roomImageUrl ?? r.RoomImageUrl,
+  }));
+
+  return normalizedRooms;
+}
