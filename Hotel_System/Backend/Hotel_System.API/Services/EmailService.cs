@@ -27,6 +27,7 @@ public class EmailService : IEmailService
     {
         try
         {
+            
             // Lấy cấu hình từ appsettings.json
             var smtpServer = _configuration["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
             var smtpPort = int.Parse(_configuration["EmailSettings:SmtpPort"] ?? "587");
