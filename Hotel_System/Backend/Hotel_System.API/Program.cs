@@ -47,6 +47,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Room service
 builder.Services.AddScoped<RoomService>();
+// Email service
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Configure JWT authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");
