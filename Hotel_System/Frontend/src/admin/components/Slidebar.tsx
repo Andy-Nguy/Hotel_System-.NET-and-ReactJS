@@ -49,9 +49,9 @@ const getCurrentRoute = () => {
   try {
     if (window.location.pathname && window.location.pathname !== "/")
       return window.location.pathname;
-    if (window.location.hash) return window.location.hash.slice(1); // Bỏ '#'
+    if (window.location.hash) return window.location.hash;
   } catch (e) {}
-  return "";
+  return "#";
 };
 
 const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
@@ -88,13 +88,17 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
   };
 
   const handleClick = () => {
+    // Use history.pushState to create clean pathname URLs like `/admin/rooms`.
+    // This keeps URLs consistent with the dashboard and avoids leftover hashes.
     try {
       const path = routeFragment.startsWith("/")
         ? routeFragment
         : `/${routeFragment}`;
       window.history.pushState(null, "", path);
+      // notify listeners (MainPage listens for popstate)
       window.dispatchEvent(new PopStateEvent("popstate"));
     } catch (e) {
+      // fallback to hash if pushState is unavailable
       window.location.hash = `#${routeFragment}`;
     }
   };
@@ -109,7 +113,7 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
           background: active ? "#e6f0ff" : "transparent",
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
+justifyContent: "center",
         }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -137,7 +141,6 @@ const Slidebar: React.FC = () => {
         position: "fixed",
         left: 0,
         top: 0,
-        overflowY: "auto",
       }}
     >
       <div style={{ marginBottom: 12 }}>
@@ -165,6 +168,9 @@ const Slidebar: React.FC = () => {
       </div>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {/* determine active state from current location (pathname or hash) */}
+        {/* local state to trigger re-render when route changes */}
+
         {/* Dashboard link */}
         <NavItem
           key="dashboard"
@@ -211,11 +217,13 @@ const Slidebar: React.FC = () => {
           routeFragment="admin/invoices"
           label="Quản lý hoá đơn"
         />
-
+        <NavItem
+          key="checkout"
+          routeFragment="admin/checkout"
+          label="Quản lý Checkout"
+        />
         {/* === THÊM: NavItem loyalty (giữ nguyên như bạn viết) === */}
         <NavItem key="loyalty" routeFragment="admin/loyalty" label="Điểm tích lũy & Cấp bậc" />
-
-        {/* ==== TẤT CẢ CÁC MenuItem GỐC ĐƯỢC GIỮ NGUYÊN ==== */}
         <MenuItem
           icon={
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -227,7 +235,7 @@ const Slidebar: React.FC = () => {
         />
         <MenuItem
           icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M4 4h16v12H4zM4 20h16v-2H4z" fill="#4b5563" />
             </svg>
           }
@@ -263,66 +271,8 @@ const Slidebar: React.FC = () => {
           }
           label="Not found"
         />
-
-        
-
-        {/* === THÊM: Các MenuItem bị lặp ở cuối (giữ nguyên 100%) === */}
-        <MenuItem 
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M12 12a5 5 0 100-10 5 5 0 000 10zM21 21v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1" fill="#4b5563"/>
-            </svg>
-          } 
-          label="User" 
-        />
-        <MenuItem 
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M3 6h18v2H3zM3 12h18v2H3zM3 18h18v2H3z" fill="#4b5563"/>
-            </svg>
-          } 
-          label="Product" 
-          badge="+3" 
-        />
-        <MenuItem 
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M4 4h16v12H4zM4 20h16v-2H4z" fill="#4b5563"/>
-            </svg>
-          } 
-          label="Blog" 
-        />
-        <MenuItem 
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M6 13h12v7H6z" fill="#4b5563"/>
-            </svg>
-          } 
-          label="Sign in" 
-        />
-        <div 
-          style={{ 
-            height: 1, 
-            background: 'rgba(15,23,42,0.04)', 
-            margin: '12px 0', 
-            borderRadius: 2 
-          }} 
-        />
-        <MenuItem 
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path 
-                d="M21 10H7l5-6H3" 
-                stroke="#4b5563" 
-                strokeWidth={1.2} 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              />
-            </svg>
-          } 
-          label="Not found" 
-        />
       </nav>
+      
     </aside>
   );
 };
