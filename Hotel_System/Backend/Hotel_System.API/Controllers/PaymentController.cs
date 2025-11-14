@@ -67,7 +67,7 @@ namespace Hotel_System.API.Controllers
                         try { tongTien = datPhong.ChiTietDatPhongs.Sum(ct => ct.ThanhTien); }
                         catch { tongTien = 0m; }
                     }
-                    _logger.LogInformation("PaymentController: request.TongTien missing/zero, fallback tongTien={TongTien}", tongTien);
+_logger.LogInformation("PaymentController: request.TongTien missing/zero, fallback tongTien={TongTien}", tongTien);
                 }
 
                 // Lấy tiền cọc hiện có trên DatPhong làm nguồn dữ liệu mặc định
@@ -124,7 +124,7 @@ namespace Hotel_System.API.Controllers
                     NgayLap = DateTime.Now,
                     TienPhong = tienPhong,
                     Slngay = soNgay,
-                    TongTien = tongTien,
+TongTien = tongTien,
                     TienCoc = tienCoc,
                     TrangThaiThanhToan = trangThaiThanhToan,
                     TienThanhToan = tienThanhToan,
@@ -179,8 +179,7 @@ namespace Hotel_System.API.Controllers
                             ThoiGianKetThuc = thoiGianKetThuc,
                             TrangThai = "new"
                         };
-
-                        _context.Cthddvs.Add(cthd);
+_context.Cthddvs.Add(cthd);
                     }
                 }
 
@@ -243,7 +242,7 @@ namespace Hotel_System.API.Controllers
 
                 // Áp dụng domain: chỉ 1 (chưa TT) hoặc 2 (đã TT)
                 dp.TrangThaiThanhToan = request.TrangThaiThanhToan == 2 ? 2 : 1;
-                await _context.SaveChangesAsync();
+await _context.SaveChangesAsync();
 
                 // Hóa đơn mới nhất
                 var hd = dp.HoaDons.OrderByDescending(h => h.NgayLap).FirstOrDefault();
@@ -309,7 +308,7 @@ namespace Hotel_System.API.Controllers
                 3 => "Thanh toán tại quầy",
                 _ => "Không xác định"
             };
-            var gw = string.IsNullOrWhiteSpace(req.PaymentGateway) ? "" : $" | Gateway: {req.PaymentGateway}";
+var gw = string.IsNullOrWhiteSpace(req.PaymentGateway) ? "" : $" | Gateway: {req.PaymentGateway}";
             var custom = string.IsNullOrWhiteSpace(req.GhiChu) ? "" : $" | {req.GhiChu}";
             return $"PTTT: {method}{gw}{custom}".Trim(' ', '|');
         }
@@ -380,7 +379,7 @@ Khách Sạn Robins Villa
         {
             try
             {
-                var type = _emailService.GetType();
+var type = _emailService.GetType();
 
                 // 1) (to,name,subject,body,bool)
                 var m5 = type.GetMethod("SendEmailAsync", new[] { typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool) });
