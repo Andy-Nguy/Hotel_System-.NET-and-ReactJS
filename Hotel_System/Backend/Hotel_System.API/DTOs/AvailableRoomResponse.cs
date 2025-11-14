@@ -7,6 +7,9 @@ namespace Hotel_System.API.DTOs
         public string RoomNumber { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public decimal BasePricePerNight { get; set; }
+        public decimal? DiscountedPrice { get; set; }
+        public string? PromotionName { get; set; }
+        public decimal? DiscountPercent { get; set; }
         public string RoomImageUrl { get; set; } = string.Empty;
         public string RoomTypeName { get; set; } = string.Empty;
         public int MaxOccupancy { get; set; }

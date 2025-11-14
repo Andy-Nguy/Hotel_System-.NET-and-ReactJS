@@ -41,6 +41,10 @@ export interface Room {
   moTa?: string | null;
   soNguoiToiDa?: number | null;
   giaCoBanMotDem?: number | null;
+  basePricePerNight?: number | null;
+  discountedPrice?: number | null;
+  promotionName?: string | null;
+  discountPercent?: number | null;
   xepHangSao?: number | null;
   trangThai?: string | null;
   urlAnhPhong?: string | null;
@@ -286,6 +290,10 @@ export async function postCheckAvailableRooms(
     moTa: r.moTa ?? r.MoTa ?? r.description ?? r.Description,
     soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa ?? r.maxOccupancy ?? r.MaxOccupancy,
     giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.basePricePerNight ?? r.BasePricePerNight,
+    basePricePerNight: r.basePricePerNight ?? r.BasePricePerNight,
+    discountedPrice: r.discountedPrice ?? r.DiscountedPrice,
+    promotionName: r.promotionName ?? r.PromotionName,
+    discountPercent: r.discountPercent ?? r.DiscountPercent,
     xepHangSao: r.xepHangSao ?? r.XepHangSao,
     trangThai: r.trangThai ?? r.TrangThai,
     urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong ?? r.roomImageUrl ?? r.RoomImageUrl,

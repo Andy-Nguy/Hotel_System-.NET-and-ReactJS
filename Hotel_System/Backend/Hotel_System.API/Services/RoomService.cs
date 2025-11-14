@@ -143,16 +143,55 @@ namespace Hotel_System.API.Services
                 .OrderBy(p => p.RoomNumber)
                 .ToListAsync();
 
-            var availableRooms = availableRoomsQuery.Select(r => new AvailableRoomResponse
+            // Get active promotions for the rooms
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var roomIds = availableRoomsQuery.Select(r => r.RoomId).ToList();
+            
+            var promotionsDict = await _context.KhuyenMaiPhongs
+                .Include(kmp => kmp.IdkhuyenMaiNavigation)
+                .Where(kmp => roomIds.Contains(kmp.Idphong) &&
+                             kmp.IsActive &&
+                             kmp.IdkhuyenMaiNavigation.TrangThai == "active" &&
+                             kmp.IdkhuyenMaiNavigation.NgayBatDau <= today &&
+                             kmp.IdkhuyenMaiNavigation.NgayKetThuc >= today)
+                .GroupBy(kmp => kmp.Idphong)
+                .ToDictionaryAsync(
+                    g => g.Key,
+                    g => g.OrderByDescending(kmp => kmp.IdkhuyenMaiNavigation.GiaTriGiam).First()
+                );
+
+            var availableRooms = availableRoomsQuery.Select(r => 
             {
-                RoomId = r.RoomId,
-                RoomName = r.RoomName,
-                RoomNumber = r.RoomNumber,
-                Description = r.Description,
-                BasePricePerNight = r.BasePricePerNight,
-                RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
-                RoomTypeName = r.RoomTypeName,
-                MaxOccupancy = r.MaxOccupancy
+                var response = new AvailableRoomResponse
+                {
+                    RoomId = r.RoomId,
+                    RoomName = r.RoomName,
+                    RoomNumber = r.RoomNumber,
+                    Description = r.Description,
+                    BasePricePerNight = r.BasePricePerNight,
+                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomTypeName = r.RoomTypeName,
+                    MaxOccupancy = r.MaxOccupancy
+                };
+
+                // Apply promotion if available
+                if (promotionsDict.TryGetValue(r.RoomId, out var promotion))
+                {
+                    var promo = promotion.IdkhuyenMaiNavigation;
+                    response.PromotionName = promo.TenKhuyenMai;
+                    response.DiscountPercent = promo.GiaTriGiam;
+                    
+                    if (promo.LoaiGiamGia == "percent" && promo.GiaTriGiam.HasValue)
+                    {
+                        response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
+                    }
+                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    {
+                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                    }
+                }
+
+                return response;
             }).ToList();
 
             _logger.LogInformation($"Available rooms count: {availableRooms.Count}");
@@ -227,16 +266,55 @@ namespace Hotel_System.API.Services
                 .OrderBy(p => p.RoomNumber)
                 .ToListAsync();
 
-            var availableRooms = availableRoomsQuery.Select(r => new AvailableRoomResponse
+            // Get active promotions for the rooms
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var roomIds = availableRoomsQuery.Select(r => r.RoomId).ToList();
+            
+            var promotionsDict = await _context.KhuyenMaiPhongs
+                .Include(kmp => kmp.IdkhuyenMaiNavigation)
+                .Where(kmp => roomIds.Contains(kmp.Idphong) &&
+                             kmp.IsActive &&
+                             kmp.IdkhuyenMaiNavigation.TrangThai == "active" &&
+                             kmp.IdkhuyenMaiNavigation.NgayBatDau <= today &&
+                             kmp.IdkhuyenMaiNavigation.NgayKetThuc >= today)
+                .GroupBy(kmp => kmp.Idphong)
+                .ToDictionaryAsync(
+                    g => g.Key,
+                    g => g.OrderByDescending(kmp => kmp.IdkhuyenMaiNavigation.GiaTriGiam).First()
+                );
+
+            var availableRooms = availableRoomsQuery.Select(r => 
             {
-                RoomId = r.RoomId,
-                RoomName = r.RoomName,
-                RoomNumber = r.RoomNumber,
-                Description = r.Description,
-                BasePricePerNight = r.BasePricePerNight,
-                RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
-                RoomTypeName = r.RoomTypeName,
-                MaxOccupancy = r.MaxOccupancy
+                var response = new AvailableRoomResponse
+                {
+                    RoomId = r.RoomId,
+                    RoomName = r.RoomName,
+                    RoomNumber = r.RoomNumber,
+                    Description = r.Description,
+                    BasePricePerNight = r.BasePricePerNight,
+                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomTypeName = r.RoomTypeName,
+                    MaxOccupancy = r.MaxOccupancy
+                };
+
+                // Apply promotion if available
+                if (promotionsDict.TryGetValue(r.RoomId, out var promotion))
+                {
+                    var promo = promotion.IdkhuyenMaiNavigation;
+                    response.PromotionName = promo.TenKhuyenMai;
+                    response.DiscountPercent = promo.GiaTriGiam;
+                    
+                    if (promo.LoaiGiamGia == "percent" && promo.GiaTriGiam.HasValue)
+                    {
+                        response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
+                    }
+                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    {
+                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                    }
+                }
+
+                return response;
             }).ToList();
 
             _logger.LogInformation($"Available rooms by type count: {availableRooms.Count}");

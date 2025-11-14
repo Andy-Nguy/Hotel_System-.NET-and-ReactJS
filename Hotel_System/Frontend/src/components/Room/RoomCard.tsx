@@ -135,6 +135,15 @@ const RoomCard: React.FC<Props> = ({
     };
   }, [room.idphong]);
 
+  // Price calculations for display
+  const basePrice: number | null =
+    ((room as any).giaCoBanMotDem ?? (room as any).basePricePerNight) ?? null;
+
+  const discountPercent = promotion?.giaTriGiam ?? 0;
+  const hasDiscount = !!promotion && !!basePrice && discountPercent > 0;
+  const discountedPrice = hasDiscount && basePrice ? Math.round(basePrice * (1 - discountPercent / 100)) : null;
+  const savings = hasDiscount && discountedPrice ? basePrice - discountedPrice : 0;
+
   return (
     <div
       style={{
@@ -223,6 +232,36 @@ const RoomCard: React.FC<Props> = ({
           >
             Xem thông tin phòng chi tiết
           </a>
+
+          {/* Price Display */}
+          <div style={{ marginTop: 12, marginBottom: 16, minHeight: 60 }}>
+            {hasDiscount && discountedPrice ? (
+              // --- DISCOUNT VIEW ---
+              <div>
+                <div style={{ fontSize: 15, color: "#999", textDecoration: "line-through" }}>
+                  {formatPrice(basePrice)}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
+                  <div style={{ fontSize: 25, fontWeight: 700, color: "#dfa974", lineHeight: 1 }}>
+                    {formatPrice(discountedPrice)}
+                  </div>
+                  <Tag color="gold" style={{fontWeight: 'bold' }}>TIẾT KIỆM {discountPercent}%</Tag>
+                </div>
+                <div style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>/đêm</div>
+              </div>
+            ) : (
+              // --- REGULAR PRICE VIEW ---
+              <div>
+                <div style={{ fontSize: 10, color: "#888" }}>Giá mỗi đêm từ</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "4px" }}>
+                  <div style={{ fontSize: 25, fontWeight: 700, color: "#333", lineHeight: 1 }}>
+                    {formatPrice(basePrice)}
+                  </div>
+                  <div style={{ fontSize: 14, color: "#666", fontWeight: 500 }}>/đêm</div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div>

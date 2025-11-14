@@ -3,7 +3,6 @@ import OffcanvasMenu from "../components/OffcanvasMenu";
 import HeaderSection from "../components/HeaderSection";
 import HeroSection from "../components/HeroSection";
 import PromotionSection from "../components/PromotionSection";
-import AboutUs from "../components/AboutUs";
 import Services from "../components/Services";
 import HomeRoom from "../components/HomeRoom";
 import Testimonial from "../components/Testimonial";
@@ -26,6 +25,8 @@ import BookingManager from "../admin/pages/BookingManager";
 import InvoicesManager from "../admin/pages/InvoicesManager";
 import LoyaltyManager from "../admin/pages/LoyaltyManager";
 import BookingSuccessPage from "./BookingSuccessPage";
+import AboutUsSection from "../components/AboutUsSection";
+import AboutUsPage from "./AboutUsPage";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
@@ -224,6 +225,17 @@ const MainPage: React.FC = () => {
     );
   }
 
+  if (route === "#AboutUsPage" || route === "/AboutUsPage" || route === "#AboutUsPage" || route === "/AboutUsPage") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <AboutUsPage />
+        <FooterSection />
+      </>
+    );
+  }
+
   if (route === "#profile" || route === "/profile") {
     return (
       <>
@@ -357,7 +369,7 @@ const MainPage: React.FC = () => {
       <HeaderSection />
 
       <HeroSection />
-      <AboutUs />
+      <AboutUsSection />
       <PromotionSection />
       
       <HomeRoom />

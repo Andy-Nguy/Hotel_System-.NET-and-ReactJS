@@ -62,6 +62,17 @@ const SelectRoomPage: React.FC = () => {
       try {
         const parsed = JSON.parse(roomsFromSession);
         console.log("Available rooms from sessionStorage:", parsed);
+        // Log chi tiết từng phòng để kiểm tra giá khuyến mãi
+        parsed.forEach((room: any, index: number) => {
+          console.log(`Room ${index + 1}:`, {
+            tenPhong: room.tenPhong,
+            giaCoBanMotDem: room.giaCoBanMotDem,
+            basePricePerNight: room.basePricePerNight,
+            discountedPrice: room.discountedPrice,
+            promotionName: room.promotionName,
+            discountPercent: room.discountPercent
+          });
+        });
         setAvailableRooms(parsed);
         setLoading(false);
       } catch (e) {
@@ -177,7 +188,11 @@ const SelectRoomPage: React.FC = () => {
     );
 
     const totalPrice = selectedRooms.reduce((sum, sr) => {
-      return sum + (sr.room.giaCoBanMotDem || 0) * nights;
+      // Sử dụng giá sau khuyến mãi nếu có, nếu không thì dùng giá cơ bản
+      const price = (sr.room.discountedPrice && sr.room.discountedPrice < sr.room.basePricePerNight) 
+        ? sr.room.discountedPrice 
+        : (sr.room.basePricePerNight || sr.room.giaCoBanMotDem);
+      return sum + (price || 0) * nights;
     }, 0);
 
     return totalPrice;
@@ -318,10 +333,23 @@ const SelectRoomPage: React.FC = () => {
                     >
                       <Text strong>Phòng {i + 1}</Text>
                       {selected && (
-                        <Text>
-                          {(selected.room.giaCoBanMotDem || 0).toLocaleString()}
-                          đ
-                        </Text>
+                        <div style={{ textAlign: "right" }}>
+                          {selected.room.discountedPrice && selected.room.discountedPrice < (selected.room.basePricePerNight || selected.room.giaCoBanMotDem) ? (
+                            <>
+                              <Text delete type="secondary" style={{ fontSize: "12px" }}>
+                                {((selected.room.basePricePerNight || selected.room.giaCoBanMotDem) || 0).toLocaleString()}đ
+                              </Text>
+                              <br />
+                              <Text strong style={{ color: "#dfa974" }}>
+                                {(selected.room.discountedPrice || 0).toLocaleString()}đ
+                              </Text>
+                            </>
+                          ) : (
+                            <Text>
+                              {((selected.room.basePricePerNight || selected.room.giaCoBanMotDem) || 0).toLocaleString()}đ
+                            </Text>
+                          )}
+                        </div>
                       )}
                     </div>
                     <div
