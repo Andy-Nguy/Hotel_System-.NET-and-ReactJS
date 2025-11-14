@@ -156,7 +156,7 @@ const AboutUsPage: React.FC = () => {
                   onMouseLeave={() => setIsImg2Hovered(false)}
                 >
                   <img
-                    src="/img/about/about-2.jpg"
+                    src="/img/about/about-21.jpg"
                     alt="Không gian Villa"
                     style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                   />
