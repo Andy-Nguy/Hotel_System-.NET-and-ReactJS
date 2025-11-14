@@ -97,7 +97,7 @@ const AboutUsSection: React.FC = () => {
               {/* --- NÚT BẤM (CTAs) VỚI HIỆU ỨNG HOVER --- */}
               <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                 <button
-                  onClick={() => handleNavigate("/about")}
+                  onClick={() => handleNavigate("/AboutUsPage")}
                   style={{
                     padding: "14px 30px", // Tăng padding
                     background: "#dfa974",
