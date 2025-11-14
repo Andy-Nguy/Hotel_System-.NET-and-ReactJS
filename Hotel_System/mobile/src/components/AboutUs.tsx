@@ -6,24 +6,22 @@ const AboutUs: React.FC = () => {
   return (
     <View style={styles.section}>
       <View style={styles.sectionTitle}>
-        <Text style={styles.span}>About Us</Text>
-        <Text style={styles.h2}>Welcome to Robins Villa</Text>
+        <Text style={styles.span}>Về Chúng Tôi</Text>
+        <Text style={styles.h2}>Chào mừng đến với Robins Villa</Text>
       </View>
 
       <View style={styles.content}>
         <Image
-          source={{
-            uri: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800",
-          }}
+          source={require("../assets/img/aboutus.jpg")}
           style={styles.image}
           resizeMode="cover"
         />
 
         <View style={styles.textContainer}>
           <Text style={styles.description}>
-            Robins Villa is a premier hotel providing exceptional hospitality
-            and luxury accommodations. We are dedicated to making your stay
-            unforgettable with our world-class services and amenities.
+            Giữa làn sương Đà Lạt, Robins Villa mang đến không gian nghỉ dưỡng
+            yên bình và tinh tế. Nơi bạn chạm vào vẻ đẹp của thiên nhiên và tìm
+            lại sự an yên trong từng khoảnh khắc.
           </Text>
         </View>
       </View>

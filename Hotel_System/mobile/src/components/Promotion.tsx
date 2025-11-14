@@ -157,7 +157,6 @@ const Promotion: React.FC<Props> = ({
 
 const styles = StyleSheet.create({
   wrap: {
-    
     width: '100%',
     aspectRatio: 16 / 9,
     borderRadius: 14,

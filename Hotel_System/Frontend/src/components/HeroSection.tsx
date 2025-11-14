@@ -6,11 +6,26 @@ const HeroSection: React.FC = () => {
       <div className="container">
         <div className="row">
           <div className="col-lg-6">
-            <div className="hero-text">
-              <h1>Robins Villa</h1>
-              <p>
-                Here are the best hotel booking sites, including recommendations
-                for international travel and for finding low-priced hotel rooms.
+            <div className="hero-text" style={{ position: "relative", zIndex: 3 }}>
+              <h1
+                style={{
+                  textShadow:
+                    "0 8px 28px rgba(0,0,0,0.65), 0 2px 8px rgba(0,0,0,0.5)",
+                  fontWeight: 800,
+                }}
+              >
+                Robins Villa
+              </h1>
+              <p
+                style={{
+                  textShadow:
+                    "0 6px 20px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.45)",
+                }}
+              >
+                Khám phá và đặt phòng tại Robins Villa Đà Lạt, điểm đến lý tưởng
+                cho kỳ nghỉ thư giãn giữa thiên nhiên cao nguyên. Nơi bạn dễ
+                dàng tìm thấy những căn villa đẹp, giá tốt và trải nghiệm dịch
+                vụ đẳng cấp.
               </p>
 
               {/* Direct booking button: go to /rooms with sensible defaults */}
@@ -73,15 +88,33 @@ const HeroSection: React.FC = () => {
       <div className="hero-slider owl-carousel">
         <div
           className="hs-item"
-          style={{ backgroundImage: "url(/img/hero/hero-1.jpg)" }}
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/hero/hero1.webp)",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            zIndex: 1,
+          }}
         ></div>
         <div
           className="hs-item"
-          style={{ backgroundImage: "url(/img/hero/hero-2.jpg)" }}
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/hero/hero2.jpg)",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            zIndex: 1,
+          }}
         ></div>
         <div
           className="hs-item"
-          style={{ backgroundImage: "url(/img/hero/hero-3.jpg)" }}
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/hero/hero3.jpg)",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            zIndex: 1,
+          }}
         ></div>
       </div>
     </section>

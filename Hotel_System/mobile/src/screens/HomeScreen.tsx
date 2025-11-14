@@ -72,7 +72,7 @@ const HomeScreen: React.FC = () => {
               />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Can I help you?"
+                placeholder="Tôi có thể giúp gì cho bạn?"
                 placeholderTextColor="#999"
                 value={searchText}
                 onChangeText={setSearchText}
@@ -83,9 +83,9 @@ const HomeScreen: React.FC = () => {
           {/* Hero Content - Bottom */}
           <View style={styles.heroContent}>
             <Text style={styles.heroTitle}>
-              Elite Stays Await, Unlock Up to 20K Points
+              Đẳng cấp chờ đón bạn – Ưu đãi không giới hạn
             </Text>
-            <Text style={styles.heroSubtext}>Get the offer →</Text>
+            {/* <Text style={styles.heroSubtext}>Nhận ưu đãi ngay →</Text> */}
           </View>
         </ImageBackground>
       </View>
@@ -93,10 +93,10 @@ const HomeScreen: React.FC = () => {
       {/* Bottom Info Bar */}
       <View style={styles.bottomBar}>
         <View style={styles.bottomLeft}>
-          <Text style={styles.bottomLabel}>Hello, {getUserName()}</Text>
+          <Text style={styles.bottomLabel}>Xin chào, {getUserName()}</Text>
         </View>
         <TouchableOpacity style={styles.bottomRight}>
-          <Text style={styles.bottomStats}>0 Nights • 0 Pts</Text>
+          <Text style={styles.bottomStats}>0 Đêm • 0 Điểm</Text>
           <Text style={styles.bottomArrow}>›</Text>
         </TouchableOpacity>
       </View>
@@ -114,7 +114,7 @@ const HomeScreen: React.FC = () => {
           style={styles.checkRoomsButton}
           onPress={() => navigation.navigate("CheckAvailableRooms" as never)}
         >
-          <Text style={styles.checkRoomsText}>Check Available Rooms</Text>
+          <Text style={styles.checkRoomsText}>Kiểm tra phòng trống</Text>
           <Icon name="search" size={20} color={COLORS.white} />
         </TouchableOpacity>
       </View>
