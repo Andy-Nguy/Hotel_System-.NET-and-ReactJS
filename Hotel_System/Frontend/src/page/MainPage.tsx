@@ -27,6 +27,7 @@ import LoyaltyManager from "../admin/pages/LoyaltyManager";
 import BookingSuccessPage from "./BookingSuccessPage";
 import AboutUsSection from "../components/AboutUsSection";
 import AboutUsPage from "./AboutUsPage";
+import ContactPage from "./ContactPage";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
@@ -225,12 +226,23 @@ const MainPage: React.FC = () => {
     );
   }
 
-  if (route === "#AboutUsPage" || route === "/AboutUsPage" || route === "#AboutUsPage" || route === "/AboutUsPage") {
+  if (route === "#AboutUsPage" || route === "/AboutUsPage") {
     return (
       <>
         <OffcanvasMenu />
         <HeaderSection />
         <AboutUsPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#contact" || route === "/contact") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <ContactPage />
         <FooterSection />
       </>
     );
@@ -371,7 +383,7 @@ const MainPage: React.FC = () => {
       <HeroSection />
       <AboutUsSection />
       <PromotionSection />
-      
+
       <HomeRoom />
       <Services />
       {/* <Testimonial /> */}

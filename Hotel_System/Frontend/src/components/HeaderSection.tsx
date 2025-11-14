@@ -189,11 +189,30 @@ const HeaderSection: React.FC = () => {
                         </li>
                       </ul>
                     </li> */}
-                    <li>
+                    {/* <li>
                       <a href="#">News</a>
-                    </li>
-                    <li>
-                      <a href="#">Contact</a>
+                    </li> */}
+                    <li
+                      className={
+                        currentRoute === "/contact" || currentRoute === "#contact"
+                          ? "active"
+                          : ""
+                      }
+                    >
+                      <a
+                        href="/contact"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          try {
+                            window.history.pushState(null, "", "/contact");
+                            window.dispatchEvent(new PopStateEvent("popstate"));
+                          } catch {
+                            window.location.href = "/contact";
+                          }
+                        }}
+                      >
+                        Contact
+                      </a>
                     </li>
                     <li>
                       <a href="#">
