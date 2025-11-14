@@ -15,6 +15,7 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getRooms, Room } from "../api/roomsApi";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
+import RoomDetail from "../components/RoomDetail";
 
 interface RoomType {
   loaiPhong: string;
@@ -155,159 +156,7 @@ const RoomsScreen: React.FC = () => {
     </View>
   );
 
-  const renderDetailsModal = () => {
-    if (!selectedRoom) return null;
-
-    // Calculate discount price if promotion exists
-    let discountPrice = selectedRoom.giaCoBanMotDem;
-    let hasDiscount = false;
-    
-    if (selectedRoom.promotions && selectedRoom.promotions.length > 0) {
-      const promo = selectedRoom.promotions[0];
-      hasDiscount = true;
-      if (promo.type === 'percent') {
-        discountPrice = selectedRoom.giaCoBanMotDem * (1 - promo.value / 100);
-      } else {
-        discountPrice = selectedRoom.giaCoBanMotDem - promo.value;
-      }
-    }
-
-    return (
-      <Modal
-        visible={showDetails}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDetails(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowDetails(false)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Chi tiết phòng</Text>
-            <View style={{ width: 30 }} />
-          </View>
-
-          <ScrollView
-            style={styles.modalContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <Image
-              source={{ uri: selectedRoom.urlAnhPhong }}
-              style={styles.modalImage}
-              contentFit="cover"
-            />
-
-            <View style={styles.detailsSection}>
-              <Text style={styles.detailTitle}>{selectedRoom.tenPhong}</Text>
-              <Text style={styles.detailSubtitle}>
-                Phòng {selectedRoom.soPhong}
-              </Text>
-
-              <View style={styles.ratingRow}>
-                <Text style={styles.stars}>
-                  {renderStars(selectedRoom.xepHangSao || 0)}
-                </Text>
-                <Text style={styles.ratingText}>
-                  {(selectedRoom.xepHangSao || 0).toFixed(1)}/5
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Loại phòng:</Text>
-                <Text style={styles.detailValue}>
-                  {selectedRoom.tenLoaiPhong || "N/A"}
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Số người tối đa:</Text>
-                <Text style={styles.detailValue}>
-                  {selectedRoom.soNguoiToiDa} người
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Trạng thái:</Text>
-                <Text
-                  style={[
-                    styles.detailValue,
-                    selectedRoom.trangThai === "Available"
-                      ? { color: "#4CAF50" }
-                      : { color: "#FF9800" },
-                  ]}
-                >
-                  {selectedRoom.trangThai === "Available" ? "Trống" : "Đã đặt"}
-                </Text>
-              </View>
-
-              <View style={styles.descriptionSection}>
-                <Text style={styles.sectionLabel}>Mô tả</Text>
-                <Text style={styles.descriptionText}>
-                  {selectedRoom.moTa || "Không có mô tả"}
-                </Text>
-              </View>
-
-              {/* Amenities Section */}
-              {selectedRoom.amenities && selectedRoom.amenities.length > 0 && (
-                <View style={styles.amenitiesSection}>
-                  <Text style={styles.sectionLabel}>Tiện nghi</Text>
-                  <View style={styles.amenitiesList}>
-                    {selectedRoom.amenities.map((amenity) => (
-                      <View key={amenity.id} style={styles.amenityItem}>
-                        <Text style={styles.amenityBullet}>✓</Text>
-                        <Text style={styles.amenityText}>{amenity.name}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Promotions Section */}
-              {selectedRoom.promotions && selectedRoom.promotions.length > 0 && (
-                <View style={styles.promotionSection}>
-                  <Text style={styles.sectionLabel}>Khuyến mãi</Text>
-                  {selectedRoom.promotions.map((promo) => (
-                    <View key={promo.id} style={styles.promotionItem}>
-                      <Text style={styles.promotionName}>{promo.name}</Text>
-                      {promo.description && (
-                        <Text style={styles.promotionDesc}>{promo.description}</Text>
-                      )}
-                      <Text style={styles.promotionValue}>
-                        {promo.type === 'percent' 
-                          ? `Giảm ${promo.value}%` 
-                          : `Giảm $${promo.value}`}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <View style={styles.priceSection}>
-                <View>
-                  <Text style={styles.priceLabel}>Giá mỗi đêm</Text>
-                  {hasDiscount && (
-                    <Text style={styles.originalPrice}>
-                      ${Number(selectedRoom.giaCoBanMotDem).toLocaleString()}
-                    </Text>
-                  )}
-                </View>
-                <Text style={[styles.priceValue, { color: hasDiscount ? COLORS.primary : COLORS.primary }]}>
-                  ${Number(discountPrice).toLocaleString()}
-                </Text>
-              </View>
-
-              <TouchableOpacity style={styles.bookButton}>
-                <Text style={styles.bookButtonText}>Đặt phòng ngay</Text>
-              </TouchableOpacity>
-
-              <View style={{ height: SIZES.padding * 2 }} />
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-    );
-  };
+  // Room detail modal is extracted into `RoomDetail.tsx`
 
   if (loading) {
     return (
@@ -336,11 +185,15 @@ const RoomsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Các phòng có sẵn</Text>
-        <Text style={styles.subtitle}>
-          {roomTypes.reduce((sum, rt) => sum + rt.rooms.length, 0)} phòng
-        </Text>
+      <View style={styles.modalHeader}>
+        <View style={{ width: 30 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.modalTitle}>Các phòng có sẵn</Text>
+          <Text style={styles.subtitle}>
+            {roomTypes.reduce((sum, rt) => sum + rt.rooms.length, 0)} phòng
+          </Text>
+        </View>
+        <View style={{ width: 30 }} />
       </View>
 
       <FlatList
@@ -365,7 +218,11 @@ const RoomsScreen: React.FC = () => {
         }
       />
 
-      {renderDetailsModal()}
+      <RoomDetail
+        selectedRoom={selectedRoom}
+        visible={showDetails}
+        onClose={() => setShowDetails(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -507,6 +364,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: COLORS.secondary,
+  },
+  headerCenter: {
+    alignItems: "center",
   },
   modalContent: {
     flex: 1,

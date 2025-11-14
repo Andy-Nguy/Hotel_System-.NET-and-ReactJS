@@ -5,6 +5,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { COLORS, SIZES } from "../constants/theme";
 import HomeScreen from "../screens/HomeScreen";
 import CheckAvailableRoomsScreen from "../screens/CheckAvailableRoomsScreen";
+import PromotionDetail from "../screens/PromotionDetail";
+import RoomTypeDetail from "../screens/RoomTypeDetail";
 import RoomsScreen from "../screens/RoomsScreen";
 import BookingsScreen from "../screens/BookingsScreen";
 import OffersScreen from "../screens/OffersScreen";
@@ -21,6 +23,8 @@ export type TabParamList = {
 export type HomeStackParamList = {
   Home: undefined;
   CheckAvailableRooms: undefined;
+  PromotionDetail: { promotionId: string };
+  RoomTypeDetail: { idloaiPhong: string; tenLoaiPhong: string };
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -33,6 +37,14 @@ const HomeStackNavigator: React.FC = () => {
       <HomeStack.Screen
         name="CheckAvailableRooms"
         component={CheckAvailableRoomsScreen}
+      />
+      <HomeStack.Screen
+        name="PromotionDetail"
+        component={PromotionDetail}
+      />
+      <HomeStack.Screen
+        name="RoomTypeDetail"
+        component={RoomTypeDetail}
       />
     </HomeStack.Navigator>
   );

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
+import { COLORS, SIZES, FONTS } from "../constants/theme";
 import {
   View,
   Text,
@@ -9,7 +10,7 @@ import {
   ViewStyle,
   TextStyle,
   ImageBackgroundProps,
-} from 'react-native';
+} from "react-native";
 
 type Props = {
   imageUri?: string;
@@ -18,9 +19,11 @@ type Props = {
   onDetailsPress?: (e: GestureResponderEvent) => void;
   onRegisterPress?: (e: GestureResponderEvent) => void;
   containerStyle?: ViewStyle;
+  promotionId?: string;
+  navigation?: any;
 };
 
-import { getPromotions } from '../api/promotionApi';
+import { getPromotions } from "../api/promotionApi";
 
 const Promotion: React.FC<Props> = ({
   imageUri,
@@ -29,6 +32,8 @@ const Promotion: React.FC<Props> = ({
   onDetailsPress,
   onRegisterPress,
   containerStyle,
+  promotionId,
+  navigation,
 }) => {
   const [remotePromo, setRemotePromo] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,22 +44,23 @@ const Promotion: React.FC<Props> = ({
     const load = async () => {
       // always fetch latest promotions so component has accurate data
       setLoading(true);
-      console.log('[Promotion] Starting to fetch promotions...');
+      console.log("[Promotion] Starting to fetch promotions...");
       try {
         const data = await getPromotions();
-        console.log('[Promotion] Fetched data:', data);
+        console.log("[Promotion] Fetched data:", data);
         if (!mounted) return;
         if (Array.isArray(data) && data.length > 0) {
           // prefer the first active promotion when possible
-          const active = data.find((p: any) => p.trangThai === 'active') || data[0];
-          console.log('[Promotion] Selected promo:', active);
+          const active =
+            data.find((p: any) => p.trangThai === "active") || data[0];
+          console.log("[Promotion] Selected promo:", active);
           setRemotePromo(active);
         } else {
-          console.log('[Promotion] No promotions found or data is not array');
+          console.log("[Promotion] No promotions found or data is not array");
         }
       } catch (err: any) {
         if (!mounted) return;
-        console.error('[Promotion] Error fetching:', err);
+        console.error("[Promotion] Error fetching:", err);
         setError(err?.message || String(err));
       } finally {
         if (mounted) setLoading(false);
@@ -65,174 +71,248 @@ const Promotion: React.FC<Props> = ({
       mounted = false;
     };
   }, [imageUri, title]);
- 
+
   // Use only real data from props or DB; do not fall back to mock values.
   const promo = remotePromo;
-  const imageSrc = imageUri && imageUri.length > 0 ? imageUri : promo?.hinhAnhBanner;
+  const imageSrc =
+    imageUri && imageUri.length > 0 ? imageUri : promo?.hinhAnhBanner;
 
   const titleText = title && title.length > 0 ? title : promo?.tenKhuyenMai;
   const descriptionText = description || promo?.moTa;
 
-  console.log('[Promotion] render - imageSrc:', imageSrc);
-  console.log('[Promotion] render - titleText:', titleText);
-  console.log('[Promotion] render - descriptionText:', descriptionText);
-  console.log('[Promotion] render - promo:', promo);
-  console.log('[Promotion] render - loading:', loading);
-  console.log('[Promotion] render - error:', error);
+  console.log("[Promotion] render - imageSrc:", imageSrc);
+  console.log("[Promotion] render - titleText:", titleText);
+  console.log("[Promotion] render - descriptionText:", descriptionText);
+  console.log("[Promotion] render - promo:", promo);
+  console.log("[Promotion] render - loading:", loading);
+  console.log("[Promotion] render - error:", error);
 
   // If no real data is available, render nothing (no mock data)
   if (!imageSrc && !titleText && !descriptionText) {
-    console.log('[Promotion] Returning null - no data');
-    
+    console.log("[Promotion] Returning null - no data");
+
     // Show placeholder while loading or error state for debugging
     if (loading) {
       return (
-        <View style={[styles.wrap, containerStyle, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f0f0' }]}>
+        <View
+          style={[
+            styles.wrap,
+            containerStyle,
+            {
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "#f0f0f0",
+            },
+          ]}
+        >
           <Text style={styles.debugText}>⏳ Loading promotions...</Text>
         </View>
       );
     }
-    
+
     if (error) {
       return (
-        <View style={[styles.wrap, containerStyle, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#fdd' }]}>
-          <Text style={[styles.debugText, { color: '#d00' }]}>❌ Error loading promotions:</Text>
-          <Text style={[styles.debugText, { color: '#d00', fontSize: 12 }]}>{error}</Text>
+        <View
+          style={[
+            styles.wrap,
+            containerStyle,
+            {
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "#fdd",
+            },
+          ]}
+        >
+          <Text style={[styles.debugText, { color: "#d00" }]}>
+            ❌ Error loading promotions:
+          </Text>
+          <Text style={[styles.debugText, { color: "#d00", fontSize: 12 }]}>
+            {error}
+          </Text>
         </View>
       );
     }
-    
+
     // No data and not loading/error - means API returned empty array
     return (
-      <View style={[styles.wrap, containerStyle, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9f9f9' }]}>
+      <View
+        style={[
+          styles.wrap,
+          containerStyle,
+          {
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "#f9f9f9",
+          },
+        ]}
+      >
         <Text style={styles.debugText}>ℹ️ No promotions available</Text>
-        <Text style={[styles.debugText, { fontSize: 12, color: '#666' }]}>Check backend database</Text>
+        <Text style={[styles.debugText, { fontSize: 12, color: "#666" }]}>
+          Check backend database
+        </Text>
       </View>
     );
   }
   return (
-    <View style={[styles.wrap, containerStyle]}>
-      <ImageBackground
-        source={imageSrc ? { uri: imageSrc } : undefined}
-        style={styles.bg}
-        imageStyle={styles.imageStyle}
-        resizeMode="cover"
-      >
-        {/* dark overlay for contrast */}
-        <View style={styles.overlay} />
+    <View style={styles.sectionTitle}>
+      <Text style={styles.span}>Khuyến mãi</Text>
+      <Text style={styles.h2}>Ưu đãi đặc biệt</Text>
 
-        <View style={styles.content} pointerEvents="box-none">
-          <Text numberOfLines={3} style={styles.title}>
-            {titleText}
-          </Text>
+      <View style={[styles.wrap, containerStyle]}>
+        <ImageBackground
+          source={imageSrc ? { uri: imageSrc } : undefined}
+          style={styles.bg}
+          imageStyle={styles.imageStyle}
+          resizeMode="cover"
+        >
+          {/* dark overlay for contrast */}
+          <View style={styles.overlay} />
 
-          {descriptionText ? (
-            <Text numberOfLines={2} style={styles.description}>
-              {descriptionText}
+          <View style={styles.content} pointerEvents="box-none">
+            <Text numberOfLines={3} style={styles.title}>
+              {titleText}
             </Text>
-          ) : null}
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              onPress={onDetailsPress}
-              style={[styles.button, styles.outlineButton]}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.buttonText, styles.outlineButtonText]}>Details</Text>
-            </TouchableOpacity>
+            {descriptionText ? (
+              <Text numberOfLines={2} style={styles.description}>
+                {descriptionText}
+              </Text>
+            ) : null}
 
-            <TouchableOpacity
-              onPress={onRegisterPress}
-              style={[styles.button, styles.filledButton]}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.buttonText, styles.filledButtonText]}>Register</Text>
-            </TouchableOpacity>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (onDetailsPress) {
+                    onDetailsPress({} as GestureResponderEvent);
+                  } else if (navigation && remotePromo?.idkhuyenMai) {
+                    navigation.navigate("PromotionDetail", {
+                      promotionId: remotePromo.idkhuyenMai,
+                    });
+                  }
+                }}
+                style={[styles.button, styles.outlineButton]}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.buttonText, styles.outlineButtonText]}>
+                  Details
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onRegisterPress}
+                style={[styles.button, styles.filledButton]}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.buttonText, styles.filledButtonText]}>
+                  Register
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </ImageBackground>
+        </ImageBackground>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   wrap: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 16 / 9,
     borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#000',
+    overflow: "hidden",
+    backgroundColor: "#000",
     marginVertical: 12,
     // shadow (iOS)
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     // elevation (Android)
     elevation: 6,
   },
+  sectionTitle: {
+    paddingTop: SIZES.padding * 3,
+    marginBottom: SIZES.margin * 2,
+    alignItems: "center",
+  },
+  span: {
+    ...FONTS.body5,
+    color: COLORS.primary,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  h2: {
+    ...FONTS.h2,
+    color: COLORS.secondary,
+    marginTop: 8,
+    textAlign: "center",
+    marginBottom: 20,
+  },
   bg: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   imageStyle: {
     borderRadius: 14,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.38)',
+    backgroundColor: "rgba(0,0,0,0.38)",
   },
   content: {
     paddingHorizontal: 18,
     paddingBottom: 18,
   },
   title: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 30,
-    fontWeight: '700',
+    fontWeight: "700",
     lineHeight: 36,
     marginBottom: 8,
   } as TextStyle,
   description: {
-    color: 'rgba(255,255,255,0.9)',
+    color: "rgba(255,255,255,0.9)",
     fontSize: 14,
     marginBottom: 14,
   } as TextStyle,
   buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   button: {
     flex: 1,
     paddingVertical: 12,
     marginHorizontal: 6,
     borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   } as ViewStyle,
   outlineButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: "#fff",
   } as ViewStyle,
   filledButton: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   } as ViewStyle,
   buttonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   } as TextStyle,
   outlineButtonText: {
-    color: '#fff',
+    color: "#fff",
   } as TextStyle,
   filledButtonText: {
-    color: '#111',
+    color: "#111",
   } as TextStyle,
   debugText: {
-    color: '#333',
+    color: "#333",
     fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: "500",
+    textAlign: "center",
   } as TextStyle,
 });
 

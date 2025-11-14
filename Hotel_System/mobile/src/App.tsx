@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View } from "react-native";
@@ -57,6 +58,12 @@ function RootNavigator() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Preload vector icon font to avoid missing glyphs at runtime
+    if (FontAwesome && typeof FontAwesome.loadFont === 'function') {
+      FontAwesome.loadFont();
+    }
+  }, []);
   return (
     <AuthProvider>
       <NavigationContainer>

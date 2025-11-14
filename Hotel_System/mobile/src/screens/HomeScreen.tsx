@@ -13,10 +13,11 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import Icon from 'react-native-vector-icons/FontAwesome';
 import AboutUs from "../components/AboutUs";
 import BlogSection from "../components/BlogSection";
 import Promotion from "../components/Promotion";
+import RoomType from "../components/RoomType";
 
 const HomeScreen: React.FC = () => {
   const { userInfo } = useAuth();
@@ -36,6 +37,10 @@ const HomeScreen: React.FC = () => {
     } catch (e) {
       return "Nguyen";
     }
+  };
+
+  const handleSearchFocus = () => {
+    navigation.navigate("CheckAvailableRooms" as never);
   };
 
   return (
@@ -72,10 +77,11 @@ const HomeScreen: React.FC = () => {
               />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Tôi có thể giúp gì cho bạn?"
+                placeholder="Tìm phòng phù hợp với bạn ..."
                 placeholderTextColor="#999"
                 value={searchText}
                 onChangeText={setSearchText}
+                onFocus={handleSearchFocus}
               />
             </View>
           </View>
@@ -106,19 +112,10 @@ const HomeScreen: React.FC = () => {
 
       {/* Promotion: Promotion will fetch latest promotion itself when no props provided */}
       <Promotion
-        
+        navigation={navigation}
       />
-      {/* Check Available Rooms Button */}
-      <View style={styles.checkRoomsContainer}>
-        <TouchableOpacity
-          style={styles.checkRoomsButton}
-          onPress={() => navigation.navigate("CheckAvailableRooms" as never)}
-        >
-          <Text style={styles.checkRoomsText}>Kiểm tra phòng trống</Text>
-          <Icon name="search" size={20} color={COLORS.white} />
-        </TouchableOpacity>
-      </View>
-
+      
+      <RoomType />
       {/* Bottom Spacing */}
       <View style={styles.spacing} />
 
@@ -186,12 +183,15 @@ const styles = StyleSheet.create({
     fontSize: 20,
     marginRight: 8,
     color: "#999",
+    width: 28,
+    textAlign: 'center',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: COLORS.secondary,
     padding: 0,
+    minHeight: 36,
   },
   heroContent: {
     paddingHorizontal: SIZES.padding * 1.5,
