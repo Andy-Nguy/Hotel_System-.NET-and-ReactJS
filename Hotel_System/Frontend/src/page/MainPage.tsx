@@ -23,6 +23,7 @@ import ServiceManager from "../admin/pages/ServiceManager";
 import PromotionManager from "../admin/pages/PromotionManager";
 import BookingManager from "../admin/pages/BookingManager";
 import InvoicesManager from "../admin/pages/InvoicesManager";
+import CheckoutManager from "../admin/pages/CheckoutManager";
 import LoyaltyManager from "../admin/pages/LoyaltyManager";
 import BookingSuccessPage from "./BookingSuccessPage";
 import AboutUsSection from "../components/AboutUsSection";
@@ -364,6 +365,15 @@ const MainPage: React.FC = () => {
     route === "#/admin/invoices"
   ) {
     return <InvoicesManager />;
+  }
+
+  // Admin checkout management (accessible at /admin/checkout)
+  if (
+    route === "#admin/checkout" ||
+    route === "/admin/checkout" ||
+    route === "#/admin/checkout"
+  ) {
+    return <CheckoutManager />;
   }
 
   // Admin loyalty / points management route (accessible at /admin/loyalty or #admin/loyalty)

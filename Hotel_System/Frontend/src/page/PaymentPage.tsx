@@ -31,6 +31,7 @@ import {
 import BookingProgress from "../components/BookingProgress";
 import PromotionLoyaltyPanel from "../components/PromotionLoyaltyPanel";
 import PromotionsAvailable from "../components/PromotionsAvailable";
+import { recordServiceUsage } from "../api/serviceApi";
 import type { ApplyPromotionResponse } from "../api/promotionApi";
 
 const { Content } = Layout;
@@ -78,7 +79,6 @@ const PaymentPage: React.FC = () => {
   const [externalPromoApplied, setExternalPromoApplied] = useState<ApplyPromotionResponse | null>(null);
   const [disableAutoApplyPromos, setDisableAutoApplyPromos] = useState(false);
 
-  // derive profile points from several possible sources (backend uses different casings sometimes)
   const profilePoints: number | null = (() => {
     try {
       if (profile) return profile.tichDiem ?? profile.tichdiem ?? profile.points ?? profile.Points ?? null;
@@ -94,10 +94,8 @@ const PaymentPage: React.FC = () => {
     return null;
   })();
 
-  // Computed discount value (legacy UI expects soTienGiam)
   const promoDiscount = promoResult ? (promoResult.soTienGiam ?? promoResult.discountAmount ?? 0) : 0;
 
-  // Fetch full promotion details when a promo is applied (auto or external) so we can show per-room breakdown
   useEffect(() => {
     let mounted = true;
     const fetchPromo = async (id?: string | null) => {
@@ -119,7 +117,6 @@ const PaymentPage: React.FC = () => {
     return () => { mounted = false; };
   }, [promoResult?.appliedPromotionId, externalPromoApplied?.appliedPromotionId]);
 
-  // Check for presence of public images (avoid rendering empty src and noisy 404s)
   const [vcbQrExists, setVcbQrExists] = useState<boolean | null>(null);
   const [momoQrExists, setMomoQrExists] = useState<boolean | null>(null);
 
@@ -133,13 +130,11 @@ const PaymentPage: React.FC = () => {
   };
 
   useEffect(() => {
-    // probe bank QR
     const img = new Image();
     img.onload = () => setVcbQrExists(true);
     img.onerror = () => setVcbQrExists(false);
     img.src = "";
 
-    // probe momo QR
     const mimg = new Image();
     mimg.onload = () => setMomoQrExists(true);
     mimg.onerror = () => setMomoQrExists(false);
@@ -147,13 +142,8 @@ const PaymentPage: React.FC = () => {
   }, []);
 
   const confirmBankTransfer = async () => {
-    // Đóng modal QR trước
     setQrModalVisible(false);
-    
-    // Đặt phương thức thanh toán hiện tại
     setCurrentPaymentMethod("bank-transfer");
-    
-    // Hiển thị modal xác nhận thanh toán
     setConfirmModalVisible(true);
   };
 
@@ -188,88 +178,107 @@ const PaymentPage: React.FC = () => {
 
   const handleFinalConfirm = async () => {
     setProcessingPayment(true);
-    
     try {
-      // Lấy thông tin từ sessionStorage
       const invoiceData = sessionStorage.getItem("invoiceInfo");
       const bookingData = sessionStorage.getItem("bookingInfo");
-      
-      console.log("📋 Debug sessionStorage:");
-      console.log("- invoiceInfo:", invoiceData);
-      console.log("- bookingInfo:", bookingData);
 
-      if (!invoiceData || !bookingData) {
+      let invoice: any = null;
+      if (invoiceData) {
+        try {
+          invoice = JSON.parse(invoiceData);
+        } catch {
+          invoice = null;
+        }
+      }
+      if (!invoice && invoiceInfoState) {
+        invoice = invoiceInfoState;
+      }
+      if (!invoice) {
+        setProcessingPayment(false);
         Modal.error({
           title: "Thiếu thông tin",
-          content: "Vui lòng quay lại trang tìm phòng và đặt lại."
+          content: "Không tìm thấy thông tin hóa đơn. Vui lòng quay lại trang đặt phòng và thử lại."
         });
         return;
       }
 
-      const invoice = JSON.parse(invoiceData);
-      const booking = JSON.parse(bookingData);
+      let booking: any = null;
+      if (bookingData) {
+        try {
+          booking = JSON.parse(bookingData);
+        } catch {
+          booking = null;
+        }
+      }
+      if (!booking) {
+        booking = {
+          selectedRooms: invoice.rooms || [],
+          checkIn: invoice.checkIn || invoice.ngayNhanPhong,
+          checkOut: invoice.checkOut || invoice.ngayTraPhong,
+          guests: invoice.guests || invoice.soLuongKhach || 1,
+          servicesTotal: invoice.servicesTotal || 0,
+          selectedServices: invoice.services || invoice.selectedServices || [],
+        };
+      }
 
-      console.log("🔍 DEBUG: invoice =", invoice);
-      console.log("🔍 DEBUG: booking =", booking);
-
-      // Tính toán thông tin cần thiết để tạo hóa đơn
       const nights = Math.ceil(
         (new Date(booking.checkOut).getTime() - new Date(booking.checkIn).getTime()) / (1000 * 60 * 60 * 24)
       );
-      
+
       const totalPrice = booking.selectedRooms.reduce((sum: number, sr: any) => {
         return sum + (sr.room.giaCoBanMotDem || 0) * nights;
       }, 0);
 
-      const servicesTotal = booking.servicesTotal || 0;
+      const computeServiceItemAmount = (it: any) => {
+        if (!it) return 0;
+        const price = Number(it.TienDichVu ?? it.tienDichVu ?? it.GiaDichVu ?? it.giaDichVu ?? it.price ?? it.Price ?? 0);
+        const qty = Number(it.quantity ?? it.soLuong ?? 1);
+        return (Number.isFinite(price) ? price : 0) * (Number.isFinite(qty) ? qty : 1);
+      };
+
+      let servicesTotal = 0;
+      if (booking.servicesTotal != null && booking.servicesTotal !== undefined) {
+        servicesTotal = Number(booking.servicesTotal) || 0;
+      } else if (Array.isArray(booking.selectedServices) && booking.selectedServices.length > 0) {
+        servicesTotal = booking.selectedServices.reduce((s: number, it: any) => s + computeServiceItemAmount(it), 0);
+      } else if (invoice && invoice.servicesTotal != null) {
+        servicesTotal = Number(invoice.servicesTotal) || 0;
+      }
 
       const discountedBase = promoResult ? promoResult.tongTienSauGiam : totalPrice;
       const baseWithServices = discountedBase + servicesTotal;
       const tax = baseWithServices * 0.1;
       const grandTotal = baseWithServices + tax;
-  // apply client-side redeem preview (1 point = 1000đ)
-  const POINT_VALUE = 1000;
-  const redeemValueClient = Math.min(redeemPoints * POINT_VALUE, grandTotal);
-  const grandTotalAfterRedeem = Math.max(0, grandTotal - redeemValueClient);
 
-      // Xác định trạng thái thanh toán
-      let trangThaiThanhToan = 0; // Mặc định: Chưa thanh toán
-      if (currentPaymentMethod !== "cash") {
-        // Nếu thanh toán online thì coi như đã thanh toán
-        trangThaiThanhToan = 2; // Đã thanh toán đủ
-      } else {
-        // Tiền mặt: chưa thanh toán (trả tại quầy)
-        trangThaiThanhToan = 0;
-      }
+      const POINT_VALUE = 1000;
+      const redeemValueClient = Math.min(redeemPoints * POINT_VALUE, grandTotal);
+      const grandTotalAfterRedeem = Math.max(0, grandTotal - redeemValueClient);
 
-      // BƯỚC 1: TẠO HÓA ĐƠN
-      console.log("📝 Bước 1: Tạo hóa đơn...");
-      // Ensure we extract IDDatPhong robustly (backend may have different casing)
-      const idDatPhong = invoice.IDDatPhong || invoice.idDatPhong || invoice.idDatphong || invoice.idDatPhong;
+      // SỬA: Mapping trạng thái thanh toán theo domain: cash = 1 (Chưa thanh toán), online = 2 (Đã thanh toán)
+      let trangThaiThanhToan = currentPaymentMethod === "cash" ? 1 : 2;
 
-      // Ensure numeric values are proper numbers (no commas or NaN)
+      const idDatPhong =
+        invoice.IDDatPhong || invoice.idDatPhong || invoice.idDatphong || invoice.idDatPhong;
+
       const tienPhongInt = Number.isFinite(Number(discountedBase)) ? Math.round(Number(discountedBase)) : Math.round(Number(totalPrice || 0));
       const tongTienDecimal = Number.isFinite(Number(grandTotalAfterRedeem)) ? Number(Math.round(Number(grandTotalAfterRedeem))) : Number(Math.round(Number(grandTotal || 0)));
 
-      const hoaDonPayload = {
+      const hoaDonPayload: any = {
         IDDatPhong: idDatPhong,
         TienPhong: tienPhongInt,
         TienDichVu: Math.round(servicesTotal || 0),
         SoLuongNgay: Number.isFinite(Number(nights)) ? Number(nights) : 1,
         TongTien: tongTienDecimal,
-        TrangThaiThanhToan: Number.isFinite(Number(trangThaiThanhToan)) ? Number(trangThaiThanhToan) : 0,
+        TrangThaiThanhToan: Number.isFinite(Number(trangThaiThanhToan)) ? Number(trangThaiThanhToan) : 1,
         GhiChu: `Thanh toán qua ${currentPaymentMethod}`,
-        RedeemPoints: redeemPoints > 0 ? Number(redeemPoints) : undefined
+        RedeemPoints: redeemPoints > 0 ? Number(redeemPoints) : undefined,
+        PhuongThucThanhToan: currentPaymentMethod === "cash" ? 1 : 2
       };
 
-      // Ensure we have a booking id to send
       if (!hoaDonPayload.IDDatPhong) {
         Modal.error({ title: "Thiếu thông tin", content: "Không tìm thấy mã đặt phòng (IDDatPhong). Vui lòng quay lại trang đặt phòng." });
         return;
       }
-
-      // Log the exact JSON being sent for easier debugging
-      console.log("📤 Payload tạo hóa đơn (JSON):", JSON.stringify(hoaDonPayload));
 
       const hoaDonResponse = await fetch("/api/Payment/hoa-don", {
         method: "POST",
@@ -283,17 +292,83 @@ const PaymentPage: React.FC = () => {
       }
 
       const hoaDonResult = await hoaDonResponse.json();
-      console.log("✅ Tạo hóa đơn thành công:", hoaDonResult);
 
-      // Lưu ID hóa đơn và grandTotal vào invoice info
       invoice.idHoaDon = hoaDonResult.idHoaDon;
-      invoice.grandTotal = Math.round(grandTotal); // Lưu tổng tiền bao gồm thuế
+      invoice.servicesTotal = Math.round(servicesTotal || 0);
+      invoice.grandTotal = hoaDonResult.tongTien ?? Math.round(grandTotal) ?? Math.round(grandTotalAfterRedeem);
       sessionStorage.setItem("invoiceInfo", JSON.stringify(invoice));
 
-      // Đóng modal confirm
+      // SỬA: Đồng bộ trạng thái thanh toán của Đặt Phòng
+      try {
+        await fetch("/api/Payment/update-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            IDDatPhong: idDatPhong,
+            TrangThaiThanhToan: trangThaiThanhToan,
+            GhiChu: `Cập nhật từ PaymentPage - ${currentPaymentMethod}`
+          })
+        });
+      } catch (e) {
+        console.warn("Không thể cập nhật trạng thái thanh toán cho DatPhong:", e);
+      }
+
       setConfirmModalVisible(false);
 
-      // Lưu payment result vào sessionStorage (bao gồm thông tin server-applied về điểm và redeem)
+      // Ghi nhận dịch vụ vào backend theo phòng (nếu có)
+      try {
+        const servicesList = booking.selectedServices || invoice.services || [];
+        const byId = new Map<string, any>();
+        const byNum = new Map<number, any>();
+        (booking.selectedRooms || []).forEach((sr: any) => {
+          const rid = sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
+          if (rid) byId.set(String(rid), sr);
+          byNum.set(Number(sr.roomNumber), sr);
+        });
+
+        if (Array.isArray(servicesList) && servicesList.length > 0) {
+          await Promise.allSettled(
+            servicesList.map((s: any) => {
+              const svcId = s.iddichVu ?? s.id ?? s.serviceId ?? s.idDichVu ?? s.iddichVu ?? null;
+              const price = Number(s.tienDichVu ?? s.TienDichVu ?? s.price ?? s.Price ?? s.GiaDichVu ?? 0) || 0;
+              const qty = Number(s.quantity ?? s.soLuong ?? 1);
+
+              const svcRoomIdRaw = s.roomId ?? s.idPhong ?? s.idphong ?? s.IDPhong ?? null;
+              const svcRoomNumberRaw = s.roomNumber ?? s.soPhong ?? s.SoPhong ?? null;
+
+              let svcRoomId: string | null = null;
+              let svcRoomNumber: number | null = null;
+
+              if (svcRoomIdRaw && byId.has(String(svcRoomIdRaw))) {
+                svcRoomId = String(svcRoomIdRaw);
+                const sr = byId.get(svcRoomId);
+                svcRoomNumber = Number(sr?.roomNumber ?? svcRoomNumberRaw ?? null) || null;
+              } else if (svcRoomNumberRaw && byNum.has(Number(svcRoomNumberRaw))) {
+                const sr = byNum.get(Number(svcRoomNumberRaw));
+                svcRoomId = String(sr?.room?.idphong ?? sr?.room?.idPhong ?? sr?.room?.id ?? "");
+                svcRoomNumber = Number(svcRoomNumberRaw);
+              }
+
+              if (!svcId) return Promise.resolve(null);
+              const payload: any = {
+                idhoaDon: hoaDonResult.idHoaDon,
+                iddichVu: svcId,
+                soLuong: qty,
+                donGia: Math.round(price),
+                tienDichVu: Math.round(price * qty),
+                thoiGianThucHien: new Date().toISOString(),
+              };
+              if (svcRoomId) payload.idphong = svcRoomId;
+              if (svcRoomNumber != null) payload.soPhong = svcRoomNumber;
+
+              return recordServiceUsage(payload as any);
+            })
+          );
+        }
+      } catch (e) {
+        console.warn("Failed to persist service usage:", e);
+      }
+
       sessionStorage.setItem("paymentResult", JSON.stringify({
         success: true,
         idDatPhong: invoice.idDatPhong,
@@ -307,6 +382,7 @@ const PaymentPage: React.FC = () => {
         pointsEarned: hoaDonResult.pointsEarned,
         pointsAfter: hoaDonResult.pointsAfter,
         appliedPromotionValue: hoaDonResult.appliedPromotionValue,
+        servicesTotal: Math.round(servicesTotal || 0),
         paymentMethod: currentPaymentMethod,
         paymentMethodName: 
           currentPaymentMethod === "bank-transfer" ? "Chuyển khoản ngân hàng" :
@@ -319,9 +395,6 @@ const PaymentPage: React.FC = () => {
           currentPaymentMethod === "cash" ? "Tiền mặt tại quầy" : ""
       }));
 
-      console.log("🔄 Redirecting to /#booking-success...");
-
-      // Chuyển sang trang BookingSuccess (dùng hash routing)
       window.location.href = "/#booking-success";
       
     } catch (e: any) {
@@ -334,26 +407,6 @@ const PaymentPage: React.FC = () => {
     } finally {
       setProcessingPayment(false);
     }
-  };
-
-  // Handler cho Credit Card - XÓA (không dùng nữa)
-  const handleCreditCardSubmit = async () => {
-    // Chuyển sang dùng confirmCreditCard
-  };
-
-  // Handler cho E-Wallet - XÓA (không dùng nữa)
-  const handleEwalletConfirm = async () => {
-    // Chuyển sang dùng confirmEwallet
-  };
-
-  // Handler cho ATM - XÓA (không dùng nữa)
-  const handleAtmConfirm = async () => {
-    // Chuyển sang dùng confirmAtm
-  };
-
-  // Handler cho Cash - XÓA (không dùng nữa)
-  const handleCashConfirm = async () => {
-    // Chuyển sang dùng confirmCash
   };
 
   const paymentMethods = [
@@ -416,7 +469,6 @@ const PaymentPage: React.FC = () => {
   ];
 
   useEffect(() => {
-    // Lấy thông tin đặt phòng từ sessionStorage
     const bookingData = sessionStorage.getItem("bookingInfo");
     const invoiceData = sessionStorage.getItem("invoiceInfo");
     
@@ -435,7 +487,6 @@ const PaymentPage: React.FC = () => {
         const parsedInvoice = JSON.parse(invoiceData);
         setInvoiceInfoState(parsedInvoice);
 
-        // If bookingInfo is missing or has no selectedRooms, try to recover from invoiceInfo (rooms saved at checkout)
         if ((!parsedBooking || !parsedBooking.selectedRooms || parsedBooking.selectedRooms.length === 0) && parsedInvoice.rooms && parsedInvoice.rooms.length > 0) {
           const recovered = {
             selectedRooms: parsedInvoice.rooms,
@@ -443,12 +494,13 @@ const PaymentPage: React.FC = () => {
             checkOut: parsedInvoice.checkOut || parsedInvoice.ngayTraPhong,
             guests: parsedInvoice.guests || parsedInvoice.soLuongKhach || 1,
             totalRooms: (parsedInvoice.rooms || []).length,
+            selectedServices: parsedInvoice.services || parsedInvoice.selectedServices || [],
+            servicesTotal: parsedInvoice.servicesTotal || parsedInvoice.tienDichVu || 0,
           };
           setBookingInfo(recovered);
         }
       } catch {}
     }
-    // If user is logged in, fetch profile to read current points
     const token = localStorage.getItem("hs_token");
     if (token) {
       fetch("/api/auth/profile", { headers: { Authorization: `Bearer ${token}` } })
@@ -476,12 +528,10 @@ const PaymentPage: React.FC = () => {
     return totalPrice;
   };
 
-  // Stable memoized list of selected room ids to avoid recreating arrays each render
   const memoRoomIds = useMemo(() => {
     return (bookingInfo?.selectedRooms || []).map((sr: any) => sr.room?.idphong || sr.room?.idPhong).filter(Boolean);
   }, [bookingInfo?.selectedRooms]);
 
-  // Chi tiết giá theo phòng: phòng nào được giảm, phòng nào giá thường
   const perRoomPricing = useMemo(() => {
     try {
       if (!bookingInfo || !bookingInfo.selectedRooms || bookingInfo.selectedRooms.length === 0) {
@@ -512,16 +562,13 @@ const PaymentPage: React.FC = () => {
         };
       });
 
-      // Các phòng được promo áp dụng (nếu có)
       const eligibleIds: any[] = (appliedPromotionObj?.khuyenMaiPhongs || [])
         .map((kp: any) => kp?.idphong ?? kp?.idPhong)
         .filter(Boolean);
 
-      // Tổng tiền giảm từ API/promoResult (để phân bổ theo tỷ lệ cho các phòng được áp dụng)
       const totalDiscount =
         Number(promoResult?.soTienGiam ?? promoResult?.discountAmount ?? 0) || 0;
 
-      // Tổng tiền gốc của các phòng có áp dụng khuyến mãi
       const eligibleBaseSum = rooms.reduce(
         (sum, r) => sum + (eligibleIds.includes(r.rid) ? r.base : 0),
         0
@@ -535,13 +582,10 @@ const PaymentPage: React.FC = () => {
       }));
 
       if (totalDiscount > 0 && eligibleBaseSum > 0) {
-        // Phân bổ số tiền giảm theo tỷ lệ trên các phòng đủ điều kiện
         let allocated = 0;
         const eligibleRows = rows.filter((r) => r.eligible);
         eligibleRows.forEach((r, idx) => {
-          // chia theo tỷ lệ base của từng phòng
           let d = Math.round((r.base / eligibleBaseSum) * totalDiscount);
-          // điều chỉnh làm tròn ở item cuối để tổng khớp tuyệt đối
           if (idx === eligibleRows.length - 1) {
             d = Math.max(0, totalDiscount - allocated);
           }
@@ -554,7 +598,6 @@ const PaymentPage: React.FC = () => {
         (appliedPromotionObj?.loaiGiamGia === "percent" ||
           appliedPromotionObj?.loaiGiamGia === "percentage")
       ) {
-        // Trường hợp không có totalDiscount cụ thể, nhưng biết khuyến mãi % -> tính theo % cho phòng đủ điều kiện
         const percent = Number(appliedPromotionObj?.giaTriGiam ?? 0) / 100;
         rows.forEach((r) => {
           if (r.eligible && percent > 0) {
@@ -563,7 +606,6 @@ const PaymentPage: React.FC = () => {
           }
         });
       }
-      // Tổng sau khuyến mãi (cộng tất cả phòng)
       const totalAfterPromo = rows.reduce((sum, r) => sum + r.after, 0);
 
       return { rows, totalAfterPromo };
@@ -579,19 +621,101 @@ const PaymentPage: React.FC = () => {
     promoResult?.discountAmount,
   ]);
 
-  // Stable handler passed to Promotion components to avoid re-triggering their effects
+  const servicesTotalUI: number = useMemo(() => {
+    try {
+      if (bookingInfo?.servicesTotal != null && bookingInfo?.servicesTotal !== undefined) {
+        return Number(bookingInfo.servicesTotal) || 0;
+      }
+      const list = bookingInfo?.selectedServices || invoiceInfoState?.selectedServices || invoiceInfoState?.services || [];
+      if (Array.isArray(list) && list.length > 0) {
+        const priceOf = (it: any) =>
+          Number(it.TienDichVu ?? it.tienDichVu ?? it.GiaDichVu ?? it.giaDichVu ?? it.price ?? it.Price ?? 0);
+        const qtyOf = (it: any) => Number(it.quantity ?? it.soLuong ?? 1);
+        return list.reduce((s: number, it: any) => s + Math.max(0, Math.round(priceOf(it))) * Math.max(1, Math.round(qtyOf(it))), 0);
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
+  }, [bookingInfo?.servicesTotal, bookingInfo?.selectedServices, invoiceInfoState?.selectedServices, invoiceInfoState?.services]);
+
+  const servicesByRoom = useMemo(() => {
+    try {
+      const rooms = bookingInfo?.selectedRooms || [];
+      const list = (bookingInfo?.selectedServices || invoiceInfoState?.selectedServices || invoiceInfoState?.services || []) as any[];
+
+      if (!list || list.length === 0) {
+        return { groups: [], common: [], hasAny: false };
+      }
+
+      const byId = new Map<string, any>();
+      const byNum = new Map<number, any>();
+      rooms.forEach((sr: any) => {
+        const rid = sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
+        if (rid) byId.set(String(rid), sr);
+        byNum.set(Number(sr.roomNumber), sr);
+      });
+
+      const priceOf = (it: any) =>
+        Number(it.TienDichVu ?? it.tienDichVu ?? it.GiaDichVu ?? it.giaDichVu ?? it.price ?? it.Price ?? 0);
+      const qtyOf = (it: any) => Number(it.quantity ?? it.soLuong ?? 1);
+
+      const groupsMap = new Map<string, { room: any; items: any[]; total: number }>();
+      const common: any[] = [];
+
+      list.forEach((s: any) => {
+        const unit = Math.max(0, Math.round(priceOf(s)));
+        const qty = Math.max(1, Math.round(qtyOf(s)));
+        const line = unit * qty;
+
+        const svcRoomIdRaw = s.roomId ?? s.idPhong ?? s.idphong ?? s.IDPhong ?? null;
+        const svcRoomNumberRaw = s.roomNumber ?? s.soPhong ?? s.SoPhong ?? null;
+
+        let key: string | null = null;
+        let roomRef: any = null;
+
+        if (svcRoomIdRaw && byId.has(String(svcRoomIdRaw))) {
+          key = `rid:${String(svcRoomIdRaw)}`;
+          roomRef = byId.get(String(svcRoomIdRaw));
+        } else if (svcRoomNumberRaw && byNum.has(Number(svcRoomNumberRaw))) {
+          const sr = byNum.get(Number(svcRoomNumberRaw));
+          const rid = sr?.room?.idphong ?? sr?.room?.idPhong ?? sr?.room?.id ?? "";
+          key = `rid:${String(rid)}`;
+          roomRef = sr;
+        }
+
+        if (key && roomRef) {
+          const cur = groupsMap.get(key) || { room: roomRef, items: [], total: 0 };
+          cur.items.push({ ...s, _unit: unit, _qty: qty, _line: line });
+          cur.total += line;
+          groupsMap.set(key, cur);
+        } else {
+          common.push({ ...s, _unit: unit, _qty: qty, _line: line });
+        }
+      });
+
+      const groups = Array.from(groupsMap.values());
+
+      return {
+        groups,
+        common,
+        hasAny: groups.length > 0 || common.length > 0,
+      };
+    } catch {
+      return { groups: [], common: [], hasAny: false };
+    }
+  }, [bookingInfo?.selectedRooms, bookingInfo?.selectedServices, invoiceInfoState?.selectedServices, invoiceInfoState?.services]);
+
   const handlePromotionApplied = useCallback((res: ApplyPromotionResponse | null) => {
     setPromoResult(res);
   }, [setPromoResult]);
 
   const handleConfirmPayment = async () => {
     if (selectedMethod === "credit-card") {
-      // Mở modal nhập thông tin thẻ tín dụng
       setCreditModalVisible(true);
       return;
     }
 
-    // Ví điện tử: MoMo, ZaloPay, VNPay, ShopeePay
     if (["momo", "zalopay", "vnpay", "shopeepay"].includes(selectedMethod)) {
       setCurrentWallet(selectedMethod);
       const ref = `IVIVU${Date.now().toString().slice(-9)}`;
@@ -600,19 +724,16 @@ const PaymentPage: React.FC = () => {
       return;
     }
 
-    // Thẻ ATM
     if (selectedMethod === "atm") {
       setAtmModalVisible(true);
       return;
     }
 
-    // Tiền mặt
     if (selectedMethod === "cash") {
       setCashModalVisible(true);
       return;
     }
 
-    // Chuyển khoản QR
     if (selectedMethod === "bank-transfer") {
       const ref = `IVIVU${Date.now().toString().slice(-9)}`;
       setPaymentRef(ref);
@@ -659,9 +780,9 @@ const PaymentPage: React.FC = () => {
   }
 
   const totalPrice = calculateTotal();
-  const servicesTotal = bookingInfo?.servicesTotal || 0;
+  const servicesTotal = servicesTotalUI;
   const nights = calculateNights();
-  const discountedBase = promoResult ? promoResult.tongTienSauGiam : totalPrice; // rooms after promo
+  const discountedBase = promoResult ? promoResult.tongTienSauGiam : totalPrice;
   const baseWithServices = discountedBase + servicesTotal;
   const tax = baseWithServices * 0.1;
   const grandTotal = baseWithServices + tax;
@@ -698,8 +819,7 @@ const PaymentPage: React.FC = () => {
           Chọn hình thức thanh toán
         </Title>
 
-  <Row gutter={[24, 24]} style={{ alignItems: 'stretch' }}>
-          {/* Top: main column (left) + enlarged right image/info column */}
+        <Row gutter={[24, 24]} style={{ alignItems: 'stretch' }}>
           <Col xs={24} lg={16}>
             <div
               style={{
@@ -714,17 +834,11 @@ const PaymentPage: React.FC = () => {
                 flexWrap: 'wrap'
               }}
             >
-              {/* Left column header (label only) */}
               <div style={{ flex: 1, minWidth: 200 }}>
                 <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.6, color: "#666", fontWeight: 700 }}>THÔNG TIN ĐẶT PHÒNG</div>
               </div>
-
-              {/* selected rooms pills moved to right column per UX request */}
             </div>
 
-            {/* (selected-room panel moved to right column) */}
-
-            {/* Below summary: promotions, loyalty and pricing */}
             <div style={{ marginTop: 18 }}>
               <PromotionLoyaltyPanel
                 invoiceId={invoiceInfoState?.idHoaDon || 0}
@@ -779,7 +893,6 @@ const PaymentPage: React.FC = () => {
                         message.error("Mã này không áp dụng cho phòng đã chọn");
                         return;
                       }
-                      // compute eligible total only for rooms covered by this promo
                       const eligibleTotal = (bookingInfo.selectedRooms || []).reduce((sum: number, sr: any) => {
                         const rid = sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
                         if (!rid) return sum;
@@ -834,7 +947,6 @@ const PaymentPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Chi tiết giá theo phòng: giúp khách thấy phòng nào giảm/không giảm */}
               <div
                 style={{
                   marginTop: 12,
@@ -924,26 +1036,79 @@ const PaymentPage: React.FC = () => {
                 )}
               </div>
 
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 12,
+                  border: '1px dashed #eee',
+                  borderRadius: 8,
+                  background: '#fff',
+                }}
+              >
+                <div style={{ fontSize: 12, marginBottom: 8, fontWeight: 700, color: '#666' }}>
+                  Dịch vụ theo phòng
+                </div>
+
+                {!servicesByRoom.hasAny ? (
+                  <div style={{ color: '#888', fontSize: 13 }}>Chưa chọn dịch vụ</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {servicesByRoom.groups.map((g: any, idx: number) => {
+                      const roomName = g.room?.room?.tenPhong || `Phòng ${g.room?.roomNumber ?? ""}`.trim();
+                      const roomNo = g.room?.roomNumber ? `#${g.room.roomNumber}` : "";
+                      return (
+                        <Card key={`svc-room-${idx}`} size="small" bodyStyle={{ padding: 10, background: '#fafafa' }}>
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                            {roomName} {roomNo && <span style={{ color: '#888', fontWeight: 500 }}>{roomNo}</span>}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {g.items.map((s: any, i: number) => (
+                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <div>
+                                  <div style={{ fontSize: 13 }}>{s.serviceName ?? s.tenDichVu ?? s.TenDichVu ?? s.name ?? 'Dịch vụ'}</div>
+                                  <div style={{ fontSize: 12, color: '#888' }}>
+                                    {s._qty} x {s._unit.toLocaleString()}đ
+                                  </div>
+                                </div>
+                                <div style={{ fontWeight: 700 }}>{s._line.toLocaleString()}đ</div>
+                              </div>
+                            ))}
+                            <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #eee', paddingTop: 6 }}>
+                              <span style={{ color: '#666' }}>Tổng dịch vụ (phòng này)</span>
+                              <span style={{ fontWeight: 700 }}>{g.total.toLocaleString()}đ</span>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+
+                    {servicesByRoom.common.length > 0 && (
+                      <Card size="small" bodyStyle={{ padding: 10 }}>
+                        <div style={{ fontWeight: 700, marginBottom: 6 }}>D���ch vụ chung</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {servicesByRoom.common.map((s: any, i: number) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <div>
+                                <div style={{ fontSize: 13 }}>{s.serviceName ?? s.tenDichVu ?? s.TenDichVu ?? s.name ?? 'Dịch vụ'}</div>
+                                <div style={{ fontSize: 12, color: '#888' }}>
+                                  {s._qty} x {s._unit.toLocaleString()}đ
+                                </div>
+                              </div>
+                              <div style={{ fontWeight: 700 }}>{s._line.toLocaleString()}đ</div>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div style={{ marginTop: 12, marginBottom: 6, paddingTop: 12, borderTop: '1px solid #eee' }}>
-                {/* Ẩn Giá phòng + Khuyến mãi + Đổi điểm theo yêu cầu, chỉ giữ Thuế + Tổng cộng */}
-                {false && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: '#666' }}>
-                    <span>Giá phòng</span>
-                    <span>{totalPrice.toLocaleString()}</span>
-                  </div>
-                )}
-                {false && promoDiscount > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: '#666' }}>
-                        <span>Khuyến mãi {promoResult?.appliedPromotionName ? `(${promoResult?.appliedPromotionName})` : ""}</span>
-                    <span style={{ color: '#cf1322' }}>- {promoDiscount.toLocaleString()}đ</span>
-                  </div>
-                )}
-                {false && redeemPoints > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: '#666' }}>
-                    <span>Đổi điểm ({redeemPoints} điểm)</span>
-                    <span style={{ color: '#cf1322' }}>- {(Math.min(redeemPoints * 1000, Math.round(grandTotal))).toLocaleString()}đ</span>
-                  </div>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: '#666' }}>
+                  <span>Tiền dịch vụ</span>
+                  <span>{Math.round(servicesTotal).toLocaleString()}đ</span>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: '#666' }}>
                   <span>Thuế VAT (10%)</span>
                   <span>{Math.round(tax).toLocaleString()}đ</span>
@@ -966,13 +1131,11 @@ const PaymentPage: React.FC = () => {
             </div>
           </Col>
 
-          {/* Right column: show selected rooms and compact booking summary */}
           <Col xs={24} lg={8}>
             <div style={{ height: '100%' }}>
               <div style={{ background: '#fff', borderRadius: 8, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#666' }}>PHÒNG ĐÃ CHỌN</div>
 
-                {/* Hình phòng dọc, full chiều ngang, cao hơn để đẹp mắt */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {(bookingInfo.selectedRooms || []).map((sr: any) => (
                     <div
@@ -987,7 +1150,7 @@ const PaymentPage: React.FC = () => {
                       <div
                         style={{
                           width: '100%',
-                          height: 200, // chiều cao ảnh dọc
+                          height: 200,
                           overflow: 'hidden',
                           borderRadius: 8,
                           background: '#f2f2f2',
@@ -1015,20 +1178,10 @@ const PaymentPage: React.FC = () => {
                     </div>
                   ))}
                 </div>
-
-                <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                    <div style={{ fontSize: 13 }}><b>{bookingInfo.guests}</b> người</div>
-                    <div style={{ fontSize: 13 }}><b>{bookingInfo.selectedRooms.length}</b> phòng</div>
-                    <div style={{ fontSize: 13 }}><b>{nights}</b> đêm</div>
-                  </div>
-                  <div style={{ fontSize: 13, color: '#888' }}>{bookingInfo.checkIn} → {bookingInfo.checkOut}</div>
-                </div>
               </div>
             </div>
           </Col>
 
-          {/* Bottom: Payment methods (full width, below summary) */}
           <Col xs={24}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "stretch", marginTop: 6 }}>
               {paymentMethods.map((method) => (
@@ -1075,7 +1228,6 @@ const PaymentPage: React.FC = () => {
               ))}
             </div>
 
-            {/* method-specific info (momo, zalopay, vnpay, shopeepay) */}
             <div style={{ marginTop: 12 }}>
               {selectedMethod === "momo" && (
                 <Card style={{ marginTop: 8 }}>
@@ -1107,7 +1259,6 @@ const PaymentPage: React.FC = () => {
               )}
             </div>
 
-            {/* Confirm button */}
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
               <Button
                 type="primary"
@@ -1131,7 +1282,6 @@ const PaymentPage: React.FC = () => {
           </Col>
         </Row>
 
-        {/* Modal QR Chuyển khoản ngân hàng */}
         <Modal
           open={qrModalVisible}
           onCancel={() => setQrModalVisible(false)}
@@ -1144,7 +1294,6 @@ const PaymentPage: React.FC = () => {
               Quét mã QR để thanh toán
             </Title>
 
-            {/* QR Code từ VietQR API */}
             <div style={{ marginBottom: 20 }}>
               <img
                 src={`https://img.vietqr.io/image/bidv-8639699999-print.png?amount=${Math.round(grandTotal)}&addInfo=Thanh toan tien phong ${paymentRef}&accountName=ROBINS VILLA HOTEL`}
@@ -1153,7 +1302,6 @@ const PaymentPage: React.FC = () => {
               />
             </div>
 
-            {/* Thông tin chuyển khoản */}
             <Card style={{ marginBottom: 20, textAlign: "left" }}>
               <div style={{ marginBottom: 12 }}>
                 <Text strong>Ngân hàng: </Text>
@@ -1234,7 +1382,6 @@ const PaymentPage: React.FC = () => {
           </div>
         </Modal>
 
-        {/* Modal Xác nhận hoàn tất thanh toán */}
         <Modal
           open={confirmModalVisible}
           onCancel={() => setConfirmModalVisible(false)}
@@ -1292,7 +1439,7 @@ const PaymentPage: React.FC = () => {
                 <>
                   Xác nhận đặt phòng và thanh toán tại quầy số tiền{" "}
                   <Text strong style={{ color: "#dfa974", fontSize: 18 }}>
-                    {Math.round(calculateTotal() + calculateTotal() * 0.1).toLocaleString()}đ
+                    {Math.round(grandTotal).toLocaleString()}đ
                   </Text>
                   ?
                 </>
@@ -1359,7 +1506,6 @@ const PaymentPage: React.FC = () => {
                   block
                   onClick={() => {
                     setConfirmModalVisible(false);
-                    // Quay lại modal tương ứng
                     if (currentPaymentMethod === "bank-transfer") setQrModalVisible(true);
                     else if (currentPaymentMethod === "credit-card") setCreditModalVisible(true);
                     else if (["momo", "zalopay", "vnpay", "shopeepay"].includes(currentPaymentMethod)) setEwalletModalVisible(true);
@@ -1394,7 +1540,6 @@ const PaymentPage: React.FC = () => {
           </div>
         </Modal>
 
-        {/* Modal Credit Card */}
         <Modal
           open={creditModalVisible}
           onCancel={() => setCreditModalVisible(false)}
@@ -1471,7 +1616,6 @@ const PaymentPage: React.FC = () => {
           </Form>
         </Modal>
 
-        {/* Modal E-Wallet (MoMo, ZaloPay, VNPay, ShopeePay) */}
         <Modal
           open={ewalletModalVisible}
           onCancel={() => setEwalletModalVisible(false)}
@@ -1541,7 +1685,6 @@ const PaymentPage: React.FC = () => {
           </div>
         </Modal>
 
-        {/* Modal ATM */}
         <Modal
           open={atmModalVisible}
           onCancel={() => setAtmModalVisible(false)}
@@ -1604,7 +1747,6 @@ const PaymentPage: React.FC = () => {
           </div>
         </Modal>
 
-        {/* Modal Cash */}
         <Modal
           open={cashModalVisible}
           onCancel={() => setCashModalVisible(false)}

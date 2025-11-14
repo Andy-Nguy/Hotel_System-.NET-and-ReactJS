@@ -299,6 +299,7 @@ const CheckoutManager: React.FC = () => {
       const isCompleted = (r.TrangThai ?? 0) === 4;
       return (
         <Space>
+          
 
           {/* If not paid yet, require payment first */}
           {!isPaid && <Button type="primary" onClick={() => markPaid(r)}>Thanh toán</Button>}

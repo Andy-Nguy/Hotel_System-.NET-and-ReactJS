@@ -41,9 +41,9 @@ namespace Hotel_System.API.Controllers
                     dp.Idphong,
                     TenPhong = dp.IdphongNavigation?.TenPhong,
                     SoPhong = dp.IdphongNavigation?.SoPhong,
-                    dp.NgayDatPhong,
-                    dp.NgayNhanPhong,
-                    dp.NgayTraPhong,
+                    NgayDatPhong = dp.NgayDatPhong.HasValue ? dp.NgayDatPhong.Value.ToString("yyyy-MM-dd") : null,
+                    NgayNhanPhong = dp.NgayNhanPhong.ToString("yyyy-MM-dd"),
+                    NgayTraPhong = dp.NgayTraPhong.ToString("yyyy-MM-dd"),
                     dp.SoDem,
                     dp.TongTien,
                     dp.TienCoc,
@@ -167,28 +167,24 @@ namespace Hotel_System.API.Controllers
                     {
                         try
                         {
-                            // Temporarily skip sending emails while resolving merge conflicts.
-                            // The original code would call: await _emailService.SendEmailAsync(...)
-                            // We keep the logging so the flow for confirmation continues without SMTP side-effects.
                             if (booking.TrangThai == 2)
                             {
                                 var subject = "Xác nhận đặt phòng - " + booking.IddatPhong;
                                 var body = $"Xin chào {booking.IdkhachHangNavigation?.HoTen},<br/><br/>Đặt phòng <strong>{booking.IddatPhong}</strong> của bạn đã được xác nhận.<br/>Ngày nhận: {booking.NgayNhanPhong:d}<br/>Ngày trả: {booking.NgayTraPhong:d}<br/>Tổng tiền: {booking.TongTien:C}<br/><br/>Cảm ơn bạn đã sử dụng dịch vụ.";
-                                // await _emailService.SendEmailAsync(to, subject, body, true);
-                                _logger.LogInformation("(Temporarily skipped) Would send confirmation email to {email} for booking {id}", to, booking.IddatPhong);
+                                await _emailService.SendEmailAsync(to, subject, body, true);
+                                _logger.LogInformation("Sent confirmation email to {email} for booking {id}", to, booking.IddatPhong);
                             }
                             else if (booking.TrangThai == 0)
                             {
                                 var subject = "Hủy đặt phòng - " + booking.IddatPhong;
                                 var body = $"Xin chào {booking.IdkhachHangNavigation?.HoTen},<br/><br/>Đặt phòng <strong>{booking.IddatPhong}</strong> đã được hủy. Nếu bạn đã thanh toán, bộ phận kế toán sẽ liên hệ để hoàn tiền (nếu có).<br/><br/>Nếu có thắc mắc, vui lòng liên hệ lại khách sạn.";
-                                // await _emailService.SendEmailAsync(to, subject, body, true);
-                                _logger.LogInformation("(Temporarily skipped) Would send cancellation email to {email} for booking {id}", to, booking.IddatPhong);
+                                await _emailService.SendEmailAsync(to, subject, body, true);
+                                _logger.LogInformation("Sent cancellation email to {email} for booking {id}", to, booking.IddatPhong);
                             }
                         }
                         catch (Exception ex)
                         {
-                            // If something unexpected happens in this logging path, capture it but do not fail the update flow.
-                            _logger.LogError(ex, "Error during email-skip logging for booking {id}", booking.IddatPhong);
+                            _logger.LogError(ex, "Failed to send email to {email} for booking {id}", to, booking.IddatPhong);
                         }
                     }
                     else

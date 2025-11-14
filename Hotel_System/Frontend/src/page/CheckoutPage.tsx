@@ -111,6 +111,18 @@ const CheckoutPage: React.FC = () => {
       };
 
       // GỌI API TẠO BOOKING THẬT
+      // Build rooms payload robustly: support different possible id/price field names
+      const roomsPayload = (bookingInfo.selectedRooms || []).map((sr) => {
+        const r = sr.room || {};
+        const idPhong = r.idphong ?? r.idPhong ?? r.id ?? r.roomId ?? String(sr.roomNumber);
+        const gia = r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.gia ?? r.Gia ?? 0;
+        return {
+          IdPhong: String(idPhong),
+          SoPhong: sr.roomNumber,
+          GiaCoBanMotDem: Number(gia) || 0
+        };
+      });
+
       const bookingPayload = {
         hoTen: values.fullName,
         email: values.email,
@@ -118,11 +130,7 @@ const CheckoutPage: React.FC = () => {
         ngayNhanPhong: bookingInfo.checkIn,
         ngayTraPhong: bookingInfo.checkOut,
         soLuongKhach: bookingInfo.guests,
-        rooms: bookingInfo.selectedRooms.map(sr => ({
-          IdPhong: sr.room.idphong,
-          SoPhong: sr.roomNumber,
-          GiaCoBanMotDem: sr.room.giaCoBanMotDem
-        }))
+        rooms: roomsPayload
       };
 
       console.log("📞 Calling Booking API:", bookingPayload);
@@ -142,8 +150,9 @@ const CheckoutPage: React.FC = () => {
       const result = await response.json();
       console.log("✅ Booking created:", result);
 
-      if (!result.success) {
-        throw new Error(result.message || "Tạo đặt phòng thất bại!");
+      if (!result.success || !result.data || !result.data.idDatPhong) {
+        console.error("Booking API returned unexpected response:", result);
+        throw new Error(result.message || "Tạo đặt phòng thất bại (không có ID đặt phòng trả về)!");
       }
 
       // Lưu thông tin ĐẶT PHÒNG (chưa có hóa đơn ở bước này)
