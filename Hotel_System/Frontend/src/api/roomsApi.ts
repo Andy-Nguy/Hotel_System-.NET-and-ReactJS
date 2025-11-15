@@ -193,7 +193,10 @@ export async function updateRoom(id: string, payload: Partial<Room>): Promise<vo
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Failed to update room: ${res.status}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => null);
+    throw new Error(`Failed to update room: ${res.status}${text ? ` - ${text}` : ''}`);
+  }
 }
 
 export async function deleteRoom(id: string): Promise<void> {

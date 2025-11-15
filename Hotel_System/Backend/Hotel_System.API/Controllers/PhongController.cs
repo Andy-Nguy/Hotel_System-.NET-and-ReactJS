@@ -15,6 +15,8 @@ namespace Hotel_System.API.Controllers
         private readonly HotelSystemContext _context;
         private readonly RoomService _roomService;
           private readonly IWebHostEnvironment _env;
+                // Status values that users are allowed to set via API (case-insensitive)
+                private static readonly HashSet<string> UserEditableStatuses = new(StringComparer.OrdinalIgnoreCase) { "Trống", "Bảo trì" };
 
         public PhongController(HotelSystemContext context, RoomService roomService, IWebHostEnvironment env)
         {
@@ -60,6 +62,10 @@ namespace Hotel_System.API.Controllers
                 Console.WriteLine($"🏨 Found {occupiedRoomIds.Count} occupied rooms");
 
                 // Normalize UrlAnhPhong to relative paths (prefer /img/room/) so frontend can request them
+                // Define allowed / normalized display statuses:
+                // - "Trống" (available)
+                // - "Đang sử dụng" (occupied)
+                // - "Bảo trì" (maintenance)
                 var transformed = rooms.Select(r => new
                 {
                     r.Idphong,
@@ -71,7 +77,10 @@ namespace Hotel_System.API.Controllers
                     r.SoNguoiToiDa,
                     r.GiaCoBanMotDem,
                     r.XepHangSao,
-                    TrangThai = occupiedRoomIds.Contains(r.Idphong) ? "Occupied" : "Available",
+                    // Normalize status for frontend (Vietnamese labels). Users may only change "Trống" or "Bảo trì".
+                    TrangThai = (r.TrangThai != null && r.TrangThai.Equals("Bảo trì", System.StringComparison.OrdinalIgnoreCase))
+                                ? "Bảo trì"
+                                : (occupiedRoomIds.Contains(r.Idphong) ? "Đang sử dụng" : "Trống"),
                     UrlAnhPhong = ResolveImageUrl(r.UrlAnhPhong),
                     // Add amenities
                     amenities = r.TienNghiPhongs
@@ -250,6 +259,25 @@ namespace Hotel_System.API.Controllers
             if (payload == null) return BadRequest("Invalid payload");
             if (string.IsNullOrWhiteSpace(payload.Idphong)) payload.Idphong = Guid.NewGuid().ToString();
 
+            // Ensure stored status is one of allowed values for user-editable state.
+            if (string.IsNullOrWhiteSpace(payload.TrangThai))
+            {
+                payload.TrangThai = "Trống"; // default
+            }
+            else
+            {
+                var trimmed = payload.TrangThai.Trim();
+                if (!UserEditableStatuses.Contains(trimmed))
+                {
+                    // Normalize unknown values to default rather than failing create.
+                    payload.TrangThai = "Trống";
+                }
+                else
+                {
+                    payload.TrangThai = trimmed;
+                }
+            }
+
             _context.Phongs.Add(payload);
             await _context.SaveChangesAsync();
 
@@ -265,16 +293,27 @@ namespace Hotel_System.API.Controllers
             var existing = await _context.Phongs.FindAsync(id);
             if (existing == null) return NotFound();
 
-            // Map updatable fields
-            existing.IdloaiPhong = payload.IdloaiPhong;
-            existing.TenPhong = payload.TenPhong;
-            existing.SoPhong = payload.SoPhong;
-            existing.MoTa = payload.MoTa;
-            existing.SoNguoiToiDa = payload.SoNguoiToiDa;
-            existing.GiaCoBanMotDem = payload.GiaCoBanMotDem;
-            existing.XepHangSao = payload.XepHangSao;
-            existing.TrangThai = payload.TrangThai;
-            existing.UrlAnhPhong = payload.UrlAnhPhong;
+            // Map updatable fields only when provided (support partial updates).
+            if (!string.IsNullOrWhiteSpace(payload.IdloaiPhong)) existing.IdloaiPhong = payload.IdloaiPhong;
+            if (!string.IsNullOrWhiteSpace(payload.TenPhong)) existing.TenPhong = payload.TenPhong;
+            if (!string.IsNullOrWhiteSpace(payload.SoPhong)) existing.SoPhong = payload.SoPhong;
+            if (payload.MoTa != null) existing.MoTa = payload.MoTa;
+            if (payload.SoNguoiToiDa.HasValue) existing.SoNguoiToiDa = payload.SoNguoiToiDa;
+            if (payload.GiaCoBanMotDem.HasValue) existing.GiaCoBanMotDem = payload.GiaCoBanMotDem;
+            if (payload.XepHangSao.HasValue) existing.XepHangSao = payload.XepHangSao;
+
+            // Only allow user-updatable statuses (Trống, Bảo trì). Others (e.g., Đang sử dụng) are calculated by system.
+            if (!string.IsNullOrWhiteSpace(payload.TrangThai))
+            {
+                var trimmed = payload.TrangThai.Trim();
+                if (!UserEditableStatuses.Contains(trimmed))
+                {
+                    return BadRequest(new { error = "Invalid status. Allowed values: 'Trống' or 'Bảo trì'." });
+                }
+                existing.TrangThai = trimmed;
+            }
+
+            if (payload.UrlAnhPhong != null) existing.UrlAnhPhong = payload.UrlAnhPhong;
 
             _context.Phongs.Update(existing);
             await _context.SaveChangesAsync();
