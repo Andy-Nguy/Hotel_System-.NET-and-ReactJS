@@ -1,7 +1,7 @@
 // Frontend API helper for service (DichVu) management
-// Frontend API helper for service (DichVu) management
-// Provides CRUD operations for DichVu, TTDichVu (details) and recording service usage (CTHDDV)
+// ĐÃ ĐƯỢC CẬP NHẬT VÀ TỐI GIẢN
 
+// 1. Gộp Service và ServiceDetail lại làm một
 export interface Service {
 	iddichVu: string;
 	tenDichVu: string;
@@ -10,11 +10,9 @@ export interface Service {
 	thoiGianBatDau?: string | null; // serialized TimeSpan (e.g. "08:00:00")
 	thoiGianKetThuc?: string | null;
 	trangThai?: string | null; // "Đang hoạt động" or "Ngưng hoạt động"
-}
-
-export interface ServiceDetail {
-	idttdichVu: string;
-	iddichVu: string;
+	
+	// Các trường gộp từ TtdichVu
+	idttdichVu?: string | null;
 	thongTinDv?: string | null;
 	thoiLuongUocTinh?: number | null;
 	ghiChu?: string | null;
@@ -42,15 +40,12 @@ async function fetchApi(endpoint: string, options?: RequestInit) {
 		if (!res.ok) {
 			const text = await res.text().catch(() => null);
 			if (text) console.warn(`API ${endpoint} returned ${res.status}: ${text}`);
-			// For non-GET methods (POST/PUT/DELETE) throw an error so callers can surface server messages.
 			const method = (options && (options.method as string)) ?? 'GET';
 			if (method.toUpperCase() !== 'GET') {
-				// try to parse JSON error body
 				let parsed: any = text;
 				try { parsed = JSON.parse(text ?? ''); } catch { /* ignore */ }
 				throw new Error(parsed?.message ?? text ?? `API error ${res.status}`);
 			}
-			// For GET requests, return null for 404/other client errors so UI lists stay usable
 			return null;
 		}
 
@@ -58,15 +53,15 @@ async function fetchApi(endpoint: string, options?: RequestInit) {
 		if (!contentType.includes("application/json")) return null;
 		return await res.json();
 	} catch (err: any) {
-		// network/CORS/fetch errors surface as TypeError in browsers. Log and return null so UI stays usable.
 		console.warn(`fetchApi: ${endpoint} failed - ${err?.message ?? err}`);
 		return null;
 	}
 }
 
+// 2. Cập nhật normalizeService để gộp cả trường chi tiết
 function normalizeService(raw: any): Service {
 	if (!raw) {
-		// return a safe empty service to avoid runtime crashes; callers should handle errors earlier
+		// return a safe empty service
 		return {
 			iddichVu: "",
 			tenDichVu: "",
@@ -75,6 +70,10 @@ function normalizeService(raw: any): Service {
 			thoiGianBatDau: null,
 			thoiGianKetThuc: null,
 			trangThai: null,
+			idttdichVu: null,
+			thongTinDv: null,
+			thoiLuongUocTinh: null,
+			ghiChu: null,
 		};
 	}
 	let hinhDichVu = raw.hinhDichVu ?? raw.HinhDichVu ?? null;
@@ -90,24 +89,31 @@ function normalizeService(raw: any): Service {
 		thoiGianBatDau: raw.thoiGianBatDau ?? raw.ThoiGianBatDau ?? null,
 		thoiGianKetThuc: raw.thoiGianKetThuc ?? raw.ThoiGianKetThuc ?? null,
 		trangThai: raw.trangThai ?? raw.TrangThai ?? null,
+		
+		// Thêm các trường đã gộp
+		idttdichVu: raw.idttdichVu ?? raw.IdttdichVu ?? null,
+		thongTinDv: raw.thongTinDv ?? raw.ThongTinDv ?? null,
+		thoiLuongUocTinh: raw.thoiLuongUocTinh ?? raw.ThoiLuongUocTinh ?? null,
+		ghiChu: raw.ghiChu ?? raw.GhiChu ?? null,
 	};
 }
 
+// 3. Cập nhật các hàm với route tiếng Việt
 export async function getServices(): Promise<Service[]> {
-	const data = await fetchApi('/api/DichVu');
+	const data = await fetchApi('/api/dich-vu/lay-danh-sach'); // <= Đã đổi
 	if (!data) return [];
 	const arr = Array.isArray(data) ? data : (data.items ?? data.data ?? [data]);
 	return arr.map(normalizeService);
 }
 
 export async function getServiceById(serviceId: string): Promise<Service> {
-	const data = await fetchApi(`/api/DichVu/${serviceId}`);
+	const data = await fetchApi(`/api/dich-vu/lay-chi-tiet/${serviceId}`); // <= Đã đổi
 	if (!data) throw new Error('Service not found');
 	return normalizeService(data);
 }
 
 export async function createService(payload: Partial<Service>): Promise<Service> {
-	const data = await fetchApi('/api/DichVu', {
+	const data = await fetchApi('/api/dich-vu/them-moi', { // <= Đã đổi
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(payload),
@@ -117,10 +123,9 @@ export async function createService(payload: Partial<Service>): Promise<Service>
 }
 
 export async function updateService(id: string, payload: Partial<Service>): Promise<void> {
-	// Ensure the payload includes the service id so model binding/validation on the server
-	// does not reject the request due to the required IddichVu field.
+	// Ensure the payload includes the service id
 	const bodyPayload = { ...payload, iddichVu: payload.iddichVu ?? id };
-	await fetchApi(`/api/DichVu/${id}`, {
+	await fetchApi(`/api/dich-vu/cap-nhat/${id}`, { // <= Đã đổi
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(bodyPayload),
@@ -128,60 +133,23 @@ export async function updateService(id: string, payload: Partial<Service>): Prom
 }
 
 export async function deleteService(id: string): Promise<void> {
-	await fetchApi(`/api/DichVu/${id}`, { method: 'DELETE' });
+	await fetchApi(`/api/dich-vu/xoa/${id}`, { method: 'DELETE' }); // <= Đã đổi
 }
 
-// Service details (TTDichVu)
-export async function createServiceDetail(serviceId: string, payload: Partial<ServiceDetail>): Promise<ServiceDetail> {
-	const data = await fetchApi(`/api/DichVu/${serviceId}/details`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(payload),
-	});
-	return {
-		idttdichVu: data?.idttdichVu ?? data?.IdttdichVu ?? data?.id ?? "",
-		iddichVu: data?.iddichVu ?? data?.IddichVu ?? serviceId,
-		thongTinDv: data?.thongTinDv ?? data?.ThongTinDv ?? null,
-	};
-}
+// 4. LOẠI BỎ HOÀN TOÀN CÁC HÀM CHI TIẾT
+// (createServiceDetail, updateServiceDetail, deleteServiceDetail, getServiceDetails)
 
-export async function updateServiceDetail(id: string, payload: Partial<ServiceDetail>): Promise<void> {
-	await fetchApi(`/api/DichVu/details/${id}`, {
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(payload),
-	});
-}
-
-export async function deleteServiceDetail(id: string): Promise<void> {
-	await fetchApi(`/api/DichVu/details/${id}`, { method: 'DELETE' });
-}
-
-// Record service usage (CTHDDV)
+// 5. Cập nhật các hàm còn lại
 export async function recordServiceUsage(payload: ServiceUsage): Promise<void> {
-	await fetchApi('/api/DichVu/use', {
+	await fetchApi('/api/dich-vu/ghi-nhan-su-dung', { // <= Đã đổi
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(payload),
 	});
-}
-
-export async function getServiceDetails(serviceId: string): Promise<ServiceDetail[]> {
-	const endpoint = `/api/DichVu/${serviceId}/details`;
-	const data = await fetchApi(endpoint);
-	if (!data) return [];
-	const arr = Array.isArray(data) ? data : (data.items ?? data.data ?? [data]);
-	return arr.map((d: any) => ({
-		idttdichVu: d.idttdichVu ?? d.IdttdichVu ?? d.id ?? "",
-		iddichVu: d.iddichVu ?? d.IddichVu ?? serviceId,
-		thongTinDv: d.thongTinDv ?? d.ThongTinDv ?? null,
-		thoiLuongUocTinh: d.thoiLuongUocTinh ?? d.ThoiLuongUocTinh ?? null,
-		ghiChu: d.ghiChu ?? d.GhiChu ?? null,
-	}));
 }
 
 export async function getServiceUsage(serviceId: string): Promise<ServiceUsage[]> {
-	const endpoint = `/api/DichVu/${serviceId}/usage`;
+	const endpoint = `/api/dich-vu/lich-su/${serviceId}`; // <= Đã đổi
 	const data = await fetchApi(endpoint);
 	if (!data) return [];
 	const arr = Array.isArray(data) ? data : (data.items ?? data.data ?? [data]);
@@ -197,7 +165,7 @@ export async function getServiceUsage(serviceId: string): Promise<ServiceUsage[]
 }
 
 export async function getAllUsage(): Promise<ServiceUsage[]> {
-	const endpoint = '/api/DichVu/usage/all';
+	const endpoint = '/api/dich-vu/lich-su/tat-ca'; // <= Đã đổi
 	const data = await fetchApi(endpoint);
 	if (!data) return [];
 	const arr = Array.isArray(data) ? data : (data.items ?? data.data ?? [data]);
@@ -212,11 +180,13 @@ export async function getAllUsage(): Promise<ServiceUsage[]> {
 	}));
 }
 
-export async function uploadServiceImage(file: File): Promise<{ fileName: string }>
+export async function uploadServiceImage(file: File, serviceId?: string, serviceName?: string): Promise<{ fileName: string }>
 {
 	const fd = new FormData();
 	fd.append('file', file);
-	const res = await fetch(`/api/DichVu/upload`, { method: 'POST', body: fd });
+	if (serviceId) fd.append('serviceId', serviceId);
+	if (serviceName) fd.append('serviceName', serviceName);
+	const res = await fetch(`/api/dich-vu/tai-anh-len`, { method: 'POST', body: fd }); // <= Đã đổi
 	if (!res.ok) {
 		const t = await res.text().catch(() => null);
 		throw new Error(`Upload failed ${res.status}${t ? `: ${t}` : ''}`);
@@ -231,11 +201,8 @@ export default {
 	createService,
 	updateService,
 	deleteService,
-	createServiceDetail,
-	updateServiceDetail,
-	deleteServiceDetail,
+	// Các hàm 'detail' đã bị xóa
 	recordServiceUsage,
-	getServiceDetails,
 	getServiceUsage,
 	getAllUsage,
 	uploadServiceImage,

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { getServices, getServiceDetails, Service as ApiService, ServiceDetail } from "../api/serviceApi";
+import { getServices, getServiceById, Service as ApiService } from "../api/serviceApi";
 
 type Service = {
   id: string;
@@ -155,10 +155,10 @@ const Services: React.FC = () => {
     setSelected(s);
     setModalOpen(true);
     try {
-      const details = await getServiceDetails(s.id);
-      if (details && details.length > 0) {
-        const d = details[0];
-        setSelected((prev) => prev ? ({ ...prev, ThongTinDV: d.thongTinDv ?? prev.ThongTinDV, ThoiLuongUocTinh: d.thoiLuongUocTinh ?? prev.ThoiLuongUocTinh, GhiChu: d.ghiChu ?? prev.GhiChu }) : prev);
+      // getServiceById returns the merged service object including detail fields
+      const detail = await getServiceById(s.id);
+      if (detail) {
+        setSelected((prev) => prev ? ({ ...prev, ThongTinDV: detail.thongTinDv ?? prev.ThongTinDV, ThoiLuongUocTinh: detail.thoiLuongUocTinh ?? prev.ThoiLuongUocTinh, GhiChu: detail.ghiChu ?? prev.GhiChu }) : prev);
       }
     } catch (e) {
       console.warn('Failed to load service details', e);
@@ -271,8 +271,8 @@ const Services: React.FC = () => {
                       </div>
 
                       <div style={{ color: '#666', marginBottom: 8 }}>
-                        <strong>Thời lượng: </strong>
-                        {formatDuration(s.ThoiLuongUocTinh)}
+                        <strong>Thời gian: </strong>
+                        {s.ThoiGianBatDau && s.ThoiGianKetThuc ? `${s.ThoiGianBatDau} - ${s.ThoiGianKetThuc}` : '-'}
                       </div>
 
                       <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>

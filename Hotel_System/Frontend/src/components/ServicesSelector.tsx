@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getServices, getServiceDetails, Service as ApiService, ServiceDetail } from "../api/serviceApi";
+import { getServices, getServiceById, Service as ApiService } from "../api/serviceApi";
 
 type Service = {
 	id: string;
@@ -44,7 +44,7 @@ const ServicesSelector: React.FC<ServicesSelectorProps> = ({ onServicesChange })
 	const [open, setOpen] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-		const [detail, setDetail] = useState<ServiceDetail | null>(null);
+		const [detail, setDetail] = useState<ApiService | null>(null);
 		const [showDetail, setShowDetail] = useState(false);
 		const [detailLoading, setDetailLoading] = useState(false);
 
@@ -110,10 +110,8 @@ const ServicesSelector: React.FC<ServicesSelectorProps> = ({ onServicesChange })
 			setDetailLoading(true);
 			setShowDetail(true);
 			try {
-				const details = await getServiceDetails(svc.id);
-				// pick first available detail record (there may be one)
-				const d = (details && details.length > 0) ? details[0] : null;
-				setDetail(d);
+				const d = await getServiceById(svc.id);
+				setDetail(d || null);
 			} catch (err) {
 				console.warn(err);
 				setDetail(null);
