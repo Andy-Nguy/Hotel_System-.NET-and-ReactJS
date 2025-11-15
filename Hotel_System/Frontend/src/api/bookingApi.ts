@@ -19,8 +19,6 @@ export interface Booking {
   chiTietDatPhongs: BookingDetail[];
 }
 
-
-
 export interface UpdateBookingRequest {
   trangThai?: number;
   trangThaiThanhToan?: number;
@@ -55,14 +53,14 @@ export const deleteBooking = async (id: string): Promise<void> => {
  * Handles booking operations: get details, history, reschedule, cancel, QR code
  */
 
-const API_BASE = '/api/Booking';
+const API_BASE = "/api/datphong";
 
 // ============================================
 // Type Definitions
 // ============================================
 
 export interface BookingDetail {
-   idChiTiet: number;
+  idChiTiet: number;
   idPhong: string;
   tenPhongChiTiet?: string;
   soPhongChiTiet?: string;
@@ -116,7 +114,7 @@ export interface BookingSummary {
 
 export interface RescheduleRequest {
   ngayNhanPhong: string; // YYYY-MM-DD
-  ngayTraPhong: string;  // YYYY-MM-DD
+  ngayTraPhong: string; // YYYY-MM-DD
 }
 
 export interface RescheduleResult {
@@ -157,9 +155,24 @@ function normalizeBookingDetail(data: any): BookingDetail {
   return {
     // Required fields - now included!
     idChiTiet: data.idChiTiet ?? data.IdChiTiet ?? 0,
-    idPhong: data.idPhong || data.IdPhong || firstRoom.idPhong || firstRoom.IdPhong || "",
-    giaPhong: data.giaPhong || data.GiaPhong || firstRoom.giaPhong || firstRoom.GiaPhong || 0,
-    thanhTien: data.thanhTien || data.ThanhTien || firstRoom.thanhTien || firstRoom.ThanhTien || 0,
+    idPhong:
+      data.idPhong ||
+      data.IdPhong ||
+      firstRoom.idPhong ||
+      firstRoom.IdPhong ||
+      "",
+    giaPhong:
+      data.giaPhong ||
+      data.GiaPhong ||
+      firstRoom.giaPhong ||
+      firstRoom.GiaPhong ||
+      0,
+    thanhTien:
+      data.thanhTien ||
+      data.ThanhTien ||
+      firstRoom.thanhTien ||
+      firstRoom.ThanhTien ||
+      0,
 
     // Existing fields
     idDatPhong: data.idDatPhong || data.IddatPhong || "",
@@ -201,19 +214,22 @@ function normalizeBookingDetail(data: any): BookingDetail {
  */
 function normalizeBookingSummary(data: any): BookingSummary {
   return {
-    idDatPhong: data.idDatPhong || data.IddatPhong || '',
+    idDatPhong: data.idDatPhong || data.IddatPhong || "",
     idHoaDon: data.idHoaDon || data.IdhoaDon,
-    bookingCode: data.bookingCode || data.BookingCode || data.idDatPhong || '',
+    bookingCode: data.bookingCode || data.BookingCode || data.idDatPhong || "",
     ngayDatPhong: data.ngayDatPhong || data.NgayDatPhong,
-    ngayNhanPhong: data.ngayNhanPhong || data.NgayNhanPhong || '',
-    ngayTraPhong: data.ngayTraPhong || data.NgayTraPhong || '',
+    ngayNhanPhong: data.ngayNhanPhong || data.NgayNhanPhong || "",
+    ngayTraPhong: data.ngayTraPhong || data.NgayTraPhong || "",
     soDem: data.soDem || data.SoDem,
     soPhong: data.soPhong || data.SoPhong || 0,
     tongTien: data.tongTien || data.TongTien || 0,
     trangThai: data.trangThai ?? data.TrangThai ?? 0,
-    trangThaiText: data.trangThaiText || data.TrangThaiText || 'Không xác định',
+    trangThaiText: data.trangThaiText || data.TrangThaiText || "Không xác định",
     trangThaiThanhToan: data.trangThaiThanhToan ?? data.TrangThaiThanhToan ?? 0,
-    trangThaiThanhToanText: data.trangThaiThanhToanText || data.TrangThaiThanhToanText || 'Không xác định',
+    trangThaiThanhToanText:
+      data.trangThaiThanhToanText ||
+      data.TrangThaiThanhToanText ||
+      "Không xác định",
   };
 }
 
@@ -225,14 +241,16 @@ function normalizeBookingSummary(data: any): BookingSummary {
  * GET /api/Booking/{bookingId}
  * Lấy chi tiết đơn đặt phòng
  */
-export async function getBookingDetail(bookingId: string): Promise<BookingDetail> {
+export async function getBookingDetail(
+  bookingId: string
+): Promise<BookingDetail> {
   const response = await fetch(`${API_BASE}/${bookingId}`);
   const result = await handleJson(response);
-  
+
   if (!result.success || !result.data) {
-    throw new Error(result.message || 'Failed to get booking detail');
+    throw new Error(result.message || "Failed to get booking detail");
   }
-  
+
   return normalizeBookingDetail(result.data);
 }
 
@@ -240,14 +258,16 @@ export async function getBookingDetail(bookingId: string): Promise<BookingDetail
  * GET /api/Booking/customer/{customerId}
  * Lấy lịch sử đặt phòng của khách hàng
  */
-export async function getCustomerBookingHistory(customerId: number): Promise<BookingSummary[]> {
+export async function getCustomerBookingHistory(
+  customerId: number
+): Promise<BookingSummary[]> {
   const response = await fetch(`${API_BASE}/customer/${customerId}`);
   const result = await handleJson(response);
-  
+
   if (!result.success || !result.data) {
-    throw new Error(result.message || 'Failed to get booking history');
+    throw new Error(result.message || "Failed to get booking history");
   }
-  
+
   return (result.data || []).map(normalizeBookingSummary);
 }
 
@@ -260,18 +280,18 @@ export async function rescheduleBooking(
   bookingId: string,
   request: RescheduleRequest
 ): Promise<RescheduleResult> {
-const response = await fetch(`${API_BASE}/${bookingId}/reschedule`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await fetch(`${API_BASE}/${bookingId}/reschedule`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
-  
+
   const result = await handleJson(response);
-  
+
   if (!result.success || !result.data) {
-    throw new Error(result.message || 'Failed to reschedule booking');
+    throw new Error(result.message || "Failed to reschedule booking");
   }
-  
+
   return {
     idDatPhong: result.data.idDatPhong || result.data.IddatPhong,
     ngayNhanPhong: result.data.ngayNhanPhong || result.data.NgayNhanPhong,
@@ -290,13 +310,13 @@ const response = await fetch(`${API_BASE}/${bookingId}/reschedule`, {
  */
 export async function cancelBooking(bookingId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/${bookingId}/cancel`, {
-    method: 'DELETE',
+    method: "DELETE",
   });
-  
+
   const result = await handleJson(response);
-  
+
   if (!result.success) {
-    throw new Error(result.message || 'Failed to cancel booking');
+    throw new Error(result.message || "Failed to cancel booking");
   }
 }
 
@@ -316,18 +336,21 @@ export function canModifyBooking(booking: BookingDetail | BookingSummary): {
 } {
   // Check if cancelled
   if (booking.trangThai === 2) {
-    return { canModify: false, reason: 'Đơn đặt phòng đã bị hủy' };
+    return { canModify: false, reason: "Đơn đặt phòng đã bị hủy" };
   }
-  
+
   // Check if already checked in (past check-in date)
   const checkInDate = new Date(booking.ngayNhanPhong);
   const now = new Date();
   const hoursDiff = (checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-  
+
   if (hoursDiff < 24) {
-    return { canModify: false, reason: 'Chỉ có thể thay đổi/hủy trước 24 giờ nhận phòng' };
+    return {
+      canModify: false,
+      reason: "Chỉ có thể thay đổi/hủy trước 24 giờ nhận phòng",
+    };
   }
-  
+
   return { canModify: true };
 }
 
@@ -341,18 +364,25 @@ export function canCancelBooking(booking: BookingDetail | BookingSummary): {
 } {
   // Booking status 2 means already cancelled
   if (booking.trangThai === 2) {
-    return { canCancel: false, reason: 'Đơn đặt phòng đã bị hủy' };
+    return { canCancel: false, reason: "Đơn đặt phòng đã bị hủy" };
   }
   // Payment status: 1 = chưa thanh toán, 2 = đã thanh toán (the domain definition)
   if (booking.trangThaiThanhToan === 2) {
-    return { canCancel: false, reason: 'Không thể hủy đơn đã thanh toán. Vui lòng liên hệ quầy để hỗ trợ.' };
+    return {
+      canCancel: false,
+      reason:
+        "Không thể hủy đơn đã thanh toán. Vui lòng liên hệ quầy để hỗ trợ.",
+    };
   }
   // Time constraint: must be >= 24h before check-in
-const checkInDate = new Date(booking.ngayNhanPhong);
+  const checkInDate = new Date(booking.ngayNhanPhong);
   const now = new Date();
   const hoursDiff = (checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60);
   if (hoursDiff < 24) {
-    return { canCancel: false, reason: 'Chỉ có thể hủy trước 24 giờ nhận phòng' };
+    return {
+      canCancel: false,
+      reason: "Chỉ có thể hủy trước 24 giờ nhận phòng",
+    };
   }
   return { canCancel: true };
 }

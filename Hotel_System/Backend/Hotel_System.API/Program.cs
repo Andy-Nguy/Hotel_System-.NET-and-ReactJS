@@ -57,6 +57,9 @@ builder.Services.AddScoped<RoomService>();
 // Email service
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+// Background service: expire holds (ThoiHan)
+builder.Services.AddHostedService<HoldExpiryBackgroundService>();
+
 // Configure JWT authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwtSection.GetValue<string>("Key");

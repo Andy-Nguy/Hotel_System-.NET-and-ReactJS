@@ -162,6 +162,9 @@ public partial class HotelSystemContext : DbContext
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
             entity.Property(e => e.TongTien).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ThoiHan)
+                .HasColumnName("ThoiHan")
+                .HasColumnType("datetime2");
 
             entity.HasOne(d => d.IdkhachHangNavigation).WithMany(p => p.DatPhongs)
                 .HasForeignKey(d => d.IdkhachHang)

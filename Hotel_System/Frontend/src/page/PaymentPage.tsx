@@ -33,6 +33,12 @@ import PromotionLoyaltyPanel from "../components/PromotionLoyaltyPanel";
 import PromotionsAvailable from "../components/PromotionsAvailable";
 import { recordServiceUsage } from "../api/serviceApi";
 import type { ApplyPromotionResponse } from "../api/promotionApi";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import duration from "dayjs/plugin/duration";
+
+dayjs.extend(utc);
+dayjs.extend(duration);
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -69,20 +75,154 @@ const PaymentPage: React.FC = () => {
   const [ewalletModalVisible, setEwalletModalVisible] = useState(false);
   const [currentWallet, setCurrentWallet] = useState<string>("");
   const [currentPaymentMethod, setCurrentPaymentMethod] = useState<string>("");
-  const [promoResult, setPromoResult] = useState<ApplyPromotionResponse | null>(null);
-  const [appliedPromotionObj, setAppliedPromotionObj] = useState<any | null>(null);
+  const [promoResult, setPromoResult] = useState<ApplyPromotionResponse | null>(
+    null
+  );
+  const [appliedPromotionObj, setAppliedPromotionObj] = useState<any | null>(
+    null
+  );
   const [invoiceInfoState, setInvoiceInfoState] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [redeemPoints, setRedeemPoints] = useState<number>(0);
   const [promoCode, setPromoCode] = useState<string>("");
   const [applyingPromoCode, setApplyingPromoCode] = useState(false);
-  const [externalPromoApplied, setExternalPromoApplied] = useState<ApplyPromotionResponse | null>(null);
+  const [externalPromoApplied, setExternalPromoApplied] =
+    useState<ApplyPromotionResponse | null>(null);
   const [disableAutoApplyPromos, setDisableAutoApplyPromos] = useState(false);
+
+  // Hold (giữ phòng) UI state
+  const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
+  const [holdLocal, setHoldLocal] = useState<string | null>(null);
+  const [holdCountdown, setHoldCountdown] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let timer: any = null;
+
+    const clearHoldUI = () => {
+      try {
+        const raw = sessionStorage.getItem("invoiceInfo");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (
+            parsed &&
+            (parsed.holdExpiresAt || parsed.ThoiHan || parsed.thoiHan)
+          ) {
+            delete parsed.holdExpiresAt;
+            delete parsed.ThoiHan;
+            delete parsed.thoiHan;
+            sessionStorage.setItem("invoiceInfo", JSON.stringify(parsed));
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+      if (mounted) {
+        setHoldExpiresAt(null);
+        setHoldLocal(null);
+        setHoldCountdown(null);
+      }
+    };
+
+    const startCountdown = (utcStr: string) => {
+      if (timer) clearInterval(timer);
+      const update = () => {
+        const now = dayjs();
+        const end = dayjs.utc(utcStr);
+        const diff = end.diff(now);
+        if (diff <= 0) {
+          clearHoldUI();
+          if (timer) {
+            clearInterval(timer);
+            timer = null;
+          }
+          return;
+        }
+        const dur = dayjs.duration(diff);
+        const hh = dur.hours();
+        const mm = dur.minutes();
+        const ss = dur.seconds();
+        const formatted =
+          hh > 0
+            ? `${String(hh).padStart(2, "0")}:${String(mm).padStart(
+                2,
+                "0"
+              )}:${String(ss).padStart(2, "0")}`
+            : `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+        if (mounted) {
+          setHoldCountdown(formatted);
+          setHoldLocal(dayjs.utc(utcStr).local().format("YYYY-MM-DD HH:mm:ss"));
+        }
+      };
+      update();
+      timer = setInterval(update, 1000);
+    };
+
+    const verifyHold = async () => {
+      // try to find IDDatPhong from invoiceInfoState or sessionStorage
+      let inv: any = invoiceInfoState;
+      try {
+        const raw = sessionStorage.getItem("invoiceInfo");
+        if (!inv && raw) inv = JSON.parse(raw);
+      } catch {}
+
+      const id =
+        inv?.IDDatPhong ||
+        inv?.idDatPhong ||
+        inv?.idDatphong ||
+        inv?.idDatPhong;
+      if (!id) return;
+
+      try {
+        const res = await fetch(`/api/datphong/${id}`);
+        if (!res.ok) {
+          clearHoldUI();
+          return;
+        }
+        const data = await res.json();
+        const th =
+          data.thoiHan ??
+          data.ThoiHan ??
+          data.holdExpiresAt ??
+          data.holdexpiresat;
+        if (!th) {
+          clearHoldUI();
+          return;
+        }
+        const thDate = dayjs(th);
+        if (thDate.isAfter(dayjs())) {
+          if (mounted) {
+            setHoldExpiresAt(th);
+            startCountdown(th);
+          }
+        } else {
+          clearHoldUI();
+        }
+      } catch (e) {
+        clearHoldUI();
+      }
+    };
+
+    verifyHold();
+
+    return () => {
+      mounted = false;
+      if (timer) clearInterval(timer);
+    };
+  }, [invoiceInfoState]);
 
   const profilePoints: number | null = (() => {
     try {
-      if (profile) return profile.tichDiem ?? profile.tichdiem ?? profile.points ?? profile.Points ?? null;
-      if (invoiceInfoState) return invoiceInfoState.tichDiem ?? invoiceInfoState.tichdiem ?? null;
+      if (profile)
+        return (
+          profile.tichDiem ??
+          profile.tichdiem ??
+          profile.points ??
+          profile.Points ??
+          null
+        );
+      if (invoiceInfoState)
+        return invoiceInfoState.tichDiem ?? invoiceInfoState.tichdiem ?? null;
       const cust = sessionStorage.getItem("customerInfo");
       if (cust) {
         const parsed = JSON.parse(cust);
@@ -94,7 +234,9 @@ const PaymentPage: React.FC = () => {
     return null;
   })();
 
-  const promoDiscount = promoResult ? (promoResult.soTienGiam ?? promoResult.discountAmount ?? 0) : 0;
+  const promoDiscount = promoResult
+    ? promoResult.soTienGiam ?? promoResult.discountAmount ?? 0
+    : 0;
 
   useEffect(() => {
     let mounted = true;
@@ -104,7 +246,7 @@ const PaymentPage: React.FC = () => {
         return;
       }
       try {
-        const { getPromotionById } = await import('../api/promotionApi');
+        const { getPromotionById } = await import("../api/promotionApi");
         const p = await getPromotionById(id);
         if (mounted) setAppliedPromotionObj(p || null);
       } catch (e) {
@@ -112,10 +254,18 @@ const PaymentPage: React.FC = () => {
       }
     };
 
-    const id = promoResult?.appliedPromotionId || externalPromoApplied?.appliedPromotionId || null;
+    const id =
+      promoResult?.appliedPromotionId ||
+      externalPromoApplied?.appliedPromotionId ||
+      null;
     fetchPromo(id as any);
-    return () => { mounted = false; };
-  }, [promoResult?.appliedPromotionId, externalPromoApplied?.appliedPromotionId]);
+    return () => {
+      mounted = false;
+    };
+  }, [
+    promoResult?.appliedPromotionId,
+    externalPromoApplied?.appliedPromotionId,
+  ]);
 
   const [vcbQrExists, setVcbQrExists] = useState<boolean | null>(null);
   const [momoQrExists, setMomoQrExists] = useState<boolean | null>(null);
@@ -154,7 +304,10 @@ const PaymentPage: React.FC = () => {
       setCurrentPaymentMethod("credit-card");
       setConfirmModalVisible(true);
     } catch (e: any) {
-      Modal.error({ title: "Lỗi", content: "Vui lòng kiểm tra lại thông tin thẻ" });
+      Modal.error({
+        title: "Lỗi",
+        content: "Vui lòng kiểm tra lại thông tin thẻ",
+      });
     }
   };
 
@@ -197,7 +350,8 @@ const PaymentPage: React.FC = () => {
         setProcessingPayment(false);
         Modal.error({
           title: "Thiếu thông tin",
-          content: "Không tìm thấy thông tin hóa đơn. Vui lòng quay lại trang đặt phòng và thử lại."
+          content:
+            "Không tìm thấy thông tin hóa đơn. Vui lòng quay lại trang đặt phòng và thử lại.",
         });
         return;
       }
@@ -222,46 +376,84 @@ const PaymentPage: React.FC = () => {
       }
 
       const nights = Math.ceil(
-        (new Date(booking.checkOut).getTime() - new Date(booking.checkIn).getTime()) / (1000 * 60 * 60 * 24)
+        (new Date(booking.checkOut).getTime() -
+          new Date(booking.checkIn).getTime()) /
+          (1000 * 60 * 60 * 24)
       );
 
-      const totalPrice = booking.selectedRooms.reduce((sum: number, sr: any) => {
-        return sum + (sr.room.giaCoBanMotDem || 0) * nights;
-      }, 0);
+      const totalPrice = booking.selectedRooms.reduce(
+        (sum: number, sr: any) => {
+          return sum + (sr.room.giaCoBanMotDem || 0) * nights;
+        },
+        0
+      );
 
       const computeServiceItemAmount = (it: any) => {
         if (!it) return 0;
-        const price = Number(it.TienDichVu ?? it.tienDichVu ?? it.GiaDichVu ?? it.giaDichVu ?? it.price ?? it.Price ?? 0);
+        const price = Number(
+          it.TienDichVu ??
+            it.tienDichVu ??
+            it.GiaDichVu ??
+            it.giaDichVu ??
+            it.price ??
+            it.Price ??
+            0
+        );
         const qty = Number(it.quantity ?? it.soLuong ?? 1);
-        return (Number.isFinite(price) ? price : 0) * (Number.isFinite(qty) ? qty : 1);
+        return (
+          (Number.isFinite(price) ? price : 0) *
+          (Number.isFinite(qty) ? qty : 1)
+        );
       };
 
       let servicesTotal = 0;
-      if (booking.servicesTotal != null && booking.servicesTotal !== undefined) {
+      if (
+        booking.servicesTotal != null &&
+        booking.servicesTotal !== undefined
+      ) {
         servicesTotal = Number(booking.servicesTotal) || 0;
-      } else if (Array.isArray(booking.selectedServices) && booking.selectedServices.length > 0) {
-        servicesTotal = booking.selectedServices.reduce((s: number, it: any) => s + computeServiceItemAmount(it), 0);
+      } else if (
+        Array.isArray(booking.selectedServices) &&
+        booking.selectedServices.length > 0
+      ) {
+        servicesTotal = booking.selectedServices.reduce(
+          (s: number, it: any) => s + computeServiceItemAmount(it),
+          0
+        );
       } else if (invoice && invoice.servicesTotal != null) {
         servicesTotal = Number(invoice.servicesTotal) || 0;
       }
 
-      const discountedBase = promoResult ? promoResult.tongTienSauGiam : totalPrice;
+      const discountedBase = promoResult
+        ? promoResult.tongTienSauGiam
+        : totalPrice;
       const baseWithServices = discountedBase + servicesTotal;
       const tax = baseWithServices * 0.1;
       const grandTotal = baseWithServices + tax;
 
       const POINT_VALUE = 1000;
-      const redeemValueClient = Math.min(redeemPoints * POINT_VALUE, grandTotal);
+      const redeemValueClient = Math.min(
+        redeemPoints * POINT_VALUE,
+        grandTotal
+      );
       const grandTotalAfterRedeem = Math.max(0, grandTotal - redeemValueClient);
 
-      // SỬA: Mapping trạng thái thanh toán theo domain: cash = 1 (Chưa thanh toán), online = 2 (Đã thanh toán)
-      let trangThaiThanhToan = currentPaymentMethod === "cash" ? 1 : 2;
+      // Khi người dùng xác nhận hoàn tất thanh toán trên UI, ghi nhận là 'Đã thanh toán' (2)
+      // Điều này áp dụng cho các phương thức online và cho cash khi người dùng bấm xác nhận.
+      let trangThaiThanhToan = 2;
 
       const idDatPhong =
-        invoice.IDDatPhong || invoice.idDatPhong || invoice.idDatphong || invoice.idDatPhong;
+        invoice.IDDatPhong ||
+        invoice.idDatPhong ||
+        invoice.idDatphong ||
+        invoice.idDatPhong;
 
-      const tienPhongInt = Number.isFinite(Number(discountedBase)) ? Math.round(Number(discountedBase)) : Math.round(Number(totalPrice || 0));
-      const tongTienDecimal = Number.isFinite(Number(grandTotalAfterRedeem)) ? Number(Math.round(Number(grandTotalAfterRedeem))) : Number(Math.round(Number(grandTotal || 0)));
+      const tienPhongInt = Number.isFinite(Number(discountedBase))
+        ? Math.round(Number(discountedBase))
+        : Math.round(Number(totalPrice || 0));
+      const tongTienDecimal = Number.isFinite(Number(grandTotalAfterRedeem))
+        ? Number(Math.round(Number(grandTotalAfterRedeem)))
+        : Number(Math.round(Number(grandTotal || 0)));
 
       const hoaDonPayload: any = {
         IDDatPhong: idDatPhong,
@@ -269,21 +461,27 @@ const PaymentPage: React.FC = () => {
         TienDichVu: Math.round(servicesTotal || 0),
         SoLuongNgay: Number.isFinite(Number(nights)) ? Number(nights) : 1,
         TongTien: tongTienDecimal,
-        TrangThaiThanhToan: Number.isFinite(Number(trangThaiThanhToan)) ? Number(trangThaiThanhToan) : 1,
+        TrangThaiThanhToan: Number.isFinite(Number(trangThaiThanhToan))
+          ? Number(trangThaiThanhToan)
+          : 1,
         GhiChu: `Thanh toán qua ${currentPaymentMethod}`,
         RedeemPoints: redeemPoints > 0 ? Number(redeemPoints) : undefined,
-        PhuongThucThanhToan: currentPaymentMethod === "cash" ? 1 : 2
+        PhuongThucThanhToan: currentPaymentMethod === "cash" ? 1 : 2,
       };
 
       if (!hoaDonPayload.IDDatPhong) {
-        Modal.error({ title: "Thiếu thông tin", content: "Không tìm thấy mã đặt phòng (IDDatPhong). Vui lòng quay lại trang đặt phòng." });
+        Modal.error({
+          title: "Thiếu thông tin",
+          content:
+            "Không tìm thấy mã đặt phòng (IDDatPhong). Vui lòng quay lại trang đặt phòng.",
+        });
         return;
       }
 
       const hoaDonResponse = await fetch("/api/Payment/hoa-don", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(hoaDonPayload)
+        body: JSON.stringify(hoaDonPayload),
       });
 
       if (!hoaDonResponse.ok) {
@@ -295,7 +493,10 @@ const PaymentPage: React.FC = () => {
 
       invoice.idHoaDon = hoaDonResult.idHoaDon;
       invoice.servicesTotal = Math.round(servicesTotal || 0);
-      invoice.grandTotal = hoaDonResult.tongTien ?? Math.round(grandTotal) ?? Math.round(grandTotalAfterRedeem);
+      invoice.grandTotal =
+        hoaDonResult.tongTien ??
+        Math.round(grandTotal) ??
+        Math.round(grandTotalAfterRedeem);
       sessionStorage.setItem("invoiceInfo", JSON.stringify(invoice));
 
       // SỬA: Đồng bộ trạng thái thanh toán của Đặt Phòng
@@ -306,11 +507,14 @@ const PaymentPage: React.FC = () => {
           body: JSON.stringify({
             IDDatPhong: idDatPhong,
             TrangThaiThanhToan: trangThaiThanhToan,
-            GhiChu: `Cập nhật từ PaymentPage - ${currentPaymentMethod}`
-          })
+            GhiChu: `Cập nhật từ PaymentPage - ${currentPaymentMethod}`,
+          }),
         });
       } catch (e) {
-        console.warn("Không thể cập nhật trạng thái thanh toán cho DatPhong:", e);
+        console.warn(
+          "Không thể cập nhật trạng thái thanh toán cho DatPhong:",
+          e
+        );
       }
 
       setConfirmModalVisible(false);
@@ -321,7 +525,8 @@ const PaymentPage: React.FC = () => {
         const byId = new Map<string, any>();
         const byNum = new Map<number, any>();
         (booking.selectedRooms || []).forEach((sr: any) => {
-          const rid = sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
+          const rid =
+            sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
           if (rid) byId.set(String(rid), sr);
           byNum.set(Number(sr.roomNumber), sr);
         });
@@ -329,12 +534,28 @@ const PaymentPage: React.FC = () => {
         if (Array.isArray(servicesList) && servicesList.length > 0) {
           await Promise.allSettled(
             servicesList.map((s: any) => {
-              const svcId = s.iddichVu ?? s.id ?? s.serviceId ?? s.idDichVu ?? s.iddichVu ?? null;
-              const price = Number(s.tienDichVu ?? s.TienDichVu ?? s.price ?? s.Price ?? s.GiaDichVu ?? 0) || 0;
+              const svcId =
+                s.iddichVu ??
+                s.id ??
+                s.serviceId ??
+                s.idDichVu ??
+                s.iddichVu ??
+                null;
+              const price =
+                Number(
+                  s.tienDichVu ??
+                    s.TienDichVu ??
+                    s.price ??
+                    s.Price ??
+                    s.GiaDichVu ??
+                    0
+                ) || 0;
               const qty = Number(s.quantity ?? s.soLuong ?? 1);
 
-              const svcRoomIdRaw = s.roomId ?? s.idPhong ?? s.idphong ?? s.IDPhong ?? null;
-              const svcRoomNumberRaw = s.roomNumber ?? s.soPhong ?? s.SoPhong ?? null;
+              const svcRoomIdRaw =
+                s.roomId ?? s.idPhong ?? s.idphong ?? s.IDPhong ?? null;
+              const svcRoomNumberRaw =
+                s.roomNumber ?? s.soPhong ?? s.SoPhong ?? null;
 
               let svcRoomId: string | null = null;
               let svcRoomNumber: number | null = null;
@@ -342,10 +563,16 @@ const PaymentPage: React.FC = () => {
               if (svcRoomIdRaw && byId.has(String(svcRoomIdRaw))) {
                 svcRoomId = String(svcRoomIdRaw);
                 const sr = byId.get(svcRoomId);
-                svcRoomNumber = Number(sr?.roomNumber ?? svcRoomNumberRaw ?? null) || null;
-              } else if (svcRoomNumberRaw && byNum.has(Number(svcRoomNumberRaw))) {
+                svcRoomNumber =
+                  Number(sr?.roomNumber ?? svcRoomNumberRaw ?? null) || null;
+              } else if (
+                svcRoomNumberRaw &&
+                byNum.has(Number(svcRoomNumberRaw))
+              ) {
                 const sr = byNum.get(Number(svcRoomNumberRaw));
-                svcRoomId = String(sr?.room?.idphong ?? sr?.room?.idPhong ?? sr?.room?.id ?? "");
+                svcRoomId = String(
+                  sr?.room?.idphong ?? sr?.room?.idPhong ?? sr?.room?.id ?? ""
+                );
                 svcRoomNumber = Number(svcRoomNumberRaw);
               }
 
@@ -369,40 +596,52 @@ const PaymentPage: React.FC = () => {
         console.warn("Failed to persist service usage:", e);
       }
 
-      sessionStorage.setItem("paymentResult", JSON.stringify({
-        success: true,
-        idDatPhong: invoice.idDatPhong,
-        idHoaDon: hoaDonResult.idHoaDon,
-        tongTien: hoaDonResult.tongTien,
-        tienCoc: hoaDonResult.tienCoc,
-        tienThanhToan: hoaDonResult.tienThanhToan,
-        trangThaiThanhToan: trangThaiThanhToan,
-        redeemedPoints: hoaDonResult.redeemedPoints,
-        redeemedValue: hoaDonResult.redeemedValue,
-        pointsEarned: hoaDonResult.pointsEarned,
-        pointsAfter: hoaDonResult.pointsAfter,
-        appliedPromotionValue: hoaDonResult.appliedPromotionValue,
-        servicesTotal: Math.round(servicesTotal || 0),
-        paymentMethod: currentPaymentMethod,
-        paymentMethodName: 
-          currentPaymentMethod === "bank-transfer" ? "Chuyển khoản ngân hàng" :
-          currentPaymentMethod === "credit-card" ? "Thẻ tín dụng" :
-          currentPaymentMethod === "momo" ? "Ví MoMo" :
-          currentPaymentMethod === "zalopay" ? "Ví ZaloPay" :
-          currentPaymentMethod === "vnpay" ? "Ví VNPay" :
-          currentPaymentMethod === "shopeepay" ? "Ví ShopeePay" :
-          currentPaymentMethod === "atm" ? "Thẻ ATM" :
-          currentPaymentMethod === "cash" ? "Tiền mặt tại quầy" : ""
-      }));
+      sessionStorage.setItem(
+        "paymentResult",
+        JSON.stringify({
+          success: true,
+          idDatPhong: invoice.idDatPhong,
+          idHoaDon: hoaDonResult.idHoaDon,
+          tongTien: hoaDonResult.tongTien,
+          tienCoc: hoaDonResult.tienCoc,
+          tienThanhToan: hoaDonResult.tienThanhToan,
+          trangThaiThanhToan: trangThaiThanhToan,
+          redeemedPoints: hoaDonResult.redeemedPoints,
+          redeemedValue: hoaDonResult.redeemedValue,
+          pointsEarned: hoaDonResult.pointsEarned,
+          pointsAfter: hoaDonResult.pointsAfter,
+          appliedPromotionValue: hoaDonResult.appliedPromotionValue,
+          servicesTotal: Math.round(servicesTotal || 0),
+          paymentMethod: currentPaymentMethod,
+          paymentMethodName:
+            currentPaymentMethod === "bank-transfer"
+              ? "Chuyển khoản ngân hàng"
+              : currentPaymentMethod === "credit-card"
+              ? "Thẻ tín dụng"
+              : currentPaymentMethod === "momo"
+              ? "Ví MoMo"
+              : currentPaymentMethod === "zalopay"
+              ? "Ví ZaloPay"
+              : currentPaymentMethod === "vnpay"
+              ? "Ví VNPay"
+              : currentPaymentMethod === "shopeepay"
+              ? "Ví ShopeePay"
+              : currentPaymentMethod === "atm"
+              ? "Thẻ ATM"
+              : currentPaymentMethod === "cash"
+              ? "Tiền mặt tại quầy"
+              : "",
+        })
+      );
 
       window.location.href = "/#booking-success";
-      
     } catch (e: any) {
       console.error("❌ Error in handleFinalConfirm:", e);
       setConfirmModalVisible(false);
-      Modal.error({ 
-        title: "Lỗi thanh toán", 
-        content: e?.message || "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại." 
+      Modal.error({
+        title: "Lỗi thanh toán",
+        content:
+          e?.message || "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.",
       });
     } finally {
       setProcessingPayment(false);
@@ -471,7 +710,7 @@ const PaymentPage: React.FC = () => {
   useEffect(() => {
     const bookingData = sessionStorage.getItem("bookingInfo");
     const invoiceData = sessionStorage.getItem("invoiceInfo");
-    
+
     let parsedBooking: any = null;
     if (bookingData) {
       try {
@@ -487,15 +726,23 @@ const PaymentPage: React.FC = () => {
         const parsedInvoice = JSON.parse(invoiceData);
         setInvoiceInfoState(parsedInvoice);
 
-        if ((!parsedBooking || !parsedBooking.selectedRooms || parsedBooking.selectedRooms.length === 0) && parsedInvoice.rooms && parsedInvoice.rooms.length > 0) {
+        if (
+          (!parsedBooking ||
+            !parsedBooking.selectedRooms ||
+            parsedBooking.selectedRooms.length === 0) &&
+          parsedInvoice.rooms &&
+          parsedInvoice.rooms.length > 0
+        ) {
           const recovered = {
             selectedRooms: parsedInvoice.rooms,
             checkIn: parsedInvoice.checkIn || parsedInvoice.ngayNhanPhong,
             checkOut: parsedInvoice.checkOut || parsedInvoice.ngayTraPhong,
             guests: parsedInvoice.guests || parsedInvoice.soLuongKhach || 1,
             totalRooms: (parsedInvoice.rooms || []).length,
-            selectedServices: parsedInvoice.services || parsedInvoice.selectedServices || [],
-            servicesTotal: parsedInvoice.servicesTotal || parsedInvoice.tienDichVu || 0,
+            selectedServices:
+              parsedInvoice.services || parsedInvoice.selectedServices || [],
+            servicesTotal:
+              parsedInvoice.servicesTotal || parsedInvoice.tienDichVu || 0,
           };
           setBookingInfo(recovered);
         }
@@ -503,10 +750,14 @@ const PaymentPage: React.FC = () => {
     }
     const token = localStorage.getItem("hs_token");
     if (token) {
-      fetch("/api/auth/profile", { headers: { Authorization: `Bearer ${token}` } })
-        .then((r) => r.ok ? r.json() : Promise.reject())
+      fetch("/api/auth/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((data) => setProfile(data))
-        .catch(() => { /* ignore */ });
+        .catch(() => {
+          /* ignore */
+        });
     }
   }, []);
 
@@ -529,25 +780,33 @@ const PaymentPage: React.FC = () => {
   };
 
   const memoRoomIds = useMemo(() => {
-    return (bookingInfo?.selectedRooms || []).map((sr: any) => sr.room?.idphong || sr.room?.idPhong).filter(Boolean);
+    return (bookingInfo?.selectedRooms || [])
+      .map((sr: any) => sr.room?.idphong || sr.room?.idPhong)
+      .filter(Boolean);
   }, [bookingInfo?.selectedRooms]);
 
   const perRoomPricing = useMemo(() => {
     try {
-      if (!bookingInfo || !bookingInfo.selectedRooms || bookingInfo.selectedRooms.length === 0) {
+      if (
+        !bookingInfo ||
+        !bookingInfo.selectedRooms ||
+        bookingInfo.selectedRooms.length === 0
+      ) {
         return { rows: [], totalAfterPromo: 0 };
       }
 
       const n = Math.max(
         1,
         Math.ceil(
-          (new Date(bookingInfo.checkOut).getTime() - new Date(bookingInfo.checkIn).getTime()) /
+          (new Date(bookingInfo.checkOut).getTime() -
+            new Date(bookingInfo.checkIn).getTime()) /
             (1000 * 60 * 60 * 24)
         )
       );
 
       const rooms = (bookingInfo.selectedRooms || []).map((sr: any) => {
-        const rid = sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
+        const rid =
+          sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
         const pricePerNight = sr.room?.giaCoBanMotDem || sr.room?.gia || 0;
         const base = pricePerNight * n;
         const name = sr.room?.tenPhong || `Phòng ${sr.roomNumber}`;
@@ -567,7 +826,8 @@ const PaymentPage: React.FC = () => {
         .filter(Boolean);
 
       const totalDiscount =
-        Number(promoResult?.soTienGiam ?? promoResult?.discountAmount ?? 0) || 0;
+        Number(promoResult?.soTienGiam ?? promoResult?.discountAmount ?? 0) ||
+        0;
 
       const eligibleBaseSum = rooms.reduce(
         (sum, r) => sum + (eligibleIds.includes(r.rid) ? r.base : 0),
@@ -623,26 +883,55 @@ const PaymentPage: React.FC = () => {
 
   const servicesTotalUI: number = useMemo(() => {
     try {
-      if (bookingInfo?.servicesTotal != null && bookingInfo?.servicesTotal !== undefined) {
+      if (
+        bookingInfo?.servicesTotal != null &&
+        bookingInfo?.servicesTotal !== undefined
+      ) {
         return Number(bookingInfo.servicesTotal) || 0;
       }
-      const list = bookingInfo?.selectedServices || invoiceInfoState?.selectedServices || invoiceInfoState?.services || [];
+      const list =
+        bookingInfo?.selectedServices ||
+        invoiceInfoState?.selectedServices ||
+        invoiceInfoState?.services ||
+        [];
       if (Array.isArray(list) && list.length > 0) {
         const priceOf = (it: any) =>
-          Number(it.TienDichVu ?? it.tienDichVu ?? it.GiaDichVu ?? it.giaDichVu ?? it.price ?? it.Price ?? 0);
+          Number(
+            it.TienDichVu ??
+              it.tienDichVu ??
+              it.GiaDichVu ??
+              it.giaDichVu ??
+              it.price ??
+              it.Price ??
+              0
+          );
         const qtyOf = (it: any) => Number(it.quantity ?? it.soLuong ?? 1);
-        return list.reduce((s: number, it: any) => s + Math.max(0, Math.round(priceOf(it))) * Math.max(1, Math.round(qtyOf(it))), 0);
+        return list.reduce(
+          (s: number, it: any) =>
+            s +
+            Math.max(0, Math.round(priceOf(it))) *
+              Math.max(1, Math.round(qtyOf(it))),
+          0
+        );
       }
       return 0;
     } catch {
       return 0;
     }
-  }, [bookingInfo?.servicesTotal, bookingInfo?.selectedServices, invoiceInfoState?.selectedServices, invoiceInfoState?.services]);
+  }, [
+    bookingInfo?.servicesTotal,
+    bookingInfo?.selectedServices,
+    invoiceInfoState?.selectedServices,
+    invoiceInfoState?.services,
+  ]);
 
   const servicesByRoom = useMemo(() => {
     try {
       const rooms = bookingInfo?.selectedRooms || [];
-      const list = (bookingInfo?.selectedServices || invoiceInfoState?.selectedServices || invoiceInfoState?.services || []) as any[];
+      const list = (bookingInfo?.selectedServices ||
+        invoiceInfoState?.selectedServices ||
+        invoiceInfoState?.services ||
+        []) as any[];
 
       if (!list || list.length === 0) {
         return { groups: [], common: [], hasAny: false };
@@ -651,16 +940,28 @@ const PaymentPage: React.FC = () => {
       const byId = new Map<string, any>();
       const byNum = new Map<number, any>();
       rooms.forEach((sr: any) => {
-        const rid = sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
+        const rid =
+          sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
         if (rid) byId.set(String(rid), sr);
         byNum.set(Number(sr.roomNumber), sr);
       });
 
       const priceOf = (it: any) =>
-        Number(it.TienDichVu ?? it.tienDichVu ?? it.GiaDichVu ?? it.giaDichVu ?? it.price ?? it.Price ?? 0);
+        Number(
+          it.TienDichVu ??
+            it.tienDichVu ??
+            it.GiaDichVu ??
+            it.giaDichVu ??
+            it.price ??
+            it.Price ??
+            0
+        );
       const qtyOf = (it: any) => Number(it.quantity ?? it.soLuong ?? 1);
 
-      const groupsMap = new Map<string, { room: any; items: any[]; total: number }>();
+      const groupsMap = new Map<
+        string,
+        { room: any; items: any[]; total: number }
+      >();
       const common: any[] = [];
 
       list.forEach((s: any) => {
@@ -668,7 +969,8 @@ const PaymentPage: React.FC = () => {
         const qty = Math.max(1, Math.round(qtyOf(s)));
         const line = unit * qty;
 
-        const svcRoomIdRaw = s.roomId ?? s.idPhong ?? s.idphong ?? s.IDPhong ?? null;
+        const svcRoomIdRaw =
+          s.roomId ?? s.idPhong ?? s.idphong ?? s.IDPhong ?? null;
         const svcRoomNumberRaw = s.roomNumber ?? s.soPhong ?? s.SoPhong ?? null;
 
         let key: string | null = null;
@@ -679,13 +981,18 @@ const PaymentPage: React.FC = () => {
           roomRef = byId.get(String(svcRoomIdRaw));
         } else if (svcRoomNumberRaw && byNum.has(Number(svcRoomNumberRaw))) {
           const sr = byNum.get(Number(svcRoomNumberRaw));
-          const rid = sr?.room?.idphong ?? sr?.room?.idPhong ?? sr?.room?.id ?? "";
+          const rid =
+            sr?.room?.idphong ?? sr?.room?.idPhong ?? sr?.room?.id ?? "";
           key = `rid:${String(rid)}`;
           roomRef = sr;
         }
 
         if (key && roomRef) {
-          const cur = groupsMap.get(key) || { room: roomRef, items: [], total: 0 };
+          const cur = groupsMap.get(key) || {
+            room: roomRef,
+            items: [],
+            total: 0,
+          };
           cur.items.push({ ...s, _unit: unit, _qty: qty, _line: line });
           cur.total += line;
           groupsMap.set(key, cur);
@@ -704,11 +1011,19 @@ const PaymentPage: React.FC = () => {
     } catch {
       return { groups: [], common: [], hasAny: false };
     }
-  }, [bookingInfo?.selectedRooms, bookingInfo?.selectedServices, invoiceInfoState?.selectedServices, invoiceInfoState?.services]);
+  }, [
+    bookingInfo?.selectedRooms,
+    bookingInfo?.selectedServices,
+    invoiceInfoState?.selectedServices,
+    invoiceInfoState?.services,
+  ]);
 
-  const handlePromotionApplied = useCallback((res: ApplyPromotionResponse | null) => {
-    setPromoResult(res);
-  }, [setPromoResult]);
+  const handlePromotionApplied = useCallback(
+    (res: ApplyPromotionResponse | null) => {
+      setPromoResult(res);
+    },
+    [setPromoResult]
+  );
 
   const handleConfirmPayment = async () => {
     if (selectedMethod === "credit-card") {
@@ -819,7 +1134,7 @@ const PaymentPage: React.FC = () => {
           Chọn hình thức thanh toán
         </Title>
 
-        <Row gutter={[24, 24]} style={{ alignItems: 'stretch' }}>
+        <Row gutter={[24, 24]} style={{ alignItems: "stretch" }}>
           <Col xs={24} lg={16}>
             <div
               style={{
@@ -828,14 +1143,24 @@ const PaymentPage: React.FC = () => {
                 padding: "18px",
                 borderRadius: "8px",
                 boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                display: 'flex',
+                display: "flex",
                 gap: 20,
-                alignItems: 'flex-start',
-                flexWrap: 'wrap'
+                alignItems: "flex-start",
+                flexWrap: "wrap",
               }}
             >
               <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.6, color: "#666", fontWeight: 700 }}>THÔNG TIN ĐẶT PHÒNG</div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    marginBottom: 8,
+                    opacity: 0.6,
+                    color: "#666",
+                    fontWeight: 700,
+                  }}
+                >
+                  THÔNG TIN ĐẶT PHÒNG
+                </div>
               </div>
             </div>
 
@@ -879,35 +1204,58 @@ const PaymentPage: React.FC = () => {
                     }
                     try {
                       setApplyingPromoCode(true);
-                      const { getAllPromotions } = await import("../api/promotionApi");
+                      const { getAllPromotions } = await import(
+                        "../api/promotionApi"
+                      );
                       const all = await getAllPromotions("active");
-                      const match = all.find((p: any) => (p.tenKhuyenMai || "").toLowerCase() === code.toLowerCase() || (p.idkhuyenMai || "").toLowerCase() === code.toLowerCase());
+                      const match = all.find(
+                        (p: any) =>
+                          (p.tenKhuyenMai || "").toLowerCase() ===
+                            code.toLowerCase() ||
+                          (p.idkhuyenMai || "").toLowerCase() ===
+                            code.toLowerCase()
+                      );
                       if (!match) {
                         message.error("Mã khuyến mãi không hợp lệ");
                         return;
                       }
                       const roomIds = memoRoomIds;
-                      const promoRoomIds = (match.khuyenMaiPhongs || []).map((kp: any) => kp.idphong);
-                      const intersects = roomIds.some((rid: any) => promoRoomIds.includes(rid));
+                      const promoRoomIds = (match.khuyenMaiPhongs || []).map(
+                        (kp: any) => kp.idphong
+                      );
+                      const intersects = roomIds.some((rid: any) =>
+                        promoRoomIds.includes(rid)
+                      );
                       if (!intersects) {
                         message.error("Mã này không áp dụng cho phòng đã chọn");
                         return;
                       }
-                      const eligibleTotal = (bookingInfo.selectedRooms || []).reduce((sum: number, sr: any) => {
-                        const rid = sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
+                      const eligibleTotal = (
+                        bookingInfo.selectedRooms || []
+                      ).reduce((sum: number, sr: any) => {
+                        const rid =
+                          sr.room?.idphong ||
+                          sr.room?.idPhong ||
+                          sr.room?.id ||
+                          sr.roomId;
                         if (!rid) return sum;
                         if (promoRoomIds.includes(rid)) {
-                          const price = sr.room?.giaCoBanMotDem || sr.room?.gia || 0;
-                          return sum + (price * (nights || 1));
+                          const price =
+                            sr.room?.giaCoBanMotDem || sr.room?.gia || 0;
+                          return sum + price * (nights || 1);
                         }
                         return sum;
                       }, 0);
 
                       let discount = 0;
                       if (match.loaiGiamGia === "percent") {
-                        discount = (match.giaTriGiam || 0) / 100 * eligibleTotal;
+                        discount =
+                          ((match.giaTriGiam || 0) / 100) * eligibleTotal;
                       } else {
-                        discount = Math.min(match.giaTriGiam || 0, eligibleTotal);
+                        discount = Math.min(
+                          match.giaTriGiam || 0,
+                          eligibleTotal
+                        );
                       }
                       const totalAfter = Math.max(0, totalPrice - discount);
                       const points = Math.floor(totalAfter / 100000);
@@ -933,17 +1281,30 @@ const PaymentPage: React.FC = () => {
               </div>
 
               <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.7 }}>Sử dụng điểm tích lũy</div>
+                <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.7 }}>
+                  Sử dụng điểm tích lũy
+                </div>
                 {profilePoints != null && profilePoints !== undefined ? (
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <div
+                    style={{ display: "flex", gap: 12, alignItems: "center" }}
+                  >
                     <div style={{ fontSize: 13 }}>
                       Điểm hiện có: <b>{profilePoints}</b>
                     </div>
-                    <InputNumber min={0} max={profilePoints ?? 0} value={redeemPoints} onChange={(v) => setRedeemPoints(Number(v) || 0)} />
-                    <div style={{ color: '#888', fontSize: 12 }}>Mỗi điểm = 1.000đ</div>
+                    <InputNumber
+                      min={0}
+                      max={profilePoints ?? 0}
+                      value={redeemPoints}
+                      onChange={(v) => setRedeemPoints(Number(v) || 0)}
+                    />
+                    <div style={{ color: "#888", fontSize: 12 }}>
+                      Mỗi điểm = 1.000đ
+                    </div>
                   </div>
                 ) : (
-                  <div style={{ color: '#888', fontSize: 13 }}>Đăng nhập để dùng điểm tích lũy</div>
+                  <div style={{ color: "#888", fontSize: 13 }}>
+                    Đăng nhập để dùng điểm tích lũy
+                  </div>
                 )}
               </div>
 
@@ -951,74 +1312,107 @@ const PaymentPage: React.FC = () => {
                 style={{
                   marginTop: 12,
                   padding: 12,
-                  border: '1px dashed #eee',
+                  border: "1px dashed #eee",
                   borderRadius: 8,
-                  background: '#fff',
+                  background: "#fff",
                 }}
               >
-                <div style={{ fontSize: 12, marginBottom: 8, fontWeight: 700, color: '#666' }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    marginBottom: 8,
+                    fontWeight: 700,
+                    color: "#666",
+                  }}
+                >
                   Chi tiết giá theo phòng
                 </div>
 
                 {perRoomPricing.rows.length === 0 ? (
-                  <div style={{ color: '#888', fontSize: 13 }}>Không có dữ liệu phòng</div>
+                  <div style={{ color: "#888", fontSize: 13 }}>
+                    Không có dữ liệu phòng
+                  </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                  >
                     {perRoomPricing.rows.map((r: any) => (
                       <div
                         key={r.key}
                         style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '8px 10px',
-                          border: '1px solid #f5f5f5',
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "8px 10px",
+                          border: "1px solid #f5f5f5",
                           borderRadius: 8,
                         }}
                       >
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: '#333' }}>
-                            {r.name}{' '}
+                        <div
+                          style={{ display: "flex", flexDirection: "column" }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 600,
+                              color: "#333",
+                            }}
+                          >
+                            {r.name}{" "}
                             <span
                               style={{
                                 fontSize: 12,
                                 fontWeight: 500,
                                 marginLeft: 8,
-                                color: r.discount > 0 ? '#52c41a' : '#999',
+                                color: r.discount > 0 ? "#52c41a" : "#999",
                               }}
                             >
-                              {r.discount > 0 ? 'Được khuyến mãi' : 'Giá thường'}
+                              {r.discount > 0
+                                ? "Được khuyến mãi"
+                                : "Giá thường"}
                             </span>
                           </div>
-                          <div style={{ fontSize: 12, color: '#888' }}>
-                            {r.nights} đêm x {r.pricePerNight.toLocaleString()}đ ={' '}
-                            {r.base.toLocaleString()}đ
+                          <div style={{ fontSize: 12, color: "#888" }}>
+                            {r.nights} đêm x {r.pricePerNight.toLocaleString()}đ
+                            = {r.base.toLocaleString()}đ
                             {r.discount > 0 && (
-                              <span style={{ marginLeft: 8, color: '#cf1322' }}>
+                              <span style={{ marginLeft: 8, color: "#cf1322" }}>
                                 − {r.discount.toLocaleString()}đ
                               </span>
                             )}
                           </div>
                         </div>
 
-                        <div style={{ textAlign: 'right' }}>
+                        <div style={{ textAlign: "right" }}>
                           {r.discount > 0 ? (
                             <>
                               <div
                                 style={{
                                   fontSize: 12,
-                                  color: '#999',
-                                  textDecoration: 'line-through',
+                                  color: "#999",
+                                  textDecoration: "line-through",
                                 }}
                               >
                                 {r.base.toLocaleString()}đ
                               </div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: '#dfa974' }}>
+                              <div
+                                style={{
+                                  fontSize: 14,
+                                  fontWeight: 700,
+                                  color: "#dfa974",
+                                }}
+                              >
                                 {r.after.toLocaleString()}đ
                               </div>
                             </>
                           ) : (
-                            <div style={{ fontSize: 14, fontWeight: 700, color: '#333' }}>
+                            <div
+                              style={{
+                                fontSize: 14,
+                                fontWeight: 700,
+                                color: "#333",
+                              }}
+                            >
                               {r.after.toLocaleString()}đ
                             </div>
                           )}
@@ -1026,8 +1420,16 @@ const PaymentPage: React.FC = () => {
                       </div>
                     ))}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 4 }}>
-                      <span style={{ color: '#666' }}>Tổng giá phòng sau khuyến mãi</span>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        paddingTop: 4,
+                      }}
+                    >
+                      <span style={{ color: "#666" }}>
+                        Tổng giá phòng sau khuyến mãi
+                      </span>
                       <span style={{ fontWeight: 600 }}>
                         {perRoomPricing.totalAfterPromo.toLocaleString()}đ
                       </span>
@@ -1040,42 +1442,102 @@ const PaymentPage: React.FC = () => {
                 style={{
                   marginTop: 12,
                   padding: 12,
-                  border: '1px dashed #eee',
+                  border: "1px dashed #eee",
                   borderRadius: 8,
-                  background: '#fff',
+                  background: "#fff",
                 }}
               >
-                <div style={{ fontSize: 12, marginBottom: 8, fontWeight: 700, color: '#666' }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    marginBottom: 8,
+                    fontWeight: 700,
+                    color: "#666",
+                  }}
+                >
                   Dịch vụ theo phòng
                 </div>
 
                 {!servicesByRoom.hasAny ? (
-                  <div style={{ color: '#888', fontSize: 13 }}>Chưa chọn dịch vụ</div>
+                  <div style={{ color: "#888", fontSize: 13 }}>
+                    Chưa chọn dịch vụ
+                  </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
                     {servicesByRoom.groups.map((g: any, idx: number) => {
-                      const roomName = g.room?.room?.tenPhong || `Phòng ${g.room?.roomNumber ?? ""}`.trim();
-                      const roomNo = g.room?.roomNumber ? `#${g.room.roomNumber}` : "";
+                      const roomName =
+                        g.room?.room?.tenPhong ||
+                        `Phòng ${g.room?.roomNumber ?? ""}`.trim();
+                      const roomNo = g.room?.roomNumber
+                        ? `#${g.room.roomNumber}`
+                        : "";
                       return (
-                        <Card key={`svc-room-${idx}`} size="small" bodyStyle={{ padding: 10, background: '#fafafa' }}>
+                        <Card
+                          key={`svc-room-${idx}`}
+                          size="small"
+                          bodyStyle={{ padding: 10, background: "#fafafa" }}
+                        >
                           <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                            {roomName} {roomNo && <span style={{ color: '#888', fontWeight: 500 }}>{roomNo}</span>}
+                            {roomName}{" "}
+                            {roomNo && (
+                              <span style={{ color: "#888", fontWeight: 500 }}>
+                                {roomNo}
+                              </span>
+                            )}
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 6,
+                            }}
+                          >
                             {g.items.map((s: any, i: number) => (
-                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <div
+                                key={i}
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                }}
+                              >
                                 <div>
-                                  <div style={{ fontSize: 13 }}>{s.serviceName ?? s.tenDichVu ?? s.TenDichVu ?? s.name ?? 'Dịch vụ'}</div>
-                                  <div style={{ fontSize: 12, color: '#888' }}>
+                                  <div style={{ fontSize: 13 }}>
+                                    {s.serviceName ??
+                                      s.tenDichVu ??
+                                      s.TenDichVu ??
+                                      s.name ??
+                                      "Dịch vụ"}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: "#888" }}>
                                     {s._qty} x {s._unit.toLocaleString()}đ
                                   </div>
                                 </div>
-                                <div style={{ fontWeight: 700 }}>{s._line.toLocaleString()}đ</div>
+                                <div style={{ fontWeight: 700 }}>
+                                  {s._line.toLocaleString()}đ
+                                </div>
                               </div>
                             ))}
-                            <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #eee', paddingTop: 6 }}>
-                              <span style={{ color: '#666' }}>Tổng dịch vụ (phòng này)</span>
-                              <span style={{ fontWeight: 700 }}>{g.total.toLocaleString()}đ</span>
+                            <div
+                              style={{
+                                marginTop: 6,
+                                display: "flex",
+                                justifyContent: "space-between",
+                                borderTop: "1px dashed #eee",
+                                paddingTop: 6,
+                              }}
+                            >
+                              <span style={{ color: "#666" }}>
+                                Tổng dịch vụ (phòng này)
+                              </span>
+                              <span style={{ fontWeight: 700 }}>
+                                {g.total.toLocaleString()}đ
+                              </span>
                             </div>
                           </div>
                         </Card>
@@ -1084,17 +1546,39 @@ const PaymentPage: React.FC = () => {
 
                     {servicesByRoom.common.length > 0 && (
                       <Card size="small" bodyStyle={{ padding: 10 }}>
-                        <div style={{ fontWeight: 700, marginBottom: 6 }}>D���ch vụ chung</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                          D���ch vụ chung
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                          }}
+                        >
                           {servicesByRoom.common.map((s: any, i: number) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <div
+                              key={i}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                              }}
+                            >
                               <div>
-                                <div style={{ fontSize: 13 }}>{s.serviceName ?? s.tenDichVu ?? s.TenDichVu ?? s.name ?? 'Dịch vụ'}</div>
-                                <div style={{ fontSize: 12, color: '#888' }}>
+                                <div style={{ fontSize: 13 }}>
+                                  {s.serviceName ??
+                                    s.tenDichVu ??
+                                    s.TenDichVu ??
+                                    s.name ??
+                                    "Dịch vụ"}
+                                </div>
+                                <div style={{ fontSize: 12, color: "#888" }}>
                                   {s._qty} x {s._unit.toLocaleString()}đ
                                 </div>
                               </div>
-                              <div style={{ fontWeight: 700 }}>{s._line.toLocaleString()}đ</div>
+                              <div style={{ fontWeight: 700 }}>
+                                {s._line.toLocaleString()}đ
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1104,18 +1588,48 @@ const PaymentPage: React.FC = () => {
                 )}
               </div>
 
-              <div style={{ marginTop: 12, marginBottom: 6, paddingTop: 12, borderTop: '1px solid #eee' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: '#666' }}>
+              <div
+                style={{
+                  marginTop: 12,
+                  marginBottom: 6,
+                  paddingTop: 12,
+                  borderTop: "1px solid #eee",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                    color: "#666",
+                  }}
+                >
                   <span>Tiền dịch vụ</span>
                   <span>{Math.round(servicesTotal).toLocaleString()}đ</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: '#666' }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                    color: "#666",
+                  }}
+                >
                   <span>Thuế VAT (10%)</span>
                   <span>{Math.round(tax).toLocaleString()}đ</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: '#000' }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontWeight: 600,
+                    color: "#000",
+                  }}
+                >
                   <span>Tổng cộng</span>
-                  <span style={{ color: '#dfa974' }}>{Math.round(grandTotal).toLocaleString()}đ</span>
+                  <span style={{ color: "#dfa974" }}>
+                    {Math.round(grandTotal).toLocaleString()}đ
+                  </span>
                 </div>
               </div>
 
@@ -1128,50 +1642,114 @@ const PaymentPage: React.FC = () => {
                   style={{ fontSize: 12 }}
                 />
               </div>
+
+              {holdExpiresAt && (
+                <div style={{ marginTop: 12 }}>
+                  <Card size="small" bodyStyle={{ padding: 12 }}>
+                    <div
+                      style={{ display: "flex", gap: 12, alignItems: "center" }}
+                    >
+                      <ClockCircleOutlined
+                        style={{ fontSize: 18, color: "#dfa974" }}
+                      />
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "#666",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Thời hạn giữ phòng
+                        </div>
+                        <div style={{ fontSize: 14, color: "#333" }}>
+                          {holdLocal ? (
+                            <span>{holdLocal}</span>
+                          ) : (
+                            <span>{holdExpiresAt}</span>
+                          )}
+                          {holdCountdown && (
+                            <span style={{ marginLeft: 8, color: "#cf1322" }}>
+                              — còn {holdCountdown}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              )}
             </div>
           </Col>
 
           <Col xs={24} lg={8}>
-            <div style={{ height: '100%' }}>
-              <div style={{ background: '#fff', borderRadius: 8, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#666' }}>PHÒNG ĐÃ CHỌN</div>
+            <div style={{ height: "100%" }}>
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: 8,
+                  padding: 16,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#666" }}>
+                  PHÒNG ĐÃ CHỌN
+                </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                >
                   {(bookingInfo.selectedRooms || []).map((sr: any) => (
                     <div
                       key={sr.roomNumber}
                       style={{
                         padding: 8,
-                        border: '1px solid #f5f5f5',
+                        border: "1px solid #f5f5f5",
                         borderRadius: 10,
-                        background: '#fff',
+                        background: "#fff",
                       }}
                     >
                       <div
                         style={{
-                          width: '100%',
+                          width: "100%",
                           height: 200,
-                          overflow: 'hidden',
+                          overflow: "hidden",
                           borderRadius: 8,
-                          background: '#f2f2f2',
+                          background: "#f2f2f2",
                         }}
                       >
                         <img
-                          src={sr.room?.urlAnhPhong || '/img/placeholder.png'}
+                          src={sr.room?.urlAnhPhong || "/img/placeholder.png"}
                           alt={sr.room?.tenPhong}
                           style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
                           }}
                         />
                       </div>
-                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#333' }}>
+                      <div
+                        style={{
+                          marginTop: 8,
+                          display: "flex",
+                          flexDirection: "column",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: "#333",
+                          }}
+                        >
                           {sr.room?.tenPhong || `Phòng ${sr.roomNumber}`}
                         </div>
-                        <div style={{ fontSize: 12, color: '#888' }}>
+                        <div style={{ fontSize: 12, color: "#888" }}>
                           Phòng #{sr.roomNumber}
                         </div>
                       </div>
@@ -1183,7 +1761,15 @@ const PaymentPage: React.FC = () => {
           </Col>
 
           <Col xs={24}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "stretch", marginTop: 6 }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+                alignItems: "stretch",
+                marginTop: 6,
+              }}
+            >
               {paymentMethods.map((method) => (
                 <Card
                   key={method.key}
@@ -1205,15 +1791,22 @@ const PaymentPage: React.FC = () => {
                   }}
                 >
                   <Row gutter={8} align="middle">
-                    <Col xs={6} style={{ textAlign: "center", color: "#dfa974" }}>
-                      {React.cloneElement(method.icon as any, { style: { fontSize: 18 } })}
+                    <Col
+                      xs={6}
+                      style={{ textAlign: "center", color: "#dfa974" }}
+                    >
+                      {React.cloneElement(method.icon as any, {
+                        style: { fontSize: 18 },
+                      })}
                     </Col>
                     <Col xs={14}>
                       <div>
                         <Text strong style={{ fontSize: 13 }}>
                           {method.title}
                         </Text>
-                        <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
+                        <div
+                          style={{ fontSize: 12, color: "#666", marginTop: 2 }}
+                        >
                           {method.desc}
                         </div>
                       </div>
@@ -1232,34 +1825,44 @@ const PaymentPage: React.FC = () => {
               {selectedMethod === "momo" && (
                 <Card style={{ marginTop: 8 }}>
                   <Text>
-                    Bạn sẽ được chuyển hướng tới ứng dụng MoMo để hoàn tất thanh toán.
+                    Bạn sẽ được chuyển hướng tới ứng dụng MoMo để hoàn tất thanh
+                    toán.
                   </Text>
                 </Card>
               )}
               {selectedMethod === "zalopay" && (
                 <Card style={{ marginTop: 8 }}>
                   <Text>
-                    Bạn sẽ được chuyển hướng tới ứng dụng ZaloPay để hoàn tất thanh toán.
+                    Bạn sẽ được chuyển hướng tới ứng dụng ZaloPay để hoàn tất
+                    thanh toán.
                   </Text>
                 </Card>
               )}
               {selectedMethod === "vnpay" && (
                 <Card style={{ marginTop: 8 }}>
                   <Text>
-                    Bạn sẽ được chuyển hướng tới cổng thanh toán VNPay để hoàn tất thanh toán.
+                    Bạn sẽ được chuyển hướng tới cổng thanh toán VNPay để hoàn
+                    tất thanh toán.
                   </Text>
                 </Card>
               )}
               {selectedMethod === "shopeepay" && (
                 <Card style={{ marginTop: 8 }}>
                   <Text>
-                    Bạn sẽ được chuyển hướng tới ứng dụng ShopeePay để hoàn tất thanh toán.
+                    Bạn sẽ được chuyển hướng tới ứng dụng ShopeePay để hoàn tất
+                    thanh toán.
                   </Text>
                 </Card>
               )}
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: 12,
+              }}
+            >
               <Button
                 type="primary"
                 size="middle"
@@ -1273,7 +1876,7 @@ const PaymentPage: React.FC = () => {
                   fontSize: 13,
                   fontWeight: 600,
                   color: "#000",
-                  padding: '0 12px',
+                  padding: "0 12px",
                 }}
               >
                 Thanh toán {Math.round(grandTotal).toLocaleString()}đ
@@ -1296,7 +1899,9 @@ const PaymentPage: React.FC = () => {
 
             <div style={{ marginBottom: 20 }}>
               <img
-                src={`https://img.vietqr.io/image/bidv-8639699999-print.png?amount=${Math.round(grandTotal)}&addInfo=Thanh toan tien phong ${paymentRef}&accountName=ROBINS VILLA HOTEL`}
+                src={`https://img.vietqr.io/image/bidv-8639699999-print.png?amount=${Math.round(
+                  grandTotal
+                )}&addInfo=Thanh toan tien phong ${paymentRef}&accountName=ROBINS VILLA HOTEL`}
                 alt="QR Code"
                 style={{ width: "100%", maxWidth: 350, height: "auto" }}
               />
@@ -1307,12 +1912,22 @@ const PaymentPage: React.FC = () => {
                 <Text strong>Ngân hàng: </Text>
                 <Text>BIDV - Ngân hàng TMCP Đầu tư và Phát triển Việt Nam</Text>
               </div>
-              <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{
+                  marginBottom: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
                 <div>
                   <Text strong>Số tài khoản: </Text>
                   <Text>8639699999</Text>
                 </div>
-                <Button size="small" onClick={() => copyToClipboard("8639699999")}>
+                <Button
+                  size="small"
+                  onClick={() => copyToClipboard("8639699999")}
+                >
                   Sao chép
                 </Button>
               </div>
@@ -1320,30 +1935,46 @@ const PaymentPage: React.FC = () => {
                 <Text strong>Chủ tài khoản: </Text>
                 <Text>ROBINS VILLA HOTEL</Text>
               </div>
-              <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{
+                  marginBottom: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
                 <div>
                   <Text strong>Số tiền: </Text>
-                  <Text style={{ color: "#dfa974", fontWeight: 600, fontSize: 16 }}>
+                  <Text
+                    style={{ color: "#dfa974", fontWeight: 600, fontSize: 16 }}
+                  >
                     {Math.round(grandTotal).toLocaleString()}đ
                   </Text>
                 </div>
                 <Button
                   size="small"
                   onClick={() =>
-                    copyToClipboard(
-                      Math.round(grandTotal).toString()
-                    )
+                    copyToClipboard(Math.round(grandTotal).toString())
                   }
                 >
                   Sao chép
                 </Button>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
                 <div>
                   <Text strong>Nội dung: </Text>
                   <Text>{paymentRef}</Text>
                 </div>
-                <Button size="small" onClick={() => copyToClipboard(paymentRef)}>
+                <Button
+                  size="small"
+                  onClick={() => copyToClipboard(paymentRef)}
+                >
                   Sao chép
                 </Button>
               </div>
@@ -1353,8 +1984,14 @@ const PaymentPage: React.FC = () => {
               message="Lưu ý"
               description={
                 <div>
-                  <p>• Vui lòng chuyển khoản đúng nội dung: <strong>{paymentRef}</strong></p>
-                  <p>• Sau khi chuyển khoản thành công, vui lòng nhấn nút bên dưới</p>
+                  <p>
+                    • Vui lòng chuyển khoản đúng nội dung:{" "}
+                    <strong>{paymentRef}</strong>
+                  </p>
+                  <p>
+                    • Sau khi chuyển khoản thành công, vui lòng nhấn nút bên
+                    dưới
+                  </p>
                 </div>
               }
               type="warning"
@@ -1393,12 +2030,14 @@ const PaymentPage: React.FC = () => {
             <CheckCircleOutlined
               style={{ fontSize: 80, color: "#52c41a", marginBottom: 20 }}
             />
-            
+
             <Title level={3} style={{ marginBottom: 16, color: "#52c41a" }}>
               Xác nhận hoàn tất thanh toán
             </Title>
 
-            <Paragraph style={{ fontSize: 16, color: "#666", marginBottom: 24 }}>
+            <Paragraph
+              style={{ fontSize: 16, color: "#666", marginBottom: 24 }}
+            >
               {currentPaymentMethod === "bank-transfer" && (
                 <>
                   Bạn đã chuyển khoản thành công số tiền{" "}
@@ -1417,9 +2056,19 @@ const PaymentPage: React.FC = () => {
                   ?
                 </>
               )}
-              {["momo", "zalopay", "vnpay", "shopeepay"].includes(currentPaymentMethod) && (
+              {["momo", "zalopay", "vnpay", "shopeepay"].includes(
+                currentPaymentMethod
+              ) && (
                 <>
-                  Bạn đã thanh toán qua {currentPaymentMethod === "momo" ? "MoMo" : currentPaymentMethod === "zalopay" ? "ZaloPay" : currentPaymentMethod === "vnpay" ? "VNPay" : "ShopeePay"} thành công số tiền{" "}
+                  Bạn đã thanh toán qua{" "}
+                  {currentPaymentMethod === "momo"
+                    ? "MoMo"
+                    : currentPaymentMethod === "zalopay"
+                    ? "ZaloPay"
+                    : currentPaymentMethod === "vnpay"
+                    ? "VNPay"
+                    : "ShopeePay"}{" "}
+                  thành công số tiền{" "}
                   <Text strong style={{ color: "#dfa974", fontSize: 18 }}>
                     {Math.round(grandTotal).toLocaleString()}đ
                   </Text>
@@ -1446,12 +2095,19 @@ const PaymentPage: React.FC = () => {
               )}
             </Paragraph>
 
-            <Card style={{ marginBottom: 24, textAlign: "left", background: "#f9f9f9" }}>
+            <Card
+              style={{
+                marginBottom: 24,
+                textAlign: "left",
+                background: "#f9f9f9",
+              }}
+            >
               <Row gutter={[16, 16]}>
                 <Col span={24}>
                   <Text strong>Phương thức thanh toán: </Text>
                   <Text style={{ color: "#dfa974" }}>
-                    {currentPaymentMethod === "bank-transfer" && "Chuyển khoản ngân hàng"}
+                    {currentPaymentMethod === "bank-transfer" &&
+                      "Chuyển khoản ngân hàng"}
                     {currentPaymentMethod === "credit-card" && "Thẻ tín dụng"}
                     {currentPaymentMethod === "momo" && "Ví MoMo"}
                     {currentPaymentMethod === "zalopay" && "Ví ZaloPay"}
@@ -1477,12 +2133,15 @@ const PaymentPage: React.FC = () => {
                     </Col>
                   </>
                 )}
-                {["momo", "zalopay", "vnpay", "shopeepay", "atm"].includes(currentPaymentMethod) && paymentRef && (
-                  <Col span={24}>
-                    <Text strong>Mã giao dịch: </Text>
-                    <Text style={{ color: "#dfa974" }}>{paymentRef}</Text>
-                  </Col>
-                )}
+                {["momo", "zalopay", "vnpay", "shopeepay", "atm"].includes(
+                  currentPaymentMethod
+                ) &&
+                  paymentRef && (
+                    <Col span={24}>
+                      <Text strong>Mã giao dịch: </Text>
+                      <Text style={{ color: "#dfa974" }}>{paymentRef}</Text>
+                    </Col>
+                  )}
                 <Col span={24}>
                   <Text strong>Số tiền: </Text>
                   <Text style={{ color: "#dfa974", fontSize: 16 }}>
@@ -1492,11 +2151,12 @@ const PaymentPage: React.FC = () => {
               </Row>
             </Card>
 
-            <Paragraph style={{ fontSize: 14, color: "#999", marginBottom: 24 }}>
-              {currentPaymentMethod === "cash" 
+            <Paragraph
+              style={{ fontSize: 14, color: "#999", marginBottom: 24 }}
+            >
+              {currentPaymentMethod === "cash"
                 ? "Vui lòng thanh toán tại quầy lễ tân khi nhận phòng. Mang theo CMND/CCCD để xác nhận."
-                : "Hệ thống sẽ kiểm tra giao dịch của bạn trong vòng 5-10 phút. Bạn sẽ nhận được email xác nhận khi thanh toán được xác thực."
-              }
+                : "Hệ thống sẽ kiểm tra giao dịch của bạn trong vòng 5-10 phút. Bạn sẽ nhận được email xác nhận khi thanh toán được xác thực."}
             </Paragraph>
 
             <Row gutter={16}>
@@ -1506,11 +2166,20 @@ const PaymentPage: React.FC = () => {
                   block
                   onClick={() => {
                     setConfirmModalVisible(false);
-                    if (currentPaymentMethod === "bank-transfer") setQrModalVisible(true);
-                    else if (currentPaymentMethod === "credit-card") setCreditModalVisible(true);
-                    else if (["momo", "zalopay", "vnpay", "shopeepay"].includes(currentPaymentMethod)) setEwalletModalVisible(true);
-                    else if (currentPaymentMethod === "atm") setAtmModalVisible(true);
-                    else if (currentPaymentMethod === "cash") setCashModalVisible(true);
+                    if (currentPaymentMethod === "bank-transfer")
+                      setQrModalVisible(true);
+                    else if (currentPaymentMethod === "credit-card")
+                      setCreditModalVisible(true);
+                    else if (
+                      ["momo", "zalopay", "vnpay", "shopeepay"].includes(
+                        currentPaymentMethod
+                      )
+                    )
+                      setEwalletModalVisible(true);
+                    else if (currentPaymentMethod === "atm")
+                      setAtmModalVisible(true);
+                    else if (currentPaymentMethod === "cash")
+                      setCashModalVisible(true);
                   }}
                   style={{ height: 48 }}
                 >
@@ -1554,7 +2223,7 @@ const PaymentPage: React.FC = () => {
               name="cardNumber"
               rules={[
                 { required: true, message: "Vui lòng nhập số thẻ" },
-                { pattern: /^\d{16}$/, message: "Số thẻ phải có 16 chữ số" }
+                { pattern: /^\d{16}$/, message: "Số thẻ phải có 16 chữ số" },
               ]}
             >
               <Input placeholder="1234 5678 9012 3456" maxLength={16} />
@@ -1567,7 +2236,7 @@ const PaymentPage: React.FC = () => {
                   name="expiry"
                   rules={[
                     { required: true, message: "Vui lòng nhập ngày hết hạn" },
-                    { pattern: /^\d{2}\/\d{2}$/, message: "Định dạng: MM/YY" }
+                    { pattern: /^\d{2}\/\d{2}$/, message: "Định dạng: MM/YY" },
                   ]}
                 >
                   <Input placeholder="MM/YY" maxLength={5} />
@@ -1579,7 +2248,7 @@ const PaymentPage: React.FC = () => {
                   name="cvv"
                   rules={[
                     { required: true, message: "Vui lòng nhập CVV" },
-                    { pattern: /^\d{3}$/, message: "CVV phải có 3 chữ số" }
+                    { pattern: /^\d{3}$/, message: "CVV phải có 3 chữ số" },
                   ]}
                 >
                   <Input placeholder="123" maxLength={3} type="password" />
@@ -1592,7 +2261,10 @@ const PaymentPage: React.FC = () => {
               name="cardName"
               rules={[{ required: true, message: "Vui lòng nhập tên chủ thẻ" }]}
             >
-              <Input placeholder="NGUYEN VAN A" style={{ textTransform: 'uppercase' }} />
+              <Input
+                placeholder="NGUYEN VAN A"
+                style={{ textTransform: "uppercase" }}
+              />
             </Form.Item>
 
             <Button
@@ -1624,16 +2296,39 @@ const PaymentPage: React.FC = () => {
           centered
         >
           <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <WalletOutlined style={{ fontSize: 60, color: "#dfa974", marginBottom: 20 }} />
-            
+            <WalletOutlined
+              style={{ fontSize: 60, color: "#dfa974", marginBottom: 20 }}
+            />
+
             <Title level={4} style={{ marginBottom: 20 }}>
-              Thanh toán qua {currentWallet === "momo" ? "MoMo" : currentWallet === "zalopay" ? "ZaloPay" : currentWallet === "vnpay" ? "VNPay" : "ShopeePay"}
+              Thanh toán qua{" "}
+              {currentWallet === "momo"
+                ? "MoMo"
+                : currentWallet === "zalopay"
+                ? "ZaloPay"
+                : currentWallet === "vnpay"
+                ? "VNPay"
+                : "ShopeePay"}
             </Title>
 
-            <div style={{ marginBottom: 20, padding: 20, background: "#f9f9f9", borderRadius: 8 }}>
+            <div
+              style={{
+                marginBottom: 20,
+                padding: 20,
+                background: "#f9f9f9",
+                borderRadius: 8,
+              }}
+            >
               <QrcodeOutlined style={{ fontSize: 120, color: "#666" }} />
               <Paragraph style={{ marginTop: 15, color: "#666" }}>
-                Quét mã QR bằng ứng dụng {currentWallet === "momo" ? "MoMo" : currentWallet === "zalopay" ? "ZaloPay" : currentWallet === "vnpay" ? "VNPay" : "ShopeePay"}
+                Quét mã QR bằng ứng dụng{" "}
+                {currentWallet === "momo"
+                  ? "MoMo"
+                  : currentWallet === "zalopay"
+                  ? "ZaloPay"
+                  : currentWallet === "vnpay"
+                  ? "VNPay"
+                  : "ShopeePay"}
               </Paragraph>
             </div>
 
@@ -1644,7 +2339,9 @@ const PaymentPage: React.FC = () => {
               </div>
               <div style={{ marginBottom: 12 }}>
                 <Text strong>Số tiền: </Text>
-                <Text style={{ color: "#dfa974", fontSize: 16, fontWeight: 600 }}>
+                <Text
+                  style={{ color: "#dfa974", fontSize: 16, fontWeight: 600 }}
+                >
                   {Math.round(grandTotal).toLocaleString()}đ
                 </Text>
               </div>
@@ -1654,7 +2351,17 @@ const PaymentPage: React.FC = () => {
               message="Hướng dẫn"
               description={
                 <div style={{ textAlign: "left" }}>
-                  <p>1. Mở ứng dụng {currentWallet === "momo" ? "MoMo" : currentWallet === "zalopay" ? "ZaloPay" : currentWallet === "vnpay" ? "VNPay" : "ShopeePay"} trên điện thoại</p>
+                  <p>
+                    1. Mở ứng dụng{" "}
+                    {currentWallet === "momo"
+                      ? "MoMo"
+                      : currentWallet === "zalopay"
+                      ? "ZaloPay"
+                      : currentWallet === "vnpay"
+                      ? "VNPay"
+                      : "ShopeePay"}{" "}
+                    trên điện thoại
+                  </p>
                   <p>2. Quét mã QR phía trên</p>
                   <p>3. Xác nhận thanh toán trong ứng dụng</p>
                   <p>4. Nhấn "Tôi đã thanh toán" bên dưới</p>
@@ -1693,13 +2400,22 @@ const PaymentPage: React.FC = () => {
           centered
         >
           <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <BankOutlined style={{ fontSize: 60, color: "#dfa974", marginBottom: 20 }} />
-            
+            <BankOutlined
+              style={{ fontSize: 60, color: "#dfa974", marginBottom: 20 }}
+            />
+
             <Title level={4} style={{ marginBottom: 20 }}>
               Thanh toán bằng thẻ ATM
             </Title>
 
-            <div style={{ marginBottom: 20, padding: 20, background: "#f9f9f9", borderRadius: 8 }}>
+            <div
+              style={{
+                marginBottom: 20,
+                padding: 20,
+                background: "#f9f9f9",
+                borderRadius: 8,
+              }}
+            >
               <QrcodeOutlined style={{ fontSize: 120, color: "#666" }} />
               <Paragraph style={{ marginTop: 15, color: "#666" }}>
                 Quét mã QR bằng ứng dụng ngân hàng của bạn
@@ -1709,7 +2425,9 @@ const PaymentPage: React.FC = () => {
             <Card style={{ marginBottom: 20, textAlign: "left" }}>
               <div style={{ marginBottom: 12 }}>
                 <Text strong>Số tiền: </Text>
-                <Text style={{ color: "#dfa974", fontSize: 16, fontWeight: 600 }}>
+                <Text
+                  style={{ color: "#dfa974", fontSize: 16, fontWeight: 600 }}
+                >
                   {Math.round(grandTotal).toLocaleString()}đ
                 </Text>
               </div>
@@ -1755,16 +2473,27 @@ const PaymentPage: React.FC = () => {
           centered
         >
           <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <DollarOutlined style={{ fontSize: 60, color: "#52c41a", marginBottom: 20 }} />
-            
+            <DollarOutlined
+              style={{ fontSize: 60, color: "#52c41a", marginBottom: 20 }}
+            />
+
             <Title level={4} style={{ marginBottom: 20 }}>
               Thanh toán tại quầy
             </Title>
 
             <Card style={{ marginBottom: 20, background: "#f9f9f9" }}>
               <div style={{ marginBottom: 15 }}>
-                <Text style={{ fontSize: 14, color: "#666" }}>Tổng thanh toán</Text>
-                <div style={{ fontSize: 28, fontWeight: 700, color: "#dfa974", marginTop: 5 }}>
+                <Text style={{ fontSize: 14, color: "#666" }}>
+                  Tổng thanh toán
+                </Text>
+                <div
+                  style={{
+                    fontSize: 28,
+                    fontWeight: 700,
+                    color: "#dfa974",
+                    marginTop: 5,
+                  }}
+                >
                   {Math.round(grandTotal).toLocaleString()}đ
                 </div>
               </div>

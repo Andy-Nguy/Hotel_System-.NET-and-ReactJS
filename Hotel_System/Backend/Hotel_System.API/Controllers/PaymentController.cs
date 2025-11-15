@@ -101,6 +101,13 @@ namespace Hotel_System.API.Controllers
                 datPhong.TongTien = tongTien;
                 datPhong.TrangThaiThanhToan = trangThaiThanhToan;
 
+                // Nếu đã thanh toán online -> đặt trạng thái đặt phòng là 'xác nhận' (1) và clear ThoiHan
+                if (datPhong.TrangThaiThanhToan == 2)
+                {
+                    datPhong.TrangThai = 1; // 1 = Xác nhận/đã giữ chấp nhận
+                    datPhong.ThoiHan = null;
+                }
+
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
 
@@ -178,6 +185,14 @@ namespace Hotel_System.API.Controllers
                             await SendInvoiceEmail(email, hoTen, hd);
                         }
                     }
+                }
+
+                // Khi cập nhật trạng thái thanh toán sang đã thanh toán, đồng thời mark booking là xác nhận và clear ThoiHan
+                if (dp.TrangThaiThanhToan == 2)
+                {
+                    dp.TrangThai = 1; // xác nhận
+                    dp.ThoiHan = null;
+                    await _context.SaveChangesAsync();
                 }
 
                 return Ok(new PaymentStatusUpdateResponse

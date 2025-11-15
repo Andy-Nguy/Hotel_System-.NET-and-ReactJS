@@ -1,4 +1,13 @@
 import React, { useEffect, useState } from "react";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import duration from "dayjs/plugin/duration";
+dayjs.extend(relativeTime);
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(duration);
 import {
   Layout,
   Card,
@@ -54,6 +63,8 @@ const CheckoutPage: React.FC = () => {
   const [bookingInfo, setBookingInfo] = useState<BookingInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<string | null>(null);
 
   useEffect(() => {
     // Lấy thông tin đặt phòng từ sessionStorage
@@ -69,6 +80,79 @@ const CheckoutPage: React.FC = () => {
       setError("Không tìm thấy thông tin đặt phòng. Vui lòng chọn phòng lại.");
     }
   }, []);
+
+  useEffect(() => {
+    // If invoice info in sessionStorage contains holdExpiresAt, verify booking exists in DB
+    // so we don't show a hold that was never persisted.
+    const inv = sessionStorage.getItem("invoiceInfo");
+    if (!inv) return;
+
+    (async () => {
+      try {
+        const parsed = JSON.parse(inv);
+        if (!parsed) return;
+
+        // Only show hold if server-side booking exists and server returned holdExpiresAt
+        if (parsed.idDatPhong && parsed.holdExpiresAt) {
+          try {
+            const res = await fetch(
+              `/api/datphong/${encodeURIComponent(parsed.idDatPhong)}`
+            );
+            if (res.ok) {
+              // booking exists on server — show hold
+              setHoldExpiresAt(parsed.holdExpiresAt);
+            } else {
+              // booking not found on server — clear any stale hold in sessionStorage
+              parsed.holdExpiresAt = null;
+              sessionStorage.setItem("invoiceInfo", JSON.stringify(parsed));
+            }
+          } catch (e) {
+            // network error — be conservative: don't show hold
+            console.warn(
+              "Could not verify booking existence, skipping hold display",
+              e
+            );
+          }
+        }
+      } catch (e) {
+        console.warn("Invalid invoiceInfo in sessionStorage", e);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!holdExpiresAt) {
+      setCountdown(null);
+      return;
+    }
+
+    const target = dayjs(holdExpiresAt).utc();
+    const tick = () => {
+      const now = dayjs().utc();
+      const diffMs = target.diff(now);
+      if (diffMs <= 0) {
+        setCountdown("Hết hạn");
+        // Clear session hold value
+        const inv = sessionStorage.getItem("invoiceInfo");
+        if (inv) {
+          try {
+            const p = JSON.parse(inv);
+            p.holdExpiresAt = null;
+            sessionStorage.setItem("invoiceInfo", JSON.stringify(p));
+          } catch {}
+        }
+        return;
+      }
+      const dur = dayjs.duration(diffMs);
+      const mm = String(Math.floor(dur.asMinutes())).padStart(2, "0");
+      const ss = String(dur.seconds()).padStart(2, "0");
+      setCountdown(`${mm}:${ss}`);
+    };
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [holdExpiresAt]);
 
   const calculateTotal = () => {
     if (!bookingInfo) return 0;
@@ -114,12 +198,13 @@ const CheckoutPage: React.FC = () => {
       // Build rooms payload robustly: support different possible id/price field names
       const roomsPayload = (bookingInfo.selectedRooms || []).map((sr) => {
         const r = sr.room || {};
-        const idPhong = r.idphong ?? r.idPhong ?? r.id ?? r.roomId ?? String(sr.roomNumber);
+        const idPhong =
+          r.idphong ?? r.idPhong ?? r.id ?? r.roomId ?? String(sr.roomNumber);
         const gia = r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.gia ?? r.Gia ?? 0;
         return {
           IdPhong: String(idPhong),
           SoPhong: sr.roomNumber,
-          GiaCoBanMotDem: Number(gia) || 0
+          GiaCoBanMotDem: Number(gia) || 0,
         };
       });
 
@@ -130,12 +215,12 @@ const CheckoutPage: React.FC = () => {
         ngayNhanPhong: bookingInfo.checkIn,
         ngayTraPhong: bookingInfo.checkOut,
         soLuongKhach: bookingInfo.guests,
-        rooms: roomsPayload
+        rooms: roomsPayload,
       };
 
       console.log("📞 Calling Booking API:", bookingPayload);
 
-      const response = await fetch("/api/Booking/create", {
+      const response = await fetch("/api/datphong/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bookingPayload),
@@ -152,7 +237,10 @@ const CheckoutPage: React.FC = () => {
 
       if (!result.success || !result.data || !result.data.idDatPhong) {
         console.error("Booking API returned unexpected response:", result);
-        throw new Error(result.message || "Tạo đặt phòng thất bại (không có ID đặt phòng trả về)!");
+        throw new Error(
+          result.message ||
+            "Tạo đặt phòng thất bại (không có ID đặt phòng trả về)!"
+        );
       }
 
       // Lưu thông tin ĐẶT PHÒNG (chưa có hóa đơn ở bước này)
@@ -168,6 +256,8 @@ const CheckoutPage: React.FC = () => {
         totalPrice: result.data.tongTien,
         tax: result.data.thue,
         grandTotal: result.data.tongCong,
+        // Thời hạn giữ phòng (ISO string, UTC) nếu server trả về
+        holdExpiresAt: result.data.holdExpiresAt ?? null,
         // carry through any selected services from booking step so PaymentPage can include them
         services: bookingInfo.selectedServices || [],
         servicesTotal: bookingInfo.servicesTotal || 0,
@@ -180,13 +270,12 @@ const CheckoutPage: React.FC = () => {
 
       console.log("✅ Booking success! Redirecting to payment page...");
       console.log("📦 Invoice info saved:", invoiceInfo);
-      
+
       // Tắt loading
       setLoading(false);
-      
+
       // Navigate to payment page
       window.location.href = "/#payment";
-
     } catch (err: any) {
       console.error("❌ Error in handleSubmit:", err);
       Modal.error({
@@ -243,10 +332,15 @@ const CheckoutPage: React.FC = () => {
     let discountedPerNight = original;
     if (promotion) {
       if (promotion.loaiGiamGia === "percent") {
-        discountedPerNight = Math.round(original * (1 - Number(promotion.giaTriGiam || 0) / 100));
+        discountedPerNight = Math.round(
+          original * (1 - Number(promotion.giaTriGiam || 0) / 100)
+        );
       } else {
         // assume fixed amount off per night
-        discountedPerNight = Math.max(0, original - Number(promotion.giaTriGiam || 0));
+        discountedPerNight = Math.max(
+          0,
+          original - Number(promotion.giaTriGiam || 0)
+        );
       }
     }
     totalAfter += discountedPerNight * nights;
@@ -419,6 +513,21 @@ const CheckoutPage: React.FC = () => {
                   <Text>Trả phòng: </Text>
                   <Text strong>{bookingInfo.checkOut}</Text>
                 </div>
+                {holdExpiresAt && (
+                  <div style={{ marginTop: 8 }}>
+                    <Text type="danger">Thời hạn giữ phòng: </Text>
+                    <Text strong>
+                      {dayjs(holdExpiresAt)
+                        .utc()
+                        .local()
+                        .format("YYYY-MM-DD HH:mm:ss")}
+                    </Text>
+                    <div style={{ marginTop: 4 }}>
+                      <Text type="secondary">Thời gian còn lại: </Text>
+                      <Text strong>{countdown ?? "--:--"}</Text>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <Text>Số đêm: </Text>
                   <Text strong>{nights} đêm</Text>
@@ -483,12 +592,26 @@ const CheckoutPage: React.FC = () => {
                   <div style={{ marginBottom: 16 }}>
                     <Text strong>Dịch vụ đã chọn</Text>
                     {servicesList.map((s: any, idx: number) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginTop: 8,
+                        }}
+                      >
                         <div>
                           <Text>{s.serviceName}</Text>
-                          <div style={{ fontSize: 12, color: '#666' }}>{s.quantity} x {Number(s.price).toLocaleString()}đ</div>
+                          <div style={{ fontSize: 12, color: "#666" }}>
+                            {s.quantity} x {Number(s.price).toLocaleString()}đ
+                          </div>
                         </div>
-                        <div style={{ fontWeight: 700 }}>{(Number(s.price) * Number(s.quantity)).toLocaleString()}đ</div>
+                        <div style={{ fontWeight: 700 }}>
+                          {(
+                            Number(s.price) * Number(s.quantity)
+                          ).toLocaleString()}
+                          đ
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -509,16 +632,40 @@ const CheckoutPage: React.FC = () => {
                 </div>
 
                 {promotion && (
-                  <div style={{ marginTop: 8, marginBottom: 8, padding: 12, background: '#fff7e6', borderRadius: 6 }}>
-                    <Text strong style={{ color: '#b45309' }}>{promotion.tenKhuyenMai || 'Khuyến mãi'}</Text>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      marginBottom: 8,
+                      padding: 12,
+                      background: "#fff7e6",
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Text strong style={{ color: "#b45309" }}>
+                      {promotion.tenKhuyenMai || "Khuyến mãi"}
+                    </Text>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: 6,
+                      }}
+                    >
                       <Text type="secondary">Giảm:</Text>
-                      <Text strong style={{ color: '#ff4d4f' }}>{discountAmount.toLocaleString()}đ</Text>
+                      <Text strong style={{ color: "#ff4d4f" }}>
+                        {discountAmount.toLocaleString()}đ
+                      </Text>
                     </div>
                   </div>
                 )}
 
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                  }}
+                >
                   <Text>Tiền dịch vụ:</Text>
                   <Text strong>{servicesTotal.toLocaleString()}đ</Text>
                 </div>

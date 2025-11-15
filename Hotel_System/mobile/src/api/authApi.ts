@@ -131,7 +131,7 @@ export async function getProfile() {
 
 export async function getBookings() {
   const token = await AsyncStorage.getItem("hs_token");
-  const res = await fetch(`${BASE_URL}/api/Bookings/my`, {
+  const res = await fetch(`${BASE_URL}/api/datphong`, {
     method: "GET",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });

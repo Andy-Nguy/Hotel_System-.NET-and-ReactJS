@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
 using Hotel_System.API.Services;
+using Hotel_System.API.DTOs;
 
 namespace Hotel_System.API.Controllers
 {
@@ -18,6 +19,114 @@ namespace Hotel_System.API.Controllers
             _context = context;
             _emailService = emailService;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// POST: api/datphong/create
+        /// Tạo DatPhong + ChiTietDatPhong (tạm giữ), không tạo Hóa đơn.
+        /// Trả về idDatPhong, tongTien, holdExpiresAt.
+        /// </summary>
+        [HttpPost("create")]
+        public async Task<IActionResult> CreateBooking([FromBody] CreateBookingRequest request)
+        {
+            if (request == null || request.Rooms == null || !request.Rooms.Any())
+            {
+                return BadRequest(new { success = false, message = "Dữ liệu không hợp lệ." });
+            }
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // 1. Tạo hoặc lấy khách hàng theo email (nếu có)
+                var khachHang = await _context.KhachHangs.FirstOrDefaultAsync(k => k.Email == request.Email);
+                if (khachHang == null)
+                {
+                    khachHang = new KhachHang
+                    {
+                        HoTen = request.HoTen,
+                        Email = request.Email,
+                        SoDienThoai = request.SoDienThoai,
+                        NgayDangKy = DateOnly.FromDateTime(DateTime.Now)
+                    };
+                    _context.KhachHangs.Add(khachHang);
+                    await _context.SaveChangesAsync();
+                }
+
+                // 2. Tính số đêm và tổng tiền (tính lại server-side)
+                var ngayNhan = DateOnly.Parse(request.NgayNhanPhong);
+                var ngayTra = DateOnly.Parse(request.NgayTraPhong);
+                var soDem = ngayTra.DayNumber - ngayNhan.DayNumber;
+
+                decimal tongTien = 0;
+                foreach (var room in request.Rooms)
+                {
+                    tongTien += room.GiaCoBanMotDem * soDem;
+                }
+
+                var thue = tongTien * 0.1m;
+                var tongCong = tongTien + thue;
+
+                // 3. Tạo DatPhong (đồng thời lưu thời hạn giữ phòng - `ThoiHan`)
+                var datPhongId = $"DP{DateTime.Now:yyyyMMddHHmmssfff}";
+                // Thiết lập thời hạn giữ phòng (test): 1 phút
+                var holdExpiresAt = DateTime.UtcNow.AddMinutes(1);
+
+                var datPhong = new DatPhong
+                {
+                    IddatPhong = datPhongId,
+                    IdkhachHang = khachHang.IdkhachHang,
+                    // Lưu tạm Idphong bằng phòng đầu tiên để tránh null (sẽ chuyển sang dùng ChiTietDatPhong làm chuẩn)
+                    Idphong = request.Rooms.First().IdPhong,
+                    NgayDatPhong = DateOnly.FromDateTime(DateTime.Now),
+                    NgayNhanPhong = ngayNhan,
+                    NgayTraPhong = ngayTra,
+                    SoDem = soDem,
+                    TongTien = tongCong,
+                    TienCoc = 0,
+                    TrangThai = 0, // 0 = Chờ xác nhận (giữ phòng bằng ThoiHan)
+                    TrangThaiThanhToan = 0, // 0 = Chưa thanh toán
+                    ThoiHan = holdExpiresAt
+                };
+                _context.DatPhongs.Add(datPhong);
+                await _context.SaveChangesAsync();
+
+                // 4. Tạo ChiTietDatPhong cho từng phòng
+                foreach (var room in request.Rooms)
+                {
+                    var thanhTien = room.GiaCoBanMotDem * soDem;
+                    var ct = new ChiTietDatPhong
+                    {
+                        IDDatPhong = datPhongId,
+                        IDPhong = room.IdPhong,
+                        SoDem = soDem,
+                        GiaPhong = room.GiaCoBanMotDem,
+                        ThanhTien = thanhTien,
+                        GhiChu = request.GhiChu
+                    };
+                    _context.ChiTietDatPhongs.Add(ct);
+                }
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Đặt phòng tạm thành công",
+                    data = new
+                    {
+                        idDatPhong = datPhong.IddatPhong,
+                        tongTien = tongCong,
+                        holdExpiresAt = datPhong.ThoiHan?.ToString("o")
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Lỗi khi tạo đặt phòng tạm");
+                return StatusCode(500, new { success = false, message = "Đặt phòng thất bại: " + ex.Message });
+            }
         }
 
         [HttpGet]
@@ -222,11 +331,167 @@ namespace Hotel_System.API.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
+        /// <summary>
+        /// PUT: api/datphong/{id}/reschedule
+        /// Thay đổi thời gian đặt phòng
+        /// </summary>
+        [HttpPut("{id}/reschedule")]
+        public async Task<IActionResult> Reschedule(string id, [FromBody] RescheduleRequest request)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var datPhong = await _context.DatPhongs
+                    .Include(dp => dp.ChiTietDatPhongs)
+                    .FirstOrDefaultAsync(dp => dp.IddatPhong == id);
+
+                if (datPhong == null)
+                {
+                    return NotFound(new { message = "Không tìm thấy đơn đặt phòng" });
+                }
+
+                // Kiểm tra trạng thái: chỉ cho phép thay đổi nếu chưa hủy
+                if (datPhong.TrangThai == 2)
+                {
+                    return BadRequest(new { message = "Không thể thay đổi đơn đặt phòng đã hủy" });
+                }
+
+                // Kiểm tra thời gian: phải trước 24h so với ngày nhận phòng
+                var now = DateOnly.FromDateTime(DateTime.Now);
+                if (datPhong.NgayNhanPhong.AddDays(-1) <= now)
+                {
+                    return BadRequest(new { message = "Chỉ có thể thay đổi trước 24 giờ nhận phòng" });
+                }
+
+                var ngayNhanMoi = DateOnly.Parse(request.NgayNhanPhong);
+                var ngayTraMoi = DateOnly.Parse(request.NgayTraPhong);
+                var soDemMoi = ngayTraMoi.DayNumber - ngayNhanMoi.DayNumber;
+
+                // Tính lại tổng tiền
+                decimal tongTienMoi = 0;
+                foreach (var chiTiet in datPhong.ChiTietDatPhongs)
+                {
+                    var thanhTienMoi = chiTiet.GiaPhong * soDemMoi;
+                    chiTiet.SoDem = soDemMoi;
+                    chiTiet.ThanhTien = thanhTienMoi;
+                    tongTienMoi += thanhTienMoi;
+                }
+
+                var thueMoi = tongTienMoi * 0.1m;
+                var tongCongMoi = tongTienMoi + thueMoi;
+
+                datPhong.NgayNhanPhong = ngayNhanMoi;
+                datPhong.NgayTraPhong = ngayTraMoi;
+                datPhong.SoDem = soDemMoi;
+                datPhong.TongTien = tongCongMoi;
+
+                // Cập nhật hóa đơn nếu có
+                var hoaDon = await _context.HoaDons.FirstOrDefaultAsync(h => h.IddatPhong == id);
+                if (hoaDon != null)
+                {
+                    hoaDon.TongTien = tongCongMoi;
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation("Booking {BookingId} rescheduled successfully", id);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Thay đổi thời gian đặt phòng thành công",
+                    data = new
+                    {
+                        idDatPhong = datPhong.IddatPhong,
+                        ngayNhanPhong = datPhong.NgayNhanPhong.ToString("yyyy-MM-dd"),
+                        ngayTraPhong = datPhong.NgayTraPhong.ToString("yyyy-MM-dd"),
+                        soDem = datPhong.SoDem,
+                        tongTien = tongTienMoi,
+                        thue = thueMoi,
+                        tongCong = tongCongMoi
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error rescheduling booking");
+                return StatusCode(500, new { message = "Có lỗi xảy ra: " + ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// DELETE: api/datphong/{id}/cancel
+        /// Hủy đặt phòng
+        /// </summary>
+        [HttpDelete("{id}/cancel")]
+        public async Task<IActionResult> Cancel(string id)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var datPhong = await _context.DatPhongs.FindAsync(id);
+                if (datPhong == null)
+                {
+                    return NotFound(new { message = "Không tìm thấy đơn đặt phòng" });
+                }
+
+                // Kiểm tra đã thanh toán chưa (1 = đã thanh toán trong code cũ, adapt if different)
+                if (datPhong.TrangThaiThanhToan == 1)
+                {
+                    return BadRequest(new { message = "Không thể hủy đơn đặt phòng đã thanh toán. Vui lòng liên hệ quầy để hoàn tiền." });
+                }
+
+                // Kiểm tra thời gian: phải trước 24h so với ngày nhận phòng
+                var now = DateOnly.FromDateTime(DateTime.Now);
+                if (datPhong.NgayNhanPhong.AddDays(-1) <= now)
+                {
+                    return BadRequest(new { message = "Chỉ có thể hủy trước 24 giờ nhận phòng" });
+                }
+
+                datPhong.TrangThai = 2; // Đã hủy
+
+                // Cập nhật hóa đơn nếu có
+                var hoaDon = await _context.HoaDons.FirstOrDefaultAsync(h => h.IddatPhong == id);
+                if (hoaDon != null)
+                {
+                    hoaDon.TrangThaiThanhToan = 2; // Đã hủy
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation("Booking {BookingId} cancelled successfully", id);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Hủy đặt phòng thành công"
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error cancelling booking");
+                return StatusCode(500, new { message = "Có lỗi xảy ra: " + ex.Message });
+            }
+        }
     }
 
     public class UpdateBookingRequest
     {
         public int? TrangThai { get; set; }
         public int? TrangThaiThanhToan { get; set; }
+    }
+
+    /// <summary>
+    /// Request để thay đổi thời gian đặt phòng
+    /// </summary>
+    public class RescheduleRequest
+    {
+        public string NgayNhanPhong { get; set; } = string.Empty;
+        public string NgayTraPhong { get; set; } = string.Empty;
     }
 }

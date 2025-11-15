@@ -27,6 +27,9 @@ public partial class DatPhong
 
     public int TrangThaiThanhToan { get; set; }
 
+    // Thời hạn giữ phòng (nếu có). Tên cột DB: ThoiHan
+    public DateTime? ThoiHan { get; set; }
+
     public virtual ICollection<HoaDon> HoaDons { get; set; } = new List<HoaDon>();
 
     public virtual KhachHang? IdkhachHangNavigation { get; set; }
