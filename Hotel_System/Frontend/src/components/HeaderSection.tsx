@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 const HeaderSection: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -38,6 +38,9 @@ const HeaderSection: React.FC = () => {
     }
   };
 
+  const headerRef = useRef<HTMLElement | null>(null);
+  const [spacerHeight, setSpacerHeight] = useState<number>(0);
+
   useEffect(() => {
     setCurrentRoute(resolveRoute());
     // ensure auth state is read on mount
@@ -48,9 +51,23 @@ const HeaderSection: React.FC = () => {
     };
     window.addEventListener("hashchange", onLocationChange);
     window.addEventListener("popstate", onLocationChange);
+
+    // set spacer height to header height to avoid content overlap
+    const updateSpacer = () => {
+      try {
+        const h = headerRef.current?.offsetHeight ?? 0;
+        setSpacerHeight(h);
+      } catch {
+        setSpacerHeight(0);
+      }
+    };
+    updateSpacer();
+    window.addEventListener("resize", updateSpacer);
+
     return () => {
       window.removeEventListener("hashchange", onLocationChange);
       window.removeEventListener("popstate", onLocationChange);
+      window.removeEventListener("resize", updateSpacer);
     };
   }, []);
 
@@ -80,7 +97,12 @@ const HeaderSection: React.FC = () => {
   };
 
   return (
-    <header className="header-section">
+    <>
+      <header
+        ref={headerRef}
+        className="header-section"
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: '#fff', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}
+      >
       <div className="top-nav">
         <div className="container">
           <div className="row">
@@ -408,7 +430,11 @@ const HeaderSection: React.FC = () => {
           </div>
         </div>
       </div>
-    </header>
+      </header>
+
+      {/* spacer to avoid content being covered by fixed header */}
+      <div style={{ height: spacerHeight, width: '100%' }} aria-hidden />
+    </>
   );
 };
 
