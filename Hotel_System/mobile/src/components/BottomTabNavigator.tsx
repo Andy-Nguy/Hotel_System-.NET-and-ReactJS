@@ -7,6 +7,7 @@ import HomeScreen from "../screens/HomeScreen";
 import CheckAvailableRoomsScreen from "../screens/CheckAvailableRoomsScreen";
 import PromotionDetail from "../screens/PromotionDetail";
 import RoomTypeDetail from "../screens/RoomTypeDetail";
+import ServiceDetail from "../screens/ServiceDetail";
 import RoomsScreen from "../screens/RoomsScreen";
 import BookingsScreen from "../screens/BookingsScreen";
 import OffersScreen from "../screens/OffersScreen";
@@ -25,6 +26,7 @@ export type HomeStackParamList = {
   CheckAvailableRooms: undefined;
   PromotionDetail: { promotionId: string };
   RoomTypeDetail: { idloaiPhong: string; tenLoaiPhong: string };
+  ServiceDetail: { serviceId: string };
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -45,6 +47,10 @@ const HomeStackNavigator: React.FC = () => {
       <HomeStack.Screen
         name="RoomTypeDetail"
         component={RoomTypeDetail}
+      />
+      <HomeStack.Screen
+        name="ServiceDetail"
+        component={ServiceDetail}
       />
     </HomeStack.Navigator>
   );

@@ -114,7 +114,7 @@ const RoomsScreen: React.FC = () => {
             <Text style={styles.promotionBadgeText}>
               {room.promotions[0].type === 'percent' 
                 ? `-${room.promotions[0].value}%` 
-                : `- $${room.promotions[0].value}`}
+                : `- ${room.promotions[0].value}`}
             </Text>
           </View>
         )}
@@ -124,7 +124,7 @@ const RoomsScreen: React.FC = () => {
           {room.tenPhong}
         </Text>
         <Text style={styles.roomCardPrice}>
-          ${Number(room.giaCoBanMotDem).toLocaleString()}
+          {Number(room.giaCoBanMotDem).toLocaleString()} VND
         </Text>
       </View>
     </TouchableOpacity>

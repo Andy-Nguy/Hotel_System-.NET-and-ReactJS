@@ -118,8 +118,8 @@ const RoomType: React.FC = () => {
 
           <View style={styles.overlayRow}>
             <Text style={styles.overlayPrice}>
-              <Text style={{ fontSize: 14 }}>🏨</Text> Từ $
-              {Number(item.minPrice).toLocaleString()}
+              <Text style={{ fontSize: 14 }}>🏨</Text> Từ{' '}
+              {Number(item.minPrice).toLocaleString()} VND
             </Text>
           </View>
         </View>
