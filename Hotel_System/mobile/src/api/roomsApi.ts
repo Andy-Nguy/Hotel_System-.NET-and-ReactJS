@@ -1,9 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BASE_URLS, DEFAULT_BASE_URL } from "../config/apiConfig";
 
-// Force backend host for mobile testing (use this IP for iPhone/device)
-// All requests will go to: http://192.168.1.3:8080
-const BASE_URLS = ["http://192.168.1.38:8080"]; // single preferred host
-
+// All requests will use the host(s) defined in `src/config/apiConfig.ts`
 const TIMEOUT_MS = 2000; // Reduced from 5000ms to 2000ms
 
 // Simple cache for API responses
@@ -87,7 +85,7 @@ async function handleRes(res: Response) {
 
 function normalizeImageUrl(
   url: string | null | undefined,
-  baseUrl: string = BASE_URLS[0]
+  baseUrl: string = DEFAULT_BASE_URL
 ): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();

@@ -1,6 +1,6 @@
-import apiConfig from '../config/apiConfig';
+import { DEFAULT_BASE_URL } from "../config/apiConfig";
 
-const API_BASE = `${apiConfig.BASE_URL}/api/KhuyenMai`;
+const API_BASE = `${DEFAULT_BASE_URL}/api/KhuyenMai`;
 
 // ============================================
 // Type Definitions
@@ -40,8 +40,8 @@ export interface Promotion {
  */
 function normalizeImagePath(imagePath?: string): string | null {
   if (!imagePath) return null;
-  if (imagePath.startsWith('http')) return imagePath;
-  return `${apiConfig.BASE_URL}${imagePath}`;
+  if (imagePath.startsWith("http")) return imagePath;
+  return `${DEFAULT_BASE_URL}${imagePath}`;
 }
 
 // ============================================
@@ -52,33 +52,37 @@ function normalizeImagePath(imagePath?: string): string | null {
  * Get all promotions from /api/KhuyenMai endpoint
  */
 export const getPromotions = async (): Promise<Promotion[]> => {
-  console.log('promotionApi.getPromotions ->', API_BASE);
+  console.log("promotionApi.getPromotions ->", API_BASE);
 
   try {
     const response = await fetch(API_BASE);
-    console.log('promotionApi response status:', response.status);
-    console.log('promotionApi response ok:', response.ok);
+    console.log("promotionApi response status:", response.status);
+    console.log("promotionApi response ok:", response.ok);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: Failed to fetch promotions`);
     }
 
     const data = await response.json();
-    console.log('promotionApi raw response:', JSON.stringify(data, null, 2));
+    console.log("promotionApi raw response:", JSON.stringify(data, null, 2));
 
     // Normalize image paths to absolute URLs
     const normalizedData = Array.isArray(data)
       ? data.map((promo: any) => ({
           ...promo,
-          hinhAnhBanner: normalizeImagePath(promo.hinhAnhBanner || promo.HinhAnhBanner),
+          hinhAnhBanner: normalizeImagePath(
+            promo.hinhAnhBanner || promo.HinhAnhBanner
+          ),
         }))
       : [];
 
-    console.log('promotionApi normalized data:', JSON.stringify(normalizedData, null, 2));
+    console.log(
+      "promotionApi normalized data:",
+      JSON.stringify(normalizedData, null, 2)
+    );
     return normalizedData;
   } catch (error) {
-    console.error('promotionApi.getPromotions error:', error);
+    console.error("promotionApi.getPromotions error:", error);
     throw error;
   }
 };
-

@@ -1,5 +1,5 @@
 // servicesApi.ts - fetch services from backend with simple caching and URL normalization
-const BASE_URLS = ["http://192.168.1.38:8080"];
+import { BASE_URLS, DEFAULT_BASE_URL } from "../config/apiConfig";
 const TIMEOUT_MS = 2000;
 
 type RawService = any;
@@ -32,7 +32,7 @@ function setCached(key: string, data: any) {
 
 function normalizeImageUrl(
   url: string | undefined | null,
-  base = BASE_URLS[0]
+  base = DEFAULT_BASE_URL
 ) {
   if (!url) return undefined;
   const t = String(url).trim();
