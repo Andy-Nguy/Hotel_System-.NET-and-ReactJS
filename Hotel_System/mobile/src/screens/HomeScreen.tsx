@@ -18,6 +18,7 @@ import AboutUs from "../components/AboutUs";
 import BlogSection from "../components/BlogSection";
 import Promotion from "../components/Promotion";
 import RoomType from "../components/RoomType";
+import Services from "../components/Services";
 
 const HomeScreen: React.FC = () => {
   const { userInfo } = useAuth();
@@ -116,6 +117,7 @@ const HomeScreen: React.FC = () => {
       />
       
       <RoomType />
+      <Services />
       {/* Bottom Spacing */}
       <View style={styles.spacing} />
 
