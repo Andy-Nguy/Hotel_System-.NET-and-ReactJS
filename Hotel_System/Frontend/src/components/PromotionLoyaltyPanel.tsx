@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Card, Button, Space, Typography, Alert } from "antd";
-import { getAllPromotions, Promotion, ApplyPromotionResponse } from "../api/promotionApi";
+import {
+  getAllPromotions,
+  Promotion,
+  ApplyPromotionResponse,
+} from "../api/promotionApi";
 
 const { Text } = Typography;
 
@@ -22,7 +26,19 @@ interface Props {
   externalApplied?: ApplyPromotionResponse | null;
 }
 
-const PromotionLoyaltyPanel: React.FC<Props> = ({ invoiceId, roomIds, baseAmount, selectedRooms = [], nights = 1, customerId, onApplied, disableAutoApply, externalApplied, checkIn, checkOut }) => {
+const PromotionLoyaltyPanel: React.FC<Props> = ({
+  invoiceId,
+  roomIds,
+  baseAmount,
+  selectedRooms = [],
+  nights = 1,
+  customerId,
+  onApplied,
+  disableAutoApply,
+  externalApplied,
+  checkIn,
+  checkOut,
+}) => {
   const [loading, setLoading] = useState(false);
   const [available, setAvailable] = useState<Promotion[]>([]);
   const [applied, setApplied] = useState<ApplyPromotionResponse | null>(null);
@@ -59,13 +75,13 @@ const PromotionLoyaltyPanel: React.FC<Props> = ({ invoiceId, roomIds, baseAmount
 
     let best: ApplyPromotionResponse | null = null;
 
-  for (const p of available) {
+    for (const p of available) {
       // skip promotions that do not overlap the booking range (or are inactive)
       try {
         const starts = p.ngayBatDau ? new Date(p.ngayBatDau) : null;
         const ends = p.ngayKetThuc ? new Date(p.ngayKetThuc) : null;
-  const bookingStart = checkIn ? new Date(checkIn) : null;
-  const bookingEnd = checkOut ? new Date(checkOut) : null;
+        const bookingStart = checkIn ? new Date(checkIn) : null;
+        const bookingEnd = checkOut ? new Date(checkOut) : null;
         // If booking dates provided, require overlap between promo period and booking period.
         if (bookingStart && bookingEnd) {
           // promo range [starts, ends] overlaps booking range [bookingStart, bookingEnd]
@@ -76,7 +92,7 @@ const PromotionLoyaltyPanel: React.FC<Props> = ({ invoiceId, roomIds, baseAmount
           const now = new Date();
           if ((starts && starts > now) || (ends && ends < now)) continue;
         }
-        if (p.trangThai && p.trangThai !== 'active') continue;
+        if (p.trangThai && p.trangThai !== "active") continue;
       } catch (e) {
         // if parsing dates fails, skip this promotion
         continue;
@@ -88,19 +104,23 @@ const PromotionLoyaltyPanel: React.FC<Props> = ({ invoiceId, roomIds, baseAmount
 
       // compute eligible total only for rooms covered by this promotion
       const promoRoomIds = (p.khuyenMaiPhongs || []).map((r: any) => r.idphong);
-      const eligibleTotal = (selectedRooms || []).reduce((sum: number, sr: any) => {
-        const rid = sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
-        if (!rid) return sum;
-        if (promoRoomIds.includes(rid)) {
-          const price = sr.room?.giaCoBanMotDem || sr.room?.gia || 0;
-          return sum + (price * (nights || 1));
-        }
-        return sum;
-      }, 0);
+      const eligibleTotal = (selectedRooms || []).reduce(
+        (sum: number, sr: any) => {
+          const rid =
+            sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
+          if (!rid) return sum;
+          if (promoRoomIds.includes(rid)) {
+            const price = sr.room?.giaCoBanMotDem || sr.room?.gia || 0;
+            return sum + price * (nights || 1);
+          }
+          return sum;
+        },
+        0
+      );
 
       let discount = 0;
       if (p.loaiGiamGia === "percent") {
-        discount = (p.giaTriGiam || 0) / 100 * eligibleTotal;
+        discount = ((p.giaTriGiam || 0) / 100) * eligibleTotal;
       } else {
         // fixed amount: don't exceed eligibleTotal
         discount = Math.min(p.giaTriGiam || 0, eligibleTotal);
@@ -127,11 +147,27 @@ const PromotionLoyaltyPanel: React.FC<Props> = ({ invoiceId, roomIds, baseAmount
       setApplied(best);
       onApplied(best);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [available, roomIds, baseAmount, selectedRooms, nights, disableAutoApply, externalApplied, applied, onApplied, checkIn, checkOut]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    available,
+    roomIds,
+    baseAmount,
+    selectedRooms,
+    nights,
+    disableAutoApply,
+    externalApplied,
+    applied,
+    onApplied,
+    checkIn,
+    checkOut,
+  ]);
 
   return (
-    <Card title="Khuyến mãi & Tích điểm" size="small" style={{ marginBottom: 12 }}>
+    <Card
+      title="Khuyến mãi & Tích điểm"
+      size="small"
+      style={{ marginBottom: 12 }}
+    >
       {error && <Alert type="error" message={error} />}
 
       <div style={{ marginBottom: 8 }}>
@@ -143,11 +179,21 @@ const PromotionLoyaltyPanel: React.FC<Props> = ({ invoiceId, roomIds, baseAmount
         <div style={{ marginBottom: 12 }}>
           <div>
             <Text type="secondary">Khuyến mãi áp dụng:</Text>
-            <div style={{ fontWeight: 700 }}>{applied.appliedPromotionName} - Giảm {applied.discountAmount.toLocaleString()} đ</div>
+            <div style={{ fontWeight: 700 }}>
+              {applied.appliedPromotionName} - Giảm{" "}
+              {(
+                applied.discountAmount ??
+                applied.soTienGiam ??
+                0
+              ).toLocaleString()}{" "}
+              đ
+            </div>
           </div>
           <div style={{ marginTop: 8 }}>
             <Text type="secondary">Tổng sau giảm (chưa thuế):</Text>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>{applied.tongTienSauGiam.toLocaleString()} đ</div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>
+              {(applied.tongTienSauGiam ?? 0).toLocaleString()} đ
+            </div>
           </div>
           <div style={{ marginTop: 8 }}>
             <Text type="secondary">Dự kiến tích điểm:</Text>
@@ -156,7 +202,9 @@ const PromotionLoyaltyPanel: React.FC<Props> = ({ invoiceId, roomIds, baseAmount
         </div>
       ) : (
         <div style={{ marginBottom: 12 }}>
-          <Text type="secondary">Không tìm thấy khuyến mãi áp dụng cho các phòng đã chọn</Text>
+          <Text type="secondary">
+            Không tìm thấy khuyến mãi áp dụng cho các phòng đã chọn
+          </Text>
         </div>
       )}
 

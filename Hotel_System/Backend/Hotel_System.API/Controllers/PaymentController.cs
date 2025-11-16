@@ -70,15 +70,51 @@ namespace Hotel_System.API.Controllers
                     _logger.LogInformation("PaymentController: request.TongTien missing/zero, fallback tongTien={TongTien}", tongTien);
                 }
 
+                // Lấy tiền cọc hiện có trên DatPhong làm nguồn dữ liệu mặc định
                 decimal tienCoc = datPhong.TienCoc ?? 0m;
 
-                // 1 = tiền mặt/quầy (chưa TT), 2 = online (đã TT)
-                int trangThaiThanhToan = (request.PhuongThucThanhToan == 2) ? 2 : 1;
+                // Nếu client gửi TienCoc trong request (ví dụ chọn đặt cọc 500k),
+                // dùng giá trị đó và cập nhật DatPhong.TienCoc
+                if (request.TienCoc.HasValue && request.TienCoc.Value > 0m)
+                {
+                    tienCoc = request.TienCoc.Value;
+                    datPhong.TienCoc = tienCoc;
+                }
 
-                // Luôn set tiền đã thanh toán rõ ràng
-                decimal tienThanhToan = trangThaiThanhToan == 2
-                    ? Math.Max(0m, tongTien - tienCoc)
-                    : 0m;
+                // Quy tắc xác định trạng thái thanh toán:
+                // - Nếu PhuongThucThanhToan == 2 (online) -> cho phép client override TrangThaiThanhToan (ví dụ: đặt cọc = 0, đã thanh toán = 2)
+                // - Nếu PhuongThucThanhToan != 2 (ví dụ: thanh toán tại khách sạn / quầy) -> luôn ghi nhận là CHƯA THANH TOÁN (1)
+                int trangThaiThanhToan;
+                if (request.PhuongThucThanhToan == 2)
+                {
+                    // Online: dùng giá trị client gửi nếu hợp lệ, ngược lại mặc định = 2 (đã thanh toán online)
+                    trangThaiThanhToan = request.TrangThaiThanhToan.HasValue ? request.TrangThaiThanhToan.Value : 2;
+                    if (trangThaiThanhToan != 0 && trangThaiThanhToan != 1 && trangThaiThanhToan != 2)
+                        trangThaiThanhToan = 2;
+                }
+                else
+                {
+                    // Không phải online (tiền mặt/ tại quầy / tại khách sạn) => lưu là CHƯA THANH TOÁN
+                    trangThaiThanhToan = 1;
+                }
+
+                // Tính số tiền đã thanh toán trên hóa đơn hiện tại:
+                // - Nếu đã thanh toán (2): số tiền thanh toán là phần còn lại = TongTien - TienCoc
+                // - Nếu chỉ đặt cọc (0): số tiền thanh toán chính là số tiền cọc (đã chuyển)
+                // - Nếu chưa thanh toán (1): 0
+                decimal tienThanhToan;
+                if (trangThaiThanhToan == 2)
+                {
+                    tienThanhToan = Math.Max(0m, tongTien - tienCoc);
+                }
+                else if (trangThaiThanhToan == 0)
+                {
+                    tienThanhToan = tienCoc;
+                }
+                else
+                {
+                    tienThanhToan = 0m;
+                }
 
                 var idHoaDon = $"HD{DateTime.Now:yyyyMMddHHmmssfff}";
                 var hoaDon = new HoaDon
@@ -97,29 +133,76 @@ namespace Hotel_System.API.Controllers
 
                 _context.HoaDons.Add(hoaDon);
 
+                // Nếu client gửi danh sách dịch vụ kèm theo, lưu chi tiết dịch vụ (Cthddv)
+                if (request.Services != null && request.Services.Any())
+                {
+                    foreach (var svc in request.Services)
+                    {
+                        // Kiểm tra dịch vụ tồn tại
+                        var dv = await _context.DichVus.FindAsync(svc.IddichVu);
+                        if (dv == null)
+                        {
+                            _logger.LogWarning("PaymentController: dịch vụ {Id} không tồn tại, bỏ qua", svc.IddichVu);
+                            continue;
+                        }
+
+                        var tienDichVu = svc.TienDichVu != 0m ? svc.TienDichVu : svc.DonGia * Math.Max(1, svc.SoLuong);
+
+                        // Nếu client không gửi thời gian thực hiện, mặc định dùng khoảng đặt phòng (check-in -> check-out)
+                        DateTime? svcTime = svc.ThoiGianThucHien;
+                        DateTime thoiGianThucHien = svcTime ?? DateTime.Now;
+
+                        DateTime thoiGianBatDau;
+                        DateTime thoiGianKetThuc;
+                        try
+                        {
+                            // DatPhong.NgayNhanPhong / NgayTraPhong là DateOnly
+                            var start = datPhong.NgayNhanPhong.ToDateTime(TimeOnly.MinValue);
+                            var end = datPhong.NgayTraPhong.ToDateTime(new TimeOnly(23, 59, 59));
+                            thoiGianBatDau = svcTime ?? start;
+                            thoiGianKetThuc = svcTime != null ? svcTime.Value.AddMinutes(30) : end;
+                        }
+                        catch
+                        {
+                            // Fallback nếu DateOnly->DateTime không khả dụng
+                            thoiGianBatDau = svcTime ?? DateTime.Now;
+                            thoiGianKetThuc = svcTime != null ? svcTime.Value.AddMinutes(30) : DateTime.Now.AddHours(1);
+                        }
+
+                        var cthd = new Cthddv
+                        {
+                            IdhoaDon = idHoaDon,
+                            IddichVu = svc.IddichVu,
+                            TienDichVu = tienDichVu,
+                            ThoiGianThucHien = thoiGianThucHien,
+                            ThoiGianBatDau = thoiGianBatDau,
+                            ThoiGianKetThuc = thoiGianKetThuc,
+                            TrangThai = "new"
+                        };
+
+                        _context.Cthddvs.Add(cthd);
+                    }
+                }
+
                 // Đồng bộ Đặt Phòng
                 datPhong.TongTien = tongTien;
                 datPhong.TrangThaiThanhToan = trangThaiThanhToan;
 
-                // Nếu đã thanh toán online -> đặt trạng thái đặt phòng là 'xác nhận' (1) và clear ThoiHan
-                if (datPhong.TrangThaiThanhToan == 2)
-                {
-                    datPhong.TrangThai = 1; // 1 = Xác nhận/đã giữ chấp nhận
-                    datPhong.ThoiHan = null;
-                }
+                // Với mọi kết quả thanh toán (đã thanh toán, đã đặt cọc, chưa thanh toán, thanh toán tại khách sạn):
+                // - Đánh dấu đặt phòng là 'xác nhận' (1)
+                // - Xoá hạn chờ (ThoiHan) để tránh auto-cancel
+                datPhong.TrangThai = 1; // 1 = Xác nhận/đã giữ chấp nhận
+                datPhong.ThoiHan = null;
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                // Gửi email hóa đơn nếu đã thanh toán (online)
-                if (hoaDon.TrangThaiThanhToan == 2)
+                // Gửi email hóa đơn cho tất cả các trường hợp (đã thanh toán, đã cọc, chưa thanh toán)
+                var customerEmail = datPhong.IdkhachHangNavigation?.Email;
+                var customerName = datPhong.IdkhachHangNavigation?.HoTen ?? "Quý khách";
+                if (!string.IsNullOrWhiteSpace(customerEmail))
                 {
-                    var email = datPhong.IdkhachHangNavigation?.Email;
-                    var hoTen = datPhong.IdkhachHangNavigation?.HoTen ?? "Quý khách";
-                    if (!string.IsNullOrWhiteSpace(email))
-                    {
-                        await SendInvoiceEmail(email, hoTen, hoaDon);
-                    }
+                    await SendInvoiceEmail(customerEmail, customerName, hoaDon);
                 }
 
                 return Ok(new
@@ -236,56 +319,59 @@ namespace Hotel_System.API.Controllers
         {
             try
             {
-                var emailSubject = $"✅ XÁC NHẬN THANH TOÁN THÀNH CÔNG - Mã hóa đơn #{hoaDon.IdhoaDon}";
+                // Use the exact subject/header requested by the user
+                var emailSubject = $"xacnhandatphong HÓA ĐƠN - XÁC NHẬN GIAO DỊCH - Mã hóa đơn #{hoaDon.IdhoaDon}";
+
+                string paymentStatusText = hoaDon.TrangThaiThanhToan switch
+                {
+                    2 => "Đã thanh toán đầy đủ",
+                    0 => "Đã đặt cọc",
+                    1 => "Chưa thanh toán",
+                    _ => "Không xác định"
+                };
+
                 var emailBody = $@"
+xacnhandatphong HÓA ĐƠN - XÁC NHẬN GIAO DỊCH - Mã hóa đơn #{hoaDon.IdhoaDon}
+
 Kính gửi Quý khách {hoTen},
 
-🎉 THANH TOÁN THÀNH CÔNG!
-Cảm ơn Quý khách đã hoàn tất thanh toán đặt phòng tại Khách Sạn Robins Villa.
+Cảm ơn Quý khách đã đặt phòng tại Khách Sạn Robins Villa. Thông tin đặt phòng và hóa đơn đã được lưu lại trong hệ thống.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 THÔNG TIN HÓA ĐƠN
+📄 THÔNG TIN HÓA ĐƠN & ĐẶT PHÒNG
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🧾 Mã hóa đơn:        {hoaDon.IdhoaDon}
 📋 Mã đặt phòng:      {hoaDon.IddatPhong}
 📅 Ngày lập:          {hoaDon.NgayLap:dd/MM/yyyy HH:mm:ss}
-✅ Trạng thái:        ĐÃ THANH TOÁN THÀNH CÔNG
+📌 Trạng thái thanh toán: {paymentStatusText}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 CHI TIẾT THANH TOÁN
+💰 CHI TIẾT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-� Tiền phòng:        {hoaDon.TienPhong:N0} VNĐ
-📆 Số ngày:           {hoaDon.Slngay} {(hoaDon.Slngay > 1 ? "ngày" : "ngày")}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💵 Tổng tiền:         {hoaDon.TongTien:N0} VNĐ
-💸 Tiền cọc đã trả:   {hoaDon.TienCoc:N0} VNĐ
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💳 Số tiền đã thanh toán: {hoaDon.TienThanhToan:N0} VNĐ
-
-✅ TRẠNG THÁI: ĐÃ THANH TOÁN HOÀN TẤT
+• Tiền phòng:        {hoaDon.TienPhong:N0} VNĐ
+• Số ngày:           {hoaDon.Slngay}
+• Tổng tiền:         {hoaDon.TongTien:N0} VNĐ
+• Tiền cọc đã trả:   {hoaDon.TienCoc:N0} VNĐ
+• Số tiền đã thanh toán: {hoaDon.TienThanhToan:N0} VNĐ
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{(string.IsNullOrEmpty(hoaDon.GhiChu) ? "" : $"📝 GHI CHÚ\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n{hoaDon.GhiChu}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")}
-📧 Hóa đơn điện tử này có giá trị như hóa đơn gốc.
-📱 Vui lòng xuất trình email này khi làm thủ tục nhận phòng.
+{(string.IsNullOrEmpty(hoaDon.GhiChu) ? "" : $"📝 GHI CHÚ: {hoaDon.GhiChu}\n\n")}
 
-🏨 Chúng tôi rất mong được phục vụ Quý khách!
-Chúc Quý khách có một kỳ nghỉ tuyệt vời tại Robins Villa!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Vui lòng mang theo email này khi làm thủ tục nhận phòng. Nếu Quý khách cần hỗ trợ thêm, vui lòng liên hệ hotline hoặc trả lời email này.
 
 Trân trọng,
 Khách Sạn Robins Villa
 📧 Email: nguyenduonglechi.1922@gmail.com
 📞 Hotline: 1900-xxxx (24/7)
 ";
+
                 await SafeSendEmailAsync(email, hoTen, emailSubject, emailBody);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Lỗi khi gửi email hóa đơn tới {Email}", email);
+                _logger.LogError(ex, "❌ Lỗi khi gửi email xác nhận đặt phòng tới {Email}", email);
             }
         }
 

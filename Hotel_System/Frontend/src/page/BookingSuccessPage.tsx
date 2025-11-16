@@ -38,6 +38,7 @@ type BookingData = {
 
 const BookingSuccessPage: React.FC = () => {
   const [bookingData, setBookingData] = useState<BookingData | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<any>(null);
 
   useEffect(() => {
     const bookingInfoStr = sessionStorage.getItem("bookingInfo");
@@ -50,13 +51,27 @@ const BookingSuccessPage: React.FC = () => {
     const payment = paymentResultStr ? JSON.parse(paymentResultStr) : null;
     const booking = bookingInfoStr ? JSON.parse(bookingInfoStr) : null;
 
-    const id = invoice?.bookingId || payment?.paymentId || `BK${Date.now().toString().slice(-8)}`;
-    const name = customer?.fullName || customer?.name || "Khách hàng";
+    setPaymentInfo(payment);
+
+    // Ưu tiên lấy ID từ invoice (có idDatPhong và idHoaDon từ API)
+    const id =
+      invoice?.idDatPhong ||
+      invoice?.bookingId ||
+      payment?.paymentId ||
+      `BK${Date.now().toString().slice(-8)}`;
+    const name =
+      customer?.hoTen || customer?.fullName || customer?.name || "Khách hàng";
     const email = customer?.email || "";
-    const phone = customer?.phone || customer?.phoneNumber || "";
+    const phone =
+      customer?.soDienThoai || customer?.phone || customer?.phoneNumber || "";
     const checkIn = booking?.checkIn || invoice?.checkIn;
     const checkOut = booking?.checkOut || invoice?.checkOut;
-    const total = invoice?.grandTotal || payment?.totalAmount || booking?.totalAmount || 0;
+    const total =
+      payment?.totalAmount ||
+      invoice?.grandTotal ||
+      invoice?.tongTien ||
+      booking?.totalAmount ||
+      0;
     const rooms = booking?.selectedRooms || invoice?.rooms || [];
 
     setBookingData({
@@ -89,7 +104,8 @@ const BookingSuccessPage: React.FC = () => {
       }
 
       const invoiceInfo = JSON.parse(invoiceInfoStr);
-      const idHoaDon = invoiceInfo.idHoaDon || invoiceInfo.id || invoiceInfo.invoiceId;
+      const idHoaDon =
+        invoiceInfo.idHoaDon || invoiceInfo.id || invoiceInfo.invoiceId;
       if (!idHoaDon) {
         message.error("Không tìm thấy mã hóa đơn!");
         return;
@@ -158,7 +174,11 @@ const BookingSuccessPage: React.FC = () => {
           >
             <Result
               status="success"
-              icon={<CheckCircleOutlined style={{ fontSize: 80, color: "#52c41a" }} />}
+              icon={
+                <CheckCircleOutlined
+                  style={{ fontSize: 80, color: "#52c41a" }}
+                />
+              }
               title={
                 <Title level={2} style={{ color: "#52c41a", marginTop: 20 }}>
                   Đặt phòng thành công!
@@ -211,11 +231,15 @@ const BookingSuccessPage: React.FC = () => {
                       <Text>{bookingData.customerName}</Text>
                     </div>
                     <div style={{ marginBottom: 12 }}>
-                      <MailOutlined style={{ marginRight: 8, color: "#dfa974" }} />
+                      <MailOutlined
+                        style={{ marginRight: 8, color: "#dfa974" }}
+                      />
                       <Text>{bookingData.customerEmail}</Text>
                     </div>
                     <div>
-                      <PhoneOutlined style={{ marginRight: 8, color: "#dfa974" }} />
+                      <PhoneOutlined
+                        style={{ marginRight: 8, color: "#dfa974" }}
+                      />
                       <Text>{bookingData.customerPhone}</Text>
                     </div>
                   </Card>
@@ -274,9 +298,7 @@ const BookingSuccessPage: React.FC = () => {
                             : "none",
                       }}
                     >
-                      <Text strong>
-                        Phòng {item.roomNumber || index + 1}:{" "}
-                      </Text>
+                      <Text strong>Phòng {item.roomNumber || index + 1}: </Text>
                       <Text>{item.room?.tenLoaiPhong || "Standard Room"}</Text>
                     </div>
                   ))}
@@ -287,21 +309,112 @@ const BookingSuccessPage: React.FC = () => {
               <Card
                 style={{
                   marginTop: 24,
-                  background: "#fff7e6",
-                  border: "1px solid #ffd591",
+                  background:
+                    paymentInfo?.paymentStatus === "paid"
+                      ? "#f6ffed"
+                      : "#fff7e6",
+                  border:
+                    paymentInfo?.paymentStatus === "paid"
+                      ? "1px solid #b7eb8f"
+                      : "1px solid #ffd591",
                 }}
               >
+                {paymentInfo?.paymentStatus === "paid" && (
+                  <>
+                    <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
+                      <CheckCircleOutlined
+                        style={{ color: "#52c41a", marginRight: 8 }}
+                      />
+                      Email xác nhận đã được gửi đến:{" "}
+                      <strong>{bookingData.customerEmail}</strong>
+                    </Paragraph>
+                    <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
+                      <CheckCircleOutlined
+                        style={{ color: "#52c41a", marginRight: 8 }}
+                      />
+                      Thanh toán đã hoàn tất. Vui lòng kiểm tra email để xem chi
+                      tiết
+                    </Paragraph>
+                  </>
+                )}
+                {paymentInfo?.paymentStatus === "deposit" && (
+                  <>
+                    <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
+                      <CheckCircleOutlined
+                        style={{ color: "#fa8c16", marginRight: 8 }}
+                      />
+                      Bạn đã đặt cọc thành công:{" "}
+                      <strong>
+                        {paymentInfo.depositAmount?.toLocaleString()}đ
+                      </strong>
+                    </Paragraph>
+                    <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
+                      <CheckCircleOutlined
+                        style={{ color: "#fa8c16", marginRight: 8 }}
+                      />
+                      Còn lại cần thanh toán khi nhận phòng:{" "}
+                      <strong>
+                        {(
+                          paymentInfo.totalAmount - paymentInfo.depositAmount
+                        ).toLocaleString()}
+                        đ
+                      </strong>
+                    </Paragraph>
+                    <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
+                      <CheckCircleOutlined
+                        style={{ color: "#fa8c16", marginRight: 8 }}
+                      />
+                      Vui lòng kiểm tra email để xem chi tiết đặt cọc
+                    </Paragraph>
+                  </>
+                )}
+                {paymentInfo?.paymentStatus === "unpaid" && (
+                  <>
+                    <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
+                      <CheckCircleOutlined
+                        style={{ color: "#fa8c16", marginRight: 8 }}
+                      />
+                      Đặt phòng thành công. Thanh toán khi nhận phòng
+                    </Paragraph>
+                    <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
+                      <CheckCircleOutlined
+                        style={{ color: "#fa8c16", marginRight: 8 }}
+                      />
+                      Tổng tiền cần thanh toán:{" "}
+                      <strong>
+                        {bookingData.totalAmount?.toLocaleString()}đ
+                      </strong>
+                    </Paragraph>
+                    <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
+                      <CheckCircleOutlined
+                        style={{ color: "#fa8c16", marginRight: 8 }}
+                      />
+                      Vui lòng kiểm tra email để xem chi tiết đặt phòng
+                    </Paragraph>
+                  </>
+                )}
                 <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
-                  <CheckCircleOutlined style={{ color: "#fa8c16", marginRight: 8 }} />
-                  Chúng tôi đã gửi email xác nhận đến:{" "}
-                  <strong>{bookingData.customerEmail}</strong>
-                </Paragraph>
-                <Paragraph style={{ marginBottom: 8, fontSize: 15 }}>
-                  <CheckCircleOutlined style={{ color: "#fa8c16", marginRight: 8 }} />
+                  <CheckCircleOutlined
+                    style={{
+                      color:
+                        paymentInfo?.paymentStatus === "paid"
+                          ? "#52c41a"
+                          : "#fa8c16",
+                      marginRight: 8,
+                    }}
+                  />
                   Vui lòng kiểm tra email để xem chi tiết đặt phòng
                 </Paragraph>
                 <Paragraph style={{ marginBottom: 0, fontSize: 15 }}>
-                  <CheckCircleOutlined style={{ color: "#fa8c16", marginRight: 8 }} />
+                  <CheckCircleOutlined
+                    style={{
+                      color:
+                        paymentInfo?.paymentStatus === "paid"
+                          ? "#52c41a"
+                          : "#fa8c16",
+                      marginRight: 8,
+                    }}
+                  />
                   Nếu có thắc mắc, vui lòng liên hệ: <strong>1900-xxxx</strong>
                 </Paragraph>
               </Card>

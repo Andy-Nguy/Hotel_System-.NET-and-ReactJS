@@ -19,6 +19,10 @@ public partial class DatPhong
 
     public int? SoDem { get; set; }
 
+    public int? SoNguoi { get; set; }
+
+    public int? SoLuongPhong { get; set; }
+
     public decimal TongTien { get; set; }
 
     public decimal? TienCoc { get; set; }

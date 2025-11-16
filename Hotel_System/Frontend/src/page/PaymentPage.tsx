@@ -13,6 +13,11 @@ import {
   Alert,
   Modal,
   message,
+  Steps,
+  Radio,
+  Space,
+  Tag,
+  Collapse,
 } from "antd";
 import {
   QrcodeOutlined,
@@ -26,22 +31,20 @@ import {
   ClockCircleOutlined,
   DollarOutlined,
   UserOutlined,
-  ExportOutlined,
+  SafetyOutlined,
+  LockOutlined,
+  InfoCircleOutlined,
+  EnvironmentOutlined,
+  CalendarOutlined,
+  TeamOutlined,
+  CheckOutlined,
+  TagOutlined,
+  CopyOutlined,
 } from "@ant-design/icons";
-import BookingProgress from "../components/BookingProgress";
-import PromotionLoyaltyPanel from "../components/PromotionLoyaltyPanel";
-import PromotionsAvailable from "../components/PromotionsAvailable";
-import { recordServiceUsage } from "../api/serviceApi";
-import type { ApplyPromotionResponse } from "../api/promotionApi";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import duration from "dayjs/plugin/duration";
-
-dayjs.extend(utc);
-dayjs.extend(duration);
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
+const { Panel } = Collapse;
 
 interface SelectedRoom {
   roomNumber: number;
@@ -63,213 +66,23 @@ const PaymentPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<string>("bank-transfer");
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
   const [qrModalVisible, setQrModalVisible] = useState(false);
   const [paymentRef, setPaymentRef] = useState<string>("");
-  const [momoModalVisible, setMomoModalVisible] = useState(false);
-  const [momoProcessing, setMomoProcessing] = useState(false);
   const [creditModalVisible, setCreditModalVisible] = useState(false);
   const [creditForm] = Form.useForm();
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
-  const [atmModalVisible, setAtmModalVisible] = useState(false);
-  const [cashModalVisible, setCashModalVisible] = useState(false);
-  const [ewalletModalVisible, setEwalletModalVisible] = useState(false);
-  const [currentWallet, setCurrentWallet] = useState<string>("");
-  const [currentPaymentMethod, setCurrentPaymentMethod] = useState<string>("");
-  const [promoResult, setPromoResult] = useState<ApplyPromotionResponse | null>(
-    null
-  );
-  const [appliedPromotionObj, setAppliedPromotionObj] = useState<any | null>(
-    null
-  );
   const [invoiceInfoState, setInvoiceInfoState] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [redeemPoints, setRedeemPoints] = useState<number>(0);
   const [promoCode, setPromoCode] = useState<string>("");
-  const [applyingPromoCode, setApplyingPromoCode] = useState(false);
-  const [externalPromoApplied, setExternalPromoApplied] =
-    useState<ApplyPromotionResponse | null>(null);
-  const [disableAutoApplyPromos, setDisableAutoApplyPromos] = useState(false);
+  const [expandedSummary, setExpandedSummary] = useState(true);
+  const [depositOption, setDepositOption] = useState<"deposit" | "full">(
+    "full"
+  ); // deposit = đặt cọc 500k, full = thanh toán đủ
+  const DEPOSIT_AMOUNT = 500000; // 500,000 VND
 
-  // Hold (giữ phòng) UI state
-  const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
-  const [holdLocal, setHoldLocal] = useState<string | null>(null);
-  const [holdCountdown, setHoldCountdown] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    let timer: any = null;
-
-    const clearHoldUI = () => {
-      try {
-        const raw = sessionStorage.getItem("invoiceInfo");
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (
-            parsed &&
-            (parsed.holdExpiresAt || parsed.ThoiHan || parsed.thoiHan)
-          ) {
-            delete parsed.holdExpiresAt;
-            delete parsed.ThoiHan;
-            delete parsed.thoiHan;
-            sessionStorage.setItem("invoiceInfo", JSON.stringify(parsed));
-          }
-        }
-      } catch (e) {
-        // ignore
-      }
-      if (mounted) {
-        setHoldExpiresAt(null);
-        setHoldLocal(null);
-        setHoldCountdown(null);
-      }
-    };
-
-    const startCountdown = (utcStr: string) => {
-      if (timer) clearInterval(timer);
-      const update = () => {
-        const now = dayjs();
-        const end = dayjs.utc(utcStr);
-        const diff = end.diff(now);
-        if (diff <= 0) {
-          clearHoldUI();
-          if (timer) {
-            clearInterval(timer);
-            timer = null;
-          }
-          return;
-        }
-        const dur = dayjs.duration(diff);
-        const hh = dur.hours();
-        const mm = dur.minutes();
-        const ss = dur.seconds();
-        const formatted =
-          hh > 0
-            ? `${String(hh).padStart(2, "0")}:${String(mm).padStart(
-                2,
-                "0"
-              )}:${String(ss).padStart(2, "0")}`
-            : `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-        if (mounted) {
-          setHoldCountdown(formatted);
-          setHoldLocal(dayjs.utc(utcStr).local().format("YYYY-MM-DD HH:mm:ss"));
-        }
-      };
-      update();
-      timer = setInterval(update, 1000);
-    };
-
-    const verifyHold = async () => {
-      // try to find IDDatPhong from invoiceInfoState or sessionStorage
-      let inv: any = invoiceInfoState;
-      try {
-        const raw = sessionStorage.getItem("invoiceInfo");
-        if (!inv && raw) inv = JSON.parse(raw);
-      } catch {}
-
-      const id =
-        inv?.IDDatPhong ||
-        inv?.idDatPhong ||
-        inv?.idDatphong ||
-        inv?.idDatPhong;
-      if (!id) return;
-
-      try {
-        const res = await fetch(`/api/datphong/${id}`);
-        if (!res.ok) {
-          clearHoldUI();
-          return;
-        }
-        const data = await res.json();
-        const th =
-          data.thoiHan ??
-          data.ThoiHan ??
-          data.holdExpiresAt ??
-          data.holdexpiresat;
-        if (!th) {
-          clearHoldUI();
-          return;
-        }
-        const thDate = dayjs(th);
-        if (thDate.isAfter(dayjs())) {
-          if (mounted) {
-            setHoldExpiresAt(th);
-            startCountdown(th);
-          }
-        } else {
-          clearHoldUI();
-        }
-      } catch (e) {
-        clearHoldUI();
-      }
-    };
-
-    verifyHold();
-
-    return () => {
-      mounted = false;
-      if (timer) clearInterval(timer);
-    };
-  }, [invoiceInfoState]);
-
-  const profilePoints: number | null = (() => {
-    try {
-      if (profile)
-        return (
-          profile.tichDiem ??
-          profile.tichdiem ??
-          profile.points ??
-          profile.Points ??
-          null
-        );
-      if (invoiceInfoState)
-        return invoiceInfoState.tichDiem ?? invoiceInfoState.tichdiem ?? null;
-      const cust = sessionStorage.getItem("customerInfo");
-      if (cust) {
-        const parsed = JSON.parse(cust);
-        return parsed.tichDiem ?? parsed.tichdiem ?? null;
-      }
-    } catch (e) {
-      // ignore
-    }
-    return null;
-  })();
-
-  const promoDiscount = promoResult
-    ? promoResult.soTienGiam ?? promoResult.discountAmount ?? 0
-    : 0;
-
-  useEffect(() => {
-    let mounted = true;
-    const fetchPromo = async (id?: string | null) => {
-      if (!id) {
-        setAppliedPromotionObj(null);
-        return;
-      }
-      try {
-        const { getPromotionById } = await import("../api/promotionApi");
-        const p = await getPromotionById(id);
-        if (mounted) setAppliedPromotionObj(p || null);
-      } catch (e) {
-        if (mounted) setAppliedPromotionObj(null);
-      }
-    };
-
-    const id =
-      promoResult?.appliedPromotionId ||
-      externalPromoApplied?.appliedPromotionId ||
-      null;
-    fetchPromo(id as any);
-    return () => {
-      mounted = false;
-    };
-  }, [
-    promoResult?.appliedPromotionId,
-    externalPromoApplied?.appliedPromotionId,
-  ]);
-
-  const [vcbQrExists, setVcbQrExists] = useState<boolean | null>(null);
-  const [momoQrExists, setMomoQrExists] = useState<boolean | null>(null);
-
+  // Copy to clipboard helper
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -278,434 +91,6 @@ const PaymentPage: React.FC = () => {
       message.error("Không thể sao chép");
     }
   };
-
-  useEffect(() => {
-    const img = new Image();
-    img.onload = () => setVcbQrExists(true);
-    img.onerror = () => setVcbQrExists(false);
-    img.src = "";
-
-    const mimg = new Image();
-    mimg.onload = () => setMomoQrExists(true);
-    mimg.onerror = () => setMomoQrExists(false);
-    mimg.src = "";
-  }, []);
-
-  const confirmBankTransfer = async () => {
-    setQrModalVisible(false);
-    setCurrentPaymentMethod("bank-transfer");
-    setConfirmModalVisible(true);
-  };
-
-  const confirmCreditCard = async () => {
-    try {
-      await creditForm.validateFields();
-      setCreditModalVisible(false);
-      setCurrentPaymentMethod("credit-card");
-      setConfirmModalVisible(true);
-    } catch (e: any) {
-      Modal.error({
-        title: "Lỗi",
-        content: "Vui lòng kiểm tra lại thông tin thẻ",
-      });
-    }
-  };
-
-  const confirmEwallet = async () => {
-    setEwalletModalVisible(false);
-    setCurrentPaymentMethod(currentWallet);
-    setConfirmModalVisible(true);
-  };
-
-  const confirmAtm = async () => {
-    setAtmModalVisible(false);
-    setCurrentPaymentMethod("atm");
-    setConfirmModalVisible(true);
-  };
-
-  const confirmCash = async () => {
-    setCashModalVisible(false);
-    setCurrentPaymentMethod("cash");
-    setConfirmModalVisible(true);
-  };
-
-  const handleFinalConfirm = async () => {
-    setProcessingPayment(true);
-    try {
-      const invoiceData = sessionStorage.getItem("invoiceInfo");
-      const bookingData = sessionStorage.getItem("bookingInfo");
-
-      let invoice: any = null;
-      if (invoiceData) {
-        try {
-          invoice = JSON.parse(invoiceData);
-        } catch {
-          invoice = null;
-        }
-      }
-      if (!invoice && invoiceInfoState) {
-        invoice = invoiceInfoState;
-      }
-      if (!invoice) {
-        setProcessingPayment(false);
-        Modal.error({
-          title: "Thiếu thông tin",
-          content:
-            "Không tìm thấy thông tin hóa đơn. Vui lòng quay lại trang đặt phòng và thử lại.",
-        });
-        return;
-      }
-
-      let booking: any = null;
-      if (bookingData) {
-        try {
-          booking = JSON.parse(bookingData);
-        } catch {
-          booking = null;
-        }
-      }
-      if (!booking) {
-        booking = {
-          selectedRooms: invoice.rooms || [],
-          checkIn: invoice.checkIn || invoice.ngayNhanPhong,
-          checkOut: invoice.checkOut || invoice.ngayTraPhong,
-          guests: invoice.guests || invoice.soLuongKhach || 1,
-          servicesTotal: invoice.servicesTotal || 0,
-          selectedServices: invoice.services || invoice.selectedServices || [],
-        };
-      }
-
-      const nights = Math.ceil(
-        (new Date(booking.checkOut).getTime() -
-          new Date(booking.checkIn).getTime()) /
-          (1000 * 60 * 60 * 24)
-      );
-
-      const totalPrice = booking.selectedRooms.reduce(
-        (sum: number, sr: any) => {
-          return sum + (sr.room.giaCoBanMotDem || 0) * nights;
-        },
-        0
-      );
-
-      const computeServiceItemAmount = (it: any) => {
-        if (!it) return 0;
-        const price = Number(
-          it.TienDichVu ??
-            it.tienDichVu ??
-            it.GiaDichVu ??
-            it.giaDichVu ??
-            it.price ??
-            it.Price ??
-            0
-        );
-        const qty = Number(it.quantity ?? it.soLuong ?? 1);
-        return (
-          (Number.isFinite(price) ? price : 0) *
-          (Number.isFinite(qty) ? qty : 1)
-        );
-      };
-
-      let servicesTotal = 0;
-      if (
-        booking.servicesTotal != null &&
-        booking.servicesTotal !== undefined
-      ) {
-        servicesTotal = Number(booking.servicesTotal) || 0;
-      } else if (
-        Array.isArray(booking.selectedServices) &&
-        booking.selectedServices.length > 0
-      ) {
-        servicesTotal = booking.selectedServices.reduce(
-          (s: number, it: any) => s + computeServiceItemAmount(it),
-          0
-        );
-      } else if (invoice && invoice.servicesTotal != null) {
-        servicesTotal = Number(invoice.servicesTotal) || 0;
-      }
-
-      const discountedBase = promoResult
-        ? promoResult.tongTienSauGiam
-        : totalPrice;
-      const baseWithServices = discountedBase + servicesTotal;
-      const tax = baseWithServices * 0.1;
-      const grandTotal = baseWithServices + tax;
-
-      const POINT_VALUE = 1000;
-      const redeemValueClient = Math.min(
-        redeemPoints * POINT_VALUE,
-        grandTotal
-      );
-      const grandTotalAfterRedeem = Math.max(0, grandTotal - redeemValueClient);
-
-      // Khi người dùng xác nhận hoàn tất thanh toán trên UI, ghi nhận là 'Đã thanh toán' (2)
-      // Điều này áp dụng cho các phương thức online và cho cash khi người dùng bấm xác nhận.
-      let trangThaiThanhToan = 2;
-
-      const idDatPhong =
-        invoice.IDDatPhong ||
-        invoice.idDatPhong ||
-        invoice.idDatphong ||
-        invoice.idDatPhong;
-
-      const tienPhongInt = Number.isFinite(Number(discountedBase))
-        ? Math.round(Number(discountedBase))
-        : Math.round(Number(totalPrice || 0));
-      const tongTienDecimal = Number.isFinite(Number(grandTotalAfterRedeem))
-        ? Number(Math.round(Number(grandTotalAfterRedeem)))
-        : Number(Math.round(Number(grandTotal || 0)));
-
-      const hoaDonPayload: any = {
-        IDDatPhong: idDatPhong,
-        TienPhong: tienPhongInt,
-        TienDichVu: Math.round(servicesTotal || 0),
-        SoLuongNgay: Number.isFinite(Number(nights)) ? Number(nights) : 1,
-        TongTien: tongTienDecimal,
-        TrangThaiThanhToan: Number.isFinite(Number(trangThaiThanhToan))
-          ? Number(trangThaiThanhToan)
-          : 1,
-        GhiChu: `Thanh toán qua ${currentPaymentMethod}`,
-        RedeemPoints: redeemPoints > 0 ? Number(redeemPoints) : undefined,
-        PhuongThucThanhToan: currentPaymentMethod === "cash" ? 1 : 2,
-      };
-
-      if (!hoaDonPayload.IDDatPhong) {
-        Modal.error({
-          title: "Thiếu thông tin",
-          content:
-            "Không tìm thấy mã đặt phòng (IDDatPhong). Vui lòng quay lại trang đặt phòng.",
-        });
-        return;
-      }
-
-      const hoaDonResponse = await fetch("/api/Payment/hoa-don", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(hoaDonPayload),
-      });
-
-      if (!hoaDonResponse.ok) {
-        const errorText = await hoaDonResponse.text();
-        throw new Error(`Lỗi tạo hóa đơn: ${errorText}`);
-      }
-
-      const hoaDonResult = await hoaDonResponse.json();
-
-      invoice.idHoaDon = hoaDonResult.idHoaDon;
-      invoice.servicesTotal = Math.round(servicesTotal || 0);
-      invoice.grandTotal =
-        hoaDonResult.tongTien ??
-        Math.round(grandTotal) ??
-        Math.round(grandTotalAfterRedeem);
-      sessionStorage.setItem("invoiceInfo", JSON.stringify(invoice));
-
-      // SỬA: Đồng bộ trạng thái thanh toán của Đặt Phòng
-      try {
-        await fetch("/api/Payment/update-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            IDDatPhong: idDatPhong,
-            TrangThaiThanhToan: trangThaiThanhToan,
-            GhiChu: `Cập nhật từ PaymentPage - ${currentPaymentMethod}`,
-          }),
-        });
-      } catch (e) {
-        console.warn(
-          "Không thể cập nhật trạng thái thanh toán cho DatPhong:",
-          e
-        );
-      }
-
-      setConfirmModalVisible(false);
-
-      // Ghi nhận dịch vụ vào backend theo phòng (nếu có)
-      try {
-        const servicesList = booking.selectedServices || invoice.services || [];
-        const byId = new Map<string, any>();
-        const byNum = new Map<number, any>();
-        (booking.selectedRooms || []).forEach((sr: any) => {
-          const rid =
-            sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
-          if (rid) byId.set(String(rid), sr);
-          byNum.set(Number(sr.roomNumber), sr);
-        });
-
-        if (Array.isArray(servicesList) && servicesList.length > 0) {
-          await Promise.allSettled(
-            servicesList.map((s: any) => {
-              const svcId =
-                s.iddichVu ??
-                s.id ??
-                s.serviceId ??
-                s.idDichVu ??
-                s.iddichVu ??
-                null;
-              const price =
-                Number(
-                  s.tienDichVu ??
-                    s.TienDichVu ??
-                    s.price ??
-                    s.Price ??
-                    s.GiaDichVu ??
-                    0
-                ) || 0;
-              const qty = Number(s.quantity ?? s.soLuong ?? 1);
-
-              const svcRoomIdRaw =
-                s.roomId ?? s.idPhong ?? s.idphong ?? s.IDPhong ?? null;
-              const svcRoomNumberRaw =
-                s.roomNumber ?? s.soPhong ?? s.SoPhong ?? null;
-
-              let svcRoomId: string | null = null;
-              let svcRoomNumber: number | null = null;
-
-              if (svcRoomIdRaw && byId.has(String(svcRoomIdRaw))) {
-                svcRoomId = String(svcRoomIdRaw);
-                const sr = byId.get(svcRoomId);
-                svcRoomNumber =
-                  Number(sr?.roomNumber ?? svcRoomNumberRaw ?? null) || null;
-              } else if (
-                svcRoomNumberRaw &&
-                byNum.has(Number(svcRoomNumberRaw))
-              ) {
-                const sr = byNum.get(Number(svcRoomNumberRaw));
-                svcRoomId = String(
-                  sr?.room?.idphong ?? sr?.room?.idPhong ?? sr?.room?.id ?? ""
-                );
-                svcRoomNumber = Number(svcRoomNumberRaw);
-              }
-
-              if (!svcId) return Promise.resolve(null);
-              const payload: any = {
-                idhoaDon: hoaDonResult.idHoaDon,
-                iddichVu: svcId,
-                soLuong: qty,
-                donGia: Math.round(price),
-                tienDichVu: Math.round(price * qty),
-                thoiGianThucHien: new Date().toISOString(),
-              };
-              if (svcRoomId) payload.idphong = svcRoomId;
-              if (svcRoomNumber != null) payload.soPhong = svcRoomNumber;
-
-              return recordServiceUsage(payload as any);
-            })
-          );
-        }
-      } catch (e) {
-        console.warn("Failed to persist service usage:", e);
-      }
-
-      sessionStorage.setItem(
-        "paymentResult",
-        JSON.stringify({
-          success: true,
-          idDatPhong: invoice.idDatPhong,
-          idHoaDon: hoaDonResult.idHoaDon,
-          tongTien: hoaDonResult.tongTien,
-          tienCoc: hoaDonResult.tienCoc,
-          tienThanhToan: hoaDonResult.tienThanhToan,
-          trangThaiThanhToan: trangThaiThanhToan,
-          redeemedPoints: hoaDonResult.redeemedPoints,
-          redeemedValue: hoaDonResult.redeemedValue,
-          pointsEarned: hoaDonResult.pointsEarned,
-          pointsAfter: hoaDonResult.pointsAfter,
-          appliedPromotionValue: hoaDonResult.appliedPromotionValue,
-          servicesTotal: Math.round(servicesTotal || 0),
-          paymentMethod: currentPaymentMethod,
-          paymentMethodName:
-            currentPaymentMethod === "bank-transfer"
-              ? "Chuyển khoản ngân hàng"
-              : currentPaymentMethod === "credit-card"
-              ? "Thẻ tín dụng"
-              : currentPaymentMethod === "momo"
-              ? "Ví MoMo"
-              : currentPaymentMethod === "zalopay"
-              ? "Ví ZaloPay"
-              : currentPaymentMethod === "vnpay"
-              ? "Ví VNPay"
-              : currentPaymentMethod === "shopeepay"
-              ? "Ví ShopeePay"
-              : currentPaymentMethod === "atm"
-              ? "Thẻ ATM"
-              : currentPaymentMethod === "cash"
-              ? "Tiền mặt tại quầy"
-              : "",
-        })
-      );
-
-      window.location.href = "/#booking-success";
-    } catch (e: any) {
-      console.error("❌ Error in handleFinalConfirm:", e);
-      setConfirmModalVisible(false);
-      Modal.error({
-        title: "Lỗi thanh toán",
-        content:
-          e?.message || "Có lỗi xảy ra khi xử lý thanh toán. Vui lòng thử lại.",
-      });
-    } finally {
-      setProcessingPayment(false);
-    }
-  };
-
-  const paymentMethods = [
-    {
-      key: "bank-transfer",
-      title: "Chuyển khoản QR",
-      desc: "Quét mã QR để chuyển khoản",
-      icon: <QrcodeOutlined style={{ fontSize: 24 }} />,
-      badge: "Miễn phí",
-    },
-    {
-      key: "credit-card",
-      title: "Thẻ tín dụng",
-      desc: "Visa, Master, JCB",
-      icon: <CreditCardOutlined style={{ fontSize: 24 }} />,
-      badge: "Miễn phí",
-    },
-    {
-      key: "momo",
-      title: "Ví điện tử MoMo",
-      desc: "Thanh toán qua ví MoMo",
-      icon: <WalletOutlined style={{ fontSize: 24 }} />,
-      badge: "Miễn phí",
-    },
-    {
-      key: "zalopay",
-      title: "Ví ZaloPay",
-      desc: "Thanh toán qua ZaloPay",
-      icon: <WalletOutlined style={{ fontSize: 24 }} />,
-      badge: "Miễn phí",
-    },
-    {
-      key: "vnpay",
-      title: "Ví VNPay",
-      desc: "Thanh toán qua VNPay",
-      icon: <WalletOutlined style={{ fontSize: 24 }} />,
-      badge: "Miễn phí",
-    },
-    {
-      key: "shopeepay",
-      title: "Ví ShopeePay",
-      desc: "Thanh toán qua ShopeePay",
-      icon: <WalletOutlined style={{ fontSize: 24 }} />,
-      badge: "Miễn phí",
-    },
-    {
-      key: "atm",
-      title: "Thẻ ATM",
-      desc: "Thẻ ghi nợ nội địa",
-      icon: <BankOutlined style={{ fontSize: 24 }} />,
-      badge: "Miễn phí",
-    },
-    {
-      key: "cash",
-      title: "Thanh toán tại quầy",
-      desc: "Thanh toán trực tiếp tại khách sạn",
-      icon: <HomeOutlined style={{ fontSize: 24 }} />,
-      badge: "Miễn phí",
-    },
-  ];
 
   useEffect(() => {
     const bookingData = sessionStorage.getItem("bookingInfo");
@@ -748,6 +133,7 @@ const PaymentPage: React.FC = () => {
         }
       } catch {}
     }
+
     const token = localStorage.getItem("hs_token");
     if (token) {
       fetch("/api/auth/profile", {
@@ -755,9 +141,7 @@ const PaymentPage: React.FC = () => {
       })
         .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((data) => setProfile(data))
-        .catch(() => {
-          /* ignore */
-        });
+        .catch(() => {});
     }
   }, []);
 
@@ -779,273 +163,9 @@ const PaymentPage: React.FC = () => {
     return totalPrice;
   };
 
-  const memoRoomIds = useMemo(() => {
-    return (bookingInfo?.selectedRooms || [])
-      .map((sr: any) => sr.room?.idphong || sr.room?.idPhong)
-      .filter(Boolean);
-  }, [bookingInfo?.selectedRooms]);
-
-  const perRoomPricing = useMemo(() => {
-    try {
-      if (
-        !bookingInfo ||
-        !bookingInfo.selectedRooms ||
-        bookingInfo.selectedRooms.length === 0
-      ) {
-        return { rows: [], totalAfterPromo: 0 };
-      }
-
-      const n = Math.max(
-        1,
-        Math.ceil(
-          (new Date(bookingInfo.checkOut).getTime() -
-            new Date(bookingInfo.checkIn).getTime()) /
-            (1000 * 60 * 60 * 24)
-        )
-      );
-
-      const rooms = (bookingInfo.selectedRooms || []).map((sr: any) => {
-        const rid =
-          sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
-        const pricePerNight = sr.room?.giaCoBanMotDem || sr.room?.gia || 0;
-        const base = pricePerNight * n;
-        const name = sr.room?.tenPhong || `Phòng ${sr.roomNumber}`;
-        return {
-          key: sr.roomNumber,
-          rid,
-          roomNumber: sr.roomNumber,
-          name,
-          pricePerNight,
-          nights: n,
-          base,
-        };
-      });
-
-      const eligibleIds: any[] = (appliedPromotionObj?.khuyenMaiPhongs || [])
-        .map((kp: any) => kp?.idphong ?? kp?.idPhong)
-        .filter(Boolean);
-
-      const totalDiscount =
-        Number(promoResult?.soTienGiam ?? promoResult?.discountAmount ?? 0) ||
-        0;
-
-      const eligibleBaseSum = rooms.reduce(
-        (sum, r) => sum + (eligibleIds.includes(r.rid) ? r.base : 0),
-        0
-      );
-
-      const rows = rooms.map((r) => ({
-        ...r,
-        eligible: eligibleIds.includes(r.rid),
-        discount: 0,
-        after: r.base,
-      }));
-
-      if (totalDiscount > 0 && eligibleBaseSum > 0) {
-        let allocated = 0;
-        const eligibleRows = rows.filter((r) => r.eligible);
-        eligibleRows.forEach((r, idx) => {
-          let d = Math.round((r.base / eligibleBaseSum) * totalDiscount);
-          if (idx === eligibleRows.length - 1) {
-            d = Math.max(0, totalDiscount - allocated);
-          }
-          r.discount = Math.min(d, r.base);
-          r.after = Math.max(0, r.base - r.discount);
-          allocated += d;
-        });
-      } else if (
-        eligibleBaseSum > 0 &&
-        (appliedPromotionObj?.loaiGiamGia === "percent" ||
-          appliedPromotionObj?.loaiGiamGia === "percentage")
-      ) {
-        const percent = Number(appliedPromotionObj?.giaTriGiam ?? 0) / 100;
-        rows.forEach((r) => {
-          if (r.eligible && percent > 0) {
-            r.discount = Math.round(r.base * percent);
-            r.after = Math.max(0, r.base - r.discount);
-          }
-        });
-      }
-      const totalAfterPromo = rows.reduce((sum, r) => sum + r.after, 0);
-
-      return { rows, totalAfterPromo };
-    } catch {
-      return { rows: [], totalAfterPromo: 0 };
-    }
-  }, [
-    bookingInfo?.selectedRooms,
-    bookingInfo?.checkIn,
-    bookingInfo?.checkOut,
-    appliedPromotionObj,
-    promoResult?.soTienGiam,
-    promoResult?.discountAmount,
-  ]);
-
-  const servicesTotalUI: number = useMemo(() => {
-    try {
-      if (
-        bookingInfo?.servicesTotal != null &&
-        bookingInfo?.servicesTotal !== undefined
-      ) {
-        return Number(bookingInfo.servicesTotal) || 0;
-      }
-      const list =
-        bookingInfo?.selectedServices ||
-        invoiceInfoState?.selectedServices ||
-        invoiceInfoState?.services ||
-        [];
-      if (Array.isArray(list) && list.length > 0) {
-        const priceOf = (it: any) =>
-          Number(
-            it.TienDichVu ??
-              it.tienDichVu ??
-              it.GiaDichVu ??
-              it.giaDichVu ??
-              it.price ??
-              it.Price ??
-              0
-          );
-        const qtyOf = (it: any) => Number(it.quantity ?? it.soLuong ?? 1);
-        return list.reduce(
-          (s: number, it: any) =>
-            s +
-            Math.max(0, Math.round(priceOf(it))) *
-              Math.max(1, Math.round(qtyOf(it))),
-          0
-        );
-      }
-      return 0;
-    } catch {
-      return 0;
-    }
-  }, [
-    bookingInfo?.servicesTotal,
-    bookingInfo?.selectedServices,
-    invoiceInfoState?.selectedServices,
-    invoiceInfoState?.services,
-  ]);
-
-  const servicesByRoom = useMemo(() => {
-    try {
-      const rooms = bookingInfo?.selectedRooms || [];
-      const list = (bookingInfo?.selectedServices ||
-        invoiceInfoState?.selectedServices ||
-        invoiceInfoState?.services ||
-        []) as any[];
-
-      if (!list || list.length === 0) {
-        return { groups: [], common: [], hasAny: false };
-      }
-
-      const byId = new Map<string, any>();
-      const byNum = new Map<number, any>();
-      rooms.forEach((sr: any) => {
-        const rid =
-          sr.room?.idphong || sr.room?.idPhong || sr.room?.id || sr.roomId;
-        if (rid) byId.set(String(rid), sr);
-        byNum.set(Number(sr.roomNumber), sr);
-      });
-
-      const priceOf = (it: any) =>
-        Number(
-          it.TienDichVu ??
-            it.tienDichVu ??
-            it.GiaDichVu ??
-            it.giaDichVu ??
-            it.price ??
-            it.Price ??
-            0
-        );
-      const qtyOf = (it: any) => Number(it.quantity ?? it.soLuong ?? 1);
-
-      const groupsMap = new Map<
-        string,
-        { room: any; items: any[]; total: number }
-      >();
-      const common: any[] = [];
-
-      list.forEach((s: any) => {
-        const unit = Math.max(0, Math.round(priceOf(s)));
-        const qty = Math.max(1, Math.round(qtyOf(s)));
-        const line = unit * qty;
-
-        const svcRoomIdRaw =
-          s.roomId ?? s.idPhong ?? s.idphong ?? s.IDPhong ?? null;
-        const svcRoomNumberRaw = s.roomNumber ?? s.soPhong ?? s.SoPhong ?? null;
-
-        let key: string | null = null;
-        let roomRef: any = null;
-
-        if (svcRoomIdRaw && byId.has(String(svcRoomIdRaw))) {
-          key = `rid:${String(svcRoomIdRaw)}`;
-          roomRef = byId.get(String(svcRoomIdRaw));
-        } else if (svcRoomNumberRaw && byNum.has(Number(svcRoomNumberRaw))) {
-          const sr = byNum.get(Number(svcRoomNumberRaw));
-          const rid =
-            sr?.room?.idphong ?? sr?.room?.idPhong ?? sr?.room?.id ?? "";
-          key = `rid:${String(rid)}`;
-          roomRef = sr;
-        }
-
-        if (key && roomRef) {
-          const cur = groupsMap.get(key) || {
-            room: roomRef,
-            items: [],
-            total: 0,
-          };
-          cur.items.push({ ...s, _unit: unit, _qty: qty, _line: line });
-          cur.total += line;
-          groupsMap.set(key, cur);
-        } else {
-          common.push({ ...s, _unit: unit, _qty: qty, _line: line });
-        }
-      });
-
-      const groups = Array.from(groupsMap.values());
-
-      return {
-        groups,
-        common,
-        hasAny: groups.length > 0 || common.length > 0,
-      };
-    } catch {
-      return { groups: [], common: [], hasAny: false };
-    }
-  }, [
-    bookingInfo?.selectedRooms,
-    bookingInfo?.selectedServices,
-    invoiceInfoState?.selectedServices,
-    invoiceInfoState?.services,
-  ]);
-
-  const handlePromotionApplied = useCallback(
-    (res: ApplyPromotionResponse | null) => {
-      setPromoResult(res);
-    },
-    [setPromoResult]
-  );
-
   const handleConfirmPayment = async () => {
     if (selectedMethod === "credit-card") {
       setCreditModalVisible(true);
-      return;
-    }
-
-    if (["momo", "zalopay", "vnpay", "shopeepay"].includes(selectedMethod)) {
-      setCurrentWallet(selectedMethod);
-      const ref = `IVIVU${Date.now().toString().slice(-9)}`;
-      setPaymentRef(ref);
-      setEwalletModalVisible(true);
-      return;
-    }
-
-    if (selectedMethod === "atm") {
-      setAtmModalVisible(true);
-      return;
-    }
-
-    if (selectedMethod === "cash") {
-      setCashModalVisible(true);
       return;
     }
 
@@ -1055,15 +175,154 @@ const PaymentPage: React.FC = () => {
       setQrModalVisible(true);
       return;
     }
+
+    // Handle other payment methods (hotel-payment, momo, etc.)
+    // Thanh toán tại khách sạn sẽ lưu trạng thái chưa thanh toán
+    setConfirmModalVisible(true);
   };
 
-  const handleGoBack = () => {
-    window.history.back();
+  const handleFinalConfirm = async () => {
+    setProcessingPayment(true);
+    try {
+      // Xác định trạng thái thanh toán và số tiền
+      let paymentStatus: "unpaid" | "deposit" | "paid" = "unpaid";
+      let amountPaid = 0;
+      let depositAmount = 0;
+      let trangThaiThanhToan = 1; // 1:Chưa TT, 2:Đã TT, 0:Đã cọc
+      let phuongThucThanhToan = 1; // 1 = tiền mặt, 2 = online, 3 = quầy
+      let tienCoc = 0; // Tiền cọc
+
+      if (selectedMethod === "hotel-payment") {
+        // Thanh toán tại khách sạn = chưa thanh toán
+        paymentStatus = "unpaid";
+        amountPaid = 0;
+        trangThaiThanhToan = 1;
+        phuongThucThanhToan = 1;
+        tienCoc = 0;
+      } else if (selectedMethod === "bank-transfer") {
+        // Chuyển khoản: kiểm tra option đặt cọc hay full
+        if (depositOption === "deposit") {
+          paymentStatus = "deposit";
+          amountPaid = DEPOSIT_AMOUNT;
+          depositAmount = DEPOSIT_AMOUNT;
+          trangThaiThanhToan = 0; // 0 = Đã cọc
+          phuongThucThanhToan = 2;
+          tienCoc = DEPOSIT_AMOUNT;
+        } else {
+          paymentStatus = "paid";
+          amountPaid = Math.round(grandTotal);
+          trangThaiThanhToan = 2; // 2 = Đã thanh toán
+          phuongThucThanhToan = 2;
+          tienCoc = 0;
+        }
+      } else {
+        // Các phương thức khác (credit-card, momo) = đã thanh toán
+        paymentStatus = "paid";
+        amountPaid = Math.round(grandTotal);
+        trangThaiThanhToan = 2;
+        phuongThucThanhToan = 2;
+        tienCoc = 0;
+      }
+
+      // Lấy thông tin từ invoiceInfo
+      const invoiceInfo = invoiceInfoState;
+      if (!invoiceInfo || !invoiceInfo.idDatPhong) {
+        throw new Error("Không tìm thấy thông tin đặt phòng");
+      }
+
+      if (!bookingInfo) {
+        throw new Error("Không tìm thấy thông tin booking");
+      }
+
+      // Tạo payload để gọi API tạo hóa đơn
+      const invoicePayload = {
+        IDDatPhong: invoiceInfo.idDatPhong,
+        TienPhong: totalPrice,
+        SoLuongNgay: nights,
+        TongTien: Math.round(grandTotal),
+        TienCoc: tienCoc,
+        TrangThaiThanhToan: trangThaiThanhToan,
+        PhuongThucThanhToan: phuongThucThanhToan,
+        GhiChu: `Phương thức: ${
+          selectedMethod === "hotel-payment"
+            ? "Thanh toán tại khách sạn"
+            : selectedMethod === "bank-transfer"
+            ? depositOption === "deposit"
+              ? "Đặt cọc 500k"
+              : "Chuyển khoản đủ"
+            : selectedMethod
+        }${paymentRef ? ` | Mã GD: ${paymentRef}` : ""}`,
+        PaymentGateway:
+          selectedMethod === "bank-transfer" ? "VietQR" : selectedMethod,
+        Services: (bookingInfo.selectedServices || []).map((svc: any) => ({
+          IddichVu: svc.serviceId,
+          SoLuong: svc.quantity || 1,
+          DonGia: svc.price,
+          TienDichVu: svc.price * (svc.quantity || 1),
+        })),
+      };
+
+      // Gọi API tạo hóa đơn
+      const response = await fetch("/api/Payment/hoa-don", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(invoicePayload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(errorData || "Không thể tạo hóa đơn");
+      }
+
+      const result = await response.json();
+
+      // Cập nhật invoiceInfo với idHoaDon mới
+      const updatedInvoiceInfo = {
+        ...invoiceInfo,
+        idHoaDon: result.idHoaDon,
+        trangThaiThanhToan: trangThaiThanhToan,
+        paymentStatus: paymentStatus,
+        amountPaid: amountPaid,
+        depositAmount: depositAmount,
+      };
+
+      // Lưu kết quả thanh toán
+      sessionStorage.setItem("invoiceInfo", JSON.stringify(updatedInvoiceInfo));
+      sessionStorage.setItem(
+        "paymentResult",
+        JSON.stringify({
+          success: true,
+          paymentMethod: selectedMethod,
+          paymentStatus: paymentStatus,
+          amountPaid: amountPaid,
+          depositAmount: depositAmount,
+          totalAmount: Math.round(grandTotal),
+          idHoaDon: result.idHoaDon,
+        })
+      );
+
+      message.success("Thanh toán thành công!");
+
+      // Chuyển sang trang success sau 1 giây
+      setTimeout(() => {
+        window.location.href = "/#booking-success";
+      }, 1000);
+    } catch (e: any) {
+      console.error("Error:", e);
+      Modal.error({
+        title: "Lỗi thanh toán",
+        content: e.message || "Có lỗi xảy ra. Vui lòng thử lại.",
+      });
+    } finally {
+      setProcessingPayment(false);
+    }
   };
 
   if (error) {
     return (
-      <Layout>
+      <Layout style={{ minHeight: "100vh", background: "#f8f9fa" }}>
         <Content style={{ padding: "50px" }}>
           <Alert
             type="error"
@@ -1086,7 +345,7 @@ const PaymentPage: React.FC = () => {
 
   if (!bookingInfo) {
     return (
-      <Layout>
+      <Layout style={{ minHeight: "100vh", background: "#f8f9fa" }}>
         <Content style={{ padding: "50px", textAlign: "center" }}>
           <div>Đang tải...</div>
         </Content>
@@ -1095,631 +354,378 @@ const PaymentPage: React.FC = () => {
   }
 
   const totalPrice = calculateTotal();
-  const servicesTotal = servicesTotalUI;
   const nights = calculateNights();
-  const discountedBase = promoResult ? promoResult.tongTienSauGiam : totalPrice;
-  const baseWithServices = discountedBase + servicesTotal;
-  const tax = baseWithServices * 0.1;
-  const grandTotal = baseWithServices + tax;
+  const servicesTotal = bookingInfo.servicesTotal || 0;
+  const subtotal = totalPrice + servicesTotal;
+  const tax = subtotal * 0.1;
+  const grandTotal = subtotal + tax;
+
+  const paymentMethods = [
+    {
+      key: "bank-transfer",
+      title: "Chuyển khoản",
+      subtitle: "QR Code",
+      icon: <QrcodeOutlined />,
+      recommended: true,
+    },
+    {
+      key: "credit-card",
+      title: "Thẻ tín dụng",
+      subtitle: "Visa, Master, JCB",
+      icon: <CreditCardOutlined />,
+    },
+    {
+      key: "momo",
+      title: "Ví MoMo",
+      subtitle: "Thanh toán nhanh",
+      icon: <WalletOutlined />,
+    },
+    {
+      key: "hotel-payment",
+      title: "Thanh toán tại khách sạn",
+      subtitle: "Thanh toán khi nhận phòng",
+      icon: <HomeOutlined />,
+    },
+  ];
 
   return (
-    <Layout>
-      <Content
+    <Layout style={{ minHeight: "100vh", background: "#f8f9fa" }}>
+      {/* Header Bar */}
+      <div
         style={{
-          padding: "24px 50px",
-          maxWidth: "1400px",
-          margin: "auto",
-          width: "100%",
-          minHeight: "100vh",
+          background: "linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)",
+          borderBottom: "2px solid #dfa974",
+          padding: "16px 0",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+          boxShadow: "0 2px 12px rgba(223, 169, 116, 0.15)",
         }}
       >
-        <Button
-          type="text"
-          icon={<ArrowLeftOutlined />}
-          onClick={handleGoBack}
-          style={{ marginBottom: 16 }}
+        <div
+          style={{
+            maxWidth: "1200px",
+            margin: "0 auto",
+            padding: "0 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
         >
-          Quay lại
-        </Button>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <Button
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => window.history.back()}
+              style={{ color: "#2c3e50" }}
+            >
+              Quay lại
+            </Button>
+            <div>
+              <Text strong style={{ fontSize: 18, color: "#2c3e50" }}>
+                Thanh toán
+              </Text>
+            </div>
+          </div>
 
-        <BookingProgress
-          totalRooms={bookingInfo?.totalRooms || 1}
-          currentStage="checkout"
-          selectedRoomNumbers={
-            bookingInfo?.selectedRooms?.map((sr) => sr.roomNumber) || []
-          }
-        />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <LockOutlined style={{ color: "#dfa974" }} />
+            <Text type="secondary" style={{ fontSize: 13, color: "#7f8c8d" }}>
+              Bảo mật SSL
+            </Text>
+          </div>
+        </div>
+      </div>
 
-        <Title level={2} style={{ marginBottom: 24, textAlign: "center" }}>
-          Chọn hình thức thanh toán
-        </Title>
-
-        <Row gutter={[24, 24]} style={{ alignItems: "stretch" }}>
-          <Col xs={24} lg={16}>
-            <div
+      <Content
+        style={{
+          padding: "40px 24px",
+          maxWidth: "1200px",
+          margin: "0 auto",
+          width: "100%",
+        }}
+      >
+        <Row gutter={[32, 32]}>
+          {/* Left Column - Payment Form */}
+          <Col xs={24} lg={14}>
+            {/* Progress Steps */}
+            <Card
+              bordered={false}
               style={{
-                background: "#ffffff",
-                color: "#000",
-                padding: "18px",
-                borderRadius: "8px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                display: "flex",
-                gap: 20,
-                alignItems: "flex-start",
-                flexWrap: "wrap",
+                marginBottom: 24,
+                borderRadius: 12,
+                boxShadow: "0 4px 12px rgba(223, 169, 116, 0.12)",
+                border: "1px solid #f0f0f0",
               }}
             >
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div
-                  style={{
-                    fontSize: 12,
-                    marginBottom: 8,
-                    opacity: 0.6,
-                    color: "#666",
-                    fontWeight: 700,
-                  }}
-                >
-                  THÔNG TIN ĐẶT PHÒNG
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 18 }}>
-              <PromotionLoyaltyPanel
-                invoiceId={invoiceInfoState?.idHoaDon || 0}
-                roomIds={memoRoomIds}
-                baseAmount={totalPrice}
-                selectedRooms={bookingInfo.selectedRooms}
-                nights={nights}
-                checkIn={bookingInfo.checkIn}
-                checkOut={bookingInfo.checkOut}
-                customerId={invoiceInfoState?.idKhachHang}
-                onApplied={handlePromotionApplied}
-                disableAutoApply={disableAutoApplyPromos}
-                externalApplied={externalPromoApplied}
+              <Steps
+                current={0}
+                size="small"
+                items={[
+                  { title: "Thanh toán", icon: <CreditCardOutlined /> },
+                  { title: "Xác nhận", icon: <CheckCircleOutlined /> },
+                  { title: "Hoàn tất", icon: <CheckOutlined /> },
+                ]}
               />
+            </Card>
 
-              <div style={{ marginTop: 12 }}>
-                <PromotionsAvailable
-                  roomIds={memoRoomIds}
-                  checkIn={bookingInfo.checkIn}
-                  checkOut={bookingInfo.checkOut}
-                  title="Tất cả khuyến mãi"
-                  compact
-                />
-              </div>
+            {/* Payment Methods */}
+            <Card
+              bordered={false}
+              style={{
+                marginBottom: 24,
+                borderRadius: 12,
+                boxShadow: "0 4px 12px rgba(223, 169, 116, 0.12)",
+                border: "1px solid #f0f0f0",
+              }}
+            >
+              <Title level={5} style={{ marginBottom: 20 }}>
+                Chọn phương thức thanh toán
+              </Title>
 
-              <div style={{ marginTop: 12 }}>
-                <Input.Search
-                  placeholder="Nhập mã khuyến mãi"
-                  enterButton="Áp dụng"
-                  value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value)}
-                  loading={applyingPromoCode}
-                  onSearch={async (value) => {
-                    const code = (value || promoCode || "").trim();
-                    if (!code) {
-                      message.warning("Vui lòng nhập mã khuyến mãi");
-                      return;
-                    }
-                    try {
-                      setApplyingPromoCode(true);
-                      const { getAllPromotions } = await import(
-                        "../api/promotionApi"
-                      );
-                      const all = await getAllPromotions("active");
-                      const match = all.find(
-                        (p: any) =>
-                          (p.tenKhuyenMai || "").toLowerCase() ===
-                            code.toLowerCase() ||
-                          (p.idkhuyenMai || "").toLowerCase() ===
-                            code.toLowerCase()
-                      );
-                      if (!match) {
-                        message.error("Mã khuyến mãi không hợp lệ");
-                        return;
-                      }
-                      const roomIds = memoRoomIds;
-                      const promoRoomIds = (match.khuyenMaiPhongs || []).map(
-                        (kp: any) => kp.idphong
-                      );
-                      const intersects = roomIds.some((rid: any) =>
-                        promoRoomIds.includes(rid)
-                      );
-                      if (!intersects) {
-                        message.error("Mã này không áp dụng cho phòng đã chọn");
-                        return;
-                      }
-                      const eligibleTotal = (
-                        bookingInfo.selectedRooms || []
-                      ).reduce((sum: number, sr: any) => {
-                        const rid =
-                          sr.room?.idphong ||
-                          sr.room?.idPhong ||
-                          sr.room?.id ||
-                          sr.roomId;
-                        if (!rid) return sum;
-                        if (promoRoomIds.includes(rid)) {
-                          const price =
-                            sr.room?.giaCoBanMotDem || sr.room?.gia || 0;
-                          return sum + price * (nights || 1);
-                        }
-                        return sum;
-                      }, 0);
-
-                      let discount = 0;
-                      if (match.loaiGiamGia === "percent") {
-                        discount =
-                          ((match.giaTriGiam || 0) / 100) * eligibleTotal;
-                      } else {
-                        discount = Math.min(
-                          match.giaTriGiam || 0,
-                          eligibleTotal
-                        );
-                      }
-                      const totalAfter = Math.max(0, totalPrice - discount);
-                      const points = Math.floor(totalAfter / 100000);
-                      const applied: ApplyPromotionResponse = {
-                        tongTienSauGiam: Math.round(totalAfter),
-                        discountAmount: Math.round(discount),
-                        appliedPromotionId: match.idkhuyenMai,
-                        appliedPromotionName: match.tenKhuyenMai,
-                        pointsEstimated: points,
-                      };
-                      setExternalPromoApplied(applied);
-                      setDisableAutoApplyPromos(true);
-                      setPromoResult(applied);
-                      message.success("Áp dụng mã khuyến mãi thành công");
-                    } catch (e: any) {
-                      console.error(e);
-                      message.error("Lỗi khi áp dụng mã");
-                    } finally {
-                      setApplyingPromoCode(false);
-                    }
-                  }}
-                />
-              </div>
-
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.7 }}>
-                  Sử dụng điểm tích lũy
-                </div>
-                {profilePoints != null && profilePoints !== undefined ? (
-                  <div
-                    style={{ display: "flex", gap: 12, alignItems: "center" }}
-                  >
-                    <div style={{ fontSize: 13 }}>
-                      Điểm hiện có: <b>{profilePoints}</b>
-                    </div>
-                    <InputNumber
-                      min={0}
-                      max={profilePoints ?? 0}
-                      value={redeemPoints}
-                      onChange={(v) => setRedeemPoints(Number(v) || 0)}
-                    />
-                    <div style={{ color: "#888", fontSize: 12 }}>
-                      Mỗi điểm = 1.000đ
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ color: "#888", fontSize: 13 }}>
-                    Đăng nhập để dùng điểm tích lũy
-                  </div>
-                )}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: 12,
-                  border: "1px dashed #eee",
-                  borderRadius: 8,
-                  background: "#fff",
-                }}
+              <Radio.Group
+                value={selectedMethod}
+                onChange={(e) => setSelectedMethod(e.target.value)}
+                style={{ width: "100%" }}
               >
-                <div
-                  style={{
-                    fontSize: 12,
-                    marginBottom: 8,
-                    fontWeight: 700,
-                    color: "#666",
-                  }}
-                >
-                  Chi tiết giá theo phòng
-                </div>
-
-                {perRoomPricing.rows.length === 0 ? (
-                  <div style={{ color: "#888", fontSize: 13 }}>
-                    Không có dữ liệu phòng
-                  </div>
-                ) : (
-                  <div
-                    style={{ display: "flex", flexDirection: "column", gap: 8 }}
-                  >
-                    {perRoomPricing.rows.map((r: any) => (
+                <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                  {paymentMethods.map((method) => (
+                    <Radio.Button
+                      key={method.key}
+                      value={method.key}
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        padding: "16px 20px",
+                        border:
+                          selectedMethod === method.key
+                            ? "2px solid #dfa974"
+                            : "1px solid #e8e8e8",
+                        borderRadius: 8,
+                        background:
+                          selectedMethod === method.key ? "#fef8f1" : "#fff",
+                        transition: "all 0.3s",
+                        boxShadow:
+                          selectedMethod === method.key
+                            ? "0 4px 12px rgba(223, 169, 116, 0.2)"
+                            : "none",
+                      }}
+                    >
                       <div
-                        key={r.key}
                         style={{
                           display: "flex",
-                          justifyContent: "space-between",
                           alignItems: "center",
-                          padding: "8px 10px",
-                          border: "1px solid #f5f5f5",
-                          borderRadius: 8,
+                          justifyContent: "space-between",
+                          width: "100%",
                         }}
                       >
                         <div
-                          style={{ display: "flex", flexDirection: "column" }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 16,
+                          }}
                         >
                           <div
                             style={{
-                              fontSize: 14,
-                              fontWeight: 600,
-                              color: "#333",
+                              fontSize: 24,
+                              color:
+                                selectedMethod === method.key
+                                  ? "#dfa974"
+                                  : "#7f8c8d",
                             }}
                           >
-                            {r.name}{" "}
-                            <span
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 500,
-                                marginLeft: 8,
-                                color: r.discount > 0 ? "#52c41a" : "#999",
-                              }}
-                            >
-                              {r.discount > 0
-                                ? "Được khuyến mãi"
-                                : "Giá thường"}
-                            </span>
+                            {method.icon}
                           </div>
-                          <div style={{ fontSize: 12, color: "#888" }}>
-                            {r.nights} đêm x {r.pricePerNight.toLocaleString()}đ
-                            = {r.base.toLocaleString()}đ
-                            {r.discount > 0 && (
-                              <span style={{ marginLeft: 8, color: "#cf1322" }}>
-                                − {r.discount.toLocaleString()}đ
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div style={{ textAlign: "right" }}>
-                          {r.discount > 0 ? (
-                            <>
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  color: "#999",
-                                  textDecoration: "line-through",
-                                }}
-                              >
-                                {r.base.toLocaleString()}đ
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 14,
-                                  fontWeight: 700,
-                                  color: "#dfa974",
-                                }}
-                              >
-                                {r.after.toLocaleString()}đ
-                              </div>
-                            </>
-                          ) : (
+                          <div>
                             <div
                               style={{
-                                fontSize: 14,
-                                fontWeight: 700,
-                                color: "#333",
+                                fontWeight: 600,
+                                fontSize: 15,
+                                color: "#2c3e50",
+                                marginBottom: 2,
                               }}
                             >
-                              {r.after.toLocaleString()}đ
+                              {method.title}
                             </div>
-                          )}
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: "#7f8c8d",
+                              }}
+                            >
+                              {method.subtitle}
+                            </div>
+                          </div>
                         </div>
+                        {method.recommended && (
+                          <Tag
+                            color="#dfa974"
+                            style={{ margin: 0, borderColor: "#dfa974" }}
+                          >
+                            Khuyên dùng
+                          </Tag>
+                        )}
                       </div>
-                    ))}
+                    </Radio.Button>
+                  ))}
+                </Space>
+              </Radio.Group>
+            </Card>
 
+            {/* Promo Code */}
+            <Card
+              bordered={false}
+              style={{
+                marginBottom: 24,
+                borderRadius: 12,
+                boxShadow: "0 4px 12px rgba(223, 169, 116, 0.12)",
+                border: "1px solid #f0f0f0",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 16,
+                }}
+              >
+                <TagOutlined style={{ color: "#dfa974" }} />
+                <Text strong style={{ color: "#2c3e50" }}>
+                  Mã khuyến mãi
+                </Text>
+              </div>
+
+              <Input.Search
+                placeholder="Nhập mã khuyến mãi"
+                enterButton="Áp dụng"
+                size="large"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                style={{ marginBottom: 12 }}
+              />
+
+              <Text type="secondary" style={{ fontSize: 13, color: "#7f8c8d" }}>
+                Bạn có điểm tích lũy?{" "}
+                <a style={{ color: "#dfa974" }}>Đăng nhập</a> để sử dụng
+              </Text>
+            </Card>
+
+            {/* Security Notice */}
+            <Alert
+              message="Thanh toán an toàn & bảo mật"
+              description="Thông tin thanh toán của bạn được mã hóa và bảo vệ bởi công nghệ SSL 256-bit"
+              type="success"
+              showIcon
+              icon={<SafetyOutlined />}
+              style={{
+                borderRadius: 8,
+                border: "1px solid #d4edda",
+                background: "#f6ffed",
+                marginBottom: 16,
+              }}
+            />
+
+            {/* Payment Info Alert */}
+            {selectedMethod === "hotel-payment" && (
+              <Alert
+                message="Thanh toán tại khách sạn"
+                description="Bạn sẽ thanh toán toàn bộ chi phí khi làm thủ tục nhận phòng. Đặt phòng sẽ được xác nhận và giữ cho bạn."
+                type="info"
+                showIcon
+                style={{
+                  borderRadius: 8,
+                  border: "1px solid #d1ecf1",
+                  background: "#d1ecf1",
+                }}
+              />
+            )}
+
+            {selectedMethod === "bank-transfer" && (
+              <Alert
+                message="Chuyển khoản ngân hàng"
+                description={
+                  <div>
+                    <p style={{ margin: 0 }}>
+                      • <strong>Đặt cọc 500,000đ:</strong> Giữ chỗ, thanh toán
+                      phần còn lại khi nhận phòng
+                    </p>
+                    <p style={{ margin: "8px 0 0 0" }}>
+                      • <strong>Thanh toán đủ:</strong> Thanh toán toàn bộ ngay,
+                      nhận phòng không cần thanh toán thêm
+                    </p>
+                  </div>
+                }
+                type="info"
+                showIcon
+                style={{
+                  borderRadius: 8,
+                  border: "1px solid #d1ecf1",
+                  background: "#e7f3ff",
+                }}
+              />
+            )}
+          </Col>
+
+          {/* Right Column - Booking Summary */}
+          <Col xs={24} lg={10}>
+            <div style={{ position: "sticky", top: 100 }}>
+              <Card
+                bordered={false}
+                style={{
+                  borderRadius: 12,
+                  boxShadow: "0 4px 16px rgba(223, 169, 116, 0.15)",
+                  overflow: "hidden",
+                  border: "1px solid #f0f0f0",
+                }}
+              >
+                <div
+                  style={{
+                    background:
+                      "radial-gradient(circle at top left, #ffffff 0%, #fef8f1 100%)",
+                    borderRadius: 8,
+                    borderBottom: "2px solid #dfa974",
+                    padding: "10px 12px",
+                    marginBottom: 20,
+                    marginTop: -24,
+                    marginLeft: -24,
+                    marginRight: -24,
+                  }}
+                >
+                  <Title level={5} style={{ margin: 0, color: "#2c3e50" }}>
+                    Tóm tắt đặt phòng
+                  </Title>
+                </div>
+
+                {/* Room Details */}
+                {bookingInfo.selectedRooms.map((sr, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      marginBottom: 20,
+                      paddingBottom: 20,
+                      borderBottom:
+                        idx < bookingInfo.selectedRooms.length - 1
+                          ? "1px solid #f0f0f0"
+                          : "none",
+                    }}
+                  >
                     <div
                       style={{
                         display: "flex",
-                        justifyContent: "space-between",
-                        paddingTop: 4,
-                      }}
-                    >
-                      <span style={{ color: "#666" }}>
-                        Tổng giá phòng sau khuyến mãi
-                      </span>
-                      <span style={{ fontWeight: 600 }}>
-                        {perRoomPricing.totalAfterPromo.toLocaleString()}đ
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: 12,
-                  border: "1px dashed #eee",
-                  borderRadius: 8,
-                  background: "#fff",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 12,
-                    marginBottom: 8,
-                    fontWeight: 700,
-                    color: "#666",
-                  }}
-                >
-                  Dịch vụ theo phòng
-                </div>
-
-                {!servicesByRoom.hasAny ? (
-                  <div style={{ color: "#888", fontSize: 13 }}>
-                    Chưa chọn dịch vụ
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                    }}
-                  >
-                    {servicesByRoom.groups.map((g: any, idx: number) => {
-                      const roomName =
-                        g.room?.room?.tenPhong ||
-                        `Phòng ${g.room?.roomNumber ?? ""}`.trim();
-                      const roomNo = g.room?.roomNumber
-                        ? `#${g.room.roomNumber}`
-                        : "";
-                      return (
-                        <Card
-                          key={`svc-room-${idx}`}
-                          size="small"
-                          bodyStyle={{ padding: 10, background: "#fafafa" }}
-                        >
-                          <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                            {roomName}{" "}
-                            {roomNo && (
-                              <span style={{ color: "#888", fontWeight: 500 }}>
-                                {roomNo}
-                              </span>
-                            )}
-                          </div>
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 6,
-                            }}
-                          >
-                            {g.items.map((s: any, i: number) => (
-                              <div
-                                key={i}
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                }}
-                              >
-                                <div>
-                                  <div style={{ fontSize: 13 }}>
-                                    {s.serviceName ??
-                                      s.tenDichVu ??
-                                      s.TenDichVu ??
-                                      s.name ??
-                                      "Dịch vụ"}
-                                  </div>
-                                  <div style={{ fontSize: 12, color: "#888" }}>
-                                    {s._qty} x {s._unit.toLocaleString()}đ
-                                  </div>
-                                </div>
-                                <div style={{ fontWeight: 700 }}>
-                                  {s._line.toLocaleString()}đ
-                                </div>
-                              </div>
-                            ))}
-                            <div
-                              style={{
-                                marginTop: 6,
-                                display: "flex",
-                                justifyContent: "space-between",
-                                borderTop: "1px dashed #eee",
-                                paddingTop: 6,
-                              }}
-                            >
-                              <span style={{ color: "#666" }}>
-                                Tổng dịch vụ (phòng này)
-                              </span>
-                              <span style={{ fontWeight: 700 }}>
-                                {g.total.toLocaleString()}đ
-                              </span>
-                            </div>
-                          </div>
-                        </Card>
-                      );
-                    })}
-
-                    {servicesByRoom.common.length > 0 && (
-                      <Card size="small" bodyStyle={{ padding: 10 }}>
-                        <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                          D���ch vụ chung
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 6,
-                          }}
-                        >
-                          {servicesByRoom.common.map((s: any, i: number) => (
-                            <div
-                              key={i}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                              }}
-                            >
-                              <div>
-                                <div style={{ fontSize: 13 }}>
-                                  {s.serviceName ??
-                                    s.tenDichVu ??
-                                    s.TenDichVu ??
-                                    s.name ??
-                                    "Dịch vụ"}
-                                </div>
-                                <div style={{ fontSize: 12, color: "#888" }}>
-                                  {s._qty} x {s._unit.toLocaleString()}đ
-                                </div>
-                              </div>
-                              <div style={{ fontWeight: 700 }}>
-                                {s._line.toLocaleString()}đ
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </Card>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 12,
-                  marginBottom: 6,
-                  paddingTop: 12,
-                  borderTop: "1px solid #eee",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 8,
-                    color: "#666",
-                  }}
-                >
-                  <span>Tiền dịch vụ</span>
-                  <span>{Math.round(servicesTotal).toLocaleString()}đ</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 8,
-                    color: "#666",
-                  }}
-                >
-                  <span>Thuế VAT (10%)</span>
-                  <span>{Math.round(tax).toLocaleString()}đ</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontWeight: 600,
-                    color: "#000",
-                  }}
-                >
-                  <span>Tổng cộng</span>
-                  <span style={{ color: "#dfa974" }}>
-                    {Math.round(grandTotal).toLocaleString()}đ
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ marginTop: 12 }}>
-                <Alert
-                  message="Miễn phí hủy trong 24h"
-                  description="Bạn có thể hủy miễn phí trước 24 giờ nhận phòng"
-                  type="info"
-                  showIcon
-                  style={{ fontSize: 12 }}
-                />
-              </div>
-
-              {holdExpiresAt && (
-                <div style={{ marginTop: 12 }}>
-                  <Card size="small" bodyStyle={{ padding: 12 }}>
-                    <div
-                      style={{ display: "flex", gap: 12, alignItems: "center" }}
-                    >
-                      <ClockCircleOutlined
-                        style={{ fontSize: 18, color: "#dfa974" }}
-                      />
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#666",
-                            fontWeight: 700,
-                          }}
-                        >
-                          Thời hạn giữ phòng
-                        </div>
-                        <div style={{ fontSize: 14, color: "#333" }}>
-                          {holdLocal ? (
-                            <span>{holdLocal}</span>
-                          ) : (
-                            <span>{holdExpiresAt}</span>
-                          )}
-                          {holdCountdown && (
-                            <span style={{ marginLeft: 8, color: "#cf1322" }}>
-                              — còn {holdCountdown}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-              )}
-            </div>
-          </Col>
-
-          <Col xs={24} lg={8}>
-            <div style={{ height: "100%" }}>
-              <div
-                style={{
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: 16,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#666" }}>
-                  PHÒNG ĐÃ CHỌN
-                </div>
-
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 12 }}
-                >
-                  {(bookingInfo.selectedRooms || []).map((sr: any) => (
-                    <div
-                      key={sr.roomNumber}
-                      style={{
-                        padding: 8,
-                        border: "1px solid #f5f5f5",
-                        borderRadius: 10,
-                        background: "#fff",
+                        gap: 12,
+                        marginBottom: 12,
                       }}
                     >
                       <div
                         style={{
-                          width: "100%",
-                          height: 200,
-                          overflow: "hidden",
+                          width: 80,
+                          height: 80,
                           borderRadius: 8,
-                          background: "#f2f2f2",
+                          overflow: "hidden",
+                          flexShrink: 0,
+                          background: "#f5f5f5",
                         }}
                       >
                         <img
@@ -1729,289 +735,392 @@ const PaymentPage: React.FC = () => {
                             width: "100%",
                             height: "100%",
                             objectFit: "cover",
-                            display: "block",
                           }}
                         />
                       </div>
-                      <div
-                        style={{
-                          marginTop: 8,
-                          display: "flex",
-                          flexDirection: "column",
-                        }}
-                      >
-                        <div
+                      <div style={{ flex: 1 }}>
+                        <Text
+                          strong
                           style={{
                             fontSize: 14,
-                            fontWeight: 700,
-                            color: "#333",
+                            display: "block",
+                            marginBottom: 4,
                           }}
                         >
                           {sr.room?.tenPhong || `Phòng ${sr.roomNumber}`}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#888" }}>
+                        </Text>
+                        <Text
+                          type="secondary"
+                          style={{ fontSize: 13, display: "block" }}
+                        >
                           Phòng #{sr.roomNumber}
-                        </div>
+                        </Text>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Col>
+                  </div>
+                ))}
 
-          <Col xs={24}>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 12,
-                alignItems: "stretch",
-                marginTop: 6,
-              }}
-            >
-              {paymentMethods.map((method) => (
-                <Card
-                  key={method.key}
-                  size="small"
-                  hoverable
-                  onClick={() => setSelectedMethod(method.key)}
-                  bodyStyle={{ padding: 10 }}
+                <Divider style={{ margin: "20px 0" }} />
+
+                {/* Date & Guests Info */}
+                <Space
+                  direction="vertical"
+                  size={12}
+                  style={{ width: "100%", marginBottom: 20 }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 12 }}
+                  >
+                    <CalendarOutlined style={{ color: "#666", fontSize: 16 }} />
+                    <div>
+                      <Text
+                        type="secondary"
+                        style={{ fontSize: 13, display: "block" }}
+                      >
+                        Nhận phòng - Trả phòng
+                      </Text>
+                      <Text strong style={{ fontSize: 14 }}>
+                        {new Date(bookingInfo.checkIn).toLocaleDateString(
+                          "vi-VN"
+                        )}{" "}
+                        -{" "}
+                        {new Date(bookingInfo.checkOut).toLocaleDateString(
+                          "vi-VN"
+                        )}
+                      </Text>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 12 }}
+                  >
+                    <ClockCircleOutlined
+                      style={{ color: "#666", fontSize: 16 }}
+                    />
+                    <div>
+                      <Text strong style={{ fontSize: 14 }}>
+                        {nights} đêm
+                      </Text>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 12 }}
+                  >
+                    <TeamOutlined style={{ color: "#666", fontSize: 16 }} />
+                    <div>
+                      <Text strong style={{ fontSize: 14 }}>
+                        {bookingInfo.guests} khách
+                      </Text>
+                    </div>
+                  </div>
+                </Space>
+
+                <Divider style={{ margin: "20px 0" }} />
+
+                {/* Price Breakdown */}
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <div
+                    style={{ display: "flex", justifyContent: "space-between" }}
+                  >
+                    <Text type="secondary">Tiền phòng ({nights} đêm)</Text>
+                    <Text>{totalPrice.toLocaleString()}đ</Text>
+                  </div>
+
+                  {servicesTotal > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text type="secondary">Dịch vụ</Text>
+                      <Text>{servicesTotal.toLocaleString()}đ</Text>
+                    </div>
+                  )}
+
+                  <div
+                    style={{ display: "flex", justifyContent: "space-between" }}
+                  >
+                    <Text type="secondary">Thuế & phí (10%)</Text>
+                    <Text>{Math.round(tax).toLocaleString()}đ</Text>
+                  </div>
+
+                  <Divider style={{ margin: "12px 0" }} />
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text strong style={{ fontSize: 16, color: "#2c3e50" }}>
+                      Tổng cộng
+                    </Text>
+                    <Text strong style={{ fontSize: 20, color: "#dfa974" }}>
+                      {Math.round(grandTotal).toLocaleString()}đ
+                    </Text>
+                  </div>
+                </Space>
+
+                <Button
+                  type="primary"
+                  size="large"
+                  block
+                  onClick={handleConfirmPayment}
+                  loading={processingPayment}
+                  icon={<CheckCircleOutlined />}
                   style={{
-                    cursor: "pointer",
-                    border:
-                      selectedMethod === method.key
-                        ? "2px solid #dfa974"
-                        : "1px solid #d9d9d9",
+                    marginTop: 24,
+                    height: 50,
+                    fontSize: 16,
+                    fontWeight: 600,
+                    borderRadius: 8,
                     background:
-                      selectedMethod === method.key ? "#fffaf0" : "#fff",
-                    width: "calc(25% - 9px)",
-                    minWidth: 160,
-                    boxSizing: "border-box",
+                      "linear-gradient(135deg, #dfa974 0%, #c4915c 100%)",
+                    border: "none",
+                    boxShadow: "0 4px 12px rgba(223, 169, 116, 0.3)",
                   }}
                 >
-                  <Row gutter={8} align="middle">
-                    <Col
-                      xs={6}
-                      style={{ textAlign: "center", color: "#dfa974" }}
-                    >
-                      {React.cloneElement(method.icon as any, {
-                        style: { fontSize: 18 },
-                      })}
-                    </Col>
-                    <Col xs={14}>
-                      <div>
-                        <Text strong style={{ fontSize: 13 }}>
-                          {method.title}
-                        </Text>
-                        <div
-                          style={{ fontSize: 12, color: "#666", marginTop: 2 }}
-                        >
-                          {method.desc}
-                        </div>
-                      </div>
-                    </Col>
-                    <Col xs={4} style={{ textAlign: "right" }}>
-                      <Text style={{ color: "#dfa974", fontSize: 12 }}>
-                        {method.badge}
-                      </Text>
-                    </Col>
-                  </Row>
-                </Card>
-              ))}
-            </div>
+                  Xác nhận thanh toán
+                </Button>
 
-            <div style={{ marginTop: 12 }}>
-              {selectedMethod === "momo" && (
-                <Card style={{ marginTop: 8 }}>
-                  <Text>
-                    Bạn sẽ được chuyển hướng tới ứng dụng MoMo để hoàn tất thanh
-                    toán.
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 12,
+                    background: "#f6ffed",
+                    borderRadius: 8,
+                    border: "1px solid #b7eb8f",
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: "#52c41a" }}>
+                    <CheckCircleOutlined /> Miễn phí hủy trong 24h
                   </Text>
-                </Card>
-              )}
-              {selectedMethod === "zalopay" && (
-                <Card style={{ marginTop: 8 }}>
-                  <Text>
-                    Bạn sẽ được chuyển hướng tới ứng dụng ZaloPay để hoàn tất
-                    thanh toán.
-                  </Text>
-                </Card>
-              )}
-              {selectedMethod === "vnpay" && (
-                <Card style={{ marginTop: 8 }}>
-                  <Text>
-                    Bạn sẽ được chuyển hướng tới cổng thanh toán VNPay để hoàn
-                    tất thanh toán.
-                  </Text>
-                </Card>
-              )}
-              {selectedMethod === "shopeepay" && (
-                <Card style={{ marginTop: 8 }}>
-                  <Text>
-                    Bạn sẽ được chuyển hướng tới ứng dụng ShopeePay để hoàn tất
-                    thanh toán.
-                  </Text>
-                </Card>
-              )}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                marginTop: 12,
-              }}
-            >
-              <Button
-                type="primary"
-                size="middle"
-                loading={processingPayment}
-                onClick={handleConfirmPayment}
-                icon={<CheckCircleOutlined />}
-                style={{
-                  background: "#dfa974",
-                  borderColor: "#dfa974",
-                  height: 36,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#000",
-                  padding: "0 12px",
-                }}
-              >
-                Thanh toán {Math.round(grandTotal).toLocaleString()}đ
-              </Button>
+                </div>
+              </Card>
             </div>
           </Col>
         </Row>
 
+        {/* QR Modal */}
         <Modal
           open={qrModalVisible}
           onCancel={() => setQrModalVisible(false)}
           footer={null}
-          width={500}
+          width={480}
           centered
+          styles={{
+            body: { padding: 32 },
+          }}
         >
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <Title level={4} style={{ marginBottom: 20 }}>
-              Quét mã QR để thanh toán
-            </Title>
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #fef8f1 0%, #ffeedd 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 20px",
+                boxShadow: "0 4px 12px rgba(223, 169, 116, 0.2)",
+              }}
+            >
+              <QrcodeOutlined style={{ fontSize: 40, color: "#dfa974" }} />
+            </div>
 
-            <div style={{ marginBottom: 20 }}>
+            <Title level={4} style={{ marginBottom: 8 }}>
+              Quét mã để thanh toán
+            </Title>
+            <Text
+              type="secondary"
+              style={{ display: "block", marginBottom: 24 }}
+            >
+              Sử dụng ứng dụng ngân hàng để quét mã QR
+            </Text>
+
+            {/* Deposit Option Selector */}
+            <Card
+              size="small"
+              style={{
+                marginBottom: 20,
+                textAlign: "left",
+                background: "#fef8f1",
+                border: "1px solid #dfa974",
+              }}
+            >
+              <Text
+                strong
+                style={{ display: "block", marginBottom: 12, color: "#2c3e50" }}
+              >
+                Chọn hình thức thanh toán:
+              </Text>
+              <Radio.Group
+                value={depositOption}
+                onChange={(e) => setDepositOption(e.target.value)}
+                style={{ width: "100%" }}
+              >
+                <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                  <Radio value="deposit" style={{ width: "100%" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        width: "100%",
+                      }}
+                    >
+                      <span>Đặt cọc</span>
+                      <Text strong style={{ color: "#dfa974" }}>
+                        {DEPOSIT_AMOUNT.toLocaleString()}đ
+                      </Text>
+                    </div>
+                    <Text
+                      type="secondary"
+                      style={{ fontSize: 12, display: "block", marginLeft: 24 }}
+                    >
+                      Thanh toán phần còn lại khi nhận phòng
+                    </Text>
+                  </Radio>
+                  <Radio value="full" style={{ width: "100%" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        width: "100%",
+                      }}
+                    >
+                      <span>Thanh toán đủ</span>
+                      <Text strong style={{ color: "#dfa974" }}>
+                        {Math.round(grandTotal).toLocaleString()}đ
+                      </Text>
+                    </div>
+                    <Text
+                      type="secondary"
+                      style={{ fontSize: 12, display: "block", marginLeft: 24 }}
+                    >
+                      Thanh toán toàn bộ ngay
+                    </Text>
+                  </Radio>
+                </Space>
+              </Radio.Group>
+            </Card>
+
+            <div
+              style={{
+                padding: 20,
+                background: "#f8f9fa",
+                borderRadius: 12,
+                marginBottom: 24,
+              }}
+            >
               <img
-                src={`https://img.vietqr.io/image/bidv-8639699999-print.png?amount=${Math.round(
-                  grandTotal
-                )}&addInfo=Thanh toan tien phong ${paymentRef}&accountName=ROBINS VILLA HOTEL`}
+                src={`https://img.vietqr.io/image/bidv-8639699999-print.png?amount=${
+                  depositOption === "deposit"
+                    ? DEPOSIT_AMOUNT
+                    : Math.round(grandTotal)
+                }&addInfo=${paymentRef}&accountName=ROBINS VILLA HOTEL`}
                 alt="QR Code"
-                style={{ width: "100%", maxWidth: 350, height: "auto" }}
+                style={{ width: "100%", maxWidth: 280, height: "auto" }}
               />
             </div>
 
-            <Card style={{ marginBottom: 20, textAlign: "left" }}>
-              <div style={{ marginBottom: 12 }}>
-                <Text strong>Ngân hàng: </Text>
-                <Text>BIDV - Ngân hàng TMCP Đầu tư và Phát triển Việt Nam</Text>
-              </div>
-              <div
-                style={{
-                  marginBottom: 12,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <Text strong>Số tài khoản: </Text>
-                  <Text>8639699999</Text>
-                </div>
-                <Button
-                  size="small"
-                  onClick={() => copyToClipboard("8639699999")}
+            <Card size="small" style={{ marginBottom: 20, textAlign: "left" }}>
+              <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between" }}
                 >
-                  Sao chép
-                </Button>
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <Text strong>Chủ tài khoản: </Text>
-                <Text>ROBINS VILLA HOTEL</Text>
-              </div>
-              <div
-                style={{
-                  marginBottom: 12,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <Text strong>Số tiền: </Text>
-                  <Text
-                    style={{ color: "#dfa974", fontWeight: 600, fontSize: 16 }}
-                  >
-                    {Math.round(grandTotal).toLocaleString()}đ
-                  </Text>
+                  <Text type="secondary">Ngân hàng</Text>
+                  <Text strong>BIDV</Text>
                 </div>
-                <Button
-                  size="small"
-                  onClick={() =>
-                    copyToClipboard(Math.round(grandTotal).toString())
-                  }
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
                 >
-                  Sao chép
-                </Button>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <Text strong>Nội dung: </Text>
-                  <Text>{paymentRef}</Text>
+                  <Text type="secondary">Số TK</Text>
+                  <div>
+                    <Text strong style={{ marginRight: 8 }}>
+                      8639699999
+                    </Text>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CopyOutlined />}
+                      onClick={() => copyToClipboard("8639699999")}
+                    />
+                  </div>
                 </div>
-                <Button
-                  size="small"
-                  onClick={() => copyToClipboard(paymentRef)}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
                 >
-                  Sao chép
-                </Button>
-              </div>
+                  <Text type="secondary">Số tiền</Text>
+                  <div>
+                    <Text strong style={{ marginRight: 8, color: "#dfa974" }}>
+                      {(depositOption === "deposit"
+                        ? DEPOSIT_AMOUNT
+                        : Math.round(grandTotal)
+                      ).toLocaleString()}
+                      đ
+                    </Text>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CopyOutlined />}
+                      onClick={() =>
+                        copyToClipboard(
+                          (depositOption === "deposit"
+                            ? DEPOSIT_AMOUNT
+                            : Math.round(grandTotal)
+                          ).toString()
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text type="secondary">Nội dung</Text>
+                  <div>
+                    <Text strong style={{ marginRight: 8 }}>
+                      {paymentRef}
+                    </Text>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CopyOutlined />}
+                      onClick={() => copyToClipboard(paymentRef)}
+                    />
+                  </div>
+                </div>
+              </Space>
             </Card>
-
-            <Alert
-              message="Lưu ý"
-              description={
-                <div>
-                  <p>
-                    • Vui lòng chuyển khoản đúng nội dung:{" "}
-                    <strong>{paymentRef}</strong>
-                  </p>
-                  <p>
-                    • Sau khi chuyển khoản thành công, vui lòng nhấn nút bên
-                    dưới
-                  </p>
-                </div>
-              }
-              type="warning"
-              showIcon
-              style={{ marginBottom: 20, textAlign: "left" }}
-            />
 
             <Button
               type="primary"
               size="large"
               block
-              icon={<CheckCircleOutlined />}
+              onClick={handleFinalConfirm}
               loading={processingPayment}
-              onClick={confirmBankTransfer}
               style={{
-                background: "#dfa974",
-                borderColor: "#dfa974",
                 height: 48,
-                fontSize: 16,
+                borderRadius: 8,
                 fontWeight: 600,
+                background: "linear-gradient(135deg, #dfa974 0%, #c4915c 100%)",
+                border: "none",
               }}
             >
               Tôi đã chuyển khoản
@@ -2019,214 +1128,55 @@ const PaymentPage: React.FC = () => {
           </div>
         </Modal>
 
-        <Modal
-          open={confirmModalVisible}
-          onCancel={() => setConfirmModalVisible(false)}
-          footer={null}
-          width={600}
-          centered
-        >
-          <div style={{ textAlign: "center", padding: "30px 20px" }}>
-            <CheckCircleOutlined
-              style={{ fontSize: 80, color: "#52c41a", marginBottom: 20 }}
-            />
-
-            <Title level={3} style={{ marginBottom: 16, color: "#52c41a" }}>
-              Xác nhận hoàn tất thanh toán
-            </Title>
-
-            <Paragraph
-              style={{ fontSize: 16, color: "#666", marginBottom: 24 }}
-            >
-              {currentPaymentMethod === "bank-transfer" && (
-                <>
-                  Bạn đã chuyển khoản thành công số tiền{" "}
-                  <Text strong style={{ color: "#dfa974", fontSize: 18 }}>
-                    {Math.round(grandTotal).toLocaleString()}đ
-                  </Text>
-                  ?
-                </>
-              )}
-              {currentPaymentMethod === "credit-card" && (
-                <>
-                  Xác nhận thanh toán bằng thẻ tín dụng số tiền{" "}
-                  <Text strong style={{ color: "#dfa974", fontSize: 18 }}>
-                    {Math.round(grandTotal).toLocaleString()}đ
-                  </Text>
-                  ?
-                </>
-              )}
-              {["momo", "zalopay", "vnpay", "shopeepay"].includes(
-                currentPaymentMethod
-              ) && (
-                <>
-                  Bạn đã thanh toán qua{" "}
-                  {currentPaymentMethod === "momo"
-                    ? "MoMo"
-                    : currentPaymentMethod === "zalopay"
-                    ? "ZaloPay"
-                    : currentPaymentMethod === "vnpay"
-                    ? "VNPay"
-                    : "ShopeePay"}{" "}
-                  thành công số tiền{" "}
-                  <Text strong style={{ color: "#dfa974", fontSize: 18 }}>
-                    {Math.round(grandTotal).toLocaleString()}đ
-                  </Text>
-                  ?
-                </>
-              )}
-              {currentPaymentMethod === "atm" && (
-                <>
-                  Bạn đã thanh toán bằng thẻ ATM thành công số tiền{" "}
-                  <Text strong style={{ color: "#dfa974", fontSize: 18 }}>
-                    {Math.round(grandTotal).toLocaleString()}đ
-                  </Text>
-                  ?
-                </>
-              )}
-              {currentPaymentMethod === "cash" && (
-                <>
-                  Xác nhận đặt phòng và thanh toán tại quầy số tiền{" "}
-                  <Text strong style={{ color: "#dfa974", fontSize: 18 }}>
-                    {Math.round(grandTotal).toLocaleString()}đ
-                  </Text>
-                  ?
-                </>
-              )}
-            </Paragraph>
-
-            <Card
-              style={{
-                marginBottom: 24,
-                textAlign: "left",
-                background: "#f9f9f9",
-              }}
-            >
-              <Row gutter={[16, 16]}>
-                <Col span={24}>
-                  <Text strong>Phương thức thanh toán: </Text>
-                  <Text style={{ color: "#dfa974" }}>
-                    {currentPaymentMethod === "bank-transfer" &&
-                      "Chuyển khoản ngân hàng"}
-                    {currentPaymentMethod === "credit-card" && "Thẻ tín dụng"}
-                    {currentPaymentMethod === "momo" && "Ví MoMo"}
-                    {currentPaymentMethod === "zalopay" && "Ví ZaloPay"}
-                    {currentPaymentMethod === "vnpay" && "Ví VNPay"}
-                    {currentPaymentMethod === "shopeepay" && "Ví ShopeePay"}
-                    {currentPaymentMethod === "atm" && "Thẻ ATM"}
-                    {currentPaymentMethod === "cash" && "Tiền mặt tại quầy"}
-                  </Text>
-                </Col>
-                {currentPaymentMethod === "bank-transfer" && (
-                  <>
-                    <Col span={24}>
-                      <Text strong>Mã giao dịch: </Text>
-                      <Text style={{ color: "#dfa974" }}>{paymentRef}</Text>
-                    </Col>
-                    <Col span={24}>
-                      <Text strong>Ngân hàng: </Text>
-                      <Text>BIDV - Số TK: 8639699999</Text>
-                    </Col>
-                    <Col span={24}>
-                      <Text strong>Chủ TK: </Text>
-                      <Text>ROBINS VILLA HOTEL</Text>
-                    </Col>
-                  </>
-                )}
-                {["momo", "zalopay", "vnpay", "shopeepay", "atm"].includes(
-                  currentPaymentMethod
-                ) &&
-                  paymentRef && (
-                    <Col span={24}>
-                      <Text strong>Mã giao dịch: </Text>
-                      <Text style={{ color: "#dfa974" }}>{paymentRef}</Text>
-                    </Col>
-                  )}
-                <Col span={24}>
-                  <Text strong>Số tiền: </Text>
-                  <Text style={{ color: "#dfa974", fontSize: 16 }}>
-                    {Math.round(grandTotal).toLocaleString()}đ
-                  </Text>
-                </Col>
-              </Row>
-            </Card>
-
-            <Paragraph
-              style={{ fontSize: 14, color: "#999", marginBottom: 24 }}
-            >
-              {currentPaymentMethod === "cash"
-                ? "Vui lòng thanh toán tại quầy lễ tân khi nhận phòng. Mang theo CMND/CCCD để xác nhận."
-                : "Hệ thống sẽ kiểm tra giao dịch của bạn trong vòng 5-10 phút. Bạn sẽ nhận được email xác nhận khi thanh toán được xác thực."}
-            </Paragraph>
-
-            <Row gutter={16}>
-              <Col span={12}>
-                <Button
-                  size="large"
-                  block
-                  onClick={() => {
-                    setConfirmModalVisible(false);
-                    if (currentPaymentMethod === "bank-transfer")
-                      setQrModalVisible(true);
-                    else if (currentPaymentMethod === "credit-card")
-                      setCreditModalVisible(true);
-                    else if (
-                      ["momo", "zalopay", "vnpay", "shopeepay"].includes(
-                        currentPaymentMethod
-                      )
-                    )
-                      setEwalletModalVisible(true);
-                    else if (currentPaymentMethod === "atm")
-                      setAtmModalVisible(true);
-                    else if (currentPaymentMethod === "cash")
-                      setCashModalVisible(true);
-                  }}
-                  style={{ height: 48 }}
-                >
-                  Quay lại
-                </Button>
-              </Col>
-              <Col span={12}>
-                <Button
-                  type="primary"
-                  size="large"
-                  block
-                  loading={processingPayment}
-                  onClick={handleFinalConfirm}
-                  icon={<CheckCircleOutlined />}
-                  style={{
-                    background: "#52c41a",
-                    borderColor: "#52c41a",
-                    height: 48,
-                    fontSize: 16,
-                    fontWeight: 600,
-                  }}
-                >
-                  Xác nhận
-                </Button>
-              </Col>
-            </Row>
-          </div>
-        </Modal>
-
+        {/* Credit Card Modal */}
         <Modal
           open={creditModalVisible}
           onCancel={() => setCreditModalVisible(false)}
           footer={null}
-          width={500}
+          width={480}
           centered
-          title="Thanh toán bằng thẻ tín dụng"
+          styles={{
+            body: { padding: 32 },
+          }}
         >
-          <Form form={creditForm} layout="vertical" style={{ marginTop: 20 }}>
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #fef8f1 0%, #ffeedd 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+                boxShadow: "0 4px 12px rgba(223, 169, 116, 0.2)",
+              }}
+            >
+              <CreditCardOutlined style={{ fontSize: 40, color: "#dfa974" }} />
+            </div>
+            <Title level={4} style={{ marginBottom: 8 }}>
+              Thanh toán thẻ tín dụng
+            </Title>
+            <Text type="secondary">Thông tin thẻ được bảo mật tuyệt đối</Text>
+          </div>
+
+          <Form form={creditForm} layout="vertical">
             <Form.Item
               label="Số thẻ"
               name="cardNumber"
               rules={[
                 { required: true, message: "Vui lòng nhập số thẻ" },
-                { pattern: /^\d{16}$/, message: "Số thẻ phải có 16 chữ số" },
+                { pattern: /^\d{16}$/, message: "Số thẻ không hợp lệ" },
               ]}
             >
-              <Input placeholder="1234 5678 9012 3456" maxLength={16} />
+              <Input
+                size="large"
+                placeholder="1234 5678 9012 3456"
+                maxLength={16}
+                prefix={<CreditCardOutlined style={{ color: "#dfa974" }} />}
+                style={{ borderRadius: 8 }}
+              />
             </Form.Item>
 
             <Row gutter={16}>
@@ -2235,11 +1185,16 @@ const PaymentPage: React.FC = () => {
                   label="Ngày hết hạn"
                   name="expiry"
                   rules={[
-                    { required: true, message: "Vui lòng nhập ngày hết hạn" },
-                    { pattern: /^\d{2}\/\d{2}$/, message: "Định dạng: MM/YY" },
+                    { required: true, message: "Vui lòng nhập" },
+                    { pattern: /^\d{2}\/\d{2}$/, message: "Format: MM/YY" },
                   ]}
                 >
-                  <Input placeholder="MM/YY" maxLength={5} />
+                  <Input
+                    size="large"
+                    placeholder="MM/YY"
+                    maxLength={5}
+                    style={{ borderRadius: 8 }}
+                  />
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -2248,10 +1203,17 @@ const PaymentPage: React.FC = () => {
                   name="cvv"
                   rules={[
                     { required: true, message: "Vui lòng nhập CVV" },
-                    { pattern: /^\d{3}$/, message: "CVV phải có 3 chữ số" },
+                    { pattern: /^\d{3}$/, message: "CVV không hợp lệ" },
                   ]}
                 >
-                  <Input placeholder="123" maxLength={3} type="password" />
+                  <Input
+                    size="large"
+                    placeholder="123"
+                    maxLength={3}
+                    type="password"
+                    prefix={<LockOutlined style={{ color: "#dfa974" }} />}
+                    style={{ borderRadius: 8 }}
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -2262,25 +1224,45 @@ const PaymentPage: React.FC = () => {
               rules={[{ required: true, message: "Vui lòng nhập tên chủ thẻ" }]}
             >
               <Input
+                size="large"
                 placeholder="NGUYEN VAN A"
-                style={{ textTransform: "uppercase" }}
+                style={{ textTransform: "uppercase", borderRadius: 8 }}
+                prefix={<UserOutlined style={{ color: "#dfa974" }} />}
               />
             </Form.Item>
+
+            <Alert
+              message={
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <LockOutlined />
+                  <Text>Thông tin được mã hóa SSL 256-bit</Text>
+                </div>
+              }
+              type="success"
+              style={{ marginBottom: 20, borderRadius: 8 }}
+            />
 
             <Button
               type="primary"
               size="large"
               block
+              onClick={async () => {
+                try {
+                  await creditForm.validateFields();
+                  setCreditModalVisible(false);
+                  handleFinalConfirm();
+                } catch (e) {
+                  message.error("Vui lòng kiểm tra lại thông tin");
+                }
+              }}
               loading={processingPayment}
-              onClick={confirmCreditCard}
-              icon={<CheckCircleOutlined />}
               style={{
-                background: "#dfa974",
-                borderColor: "#dfa974",
-                height: 48,
-                fontSize: 16,
+                height: 50,
+                borderRadius: 8,
                 fontWeight: 600,
-                marginTop: 10,
+                background: "linear-gradient(135deg, #dfa974 0%, #c4915c 100%)",
+                border: "none",
+                boxShadow: "0 4px 12px rgba(223, 169, 116, 0.3)",
               }}
             >
               Thanh toán {Math.round(grandTotal).toLocaleString()}đ
@@ -2288,251 +1270,203 @@ const PaymentPage: React.FC = () => {
           </Form>
         </Modal>
 
+        {/* Confirmation Modal */}
         <Modal
-          open={ewalletModalVisible}
-          onCancel={() => setEwalletModalVisible(false)}
+          open={confirmModalVisible}
+          onCancel={() => setConfirmModalVisible(false)}
           footer={null}
           width={500}
           centered
+          styles={{
+            body: { padding: 40 },
+          }}
         >
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <WalletOutlined
-              style={{ fontSize: 60, color: "#dfa974", marginBottom: 20 }}
-            />
-
-            <Title level={4} style={{ marginBottom: 20 }}>
-              Thanh toán qua{" "}
-              {currentWallet === "momo"
-                ? "MoMo"
-                : currentWallet === "zalopay"
-                ? "ZaloPay"
-                : currentWallet === "vnpay"
-                ? "VNPay"
-                : "ShopeePay"}
-            </Title>
-
+          <div style={{ textAlign: "center" }}>
             <div
               style={{
-                marginBottom: 20,
-                padding: 20,
-                background: "#f9f9f9",
-                borderRadius: 8,
+                width: 100,
+                height: 100,
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 24px",
+                boxShadow: "0 8px 24px rgba(82, 196, 26, 0.3)",
               }}
             >
-              <QrcodeOutlined style={{ fontSize: 120, color: "#666" }} />
-              <Paragraph style={{ marginTop: 15, color: "#666" }}>
-                Quét mã QR bằng ứng dụng{" "}
-                {currentWallet === "momo"
-                  ? "MoMo"
-                  : currentWallet === "zalopay"
-                  ? "ZaloPay"
-                  : currentWallet === "vnpay"
-                  ? "VNPay"
-                  : "ShopeePay"}
-              </Paragraph>
+              <CheckCircleOutlined style={{ fontSize: 50, color: "#fff" }} />
             </div>
 
-            <Card style={{ marginBottom: 20, textAlign: "left" }}>
-              <div style={{ marginBottom: 12 }}>
-                <Text strong>Mã giao dịch: </Text>
-                <Text style={{ color: "#dfa974" }}>{paymentRef}</Text>
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <Text strong>Số tiền: </Text>
-                <Text
-                  style={{ color: "#dfa974", fontSize: 16, fontWeight: 600 }}
-                >
-                  {Math.round(grandTotal).toLocaleString()}đ
-                </Text>
-              </div>
-            </Card>
-
-            <Alert
-              message="Hướng dẫn"
-              description={
-                <div style={{ textAlign: "left" }}>
-                  <p>
-                    1. Mở ứng dụng{" "}
-                    {currentWallet === "momo"
-                      ? "MoMo"
-                      : currentWallet === "zalopay"
-                      ? "ZaloPay"
-                      : currentWallet === "vnpay"
-                      ? "VNPay"
-                      : "ShopeePay"}{" "}
-                    trên điện thoại
-                  </p>
-                  <p>2. Quét mã QR phía trên</p>
-                  <p>3. Xác nhận thanh toán trong ứng dụng</p>
-                  <p>4. Nhấn "Tôi đã thanh toán" bên dưới</p>
-                </div>
-              }
-              type="info"
-              showIcon
-              style={{ marginBottom: 20, textAlign: "left" }}
-            />
-
-            <Button
-              type="primary"
-              size="large"
-              block
-              icon={<CheckCircleOutlined />}
-              loading={processingPayment}
-              onClick={confirmEwallet}
-              style={{
-                background: "#dfa974",
-                borderColor: "#dfa974",
-                height: 48,
-                fontSize: 16,
-                fontWeight: 600,
-              }}
-            >
-              Tôi đã thanh toán
-            </Button>
-          </div>
-        </Modal>
-
-        <Modal
-          open={atmModalVisible}
-          onCancel={() => setAtmModalVisible(false)}
-          footer={null}
-          width={500}
-          centered
-        >
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <BankOutlined
-              style={{ fontSize: 60, color: "#dfa974", marginBottom: 20 }}
-            />
-
-            <Title level={4} style={{ marginBottom: 20 }}>
-              Thanh toán bằng thẻ ATM
+            <Title level={3} style={{ marginBottom: 12, color: "#52c41a" }}>
+              {selectedMethod === "hotel-payment"
+                ? "Đặt phòng thành công!"
+                : "Thanh toán thành công!"}
             </Title>
 
-            <div
+            <Paragraph
+              style={{ fontSize: 15, color: "#666", marginBottom: 30 }}
+            >
+              {selectedMethod === "hotel-payment"
+                ? "Đơn đặt phòng của bạn đã được ghi nhận. Vui lòng thanh toán khi nhận phòng."
+                : depositOption === "deposit" &&
+                  selectedMethod === "bank-transfer"
+                ? "Bạn đã đặt cọc thành công. Vui lòng thanh toán phần còn lại khi nhận phòng."
+                : "Đơn đặt phòng của bạn đã được xác nhận và thanh toán hoàn tất"}
+            </Paragraph>
+
+            <Card
+              size="small"
               style={{
-                marginBottom: 20,
-                padding: 20,
-                background: "#f9f9f9",
-                borderRadius: 8,
+                marginBottom: 24,
+                textAlign: "left",
+                background: "#f8f9fa",
+                border: "none",
+                borderRadius: 12,
               }}
             >
-              <QrcodeOutlined style={{ fontSize: 120, color: "#666" }} />
-              <Paragraph style={{ marginTop: 15, color: "#666" }}>
-                Quét mã QR bằng ứng dụng ngân hàng của bạn
-              </Paragraph>
-            </div>
-
-            <Card style={{ marginBottom: 20, textAlign: "left" }}>
-              <div style={{ marginBottom: 12 }}>
-                <Text strong>Số tiền: </Text>
-                <Text
-                  style={{ color: "#dfa974", fontSize: 16, fontWeight: 600 }}
-                >
-                  {Math.round(grandTotal).toLocaleString()}đ
-                </Text>
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <Text strong>Nội dung: </Text>
-                <Text>Thanh toán đặt phòng {paymentRef}</Text>
-              </div>
-            </Card>
-
-            <Alert
-              message="Hướng dẫn"
-              description="Quét mã QR bằng ứng dụng Mobile Banking của bạn và xác nhận thanh toán"
-              type="info"
-              showIcon
-              style={{ marginBottom: 20 }}
-            />
-
-            <Button
-              type="primary"
-              size="large"
-              block
-              icon={<CheckCircleOutlined />}
-              loading={processingPayment}
-              onClick={confirmAtm}
-              style={{
-                background: "#dfa974",
-                borderColor: "#dfa974",
-                height: 48,
-                fontSize: 16,
-                fontWeight: 600,
-              }}
-            >
-              Tôi đã thanh toán
-            </Button>
-          </div>
-        </Modal>
-
-        <Modal
-          open={cashModalVisible}
-          onCancel={() => setCashModalVisible(false)}
-          footer={null}
-          width={500}
-          centered
-        >
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <DollarOutlined
-              style={{ fontSize: 60, color: "#52c41a", marginBottom: 20 }}
-            />
-
-            <Title level={4} style={{ marginBottom: 20 }}>
-              Thanh toán tại quầy
-            </Title>
-
-            <Card style={{ marginBottom: 20, background: "#f9f9f9" }}>
-              <div style={{ marginBottom: 15 }}>
-                <Text style={{ fontSize: 14, color: "#666" }}>
-                  Tổng thanh toán
-                </Text>
+              <Space direction="vertical" size={16} style={{ width: "100%" }}>
                 <div
-                  style={{
-                    fontSize: 28,
-                    fontWeight: 700,
-                    color: "#dfa974",
-                    marginTop: 5,
-                  }}
+                  style={{ display: "flex", justifyContent: "space-between" }}
                 >
-                  {Math.round(grandTotal).toLocaleString()}đ
+                  <Text type="secondary">Phương thức</Text>
+                  <Text strong>
+                    {selectedMethod === "bank-transfer" && "Chuyển khoản"}
+                    {selectedMethod === "credit-card" && "Thẻ tín dụng"}
+                    {selectedMethod === "momo" && "Ví MoMo"}
+                    {selectedMethod === "hotel-payment" &&
+                      "Thanh toán tại khách sạn"}
+                  </Text>
                 </div>
-              </div>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between" }}
+                >
+                  <Text type="secondary">
+                    {selectedMethod === "hotel-payment"
+                      ? "Tổng tiền cần thanh toán"
+                      : depositOption === "deposit" &&
+                        selectedMethod === "bank-transfer"
+                      ? "Số tiền đã đặt cọc"
+                      : "Số tiền đã thanh toán"}
+                  </Text>
+                  <Text strong style={{ fontSize: 18, color: "#dfa974" }}>
+                    {selectedMethod === "hotel-payment"
+                      ? Math.round(grandTotal).toLocaleString()
+                      : depositOption === "deposit" &&
+                        selectedMethod === "bank-transfer"
+                      ? DEPOSIT_AMOUNT.toLocaleString()
+                      : Math.round(grandTotal).toLocaleString()}
+                    đ
+                  </Text>
+                </div>
+                {depositOption === "deposit" &&
+                  selectedMethod === "bank-transfer" && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text type="secondary">Còn lại cần thanh toán</Text>
+                      <Text strong style={{ fontSize: 16, color: "#fa8c16" }}>
+                        {(
+                          Math.round(grandTotal) - DEPOSIT_AMOUNT
+                        ).toLocaleString()}
+                        đ
+                      </Text>
+                    </div>
+                  )}
+                {paymentRef && (
+                  <div
+                    style={{ display: "flex", justifyContent: "space-between" }}
+                  >
+                    <Text type="secondary">Mã GD</Text>
+                    <Text strong style={{ fontFamily: "monospace" }}>
+                      {paymentRef}
+                    </Text>
+                  </div>
+                )}
+              </Space>
             </Card>
 
-            <Alert
-              message="Thông tin thanh toán"
-              description={
-                <div style={{ textAlign: "left" }}>
-                  <p>• Vui lòng thanh toán tại quầy lễ tân khi nhận phòng</p>
-                  <p>• Mang theo CMND/CCCD để xác nhận đặt phòng</p>
-                  <p>• Chúng tôi chấp nhận thanh toán bằng tiền mặt hoặc thẻ</p>
-                </div>
-              }
-              type="info"
-              showIcon
-              style={{ marginBottom: 20, textAlign: "left" }}
-            />
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Button
+                type="primary"
+                size="large"
+                block
+                onClick={async () => {
+                  // Close modal and run the same final confirm flow to create invoice
+                  setConfirmModalVisible(false);
+                  await handleFinalConfirm();
+                }}
+                style={{
+                  height: 50,
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  background:
+                    "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
+                  border: "none",
+                }}
+              >
+                Xác nhận và lưu
+              </Button>
 
-            <Button
-              type="primary"
-              size="large"
-              block
-              icon={<CheckCircleOutlined />}
-              loading={processingPayment}
-              onClick={confirmCash}
-              style={{
-                background: "#52c41a",
-                borderColor: "#52c41a",
-                height: 48,
-                fontSize: 16,
-                fontWeight: 600,
-              }}
-            >
-              Xác nhận đặt phòng
-            </Button>
+              <Button
+                size="large"
+                block
+                onClick={() => setConfirmModalVisible(false)}
+                style={{
+                  height: 50,
+                  borderRadius: 8,
+                  fontWeight: 600,
+                }}
+              >
+                Đóng
+              </Button>
+            </Space>
           </div>
         </Modal>
       </Content>
+
+      {/* Footer */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)",
+          borderTop: "2px solid #dfa974",
+          padding: "24px 0",
+          marginTop: 60,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1200px",
+            margin: "0 auto",
+            padding: "0 24px",
+            textAlign: "center",
+          }}
+        >
+          <Space size={24}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <SafetyOutlined style={{ color: "#dfa974" }} />
+              <Text type="secondary" style={{ fontSize: 13, color: "#7f8c8d" }}>
+                Bảo mật thanh toán
+              </Text>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <CheckCircleOutlined style={{ color: "#52c41a" }} />
+              <Text type="secondary" style={{ fontSize: 13, color: "#7f8c8d" }}>
+                Xác nhận ngay lập tức
+              </Text>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <InfoCircleOutlined style={{ color: "#dfa974" }} />
+              <Text type="secondary" style={{ fontSize: 13, color: "#7f8c8d" }}>
+                Hỗ trợ 24/7
+              </Text>
+            </div>
+          </Space>
+        </div>
+      </div>
     </Layout>
   );
 };

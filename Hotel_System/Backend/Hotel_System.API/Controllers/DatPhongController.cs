@@ -68,8 +68,9 @@ namespace Hotel_System.API.Controllers
 
                 // 3. Tạo DatPhong (đồng thời lưu thời hạn giữ phòng - `ThoiHan`)
                 var datPhongId = $"DP{DateTime.Now:yyyyMMddHHmmssfff}";
-                // Thiết lập thời hạn giữ phòng (test): 1 phút
-                var holdExpiresAt = DateTime.UtcNow.AddMinutes(1);
+                // // Thiết lập thời hạn giữ phòng (test): 1 phút
+                // var holdExpiresAt = DateTime.UtcNow.AddMinutes(1);
+                var holdExpiresAt = DateTime.UtcNow.AddMinutes(15);
 
                 var datPhong = new DatPhong
                 {
@@ -81,6 +82,8 @@ namespace Hotel_System.API.Controllers
                     NgayNhanPhong = ngayNhan,
                     NgayTraPhong = ngayTra,
                     SoDem = soDem,
+                    SoNguoi = request.SoLuongKhach,
+                    SoLuongPhong = request.Rooms?.Count ?? 0,
                     TongTien = tongCong,
                     TienCoc = 0,
                     TrangThai = 0, // 0 = Chờ xác nhận (giữ phòng bằng ThoiHan)
@@ -91,7 +94,7 @@ namespace Hotel_System.API.Controllers
                 await _context.SaveChangesAsync();
 
                 // 4. Tạo ChiTietDatPhong cho từng phòng
-                foreach (var room in request.Rooms)
+                foreach (var room in request.Rooms ?? new List<RoomBookingDto>())
                 {
                     var thanhTien = room.GiaCoBanMotDem * soDem;
                     var ct = new ChiTietDatPhong
@@ -154,6 +157,8 @@ namespace Hotel_System.API.Controllers
                     NgayNhanPhong = dp.NgayNhanPhong.ToString("yyyy-MM-dd"),
                     NgayTraPhong = dp.NgayTraPhong.ToString("yyyy-MM-dd"),
                     dp.SoDem,
+                    dp.SoNguoi,
+                    dp.SoLuongPhong,
                     dp.TongTien,
                     dp.TienCoc,
                     dp.TrangThai,
@@ -209,6 +214,8 @@ namespace Hotel_System.API.Controllers
                     booking.NgayNhanPhong,
                     booking.NgayTraPhong,
                     booking.SoDem,
+                    booking.SoNguoi,
+                    booking.SoLuongPhong,
                     booking.TongTien,
                     booking.TienCoc,
                     booking.TrangThai,

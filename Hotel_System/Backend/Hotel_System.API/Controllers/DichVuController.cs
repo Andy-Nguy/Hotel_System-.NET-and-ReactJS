@@ -16,17 +16,19 @@ namespace Hotel_System.API.Controllers
     {
         private readonly HotelSystemContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly ILogger<DichVuController> _logger;
 
-        public DichVuController(HotelSystemContext context, IWebHostEnvironment env)
+        public DichVuController(HotelSystemContext context, IWebHostEnvironment env, ILogger<DichVuController> logger)
         {
             _context = context;
             _env = env;
+            _logger = logger;
         }
 
         // 2. Helper để tạo DTO (gộp DichVu và TtdichVu)
         private static DichVuDto MapToDto(DichVu dv)
         {
-            var detail = dv.TtdichVus.FirstOrDefault(); // Lấy chi tiết đầu tiên (nếu có)
+            var detail = dv.TtdichVus?.FirstOrDefault(); // Lấy chi tiết đầu tiên (nếu có) - null-safe
             return new DichVuDto
             {
                 IddichVu = dv.IddichVu,
@@ -304,16 +306,40 @@ namespace Hotel_System.API.Controllers
         [HttpPost("ghi-nhan-su-dung")]
         public async Task<IActionResult> RecordUsage([FromBody] Cthddv payload)
         {
-            // ... (Giữ nguyên logic của hàm 'RecordUsage' cũ) ...
-             if (payload == null) return BadRequest();
+            if (payload == null)
+            {
+                _logger?.LogWarning("RecordUsage called with null payload");
+                return BadRequest();
+            }
+
+            _logger?.LogInformation("RecordUsage called: idHoaDon={IdHoaDon}, idDichVu={IdDichVu}, tien={Tien}", payload.IdhoaDon, payload.IddichVu, payload.TienDichVu);
+
             var hoaDon = await _context.HoaDons.FindAsync(payload.IdhoaDon);
-            if (hoaDon == null) return NotFound(new { message = "Hóa đơn không tồn tại" });
+            if (hoaDon == null)
+            {
+                _logger?.LogWarning("RecordUsage: HoaDon not found {Id}", payload.IdhoaDon);
+                return NotFound(new { message = "Hóa đơn không tồn tại" });
+            }
+
             var dv = await _context.DichVus.FindAsync(payload.IddichVu);
-            if (dv == null) return NotFound(new { message = "Dịch vụ không tồn tại" });
-            // ... (Phần còn lại của logic) ...
-             _context.Cthddvs.Add(payload);
-             await _context.SaveChangesAsync();
-             return Ok(new { message = "Ghi nhận thành công" });
+            if (dv == null)
+            {
+                _logger?.LogWarning("RecordUsage: DichVu not found {Id}", payload.IddichVu);
+                return NotFound(new { message = "Dịch vụ không tồn tại" });
+            }
+
+            try
+            {
+                _context.Cthddvs.Add(payload);
+                await _context.SaveChangesAsync();
+                _logger?.LogInformation("RecordUsage saved: idcthddv={Id}", payload.Idcthddv);
+                return Ok(new { message = "Ghi nhận thành công" });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "RecordUsage failed to save payload");
+                return StatusCode(500, new { message = "Lỗi khi ghi nhận dịch vụ", error = ex.Message });
+            }
         }
 
         // [GET] api/dich-vu/lich-su/tat-ca

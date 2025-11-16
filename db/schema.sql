@@ -320,7 +320,7 @@ CREATE TABLE DatPhong (
     TongTien DECIMAL(18,2) NOT NULL,
     TienCoc DECIMAL(18,2) DEFAULT 0,
     TrangThai INT NOT NULL,          -- 1:Chờ XN, 2:Đã XN, 0:Hủy, 3:Đang dùng, 4:Hoàn thành
-    TrangThaiThanhToan INT NOT NULL, -- 1:Chưa TT, 2:Đã TT, 0:Đã cọc, -1:Chưa cọc
+    TrangThaiThanhToan INT NOT NULL, -- 1:Chưa TT, 2:Đã TT, 0:Đã cọc,
     CONSTRAINT FK_DatPhong_KhachHang FOREIGN KEY (IDKhachHang)
         REFERENCES KhachHang(IDKhachHang)
         ON DELETE SET NULL ON UPDATE CASCADE,

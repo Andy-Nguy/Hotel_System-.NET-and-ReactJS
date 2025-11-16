@@ -162,6 +162,8 @@ public partial class HotelSystemContext : DbContext
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
             entity.Property(e => e.TongTien).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.SoNguoi).HasColumnName("SoNguoi");
+            entity.Property(e => e.SoLuongPhong).HasColumnName("SoLuongPhong");
             entity.Property(e => e.ThoiHan)
                 .HasColumnName("ThoiHan")
                 .HasColumnType("datetime2");

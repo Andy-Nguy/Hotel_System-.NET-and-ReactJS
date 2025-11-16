@@ -9,6 +9,7 @@ import {
   Col,
   Button,
   Divider,
+  message,
 } from "antd";
 import { CheckCircleOutlined, UserOutlined } from "@ant-design/icons";
 import RoomCard from "../components/Room/RoomCard";
@@ -46,9 +47,12 @@ const SelectRoomPage: React.FC = () => {
   const [currentRoomNumber, setCurrentRoomNumber] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedServices, setSelectedServices] = useState<SelectedService[]>([]);
+  const [selectedServices, setSelectedServices] = useState<SelectedService[]>(
+    []
+  );
   const [servicesTotal, setServicesTotal] = useState(0);
   const [selectionComplete, setSelectionComplete] = useState(false);
+  const [extraSelectAlert, setExtraSelectAlert] = useState<string | null>(null);
 
   // Modal detail room
   const [detailVisible, setDetailVisible] = useState(false);
@@ -70,7 +74,7 @@ const SelectRoomPage: React.FC = () => {
             basePricePerNight: room.basePricePerNight,
             discountedPrice: room.discountedPrice,
             promotionName: room.promotionName,
-            discountPercent: room.discountPercent
+            discountPercent: room.discountPercent,
           });
         });
         setAvailableRooms(parsed);
@@ -87,14 +91,33 @@ const SelectRoomPage: React.FC = () => {
     }
   }, []);
 
+  // auto hide inline alert after a short time (kept here so hooks order stable)
+  React.useEffect(() => {
+    if (!extraSelectAlert) return;
+    const t = setTimeout(() => setExtraSelectAlert(null), 5000);
+    return () => clearTimeout(t);
+  }, [extraSelectAlert]);
+
   const handleSelectRoom = (room: any) => {
     // Kiểm tra xem phòng đã được chọn chưa
     const alreadySelected = selectedRooms.some(
       (sr) => sr.room.idphong === room.idphong
     );
 
+    // If the room is already selected, notify user
     if (alreadySelected) {
-      alert("Phòng này đã được chọn!");
+      message.info("Phòng này đã được chọn!");
+      return;
+    }
+
+    // Prevent selecting additional rooms when user already selected the maximum allowed
+    if (selectedRooms.length >= totalRooms) {
+      const txt =
+        "Bạn đã chọn đủ số phòng rồi. Xóa phòng hiện tại để chọn phòng khác.";
+      // show toast
+      message.warning(txt);
+      // show inline alert banner for stronger visibility
+      setExtraSelectAlert(txt);
       return;
     }
 
@@ -189,9 +212,11 @@ const SelectRoomPage: React.FC = () => {
 
     const totalPrice = selectedRooms.reduce((sum, sr) => {
       // Sử dụng giá sau khuyến mãi nếu có, nếu không thì dùng giá cơ bản
-      const price = (sr.room.discountedPrice && sr.room.discountedPrice < sr.room.basePricePerNight) 
-        ? sr.room.discountedPrice 
-        : (sr.room.basePricePerNight || sr.room.giaCoBanMotDem);
+      const price =
+        sr.room.discountedPrice &&
+        sr.room.discountedPrice < sr.room.basePricePerNight
+          ? sr.room.discountedPrice
+          : sr.room.basePricePerNight || sr.room.giaCoBanMotDem;
       return sum + (price || 0) * nights;
     }, 0);
 
@@ -202,7 +227,6 @@ const SelectRoomPage: React.FC = () => {
     setSelectedServices(services);
     setServicesTotal(total);
   };
-
 
   if (loading) {
     return (
@@ -270,6 +294,18 @@ const SelectRoomPage: React.FC = () => {
           selectedRoomNumbers={selectedRooms.map((sr) => sr.roomNumber)}
         />
 
+        {extraSelectAlert && (
+          <div style={{ marginTop: 12 }}>
+            <Alert
+              type="warning"
+              message={extraSelectAlert}
+              showIcon
+              closable
+              onClose={() => setExtraSelectAlert(null)}
+            />
+          </div>
+        )}
+
         <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
           {/* Main content */}
           <Col xs={24} lg={16}>
@@ -334,19 +370,39 @@ const SelectRoomPage: React.FC = () => {
                       <Text strong>Phòng {i + 1}</Text>
                       {selected && (
                         <div style={{ textAlign: "right" }}>
-                          {selected.room.discountedPrice && selected.room.discountedPrice < (selected.room.basePricePerNight || selected.room.giaCoBanMotDem) ? (
+                          {selected.room.discountedPrice &&
+                          selected.room.discountedPrice <
+                            (selected.room.basePricePerNight ||
+                              selected.room.giaCoBanMotDem) ? (
                             <>
-                              <Text delete type="secondary" style={{ fontSize: "12px" }}>
-                                {((selected.room.basePricePerNight || selected.room.giaCoBanMotDem) || 0).toLocaleString()}đ
+                              <Text
+                                delete
+                                type="secondary"
+                                style={{ fontSize: "12px" }}
+                              >
+                                {(
+                                  selected.room.basePricePerNight ||
+                                  selected.room.giaCoBanMotDem ||
+                                  0
+                                ).toLocaleString()}
+                                đ
                               </Text>
                               <br />
                               <Text strong style={{ color: "#dfa974" }}>
-                                {(selected.room.discountedPrice || 0).toLocaleString()}đ
+                                {(
+                                  selected.room.discountedPrice || 0
+                                ).toLocaleString()}
+                                đ
                               </Text>
                             </>
                           ) : (
                             <Text>
-                              {((selected.room.basePricePerNight || selected.room.giaCoBanMotDem) || 0).toLocaleString()}đ
+                              {(
+                                selected.room.basePricePerNight ||
+                                selected.room.giaCoBanMotDem ||
+                                0
+                              ).toLocaleString()}
+                              đ
                             </Text>
                           )}
                         </div>
@@ -381,22 +437,49 @@ const SelectRoomPage: React.FC = () => {
               <ServicesSelector onServicesChange={handleServicesChange} />
 
               <Divider />
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
                 <Text strong>Tiền phòng:</Text>
                 <Text strong>{calculateTotal().toLocaleString()}đ</Text>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
                 <Text strong>Tiền dịch vụ:</Text>
                 <Text strong>{servicesTotal.toLocaleString()}đ</Text>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: 12, background: "#f5f5f5", borderRadius: 6 }}>
-                <Text strong style={{ fontSize: 16 }}>Tổng chi phí:</Text>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: 12,
+                  background: "#f5f5f5",
+                  borderRadius: 6,
+                }}
+              >
+                <Text strong style={{ fontSize: 16 }}>
+                  Tổng chi phí:
+                </Text>
                 <Text strong style={{ fontSize: 16, color: "#dfa974" }}>
                   {(calculateTotal() + servicesTotal).toLocaleString()}đ
                 </Text>
               </div>
               <div style={{ marginTop: 12 }}>
-                <Button type="primary" block disabled={selectedRooms.length < totalRooms} onClick={handleProceedToCheckout}>
+                <Button
+                  type="primary"
+                  block
+                  disabled={selectedRooms.length < totalRooms}
+                  onClick={handleProceedToCheckout}
+                >
                   Thanh toán
                 </Button>
               </div>

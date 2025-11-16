@@ -50,6 +50,21 @@ public class HoaDonRequest
 }
 
 /// <summary>
+/// Optional service line items when creating an invoice + payment
+/// </summary>
+public class ServiceLineDto
+{
+    public string IddichVu { get; set; } = string.Empty;
+    public int SoLuong { get; set; } = 1;
+    public decimal DonGia { get; set; } = 0m;
+    public decimal TienDichVu { get; set; } = 0m;
+    public string? Idphong { get; set; }
+    public int? SoPhong { get; set; }
+    public DateTime? ThoiGianThucHien { get; set; }
+}
+
+
+/// <summary>
 /// DTO cho request tạo hóa đơn kèm thanh toán
 /// </summary>
 public class HoaDonPaymentRequest
@@ -76,11 +91,29 @@ public class HoaDonPaymentRequest
     public int PhuongThucThanhToan { get; set; }
 
     /// <summary>
+    /// Nếu client muốn gửi tiền cọc trực tiếp trong request (ví dụ: đặt cọc 500.000đ),
+    /// có thể gửi vào đây. Nếu không gửi, server sẽ dùng giá trị DatPhong.TienCoc từ CSDL.
+    /// </summary>
+    public decimal? TienCoc { get; set; }
+
+    /// <summary>
+    /// Tùy chọn: cho phép client gửi rõ trạng thái thanh toán mong muốn.
+    /// - 0 = Đã cọc
+    /// - 1 = Chưa thanh toán
+    /// - 2 = Đã thanh toán đầy đủ
+    /// Nếu không gửi, server sẽ suy luận mặc định từ PhuongThucThanhToan (online -> 2, khác -> 1).
+    /// </summary>
+    public int? TrangThaiThanhToan { get; set; }
+
+    /// <summary>
     /// Cổng thanh toán (VNPay, Momo, etc.) - chỉ dùng khi PhuongThucThanhToan = 2
     /// </summary>
     public string? PaymentGateway { get; set; }
 
     public string? GhiChu { get; set; }
+    
+    // Optional list of service lines attached to the invoice
+    public List<ServiceLineDto>? Services { get; set; }
 }
 
 /// <summary>
