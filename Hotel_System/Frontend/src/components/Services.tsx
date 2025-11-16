@@ -174,7 +174,7 @@ const Services: React.FC = () => {
   };
 
   return (
-    <section className="services-section spad">
+    <section className="services-section spad" style={{ background: '#fff' }}>
       <div className="container">
         <div className="row">
           <div className="col-lg-12">
@@ -240,30 +240,32 @@ const Services: React.FC = () => {
                 return (
                   <div key={s.id} style={{ flex: `0 0 calc(100% / ${visibleCount})`, maxWidth: `calc(100% / ${visibleCount})` }}>
                     <div
-                      className="service-card"
-                      style={{
-                        border: '1px solid #e6e6e6',
-                        borderRadius: 8,
-                        padding: 12,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        opacity: unavailable ? 0.55 : 1,
-                        position: 'relative',
-                        background: '#fff'
-                      }}
-                    >
+                          className="service-card"
+                          style={{
+                            borderRadius: 18,
+                            padding: 12,
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            opacity: unavailable ? 0.75 : 1,
+                            position: 'relative',
+                            background: '#fff',
+                            color: '#222',
+                            boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
+                            overflow: 'hidden'
+                          }}
+                        >
                       {unavailable && (
                         <span style={{ position: 'absolute', left: 12, top: 12, background: '#d9534f', color: '#fff', padding: '4px 8px', borderRadius: 4, fontSize: 12 }}>
                           Không khả dụng
                         </span>
                       )}
 
-                      <div style={{ textAlign: 'center' }}>
-                        <img src={s.HinhDichVu || placeholderImg} alt={s.TenDichVu} style={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 6, marginBottom: 10 }} />
+                      <div style={{ textAlign: 'center', paddingTop: 6 }}>
+                        <img src={s.HinhDichVu || placeholderImg} alt={s.TenDichVu} style={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 14, marginBottom: 12, boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }} />
                       </div>
 
-                      <h5 style={{ margin: '4px 0 6px 0' }}>{s.TenDichVu}</h5>
+                      <h5 style={{ margin: '4px 0 6px 0', color: '#222' }}>{s.TenDichVu}</h5>
 
                       <div style={{ color: '#333', marginBottom: 6 }}>
                         <strong>Giá: </strong>
@@ -276,10 +278,10 @@ const Services: React.FC = () => {
                       </div>
 
                       <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
-                        <button className="btn btn-primary" onClick={() => openDetails(s)} disabled={unavailable} style={{ flex: 1 }}>
+                        <button className="btn" onClick={() => openDetails(s)} disabled={unavailable} style={{ flex: 1, background: 'linear-gradient(135deg, #dfa974 0%, #d89860 100%)', color: '#fff', border: 'none', borderRadius: 999, padding: '10px 14px' }}>
                           Xem chi tiết
                         </button>
-                        <button className="btn btn-outline-secondary" onClick={() => alert('Đặt dịch vụ: ' + s.TenDichVu)} disabled={unavailable}>
+                        <button className="btn" onClick={() => alert('Đặt dịch vụ: ' + s.TenDichVu)} disabled={unavailable} style={{ background: 'transparent', color: '#d89860', border: '1px solid rgba(217,152,96,0.18)', borderRadius: 999, padding: '10px 14px' }}>
                           Đặt
                         </button>
                       </div>
