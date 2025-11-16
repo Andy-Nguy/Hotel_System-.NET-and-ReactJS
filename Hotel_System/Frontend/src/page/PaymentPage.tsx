@@ -158,7 +158,12 @@ const PaymentPage: React.FC = () => {
     if (!bookingInfo) return 0;
     const nights = calculateNights();
     const totalPrice = bookingInfo.selectedRooms.reduce((sum, sr) => {
-      return sum + (sr.room.giaCoBanMotDem || 0) * nights;
+      const r = sr.room || {};
+      const price =
+        r.discountedPrice && r.discountedPrice < r.basePricePerNight
+          ? r.discountedPrice
+          : r.basePricePerNight || r.giaCoBanMotDem || 0;
+      return sum + (price || 0) * nights;
     }, 0);
     return totalPrice;
   };
