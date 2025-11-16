@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Force backend host for mobile testing (use this IP for iPhone/device)
 // All requests will go to: http://192.168.1.3:8080
-const BASE_URLS = ["http://192.168.1.3:8080"]; // single preferred host
+const BASE_URLS = ["http://192.168.1.38:8080"]; // single preferred host
 
 const TIMEOUT_MS = 2000; // Reduced from 5000ms to 2000ms
 
@@ -36,7 +36,7 @@ export type Promotion = {
   id: string;
   name: string;
   description?: string;
-  type: 'percent' | 'amount';
+  type: "percent" | "amount";
   value: number;
   startDate: string;
   endDate: string;
@@ -149,7 +149,8 @@ async function tryFetchRooms(): Promise<Room[] | null> {
 
           return {
             idphong: r.idphong ?? r.idPhong ?? r.Idphong ?? r.IdPhong,
-            idloaiPhong: r.idloaiPhong ?? r.idLoaiPhong ?? r.IdloaiPhong ?? r.IdLoaiPhong,
+            idloaiPhong:
+              r.idloaiPhong ?? r.idLoaiPhong ?? r.IdloaiPhong ?? r.IdLoaiPhong,
             tenPhong: r.tenPhong ?? r.TenPhong,
             tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong,
             soPhong: r.soPhong ?? r.SoPhong,
@@ -166,8 +167,14 @@ async function tryFetchRooms(): Promise<Room[] | null> {
         });
 
         console.log("🔄 Processed data sample:", processedData[0]?.urlAnhPhong);
-        console.log("🎁 Sample room amenities:", processedData[0]?.amenities?.length || 0);
-        console.log("🏷️ Sample room promotions:", processedData[0]?.promotions?.length || 0);
+        console.log(
+          "🎁 Sample room amenities:",
+          processedData[0]?.amenities?.length || 0
+        );
+        console.log(
+          "🏷️ Sample room promotions:",
+          processedData[0]?.promotions?.length || 0
+        );
         return processedData;
       } else {
         console.warn(`⚠️ ${baseUrl} returned:`, res.status, res.statusText);
@@ -294,23 +301,37 @@ export async function checkAvailableRoomsByType(
   checkOut: string,
   numberOfGuests = 1
 ): Promise<AvailableRoom[]> {
-  const cacheKey = getCacheKey('checkAvailableRoomsByType', { loaiPhongId, checkIn, checkOut, numberOfGuests });
+  const cacheKey = getCacheKey("checkAvailableRoomsByType", {
+    loaiPhongId,
+    checkIn,
+    checkOut,
+    numberOfGuests,
+  });
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
 
   for (const baseUrl of BASE_URLS) {
     try {
-      console.log(`🌐 Trying GET availability: ${baseUrl}/api/Phong/kiem-tra-trong-theo-loai-phong`);
+      console.log(
+        `🌐 Trying GET availability: ${baseUrl}/api/Phong/kiem-tra-trong-theo-loai-phong`
+      );
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-      const qs = `?loaiPhongId=${encodeURIComponent(loaiPhongId)}&checkin=${encodeURIComponent(checkIn)}&checkout=${encodeURIComponent(checkOut)}&numberOfGuests=${numberOfGuests}`;
-      const res = await fetch(`${baseUrl}/api/Phong/kiem-tra-trong-theo-loai-phong${qs}`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        signal: controller.signal,
-      });
+      const qs = `?loaiPhongId=${encodeURIComponent(
+        loaiPhongId
+      )}&checkin=${encodeURIComponent(checkIn)}&checkout=${encodeURIComponent(
+        checkOut
+      )}&numberOfGuests=${numberOfGuests}`;
+      const res = await fetch(
+        `${baseUrl}/api/Phong/kiem-tra-trong-theo-loai-phong${qs}`,
+        {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        }
+      );
 
       clearTimeout(timeoutId);
 
@@ -318,51 +339,73 @@ export async function checkAvailableRoomsByType(
         const data = await handleRes(res);
         // Backend may return either an array of rooms or an object { message: '...' }
         if (!data) {
-          console.warn('GET availability returned empty body');
+          console.warn("GET availability returned empty body");
           setCachedData(cacheKey, []);
           return [];
         }
 
         if (Array.isArray(data)) {
-          const processed = data.map((r: any) => ({
-            roomId: r.roomId ?? r.idphong ?? r.Idphong ?? r.idPhong ?? r.IdPhong,
-            roomNumber: r.roomNumber ?? r.soPhong ?? r.SoPhong ?? '',
-            description: r.description ?? r.MoTa ?? r.moTa ?? '',
-            basePricePerNight: r.basePricePerNight ?? r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? 0,
-            roomImageUrl: normalizeImageUrl(r.roomImageUrl ?? r.urlAnh ?? r.UrlAnhPhong ?? r.urlAnhPhong, baseUrl),
-            roomTypeName: r.roomTypeName ?? r.tenLoaiPhong ?? r.TenLoaiPhong ?? '',
-            maxOccupancy: r.maxOccupancy ?? r.soNguoiToiDa ?? r.SoNguoiToiDa ?? 1,
-          } as AvailableRoom));
+          const processed = data.map(
+            (r: any) =>
+              ({
+                roomId:
+                  r.roomId ?? r.idphong ?? r.Idphong ?? r.idPhong ?? r.IdPhong,
+                roomNumber: r.roomNumber ?? r.soPhong ?? r.SoPhong ?? "",
+                description: r.description ?? r.MoTa ?? r.moTa ?? "",
+                basePricePerNight:
+                  r.basePricePerNight ??
+                  r.giaCoBanMotDem ??
+                  r.GiaCoBanMotDem ??
+                  0,
+                roomImageUrl: normalizeImageUrl(
+                  r.roomImageUrl ?? r.urlAnh ?? r.UrlAnhPhong ?? r.urlAnhPhong,
+                  baseUrl
+                ),
+                roomTypeName:
+                  r.roomTypeName ?? r.tenLoaiPhong ?? r.TenLoaiPhong ?? "",
+                maxOccupancy:
+                  r.maxOccupancy ?? r.soNguoiToiDa ?? r.SoNguoiToiDa ?? 1,
+              } as AvailableRoom)
+          );
 
           setCachedData(cacheKey, processed);
           return processed;
         }
 
         // If server returned an object with message => no rooms
-        if (typeof data === 'object' && data.message) {
-          console.warn('GET availability returned message:', data.message);
+        if (typeof data === "object" && data.message) {
+          console.warn("GET availability returned message:", data.message);
           setCachedData(cacheKey, []);
           return [];
         }
 
         // Unexpected shape
-        console.warn('GET availability unexpected response shape', data);
+        console.warn("GET availability unexpected response shape", data);
         setCachedData(cacheKey, []);
         return [];
       } else {
         console.warn(`⚠️ ${baseUrl} returned:`, res.status, res.statusText);
       }
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      if (error.name === "AbortError") {
         console.warn(`⏰ Timeout with ${baseUrl} after ${TIMEOUT_MS}ms`);
       } else {
-        console.warn(`❌ Failed GET availability with ${baseUrl}:`, error?.name, error?.message);
+        console.warn(
+          `❌ Failed GET availability with ${baseUrl}:`,
+          error?.name,
+          error?.message
+        );
       }
       continue;
     }
   }
 
-  throw new Error('Failed to check available rooms by type from all endpoints');
+  throw new Error("Failed to check available rooms by type from all endpoints");
 }
 
-export default { getRooms, getRoomById, checkAvailableRooms, checkAvailableRoomsByType };
+export default {
+  getRooms,
+  getRoomById,
+  checkAvailableRooms,
+  checkAvailableRoomsByType,
+};

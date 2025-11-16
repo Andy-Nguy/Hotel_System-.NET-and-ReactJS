@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,13 +12,14 @@ import {
   TextInput,
   Alert,
   SafeAreaView,
-} from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { getPromotions } from '../api/promotionApi';
-import { checkAvailableRooms } from '../api/roomsApi';
-import { getAmenitiesForRoom } from '../api/amenitiesApi';
+  Platform,
+} from "react-native";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
+import { getPromotions } from "../api/promotionApi";
+import { checkAvailableRooms } from "../api/roomsApi";
+import { getAmenitiesForRoom } from "../api/amenitiesApi";
 
-const windowWidth = Dimensions.get('window').width;
+const windowWidth = Dimensions.get("window").width;
 
 type PromotionDetailProps = {
   route?: any;
@@ -61,7 +62,10 @@ interface AvailableRoom {
   description?: string;
 }
 
-const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) => {
+const PromotionDetail: React.FC<PromotionDetailProps> = ({
+  route,
+  navigation,
+}) => {
   const promotionId = route?.params?.promotionId;
 
   const [promotion, setPromotion] = useState<Promotion | null>(null);
@@ -71,15 +75,19 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
   // Availability check states
   const [checkIn, setCheckIn] = useState<Date | null>(null);
   const [checkOut, setCheckOut] = useState<Date | null>(null);
-  const [guests, setGuests] = useState('1');
+  const [guests, setGuests] = useState("1");
   const [showCheckInPicker, setShowCheckInPicker] = useState(false);
   const [showCheckOutPicker, setShowCheckOutPicker] = useState(false);
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>([]);
   const [hasCheckedAvailability, setHasCheckedAvailability] = useState(false);
   const [checking, setChecking] = useState(false);
   const [expandedRoom, setExpandedRoom] = useState<string | null>(null);
-  const [roomAmenities, setRoomAmenities] = useState<Map<string, any[]>>(new Map());
-  const [amenitiesLoading, setAmenitiesLoading] = useState<Map<string, boolean>>(new Map());
+  const [roomAmenities, setRoomAmenities] = useState<Map<string, any[]>>(
+    new Map()
+  );
+  const [amenitiesLoading, setAmenitiesLoading] = useState<
+    Map<string, boolean>
+  >(new Map());
 
   // Load promotion details
   useEffect(() => {
@@ -92,11 +100,11 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
         if (selected) {
           setPromotion(selected);
         } else {
-          setError('Promotion not found');
+          setError("Promotion not found");
         }
       } catch (err: any) {
-        console.error('[PromotionDetail] Error loading promotion:', err);
-        setError(err?.message || 'Failed to load promotion');
+        console.error("[PromotionDetail] Error loading promotion:", err);
+        setError(err?.message || "Failed to load promotion");
       } finally {
         setLoading(false);
       }
@@ -109,23 +117,22 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
 
   // Format date for display
   const formatDate = (date: Date | null): string => {
-    if (!date) return '';
-    const dd = String(date.getDate()).padStart(2, '0');
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    if (!date) return "";
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
     const yyyy = date.getFullYear();
     return `${dd}/${mm}/${yyyy}`;
   };
 
   // Convert date to ISO string YYYY-MM-DD
   const toISOString = (date: Date): string => {
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   };
 
-  // Handle check-in date change
-  const handleCheckInChange = (event: any, selectedDate?: Date) => {
+  // Handle check-in date change (modal)
+  const handleConfirmCheckIn = (selectedDate: Date) => {
     if (selectedDate) {
       setCheckIn(selectedDate);
-      // Reset checkout if it's before the new checkin date
       if (checkOut && selectedDate >= checkOut) {
         setCheckOut(null);
       }
@@ -133,8 +140,8 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
     setShowCheckInPicker(false);
   };
 
-  // Handle check-out date change
-  const handleCheckOutChange = (event: any, selectedDate?: Date) => {
+  // Handle check-out date change (modal)
+  const handleConfirmCheckOut = (selectedDate: Date) => {
     if (selectedDate && checkIn && selectedDate > checkIn) {
       setCheckOut(selectedDate);
     }
@@ -144,13 +151,13 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
   // Check availability
   const handleCheckAvailability = async () => {
     if (!checkIn || !checkOut) {
-      Alert.alert('Lỗi', 'Vui lòng chọn ngày nhận và ngày trả phòng');
+      Alert.alert("Lỗi", "Vui lòng chọn ngày nhận và ngày trả phòng");
       return;
     }
 
     const guestCount = parseInt(guests, 10);
     if (isNaN(guestCount) || guestCount < 1) {
-      Alert.alert('Lỗi', 'Số khách phải lớn hơn 0');
+      Alert.alert("Lỗi", "Số khách phải lớn hơn 0");
       return;
     }
 
@@ -180,8 +187,8 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
       setExpandedRoom(null);
       setRoomAmenities(new Map());
     } catch (err: any) {
-      console.error('[PromotionDetail] Check availability error:', err);
-      Alert.alert('Lỗi', err?.message || 'Không thể kiểm tra phòng trống');
+      console.error("[PromotionDetail] Check availability error:", err);
+      Alert.alert("Lỗi", err?.message || "Không thể kiểm tra phòng trống");
       setAvailableRooms([]);
       setHasCheckedAvailability(true);
     } finally {
@@ -195,10 +202,10 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
       return;
     }
     try {
-      console.log('[PromotionDetail] Loading amenities for room:', roomId);
+      console.log("[PromotionDetail] Loading amenities for room:", roomId);
       setAmenitiesLoading((prev) => new Map(prev).set(roomId, true));
       const amenities = await getAmenitiesForRoom(roomId);
-      console.log('[PromotionDetail] Loaded amenities:', amenities);
+      console.log("[PromotionDetail] Loaded amenities:", amenities);
       setRoomAmenities((prev) => new Map(prev).set(roomId, amenities || []));
       setAmenitiesLoading((prev) => {
         const next = new Map(prev);
@@ -206,7 +213,7 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
         return next;
       });
     } catch (err) {
-      console.error('[PromotionDetail] Error loading amenities:', err);
+      console.error("[PromotionDetail] Error loading amenities:", err);
       setRoomAmenities((prev) => new Map(prev).set(roomId, []));
       setAmenitiesLoading((prev) => {
         const next = new Map(prev);
@@ -248,13 +255,14 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
   if (error || !promotion) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>{error || 'Promotion not found'}</Text>
+        <Text style={styles.errorText}>{error || "Promotion not found"}</Text>
       </View>
     );
   }
 
   const isGuestCountValid = parseInt(guests, 10) > 0;
-  const isCheckAvailableDisabled = !checkIn || !checkOut || !isGuestCountValid || checking;
+  const isCheckAvailableDisabled =
+    !checkIn || !checkOut || !isGuestCountValid || checking;
 
   return (
     <SafeAreaView style={styles.outerContainer}>
@@ -270,383 +278,429 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Banner Image */}
         <View style={styles.bannerContainer}>
-        {promotion.hinhAnhBanner ? (
-          <ImageBackground
-            source={{ uri: promotion.hinhAnhBanner }}
-            style={styles.banner}
-            resizeMode="cover"
-          >
-            <View style={styles.overlay} />
-          </ImageBackground>
-        ) : (
-          <View style={[styles.banner, { backgroundColor: '#e0e0e0' }]}>
-            <Text style={styles.placeholderText}>No image</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Title */}
-      <Text style={styles.title}>{promotion.tenKhuyenMai}</Text>
-
-      {/* Status Badge */}
-      <View style={styles.statusBadgeContainer}>
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor:
-                promotion.trangThai === 'active'
-                  ? '#4CAF50'
-                  : promotion.trangThai === 'inactive'
-                  ? '#FF9800'
-                  : '#f44336',
-            },
-          ]}
-        >
-          <Text style={styles.statusBadgeText}>
-            {promotion.trangThai === 'active'
-              ? '✓ Đang hoạt động'
-              : promotion.trangThai === 'inactive'
-              ? '⊘ Tạm dừng'
-              : '✕ Ngừng'}
-          </Text>
-        </View>
-      </View>
-
-      {/* Description */}
-      {promotion.moTa && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Chi tiết khuyến mãi</Text>
-          <Text style={styles.description}>{promotion.moTa}</Text>
-        </View>
-      )}
-
-      {/* Promotion Details */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Thông tin chi tiết</Text>
-        <View style={styles.detailsGrid}>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Loại Giảm</Text>
-            <Text style={styles.detailValue}>
-              {promotion.loaiGiamGia === 'percent'
-                ? `${promotion.giaTriGiam}%`
-                : `${promotion.giaTriGiam?.toLocaleString()} đ`}
-            </Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Loại Giảm Giá</Text>
-            <Text style={styles.detailValue}>
-              {promotion.loaiGiamGia === 'percent' ? 'Phần trăm' : 'Số tiền'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.detailsGrid}>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Ngày Bắt Đầu</Text>
-            <Text style={styles.detailValue}>
-              {new Date(promotion.ngayBatDau).toLocaleDateString('vi-VN')}
-            </Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Ngày Kết Thúc</Text>
-            <Text style={styles.detailValue}>
-              {new Date(promotion.ngayKetThuc).toLocaleDateString('vi-VN')}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Availability Check */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🔍 Kiểm Tra Phòng Trống</Text>
-
-        {/* Date Inputs */}
-        <View style={styles.datePickerContainer}>
-          <TouchableOpacity
-            style={styles.datePickerButton}
-            onPress={() => setShowCheckInPicker(true)}
-          >
-            <Text style={styles.datePickerLabel}>Nhận phòng</Text>
-            <Text style={styles.datePickerValue}>
-              {formatDate(checkIn) || 'Chọn ngày'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.datePickerButton}
-            onPress={() => setShowCheckOutPicker(true)}
-            disabled={!checkIn}
-          >
-            <Text style={styles.datePickerLabel}>Trả phòng</Text>
-            <Text style={styles.datePickerValue}>
-              {formatDate(checkOut) || 'Chọn ngày'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {showCheckInPicker && (
-          <DateTimePicker
-            value={checkIn || today}
-            mode="date"
-            display="spinner"
-            onChange={handleCheckInChange}
-            minimumDate={today}
-          />
-        )}
-
-        {showCheckOutPicker && (
-          <DateTimePicker
-            value={checkOut || (minCheckOut || today)}
-            mode="date"
-            display="spinner"
-            onChange={handleCheckOutChange}
-            minimumDate={minCheckOut || today}
-          />
-        )}
-
-        {/* Guest Count */}
-        <View style={styles.guestCountContainer}>
-          <Text style={styles.datePickerLabel}>Số khách</Text>
-          <View style={styles.guestCountInput}>
-            <TouchableOpacity
-              onPress={() => {
-                const count = Math.max(1, parseInt(guests, 10) - 1);
-                setGuests(count.toString());
-              }}
-              style={styles.guestCountButton}
+          {promotion.hinhAnhBanner ? (
+            <ImageBackground
+              source={{ uri: promotion.hinhAnhBanner }}
+              style={styles.banner}
+              resizeMode="cover"
             >
-              <Text style={styles.guestCountButtonText}>−</Text>
-            </TouchableOpacity>
-            <TextInput
-              style={styles.guestCountText}
-              value={guests}
-              onChangeText={(text) => {
-                const num = parseInt(text, 10);
-                if (!isNaN(num) && num > 0) {
-                  setGuests(num.toString());
-                }
-              }}
-              keyboardType="number-pad"
-            />
-            <TouchableOpacity
-              onPress={() => {
-                const count = parseInt(guests, 10) + 1;
-                setGuests(count.toString());
-              }}
-              style={styles.guestCountButton}
-            >
-              <Text style={styles.guestCountButtonText}>+</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Check Button */}
-        <TouchableOpacity
-          style={[styles.checkButton, isCheckAvailableDisabled && styles.checkButtonDisabled]}
-          onPress={handleCheckAvailability}
-          disabled={isCheckAvailableDisabled}
-        >
-          {checking ? (
-            <ActivityIndicator size="small" color="#fff" />
+              <View style={styles.overlay} />
+            </ImageBackground>
           ) : (
-            <Text style={styles.checkButtonText}>Kiểm Tra Phòng Trống</Text>
+            <View style={[styles.banner, { backgroundColor: "#e0e0e0" }]}>
+              <Text style={styles.placeholderText}>No image</Text>
+            </View>
           )}
-        </TouchableOpacity>
-      </View>
+        </View>
 
-      {/* Room List */}
-      {hasCheckedAvailability && (
+        {/* Title */}
+        <Text style={styles.title}>{promotion.tenKhuyenMai}</Text>
+
+        {/* Status Badge */}
+        <View style={styles.statusBadgeContainer}>
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor:
+                  promotion.trangThai === "active"
+                    ? "#4CAF50"
+                    : promotion.trangThai === "inactive"
+                    ? "#FF9800"
+                    : "#f44336",
+              },
+            ]}
+          >
+            <Text style={styles.statusBadgeText}>
+              {promotion.trangThai === "active"
+                ? "✓ Đang hoạt động"
+                : promotion.trangThai === "inactive"
+                ? "⊘ Tạm dừng"
+                : "✕ Ngừng"}
+            </Text>
+          </View>
+        </View>
+
+        {/* Description */}
+        {promotion.moTa && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Chi tiết khuyến mãi</Text>
+            <Text style={styles.description}>{promotion.moTa}</Text>
+          </View>
+        )}
+
+        {/* Promotion Details */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Danh sách phòng khuyến mãi</Text>
-
-          {availableRooms.length === 0 && !checking && checkIn && checkOut ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>
-                ❌ Không có phòng trống cho khoảng thời gian đã chọn
+          <Text style={styles.sectionTitle}>Thông tin chi tiết</Text>
+          <View style={styles.detailsGrid}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Loại Giảm</Text>
+              <Text style={styles.detailValue}>
+                {promotion.loaiGiamGia === "percent"
+                  ? `${promotion.giaTriGiam}%`
+                  : `${promotion.giaTriGiam?.toLocaleString()} đ`}
               </Text>
             </View>
-          ) : (
-            <FlatList
-              scrollEnabled={false}
-              data={availableRooms}
-              keyExtractor={(item) => item.idphong || item.roomId || Math.random().toString()}
-              renderItem={({ item: room }) => {
-                const roomId = room.idphong || room.roomId || '';
-                // Try multiple field names for room name/type
-                const roomName = room.tenLoaiPhong || room.TenLoaiPhong || room.tenPhong || room.roomNumber || 'Phòng không xác định';
-                const roomNumber = room.soPhong || room.SoPhong || '';
-                const originalPrice = room.giaCoBanMotDem || room.basePricePerNight || room.GiaCoBanMotDem || 0;
-                const maxGuests = room.soNguoiToiDa || room.maxOccupancy || room.SoNguoiToiDa || 0;
-                const description = room.moTa || room.description || room.MoTa || '';
-                const imageUrl = room.urlAnhPhong || room.roomImageUrl || room.UrlAnhPhong || '';
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Loại Giảm Giá</Text>
+              <Text style={styles.detailValue}>
+                {promotion.loaiGiamGia === "percent" ? "Phần trăm" : "Số tiền"}
+              </Text>
+            </View>
+          </View>
 
-                // Calculate discounted price
-                const discountPercent =
-                  promotion?.loaiGiamGia === 'percent'
-                    ? Number(promotion.giaTriGiam || 0)
-                    : 0;
-                const discountedPrice = Math.round(
-                  originalPrice * (1 - discountPercent / 100)
-                );
+          <View style={styles.detailsGrid}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Ngày Bắt Đầu</Text>
+              <Text style={styles.detailValue}>
+                {new Date(promotion.ngayBatDau).toLocaleDateString("vi-VN")}
+              </Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Ngày Kết Thúc</Text>
+              <Text style={styles.detailValue}>
+                {new Date(promotion.ngayKetThuc).toLocaleDateString("vi-VN")}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-                return (
-                  <View
-                    key={roomId}
-                    style={[
-                      styles.roomCardContainer,
-                      expandedRoom === roomId && styles.roomCardExpanded,
-                    ]}
-                  >
-                    {/* Room Header with Image and Basic Info */}
-                    <TouchableOpacity
-                      style={styles.roomHeaderSection}
-                      onPress={() => roomId && toggleExpand(roomId)}
-                      activeOpacity={0.7}
+        {/* Availability Check */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🔍 Kiểm Tra Phòng Trống</Text>
+
+          {/* Date Inputs */}
+          <View style={styles.datePickerContainer}>
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setShowCheckInPicker(true)}
+            >
+              <Text style={styles.datePickerLabel}>Nhận phòng</Text>
+              <Text style={styles.datePickerValue}>
+                {formatDate(checkIn) || "Chọn ngày"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setShowCheckOutPicker(true)}
+              disabled={!checkIn}
+            >
+              <Text style={styles.datePickerLabel}>Trả phòng</Text>
+              <Text style={styles.datePickerValue}>
+                {formatDate(checkOut) || "Chọn ngày"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <DateTimePickerModal
+            isVisible={showCheckInPicker}
+            mode="date"
+            date={checkIn || today}
+            onConfirm={(date) => handleConfirmCheckIn(date)}
+            onCancel={() => setShowCheckInPicker(false)}
+            minimumDate={today}
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            locale="vi-VN"
+          />
+
+          <DateTimePickerModal
+            isVisible={showCheckOutPicker}
+            mode="date"
+            date={checkOut || minCheckOut || today}
+            onConfirm={(date) => handleConfirmCheckOut(date)}
+            onCancel={() => setShowCheckOutPicker(false)}
+            minimumDate={minCheckOut || today}
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            locale="vi-VN"
+          />
+
+          {/* Guest Count */}
+          <View style={styles.guestCountContainer}>
+            <Text style={styles.datePickerLabel}>Số khách</Text>
+            <View style={styles.guestCountInput}>
+              <TouchableOpacity
+                onPress={() => {
+                  const count = Math.max(1, parseInt(guests, 10) - 1);
+                  setGuests(count.toString());
+                }}
+                style={styles.guestCountButton}
+              >
+                <Text style={styles.guestCountButtonText}>−</Text>
+              </TouchableOpacity>
+              <TextInput
+                style={styles.guestCountText}
+                value={guests}
+                onChangeText={(text) => {
+                  const num = parseInt(text, 10);
+                  if (!isNaN(num) && num > 0) {
+                    setGuests(num.toString());
+                  }
+                }}
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity
+                onPress={() => {
+                  const count = parseInt(guests, 10) + 1;
+                  setGuests(count.toString());
+                }}
+                style={styles.guestCountButton}
+              >
+                <Text style={styles.guestCountButtonText}>+</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Check Button */}
+          <TouchableOpacity
+            style={[
+              styles.checkButton,
+              isCheckAvailableDisabled && styles.checkButtonDisabled,
+            ]}
+            onPress={handleCheckAvailability}
+            disabled={isCheckAvailableDisabled}
+          >
+            {checking ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.checkButtonText}>Kiểm Tra Phòng Trống</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Room List */}
+        {hasCheckedAvailability && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Danh sách phòng khuyến mãi</Text>
+
+            {availableRooms.length === 0 && !checking && checkIn && checkOut ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>
+                  ❌ Không có phòng trống cho khoảng thời gian đã chọn
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                scrollEnabled={false}
+                data={availableRooms}
+                keyExtractor={(item) =>
+                  item.idphong || item.roomId || Math.random().toString()
+                }
+                renderItem={({ item: room }) => {
+                  const roomId = room.idphong || room.roomId || "";
+                  // Try multiple field names for room name/type
+                  const roomName =
+                    room.tenLoaiPhong ||
+                    room.TenLoaiPhong ||
+                    room.tenPhong ||
+                    room.roomNumber ||
+                    "Phòng không xác định";
+                  const roomNumber = room.soPhong || room.SoPhong || "";
+                  const originalPrice =
+                    room.giaCoBanMotDem ||
+                    room.basePricePerNight ||
+                    room.GiaCoBanMotDem ||
+                    0;
+                  const maxGuests =
+                    room.soNguoiToiDa ||
+                    room.maxOccupancy ||
+                    room.SoNguoiToiDa ||
+                    0;
+                  const description =
+                    room.moTa || room.description || room.MoTa || "";
+                  const imageUrl =
+                    room.urlAnhPhong ||
+                    room.roomImageUrl ||
+                    room.UrlAnhPhong ||
+                    "";
+
+                  // Calculate discounted price
+                  const discountPercent =
+                    promotion?.loaiGiamGia === "percent"
+                      ? Number(promotion.giaTriGiam || 0)
+                      : 0;
+                  const discountedPrice = Math.round(
+                    originalPrice * (1 - discountPercent / 100)
+                  );
+
+                  return (
+                    <View
+                      key={roomId}
+                      style={[
+                        styles.roomCardContainer,
+                        expandedRoom === roomId && styles.roomCardExpanded,
+                      ]}
                     >
-                      {/* Room Image */}
-                      <View style={styles.roomImageContainer}>
-                        {imageUrl ? (
-                          <ImageBackground
-                            source={{ uri: imageUrl }}
-                            style={styles.roomImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={[styles.roomImage, { backgroundColor: '#e0e0e0' }]}>
-                            <Text style={styles.noImageText}>Không có ảnh</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Room Info */}
-                      <View style={styles.roomInfoSection}>
-                        {/* Room Name and Number */}
-                        <View style={styles.roomNameRow}>
-                          <Text style={styles.roomNameText}>
-                            {roomName}
-                            {roomNumber ? ` - ${roomNumber}` : ''}
-                          </Text>
-                        </View>
-
-                        {/* Room Meta */}
-                        <Text style={styles.roomMetaInfo} numberOfLines={2}>
-                          {maxGuests ? `👥 Tối đa ${maxGuests} người` : '—'}
-                          {' • '}
-                          💰 {originalPrice.toLocaleString()} ₫/đêm
-                          {discountPercent > 0 && (
-                            <>
-                              {' • '}
-                              <Text style={styles.discountedPrice}>
-                                🎉 {discountedPrice.toLocaleString()} ₫
-                              </Text>
-                            </>
-                          )}
-                        </Text>
-                      </View>
-
-                      {/* Expand Icon */}
-                      <View style={styles.expandButtonContainer}>
-                        <Text style={styles.expandIconText}>
-                          {expandedRoom === roomId ? '▼' : '▶'}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* Expanded Details */}
-                    {expandedRoom === roomId && (
-                      <View style={styles.expandedDetailsSection}>
-                        {/* Full Image */}
-                        {imageUrl && (
-                          <View style={styles.fullImageContainer}>
+                      {/* Room Header with Image and Basic Info */}
+                      <TouchableOpacity
+                        style={styles.roomHeaderSection}
+                        onPress={() => roomId && toggleExpand(roomId)}
+                        activeOpacity={0.7}
+                      >
+                        {/* Room Image */}
+                        <View style={styles.roomImageContainer}>
+                          {imageUrl ? (
                             <ImageBackground
                               source={{ uri: imageUrl }}
-                              style={styles.fullImage}
-                              resizeMode="contain"
+                              style={styles.roomImage}
+                              resizeMode="cover"
                             />
-                          </View>
-                        )}
+                          ) : (
+                            <View
+                              style={[
+                                styles.roomImage,
+                                { backgroundColor: "#e0e0e0" },
+                              ]}
+                            >
+                              <Text style={styles.noImageText}>
+                                Không có ảnh
+                              </Text>
+                            </View>
+                          )}
+                        </View>
 
-                        {/* Description */}
-                        {description && (
-                          <Text style={styles.descriptionText}>{description}</Text>
-                        )}
-
-                        {/* Info Grid */}
-                        <View style={styles.infoGrid}>
-                          {/* Box 1: Thông tin */}
-                          <View style={styles.infoBox}>
-                            <Text style={styles.infoBoxTitle}>📊 Thông tin</Text>
-                            <Text style={styles.infoBoxContent}>
-                              Sức chứa: <Text style={styles.infoBoxBold}>{maxGuests} người</Text>
-                              {'\n'}
-                              Giá gốc: <Text style={styles.infoBoxBold}>{originalPrice.toLocaleString()} ₫</Text>
-                              {discountPercent > 0 && (
-                                <>
-                                  {'\n'}
-                                  <Text style={styles.discountedPriceBox}>
-                                    Giá KM: {discountedPrice.toLocaleString()} ₫
-                                  </Text>
-                                </>
-                              )}
+                        {/* Room Info */}
+                        <View style={styles.roomInfoSection}>
+                          {/* Room Name and Number */}
+                          <View style={styles.roomNameRow}>
+                            <Text style={styles.roomNameText}>
+                              {roomName}
+                              {roomNumber ? ` - ${roomNumber}` : ""}
                             </Text>
                           </View>
 
-                          {/* Box 2: Tiện ích */}
-                          <View style={styles.infoBox}>
-                            <Text style={styles.infoBoxTitle}>✨ Tiện ích</Text>
-                            <AmenitiesDisplay 
-                              roomId={roomId} 
-                              amenities={roomAmenities.get(roomId) || []}
-                              loading={amenitiesLoading.get(roomId) || false}
-                            />
-                          </View>
+                          {/* Room Meta */}
+                          <Text style={styles.roomMetaInfo} numberOfLines={2}>
+                            {maxGuests ? `👥 Tối đa ${maxGuests} người` : "—"}
+                            {" • "}
+                            💰 {originalPrice.toLocaleString()} ₫/đêm
+                            {discountPercent > 0 && (
+                              <>
+                                {" • "}
+                                <Text style={styles.discountedPrice}>
+                                  🎉 {discountedPrice.toLocaleString()} ₫
+                                </Text>
+                              </>
+                            )}
+                          </Text>
                         </View>
 
-                        {/* Book Button */}
-                        <TouchableOpacity
-                          style={styles.bookButtonLarge}
-                          onPress={() => {
-                            const bookingInfo = {
-                              selectedRooms: [
-                                {
-                                  roomNumber: 1,
-                                  room,
-                                },
-                              ],
-                              checkIn: toISOString(checkIn!),
-                              checkOut: toISOString(checkOut!),
-                              guests: parseInt(guests, 10),
-                              totalRooms: 1,
-                              promotion: promotion
-                                ? {
-                                    idkhuyenMai: promotion.idkhuyenMai,
-                                    tenKhuyenMai: promotion.tenKhuyenMai,
-                                    loaiGiamGia: promotion.loaiGiamGia,
-                                    giaTriGiam: promotion.giaTriGiam,
-                                  }
-                                : null,
-                            };
-                            Alert.alert(
-                              'Booking',
-                              `Đặt ${roomName} từ ${formatDate(checkIn)} đến ${formatDate(
-                                checkOut
-                              )}`
-                            );
-                          }}
-                        >
-                          <Text style={styles.bookButtonLargeText}>💳 Đặt phòng ngay</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                );
-              }}
-            />
-          )}
-        </View>
-      )}
+                        {/* Expand Icon */}
+                        <View style={styles.expandButtonContainer}>
+                          <Text style={styles.expandIconText}>
+                            {expandedRoom === roomId ? "▼" : "▶"}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
 
+                      {/* Expanded Details */}
+                      {expandedRoom === roomId && (
+                        <View style={styles.expandedDetailsSection}>
+                          {/* Full Image */}
+                          {imageUrl && (
+                            <View style={styles.fullImageContainer}>
+                              <ImageBackground
+                                source={{ uri: imageUrl }}
+                                style={styles.fullImage}
+                                resizeMode="contain"
+                              />
+                            </View>
+                          )}
+
+                          {/* Description */}
+                          {description && (
+                            <Text style={styles.descriptionText}>
+                              {description}
+                            </Text>
+                          )}
+
+                          {/* Info Grid */}
+                          <View style={styles.infoGrid}>
+                            {/* Box 1: Thông tin */}
+                            <View style={styles.infoBox}>
+                              <Text style={styles.infoBoxTitle}>
+                                📊 Thông tin
+                              </Text>
+                              <Text style={styles.infoBoxContent}>
+                                Sức chứa:{" "}
+                                <Text style={styles.infoBoxBold}>
+                                  {maxGuests} người
+                                </Text>
+                                {"\n"}
+                                Giá gốc:{" "}
+                                <Text style={styles.infoBoxBold}>
+                                  {originalPrice.toLocaleString()} ₫
+                                </Text>
+                                {discountPercent > 0 && (
+                                  <>
+                                    {"\n"}
+                                    <Text style={styles.discountedPriceBox}>
+                                      Giá KM: {discountedPrice.toLocaleString()}{" "}
+                                      ₫
+                                    </Text>
+                                  </>
+                                )}
+                              </Text>
+                            </View>
+
+                            {/* Box 2: Tiện ích */}
+                            <View style={styles.infoBox}>
+                              <Text style={styles.infoBoxTitle}>
+                                ✨ Tiện ích
+                              </Text>
+                              <AmenitiesDisplay
+                                roomId={roomId}
+                                amenities={roomAmenities.get(roomId) || []}
+                                loading={amenitiesLoading.get(roomId) || false}
+                              />
+                            </View>
+                          </View>
+
+                          {/* Book Button */}
+                          <TouchableOpacity
+                            style={styles.bookButtonLarge}
+                            onPress={() => {
+                              const bookingInfo = {
+                                selectedRooms: [
+                                  {
+                                    roomNumber: 1,
+                                    room,
+                                  },
+                                ],
+                                checkIn: toISOString(checkIn!),
+                                checkOut: toISOString(checkOut!),
+                                guests: parseInt(guests, 10),
+                                totalRooms: 1,
+                                promotion: promotion
+                                  ? {
+                                      idkhuyenMai: promotion.idkhuyenMai,
+                                      tenKhuyenMai: promotion.tenKhuyenMai,
+                                      loaiGiamGia: promotion.loaiGiamGia,
+                                      giaTriGiam: promotion.giaTriGiam,
+                                    }
+                                  : null,
+                              };
+                              Alert.alert(
+                                "Booking",
+                                `Đặt ${roomName} từ ${formatDate(
+                                  checkIn
+                                )} đến ${formatDate(checkOut)}`
+                              );
+                            }}
+                          >
+                            <Text style={styles.bookButtonLargeText}>
+                              💳 Đặt phòng ngay
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                }}
+              />
+            )}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -655,48 +709,48 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({ route, navigation }) 
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 12,
   },
   backArrowButton: {
     paddingLeft: 12,
     paddingRight: 16,
     paddingVertical: 8,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
+    justifyContent: "center",
+    alignItems: "flex-start",
   },
   backArrowText: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#000',
+    fontWeight: "bold",
+    color: "#000",
   },
   bannerContainer: {
     marginVertical: 12,
     borderRadius: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   banner: {
-    width: '100%',
+    width: "100%",
     height: 280,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
   },
   placeholderText: {
-    color: '#999',
+    color: "#999",
     fontSize: 16,
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#111',
+    fontWeight: "700",
+    color: "#111",
     marginVertical: 12,
   },
   statusBadgeContainer: {
@@ -706,11 +760,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   statusBadgeText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: "#fff",
+    fontWeight: "600",
     fontSize: 14,
   },
   section: {
@@ -719,18 +773,18 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#111',
+    fontWeight: "700",
+    color: "#111",
     marginBottom: 12,
   },
   description: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     lineHeight: 20,
   },
   detailsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 12,
   },
   detailItem: {
@@ -739,19 +793,19 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 12,
-    color: '#999',
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    color: "#999",
+    fontWeight: "600",
+    textTransform: "uppercase",
     marginBottom: 4,
   },
   detailValue: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
+    fontWeight: "600",
+    color: "#111",
   },
   datePickerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 12,
   },
   datePickerButton: {
@@ -759,45 +813,45 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
   },
   datePickerLabel: {
     fontSize: 12,
-    color: '#999',
-    fontWeight: '600',
+    color: "#999",
+    fontWeight: "600",
     marginBottom: 4,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   datePickerValue: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
+    fontWeight: "600",
+    color: "#111",
   },
   guestCountContainer: {
     marginBottom: 12,
   },
   guestCountInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 8,
   },
   guestCountButton: {
     width: 40,
     height: 40,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
   },
   guestCountButtonText: {
     fontSize: 24,
-    fontWeight: '600',
-    color: '#111',
+    fontWeight: "600",
+    color: "#111",
   },
   guestCountText: {
     flex: 1,
@@ -805,88 +859,88 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     borderRadius: 8,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
-    textAlign: 'center',
+    fontWeight: "600",
+    color: "#111",
+    textAlign: "center",
   },
   checkButton: {
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 12,
   },
   checkButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: "#ccc",
   },
   checkButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   emptyState: {
     paddingVertical: 24,
     paddingHorizontal: 16,
-    backgroundColor: '#fdeaea',
+    backgroundColor: "#fdeaea",
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   emptyStateText: {
     fontSize: 14,
-    color: '#c0392b',
-    fontWeight: '500',
-    textAlign: 'center',
+    color: "#c0392b",
+    fontWeight: "500",
+    textAlign: "center",
   },
   roomCard: {
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     borderRadius: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   roomCardContainer: {
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#fff',
+    overflow: "hidden",
+    backgroundColor: "#fff",
   },
   roomCardExpanded: {
-    borderColor: '#1890ff',
-    shadowColor: '#000',
+    borderColor: "#1890ff",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
   },
   roomHeaderSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 12,
     gap: 12,
-    backgroundColor: '#fafafa',
+    backgroundColor: "#fafafa",
   },
   roomImageContainer: {
     width: 140,
     height: 100,
     borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#f0f0f0',
+    overflow: "hidden",
+    backgroundColor: "#f0f0f0",
     flexShrink: 0,
   },
   roomImage: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
   },
   noImageText: {
-    color: '#999',
+    color: "#999",
     fontSize: 12,
   },
   roomInfoSection: {
@@ -895,109 +949,109 @@ const styles = StyleSheet.create({
   },
   roomNameRow: {
     marginBottom: 6,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   roomNameText: {
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 15,
-    color: '#333',
-    flexWrap: 'wrap',
+    color: "#333",
+    flexWrap: "wrap",
     flex: 1,
   },
   roomMetaInfo: {
-    color: '#666',
+    color: "#666",
     fontSize: 12,
     lineHeight: 16,
   },
   discountedPrice: {
-    color: '#ff4d4f',
-    fontWeight: 'bold',
+    color: "#ff4d4f",
+    fontWeight: "bold",
   },
   expandButtonContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 8,
   },
   expandIconText: {
     fontSize: 12,
-    color: '#999',
-    fontWeight: '600',
+    color: "#999",
+    fontWeight: "600",
   },
   expandedDetailsSection: {
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: "#e0e0e0",
   },
   fullImageContainer: {
-    width: '100%',
+    width: "100%",
     height: 300,
     marginBottom: 12,
     borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#f9f9f9',
+    overflow: "hidden",
+    backgroundColor: "#f9f9f9",
   },
   fullImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   descriptionText: {
     fontSize: 13,
-    color: '#555',
+    color: "#555",
     lineHeight: 18,
     marginBottom: 12,
   },
   infoGrid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginBottom: 12,
   },
   infoBox: {
     flex: 1,
     padding: 12,
-    backgroundColor: '#f5f7fa',
+    backgroundColor: "#f5f7fa",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e8eff7',
+    borderColor: "#e8eff7",
   },
   infoBoxTitle: {
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
     fontSize: 13,
-    color: '#333',
+    color: "#333",
   },
   infoBoxContent: {
-    color: '#666',
+    color: "#666",
     fontSize: 13,
     lineHeight: 18,
   },
   infoBoxBold: {
-    fontWeight: '700',
-    color: '#333',
+    fontWeight: "700",
+    color: "#333",
   },
   discountedPriceBox: {
-    color: '#ff4d4f',
-    fontWeight: 'bold',
+    color: "#ff4d4f",
+    fontWeight: "bold",
   },
   bookButtonLarge: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#dfa974',
+    backgroundColor: "#dfa974",
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 12,
   },
   bookButtonLargeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   errorText: {
     fontSize: 16,
-    color: '#d00',
-    textAlign: 'center',
+    color: "#d00",
+    textAlign: "center",
     marginTop: 24,
   },
 });
@@ -1009,27 +1063,40 @@ interface AmenitiesDisplayProps {
   loading?: boolean;
 }
 
-const AmenitiesDisplay: React.FC<AmenitiesDisplayProps> = ({ roomId, amenities, loading = false }) => {
+const AmenitiesDisplay: React.FC<AmenitiesDisplayProps> = ({
+  roomId,
+  amenities,
+  loading = false,
+}) => {
   if (loading) {
-    return <Text style={{ color: '#666', fontSize: 12 }}>Đang tải...</Text>;
+    return <Text style={{ color: "#666", fontSize: 12 }}>Đang tải...</Text>;
   }
 
   if (!amenities || amenities.length === 0) {
-    return <Text style={{ color: '#666', fontSize: 12 }}>—</Text>;
+    return <Text style={{ color: "#666", fontSize: 12 }}>—</Text>;
   }
 
   return (
-    <View style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 6 } as any}>
+    <View
+      style={
+        {
+          display: "flex",
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: 6,
+        } as any
+      }
+    >
       {amenities.map((amenity: any) => (
         <View
           key={amenity.idtienNghi || amenity.tenTienNghi}
           style={{
-            backgroundColor: '#f1f5f9',
+            backgroundColor: "#f1f5f9",
             paddingVertical: 4,
             paddingHorizontal: 8,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: '#e2e8f0',
+            borderColor: "#e2e8f0",
             marginRight: 6,
             marginBottom: 6,
           }}
@@ -1037,8 +1104,8 @@ const AmenitiesDisplay: React.FC<AmenitiesDisplayProps> = ({ roomId, amenities, 
           <Text
             style={{
               fontSize: 11,
-              color: '#111827',
-              fontWeight: '500',
+              color: "#111827",
+              fontWeight: "500",
             }}
           >
             {amenity.tenTienNghi || amenity.idtienNghi}
