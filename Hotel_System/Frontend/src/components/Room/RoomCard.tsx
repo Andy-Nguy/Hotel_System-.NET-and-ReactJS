@@ -26,7 +26,7 @@ const RoomCard: React.FC<Props> = ({
   room,
   onOpenDetail,
   onBook,
-  bookButtonText = "Đặt phòng ngay",
+  bookButtonText = "Khám phá phòng",
 }) => {
   const defaultWebp = "/img/room/room-6.jpg";
 
@@ -230,22 +230,7 @@ const RoomCard: React.FC<Props> = ({
             {room.tenPhong ?? "Phòng nghỉ"}
           </h2>
 
-          <a
-            onClick={() => onOpenDetail(room)}
-            style={{
-              display: "inline-block",
-              marginBottom: 12,
-              color: "#dfa974",
-              textDecoration: "none",
-              borderBottom: "2px solid #dfa974",
-              paddingBottom: 2,
-              cursor: "pointer",
-              fontWeight: "bold",
-              lineHeight: 1.2,
-            }}
-          >
-            Xem thông tin phòng chi tiết
-          </a>
+          {/* Removed inline detail link — primary CTA now opens detail (luxury "Khám phá phòng") */}
 
           {/* Price Display */}
           <div style={{ marginTop: 12, marginBottom: 16, minHeight: 60 }}>
@@ -290,13 +275,19 @@ const RoomCard: React.FC<Props> = ({
           >
             <Button
               type="primary"
-              onClick={() => onBook(room)}
+              onClick={() => onOpenDetail(room)}
+              aria-label="Khám phá phòng"
               style={{
-                background: "#dfa974",
-                borderColor: "#dfa974",
+                background: "linear-gradient(135deg, #dfa974 0%, #d89860 100%)",
+                borderColor: "transparent",
                 height: 64,
                 fontSize: 18,
                 width: "min(420px, 85%)",
+                borderRadius: 12,
+                boxShadow: "0 10px 30px rgba(217,152,96,0.18)",
+                color: '#fff',
+                fontWeight: 700,
+                letterSpacing: '0.2px'
               }}
             >
               {bookButtonText}
