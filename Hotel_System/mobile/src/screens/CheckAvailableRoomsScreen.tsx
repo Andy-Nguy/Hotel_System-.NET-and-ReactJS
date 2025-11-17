@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "../components/AppIcon";
 import { checkAvailableRooms, AvailableRoom } from "../api/roomsApi";
 
 const CheckAvailableRoomsScreen: React.FC = () => {
@@ -259,7 +259,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Icon name="arrow-left" size={20} color={COLORS.secondary} />
+          <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Kiểm tra phòng trống</Text>
         <View style={{ width: 20 }} />
@@ -280,7 +280,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               style={styles.dateInput}
               onPress={() => setCheckInPickerVisibility(true)}
             >
-              <Icon
+              <AppIcon
                 name="calendar"
                 size={20}
                 color={COLORS.primary}
@@ -292,7 +292,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                   {formatDateShort(checkIn)}
                 </Text>
               </View>
-              <Icon name="chevron-down" size={16} color={COLORS.gray} />
+              <AppIcon name="chevron-down" size={16} color={COLORS.gray} />
             </TouchableOpacity>
           </View>
 
@@ -303,7 +303,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               style={styles.dateInput}
               onPress={() => setCheckOutPickerVisibility(true)}
             >
-              <Icon
+              <AppIcon
                 name="calendar"
                 size={20}
                 color={COLORS.primary}
@@ -315,7 +315,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                   {formatDateShort(checkOut)}
                 </Text>
               </View>
-              <Icon name="chevron-down" size={16} color={COLORS.gray} />
+              <AppIcon name="chevron-down" size={16} color={COLORS.gray} />
             </TouchableOpacity>
           </View>
 
@@ -327,7 +327,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                 style={styles.guestButton}
                 onPress={() => setGuests(Math.max(1, guests - 1))}
               >
-                <Icon name="minus" size={16} color={COLORS.primary} />
+                <AppIcon name="minus" size={16} color={COLORS.primary} />
               </TouchableOpacity>
               <View style={styles.guestCount}>
                 <Text style={styles.guestCountText}>{guests}</Text>
@@ -337,7 +337,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                 style={styles.guestButton}
                 onPress={() => setGuests(Math.min(10, guests + 1))}
               >
-                <Icon name="plus" size={16} color={COLORS.primary} />
+                <AppIcon name="plus" size={16} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -350,7 +350,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                 style={styles.guestButton}
                 onPress={() => setRooms(Math.max(1, rooms - 1))}
               >
-                <Icon name="minus" size={16} color={COLORS.primary} />
+                <AppIcon name="minus" size={16} color={COLORS.primary} />
               </TouchableOpacity>
               <View style={styles.guestCount}>
                 <Text style={styles.guestCountText}>{rooms}</Text>
@@ -360,7 +360,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                 style={styles.guestButton}
                 onPress={() => setRooms(Math.min(10, rooms + 1))}
               >
-                <Icon name="plus" size={16} color={COLORS.primary} />
+                <AppIcon name="plus" size={16} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -377,7 +377,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               <ActivityIndicator color={COLORS.white} />
             ) : (
               <>
-                <Icon name="search" size={18} color={COLORS.white} />
+                <AppIcon name="search" size={18} color={COLORS.white} />
                 <Text style={styles.searchButtonText}>Tìm phòng trống</Text>
               </>
             )}
@@ -426,7 +426,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               />
             ) : (
               <View style={styles.noResults}>
-                <Icon name="bed" size={48} color="#ccc" />
+                <AppIcon name="bed" size={48} color="#ccc" />
                 <Text style={styles.noResultsText}>Không có phòng phù hợp</Text>
                 <Text style={styles.noResultsSubtext}>
                   Thử chọn ngày khác hoặc ít khách hơn
@@ -474,7 +474,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                 onPress={closeRoomDetail}
                 style={styles.closeButton}
               >
-                <Icon name="close" size={24} color={COLORS.secondary} />
+                <AppIcon name="close" size={24} color={COLORS.secondary} />
               </TouchableOpacity>
             </View>
 

@@ -11,7 +11,7 @@ import {
   Modal,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "../components/AppIcon";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
 import { DEFAULT_BASE_URL } from "../config/apiConfig";
 import BookingProgress from "../components/BookingProgress";
@@ -289,7 +289,7 @@ const ServicesSelectionScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Icon name="arrow-left" size={20} color={COLORS.secondary} />
+          <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chọn dịch vụ</Text>
         <View style={{ width: 20 }} />
@@ -358,7 +358,7 @@ const ServicesSelectionScreen: React.FC = () => {
                 onPress={() => removeService(service.serviceId)}
                 style={styles.removeButton}
               >
-                <Icon name="trash" size={16} color={COLORS.error} />
+                <AppIcon name="trash" size={16} color={COLORS.error} />
               </TouchableOpacity>
             </View>
           ))}
@@ -413,7 +413,7 @@ const ServicesSelectionScreen: React.FC = () => {
                 onPress={() => setDetailModalVisible(false)}
                 style={styles.closeButton}
               >
-                <Icon name="close" size={24} color={COLORS.secondary} />
+                <AppIcon name="close" size={24} color={COLORS.secondary} />
               </TouchableOpacity>
             </View>
 

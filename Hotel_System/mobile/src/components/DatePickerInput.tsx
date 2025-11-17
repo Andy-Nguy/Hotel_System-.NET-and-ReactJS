@@ -7,7 +7,7 @@ import {
   Platform,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "./AppIcon";
 import { COLORS } from "../constants/theme";
 
 interface DatePickerInputProps {
@@ -51,7 +51,7 @@ const DatePickerInput: React.FC<DatePickerInputProps> = ({
         style={styles.inputButton}
         onPress={() => setShow(true)}
       >
-        <Icon
+        <AppIcon
           name="calendar"
           size={18}
           color={COLORS.gray}
@@ -60,7 +60,7 @@ const DatePickerInput: React.FC<DatePickerInputProps> = ({
         <Text style={[styles.inputText, !value && styles.placeholderText]}>
           {formatDate(value)}
         </Text>
-        <Icon
+        <AppIcon
           name="chevron-down"
           size={14}
           color={COLORS.gray}

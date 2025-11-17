@@ -10,7 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "./AppIcon";
 
 type Service = {
   id: string;
@@ -238,7 +238,7 @@ const ServicesSelector: React.FC<ServicesSelectorProps> = ({
           style={styles.removeButton}
           onPress={() => removeService(item.serviceId)}
         >
-          <Icon name="trash" size={16} color={COLORS.error} />
+          <AppIcon name="trash" size={16} color={COLORS.error} />
         </TouchableOpacity>
       </View>
     </View>
@@ -250,7 +250,11 @@ const ServicesSelector: React.FC<ServicesSelectorProps> = ({
         style={styles.toggleButton}
         onPress={() => setOpen(!open)}
       >
-        <Icon name={open ? "minus" : "plus"} size={16} color={COLORS.primary} />
+        <AppIcon
+          name={open ? "minus" : "plus"}
+          size={16}
+          color={COLORS.primary}
+        />
         <Text style={styles.toggleText}>
           Thêm dịch vụ
           {selectedServices.length > 0 && (
@@ -306,7 +310,7 @@ const ServicesSelector: React.FC<ServicesSelectorProps> = ({
               style={styles.closeButton}
               onPress={() => setDetailModalVisible(false)}
             >
-              <Icon name="times" size={20} color={COLORS.secondary} />
+              <AppIcon name="times" size={20} color={COLORS.secondary} />
             </TouchableOpacity>
 
             {selectedServiceDetail && (

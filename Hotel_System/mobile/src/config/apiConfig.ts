@@ -9,10 +9,23 @@ export const BASE_URLS: string[] = [
 export const DEFAULT_BASE_URL = BASE_URLS[0];
 
 // Helper to build a full URL from a path
+import { Platform } from "react-native";
+
 export function buildApiUrl(path: string, base = DEFAULT_BASE_URL) {
   if (!path) return base;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   if (!path.startsWith("/")) path = "/" + path;
+  // When running on Android emulator, 'localhost' refers to the device itself.
+  // Map to 10.0.2.2 (Android emulator) so fetches hit the host machine.
+  try {
+    const host = base;
+    if (Platform.OS === "android" && host.includes("localhost")) {
+      return host.replace("localhost", "10.0.2.2") + path;
+    }
+  } catch (e) {
+    // ignore platform read errors in non-RN env
+  }
+
   return `${base}${path}`;
 }
 

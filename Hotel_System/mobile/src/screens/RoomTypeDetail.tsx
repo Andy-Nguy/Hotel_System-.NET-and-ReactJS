@@ -18,8 +18,13 @@ import {
 import { Image } from "expo-image";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
-import Icon from 'react-native-vector-icons/FontAwesome';
-import { getRooms, Room, checkAvailableRoomsByType, AvailableRoom } from "../api/roomsApi";
+import AppIcon from "../components/AppIcon";
+import {
+  getRooms,
+  Room,
+  checkAvailableRoomsByType,
+  AvailableRoom,
+} from "../api/roomsApi";
 import RoomDetail from "../components/RoomDetail";
 import DatePickerInput from "../components/DatePickerInput";
 import GuestSelector from "../components/GuestSelector";
@@ -32,7 +37,8 @@ interface RoomTypeDetailRouteParams {
 const RoomTypeDetail: React.FC = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { idloaiPhong, tenLoaiPhong } = (route.params as RoomTypeDetailRouteParams) || {};
+  const { idloaiPhong, tenLoaiPhong } =
+    (route.params as RoomTypeDetailRouteParams) || {};
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +51,11 @@ const RoomTypeDetail: React.FC = () => {
   const [showSearchForm, setShowSearchForm] = useState<boolean>(true);
   const anim = useRef(new Animated.Value(showSearchForm ? 1 : 0)).current;
   const [searching, setSearching] = useState(false);
-  const [availabilityResult, setAvailabilityResult] = useState<null | { available: boolean; availableCount: number; rooms?: AvailableRoom[] } | { message: string }>(null);
+  const [availabilityResult, setAvailabilityResult] = useState<
+    | null
+    | { available: boolean; availableCount: number; rooms?: AvailableRoom[] }
+    | { message: string }
+  >(null);
 
   useEffect(() => {
     fetchRoomsByType();
@@ -72,7 +82,9 @@ const RoomTypeDetail: React.FC = () => {
       setError(null);
 
       const allRooms = await getRooms();
-      const filteredRooms = allRooms.filter((r: Room) => r.idloaiPhong === idloaiPhong);
+      const filteredRooms = allRooms.filter(
+        (r: Room) => r.idloaiPhong === idloaiPhong
+      );
       setRooms(filteredRooms);
 
       if (filteredRooms.length === 0) {
@@ -123,10 +135,9 @@ const RoomTypeDetail: React.FC = () => {
           />
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Icon name="image" size={40} color="#ccc" />
+            <AppIcon name="image" size={40} color="#ccc" />
           </View>
         )}
-
       </View>
 
       {/* Room Info */}
@@ -140,7 +151,9 @@ const RoomTypeDetail: React.FC = () => {
         {/* Rating */}
         <View style={styles.ratingSection}>
           <Text style={styles.stars}>{renderStars(item.xepHangSao || 0)}</Text>
-          <Text style={styles.ratingText}>{(item.xepHangSao || 0).toFixed(1)}/5</Text>
+          <Text style={styles.ratingText}>
+            {(item.xepHangSao || 0).toFixed(1)}/5
+          </Text>
         </View>
 
         {/* Description */}
@@ -153,11 +166,15 @@ const RoomTypeDetail: React.FC = () => {
         {/* Amenities Preview */}
         <View style={styles.amenitiesSection}>
           <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>👥 {item.soNguoiToiDa || "-"} guests</Text>
+            <Text style={styles.amenityText}>
+              👥 {item.soNguoiToiDa || "-"} guests
+            </Text>
           </View>
           {item.amenities && item.amenities.length > 0 && (
             <View style={styles.amenityBadge}>
-              <Text style={styles.amenityText}>✓ {item.amenities.length} amenities</Text>
+              <Text style={styles.amenityText}>
+                ✓ {item.amenities.length} amenities
+              </Text>
             </View>
           )}
         </View>
@@ -173,7 +190,7 @@ const RoomTypeDetail: React.FC = () => {
         {/* View Details Button */}
         <TouchableOpacity style={styles.detailButton}>
           <Text style={styles.detailButtonText}>Xem chi tiết</Text>
-          <Icon name="arrow-right" size={14} color={COLORS.white} />
+          <AppIcon name="arrow-right" size={14} color={COLORS.white} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -209,9 +226,12 @@ const RoomTypeDetail: React.FC = () => {
           <View style={{ width: 30 }} />
         </View>
         <View style={styles.errorContainer}>
-          <Icon name="exclamation-circle" size={48} color={COLORS.primary} />
+          <AppIcon name="exclamation-circle" size={48} color={COLORS.primary} />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchRoomsByType}>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchRoomsByType}
+          >
             <Text style={styles.retryButtonText}>Thử lại</Text>
           </TouchableOpacity>
         </View>
@@ -235,9 +255,13 @@ const RoomTypeDetail: React.FC = () => {
         <TouchableOpacity
           style={styles.showFormButton}
           onPress={() => setShowSearchForm((s) => !s)}
-          accessibilityLabel={showSearchForm ? 'Ẩn form tìm phòng' : 'Hiện form tìm phòng'}
+          accessibilityLabel={
+            showSearchForm ? "Ẩn form tìm phòng" : "Hiện form tìm phòng"
+          }
         >
-          <Text style={styles.showFormButtonText}>{showSearchForm ? 'Ẩn tìm phòng' : 'Tìm Phòng'}</Text>
+          <Text style={styles.showFormButtonText}>
+            {showSearchForm ? "Ẩn tìm phòng" : "Tìm Phòng"}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -246,12 +270,15 @@ const RoomTypeDetail: React.FC = () => {
         style={[
           styles.searchForm,
           {
-            height: anim.interpolate({ inputRange: [0, 1], outputRange: [0, 320] }),
+            height: anim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 320],
+            }),
             opacity: anim,
-            overflow: 'hidden',
+            overflow: "hidden",
           },
         ]}
-        pointerEvents={showSearchForm ? 'auto' : 'none'}
+        pointerEvents={showSearchForm ? "auto" : "none"}
       >
         <DatePickerInput
           label="Ngày Check-in"
@@ -285,44 +312,67 @@ const RoomTypeDetail: React.FC = () => {
         <TouchableOpacity
           style={styles.searchButton}
           onPress={async () => {
-            if (!idloaiPhong) return Alert.alert('Lỗi', 'Không có loại phòng');
-            if (!checkInDate || !checkOutDate) return Alert.alert('Lỗi', 'Vui lòng chọn ngày check-in và check-out');
-            
+            if (!idloaiPhong) return Alert.alert("Lỗi", "Không có loại phòng");
+            if (!checkInDate || !checkOutDate)
+              return Alert.alert(
+                "Lỗi",
+                "Vui lòng chọn ngày check-in và check-out"
+              );
+
             // Validate dates
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            
+
             if (checkInDate < today) {
-              return Alert.alert('Lỗi', 'Ngày check-in phải là hôm nay hoặc trong tương lai');
+              return Alert.alert(
+                "Lỗi",
+                "Ngày check-in phải là hôm nay hoặc trong tương lai"
+              );
             }
-            
+
             if (checkOutDate <= checkInDate) {
-              return Alert.alert('Lỗi', 'Ngày check-out phải sau ngày check-in ít nhất 1 ngày');
+              return Alert.alert(
+                "Lỗi",
+                "Ngày check-out phải sau ngày check-in ít nhất 1 ngày"
+              );
             }
-            
+
             setSearching(true);
             setAvailabilityResult(null);
             try {
               const fmt = (d: Date) => {
                 const yyyy = d.getFullYear();
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
+                const mm = String(d.getMonth() + 1).padStart(2, "0");
+                const dd = String(d.getDate()).padStart(2, "0");
                 return `${yyyy}-${mm}-${dd}`;
               };
 
-              const resRooms = await checkAvailableRoomsByType(idloaiPhong, fmt(checkInDate), fmt(checkOutDate), numberGuests);
+              const resRooms = await checkAvailableRoomsByType(
+                idloaiPhong,
+                fmt(checkInDate),
+                fmt(checkOutDate),
+                numberGuests
+              );
               // roomsApi returns array; if empty means no rooms
               if (!resRooms || resRooms.length === 0) {
-                const message = 'Không có phòng trống phù hợp với số khách và ngày đã chọn.';
+                const message =
+                  "Không có phòng trống phù hợp với số khách và ngày đã chọn.";
                 setAvailabilityResult({ message });
-                Alert.alert('Thông báo', message);
+                Alert.alert("Thông báo", message);
               } else {
-                setAvailabilityResult({ available: true, availableCount: resRooms.length, rooms: resRooms });
-                Alert.alert('Thành công', `Tìm thấy ${resRooms.length} phòng phù hợp!`);
+                setAvailabilityResult({
+                  available: true,
+                  availableCount: resRooms.length,
+                  rooms: resRooms,
+                });
+                Alert.alert(
+                  "Thành công",
+                  `Tìm thấy ${resRooms.length} phòng phù hợp!`
+                );
               }
             } catch (err: any) {
-              console.error('check availability error', err);
-              Alert.alert('Lỗi', err.message || 'Không thể kiểm tra phòng');
+              console.error("check availability error", err);
+              Alert.alert("Lỗi", err.message || "Không thể kiểm tra phòng");
             } finally {
               setSearching(false);
             }
@@ -337,10 +387,16 @@ const RoomTypeDetail: React.FC = () => {
 
         {availabilityResult && (
           <View style={styles.resultBanner}>
-            {'message' in availabilityResult ? (
-              <Text style={styles.resultText}>{availabilityResult.message}</Text>
+            {"message" in availabilityResult ? (
+              <Text style={styles.resultText}>
+                {availabilityResult.message}
+              </Text>
             ) : (
-              <Text style={styles.resultText}>{availabilityResult.available ? `✓ Còn ${availabilityResult.availableCount} phòng trống phù hợp` : 'Không có phòng trống'}</Text>
+              <Text style={styles.resultText}>
+                {availabilityResult.available
+                  ? `✓ Còn ${availabilityResult.availableCount} phòng trống phù hợp`
+                  : "Không có phòng trống"}
+              </Text>
             )}
           </View>
         )}
@@ -349,23 +405,28 @@ const RoomTypeDetail: React.FC = () => {
       {/* Room List */}
       <FlatList
         data={
-          availabilityResult && 'rooms' in availabilityResult && availabilityResult.rooms
-            ? availabilityResult.rooms.map(ar => {
+          availabilityResult &&
+          "rooms" in availabilityResult &&
+          availabilityResult.rooms
+            ? availabilityResult.rooms.map((ar) => {
                 // Map available rooms to Room type for display
-                const matchingRoom = rooms.find(r => r.idphong === ar.roomId);
-                return matchingRoom || {
-                  idphong: ar.roomId,
-                  tenPhong: ar.roomTypeName,
-                  soPhong: ar.roomNumber,
-                  moTa: ar.description,
-                  soNguoiToiDa: ar.maxOccupancy,
-                  giaCoBanMotDem: ar.basePricePerNight,
-                  xepHangSao: 0,
-                  trangThai: 'Available',
-                  urlAnhPhong: ar.roomImageUrl || '',
-                  amenities: [],
-                  promotions: [],
-                } as Room;
+                const matchingRoom = rooms.find((r) => r.idphong === ar.roomId);
+                return (
+                  matchingRoom ||
+                  ({
+                    idphong: ar.roomId,
+                    tenPhong: ar.roomTypeName,
+                    soPhong: ar.roomNumber,
+                    moTa: ar.description,
+                    soNguoiToiDa: ar.maxOccupancy,
+                    giaCoBanMotDem: ar.basePricePerNight,
+                    xepHangSao: 0,
+                    trangThai: "Available",
+                    urlAnhPhong: ar.roomImageUrl || "",
+                    amenities: [],
+                    promotions: [],
+                  } as Room)
+                );
               })
             : rooms
         }
@@ -375,9 +436,9 @@ const RoomTypeDetail: React.FC = () => {
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         ListEmptyComponent={
-          availabilityResult && 'message' in availabilityResult ? (
+          availabilityResult && "message" in availabilityResult ? (
             <View style={styles.emptyContainer}>
-              <Icon name="inbox" size={48} color={COLORS.gray} />
+              <AppIcon name="inbox" size={48} color={COLORS.gray} />
               <Text style={styles.emptyText}>{availabilityResult.message}</Text>
             </View>
           ) : null
@@ -606,8 +667,8 @@ const styles = StyleSheet.create({
   toggleButton: {
     width: 36,
     height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerActionContainer: {
     paddingHorizontal: SIZES.padding,
@@ -615,19 +676,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.lightGray,
-    alignItems: 'center',
+    alignItems: "center",
   },
   showFormButton: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
   },
   showFormButtonText: {
     color: COLORS.primary,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   modalContent: {
     flex: 1,
@@ -792,38 +853,38 @@ const styles = StyleSheet.create({
   input: {
     height: 44,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     borderRadius: 8,
     paddingHorizontal: 12,
     marginBottom: 8,
-    backgroundColor: '#fff'
+    backgroundColor: "#fff",
   },
   searchButton: {
     backgroundColor: COLORS.primary,
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 8,
   },
   searchButtonText: {
     color: COLORS.white,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   resultBanner: {
     padding: 10,
     borderRadius: 8,
-    backgroundColor: '#eef7ff',
+    backgroundColor: "#eef7ff",
     borderWidth: 1,
-    borderColor: '#d6edff',
+    borderColor: "#d6edff",
   },
   resultText: {
     color: COLORS.secondary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 60,
     paddingHorizontal: SIZES.padding,
   },
@@ -831,7 +892,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.gray,
     marginTop: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });
 

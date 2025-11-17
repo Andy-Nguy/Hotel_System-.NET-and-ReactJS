@@ -14,7 +14,7 @@ import {
 import { Image } from "expo-image";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "../components/AppIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BookingProgress from "../components/BookingProgress";
 import ServicesSelector from "../components/ServicesSelector";
@@ -333,7 +333,7 @@ const SelectRoomsScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Icon name="arrow-left" size={20} color={COLORS.secondary} />
+          <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chọn phòng</Text>
         <View style={{ width: 20 }} />
@@ -384,7 +384,7 @@ const SelectRoomsScreen: React.FC = () => {
                   onPress={() => handleRemoveRoom(sr.roomNumber)}
                   style={styles.removeButton}
                 >
-                  <Icon name="trash" size={16} color={COLORS.error} />
+                  <AppIcon name="trash" size={16} color={COLORS.error} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -460,7 +460,7 @@ const SelectRoomsScreen: React.FC = () => {
                 onPress={closeRoomDetail}
                 style={styles.closeButton}
               >
-                <Icon name="close" size={24} color={COLORS.secondary} />
+                <AppIcon name="close" size={24} color={COLORS.secondary} />
               </TouchableOpacity>
             </View>
 
