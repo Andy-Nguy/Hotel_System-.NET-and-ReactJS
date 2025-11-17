@@ -70,6 +70,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
       });
 
       const json = await res.json().catch(() => null);
+      console.log("Raw API Response from check-available-rooms:", json);
+      
       if (!res.ok) {
         const text = json && (json.message || JSON.stringify(json));
         throw new Error(text || `HTTP ${res.status}`);
@@ -129,6 +131,10 @@ const BookingForm: React.FC<BookingFormProps> = ({
             moTa: r.description ?? r.Description,
             soNguoiToiDa: r.maxOccupancy ?? r.MaxOccupancy,
             giaCoBanMotDem: r.basePricePerNight ?? r.BasePricePerNight,
+            basePricePerNight: r.basePricePerNight ?? r.BasePricePerNight,
+            discountedPrice: r.discountedPrice ?? r.DiscountedPrice,
+            promotionName: r.promotionName ?? r.PromotionName,
+            discountPercent: r.discountPercent ?? r.DiscountPercent,
             xepHangSao: r.xepHangSao ?? null, // Not in sample
             trangThai: r.trangThai ?? "Trống", // Assume available
             urlAnhPhong: r.roomImageUrl ?? r.RoomImageUrl,

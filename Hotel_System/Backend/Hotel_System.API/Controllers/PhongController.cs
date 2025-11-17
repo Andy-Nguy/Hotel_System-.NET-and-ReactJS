@@ -15,6 +15,8 @@ namespace Hotel_System.API.Controllers
         private readonly HotelSystemContext _context;
         private readonly RoomService _roomService;
           private readonly IWebHostEnvironment _env;
+                // Status values that users are allowed to set via API (case-insensitive)
+                private static readonly HashSet<string> UserEditableStatuses = new(StringComparer.OrdinalIgnoreCase) { "Trống", "Bảo trì" };
 
         public PhongController(HotelSystemContext context, RoomService roomService, IWebHostEnvironment env)
         {
@@ -29,7 +31,12 @@ namespace Hotel_System.API.Controllers
             try
             {
                 Console.WriteLine("🔍 PhongController: Getting all rooms...");
-                IQueryable<Phong> query = _context.Phongs.Include(p => p.IdloaiPhongNavigation);
+                IQueryable<Phong> query = _context.Phongs
+                    .Include(p => p.IdloaiPhongNavigation)
+                    .Include(p => p.TienNghiPhongs)
+                        .ThenInclude(tnp => tnp.IdtienNghiNavigation)
+                    .Include(p => p.KhuyenMaiPhongs)
+                        .ThenInclude(kmp => kmp.IdkhuyenMaiNavigation);
 
                 if (!string.IsNullOrEmpty(loaiPhongId))
                 {
@@ -55,6 +62,10 @@ namespace Hotel_System.API.Controllers
                 Console.WriteLine($"🏨 Found {occupiedRoomIds.Count} occupied rooms");
 
                 // Normalize UrlAnhPhong to relative paths (prefer /img/room/) so frontend can request them
+                // Define allowed / normalized display statuses:
+                // - "Trống" (available)
+                // - "Đang sử dụng" (occupied)
+                // - "Bảo trì" (maintenance)
                 var transformed = rooms.Select(r => new
                 {
                     r.Idphong,
@@ -66,8 +77,34 @@ namespace Hotel_System.API.Controllers
                     r.SoNguoiToiDa,
                     r.GiaCoBanMotDem,
                     r.XepHangSao,
-                    TrangThai = occupiedRoomIds.Contains(r.Idphong) ? "Occupied" : "Available",
+                    // Normalize status for frontend (Vietnamese labels). Users may only change "Trống" or "Bảo trì".
+                    TrangThai = (r.TrangThai != null && r.TrangThai.Equals("Bảo trì", System.StringComparison.OrdinalIgnoreCase))
+                                ? "Bảo trì"
+                                : (occupiedRoomIds.Contains(r.Idphong) ? "Đang sử dụng" : "Trống"),
                     UrlAnhPhong = ResolveImageUrl(r.UrlAnhPhong),
+                    // Add amenities
+                    amenities = r.TienNghiPhongs
+                        .Select(tnp => new {
+                            id = tnp.IdtienNghi,
+                            name = tnp.IdtienNghiNavigation != null ? tnp.IdtienNghiNavigation.TenTienNghi : ""
+                        })
+                        .ToList(),
+                    // Add active promotions only
+                    promotions = r.KhuyenMaiPhongs
+                        .Where(kmp => kmp.IdkhuyenMaiNavigation != null &&
+                                      kmp.IdkhuyenMaiNavigation.TrangThai == "active" &&
+                                      kmp.IdkhuyenMaiNavigation.NgayBatDau <= currentDate &&
+                                      kmp.IdkhuyenMaiNavigation.NgayKetThuc >= currentDate)
+                        .Select(kmp => new {
+                            id = kmp.IdkhuyenMai,
+                            name = kmp.IdkhuyenMaiNavigation.TenKhuyenMai,
+                            description = kmp.IdkhuyenMaiNavigation.MoTa,
+                            type = kmp.IdkhuyenMaiNavigation.LoaiGiamGia,
+                            value = kmp.IdkhuyenMaiNavigation.GiaTriGiam,
+                            startDate = kmp.IdkhuyenMaiNavigation.NgayBatDau,
+                            endDate = kmp.IdkhuyenMaiNavigation.NgayKetThuc
+                        })
+                        .ToList()
                 }).ToList();
 
                 Console.WriteLine($"✅ Returning {transformed.Count} transformed rooms");
@@ -222,6 +259,25 @@ namespace Hotel_System.API.Controllers
             if (payload == null) return BadRequest("Invalid payload");
             if (string.IsNullOrWhiteSpace(payload.Idphong)) payload.Idphong = Guid.NewGuid().ToString();
 
+            // Ensure stored status is one of allowed values for user-editable state.
+            if (string.IsNullOrWhiteSpace(payload.TrangThai))
+            {
+                payload.TrangThai = "Trống"; // default
+            }
+            else
+            {
+                var trimmed = payload.TrangThai.Trim();
+                if (!UserEditableStatuses.Contains(trimmed))
+                {
+                    // Normalize unknown values to default rather than failing create.
+                    payload.TrangThai = "Trống";
+                }
+                else
+                {
+                    payload.TrangThai = trimmed;
+                }
+            }
+
             _context.Phongs.Add(payload);
             await _context.SaveChangesAsync();
 
@@ -237,16 +293,27 @@ namespace Hotel_System.API.Controllers
             var existing = await _context.Phongs.FindAsync(id);
             if (existing == null) return NotFound();
 
-            // Map updatable fields
-            existing.IdloaiPhong = payload.IdloaiPhong;
-            existing.TenPhong = payload.TenPhong;
-            existing.SoPhong = payload.SoPhong;
-            existing.MoTa = payload.MoTa;
-            existing.SoNguoiToiDa = payload.SoNguoiToiDa;
-            existing.GiaCoBanMotDem = payload.GiaCoBanMotDem;
-            existing.XepHangSao = payload.XepHangSao;
-            existing.TrangThai = payload.TrangThai;
-            existing.UrlAnhPhong = payload.UrlAnhPhong;
+            // Map updatable fields only when provided (support partial updates).
+            if (!string.IsNullOrWhiteSpace(payload.IdloaiPhong)) existing.IdloaiPhong = payload.IdloaiPhong;
+            if (!string.IsNullOrWhiteSpace(payload.TenPhong)) existing.TenPhong = payload.TenPhong;
+            if (!string.IsNullOrWhiteSpace(payload.SoPhong)) existing.SoPhong = payload.SoPhong;
+            if (payload.MoTa != null) existing.MoTa = payload.MoTa;
+            if (payload.SoNguoiToiDa.HasValue) existing.SoNguoiToiDa = payload.SoNguoiToiDa;
+            if (payload.GiaCoBanMotDem.HasValue) existing.GiaCoBanMotDem = payload.GiaCoBanMotDem;
+            if (payload.XepHangSao.HasValue) existing.XepHangSao = payload.XepHangSao;
+
+            // Only allow user-updatable statuses (Trống, Bảo trì). Others (e.g., Đang sử dụng) are calculated by system.
+            if (!string.IsNullOrWhiteSpace(payload.TrangThai))
+            {
+                var trimmed = payload.TrangThai.Trim();
+                if (!UserEditableStatuses.Contains(trimmed))
+                {
+                    return BadRequest(new { error = "Invalid status. Allowed values: 'Trống' or 'Bảo trì'." });
+                }
+                existing.TrangThai = trimmed;
+            }
+
+            if (payload.UrlAnhPhong != null) existing.UrlAnhPhong = payload.UrlAnhPhong;
 
             _context.Phongs.Update(existing);
             await _context.SaveChangesAsync();
@@ -265,6 +332,118 @@ namespace Hotel_System.API.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        // GET: api/Phong/top-rooms-2025?top=5
+        [HttpGet("top-rooms-2025")]
+        public async Task<IActionResult> GetTopRooms2025([FromQuery] int top = 5)
+        {
+            try
+            {
+                Console.WriteLine($"🔍 PhongController: Getting top {top} rooms for 2025...");
+
+                // Execute stored procedure with ADO.NET to tolerate missing columns
+                var conn = _context.Database.GetDbConnection();
+                await using (conn)
+                {
+                    if (conn.State != System.Data.ConnectionState.Open)
+                        await conn.OpenAsync();
+
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "sp_TopPhong2025";
+                    cmd.CommandType = System.Data.CommandType.StoredProcedure;
+
+                    var param = cmd.CreateParameter();
+                    param.ParameterName = "@Top";
+                    param.Value = top;
+                    param.DbType = System.Data.DbType.Int32;
+                    cmd.Parameters.Add(param);
+
+                    var list = new List<object>();
+                    using var reader = await cmd.ExecuteReaderAsync();
+                    // Build a map of column name (lower) to ordinal for defensive reads
+                    var colMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        colMap[reader.GetName(i)] = i;
+                    }
+
+                    while (await reader.ReadAsync())
+                    {
+                        string GetStringOrNull(string[] possibleNames)
+                        {
+                            foreach (var n in possibleNames)
+                            {
+                                if (colMap.TryGetValue(n, out var idx) && !reader.IsDBNull(idx))
+                                    return reader.GetValue(idx)?.ToString();
+                            }
+                            return null;
+                        }
+
+                        int? GetIntOrNull(string[] possibleNames)
+                        {
+                            foreach (var n in possibleNames)
+                            {
+                                if (colMap.TryGetValue(n, out var idx) && !reader.IsDBNull(idx))
+                                {
+                                    if (int.TryParse(reader.GetValue(idx)?.ToString(), out var v)) return v;
+                                    try { return Convert.ToInt32(reader.GetValue(idx)); } catch { }
+                                }
+                            }
+                            return null;
+                        }
+
+                        decimal? GetDecimalOrNull(string[] possibleNames)
+                        {
+                            foreach (var n in possibleNames)
+                            {
+                                if (colMap.TryGetValue(n, out var idx) && !reader.IsDBNull(idx))
+                                {
+                                    try { return Convert.ToDecimal(reader.GetValue(idx)); } catch { }
+                                }
+                            }
+                            return null;
+                        }
+
+                        var obj = new
+                        {
+                            idPhong = GetStringOrNull(new[] { "IDPhong", "IdPhong", "IDPHONG", "Idphong" }),
+                            tenPhong = GetStringOrNull(new[] { "TenPhong", "tenPhong", "TENPHONG" }),
+                            soLanSuDung = GetIntOrNull(new[] { "SoLanSuDung", "SoLanSuDung" }) ?? 0,
+                            tongDem = GetIntOrNull(new[] { "TongDem", "TongDem" }) ?? 0,
+                            urlAnhPhong = GetStringOrNull(new[] { "UrlAnhPhong", "UrlAnhPhong" }),
+                            giaCoBanMotDem = GetDecimalOrNull(new[] { "GiaCoBanMotDem", "GiaCoBanMotDem" }),
+                            xepHangSao = GetIntOrNull(new[] { "XepHangSao", "XepHangSao" }),
+                            tenLoaiPhong = GetStringOrNull(new[] { "TenLoaiPhong", "TenLoaiPhong" })
+                        };
+
+                        list.Add(obj);
+                    }
+
+                    var result = ((List<object>)list).Select(r =>
+                    {
+                        // r is anonymous type; return as dynamic object already shaped correctly
+                        return r;
+                    }).ToList();
+
+                    Console.WriteLine($"✅ Returning {result.Count} top rooms (ADO.NET)");
+                    // Normalize UrlAnhPhong values inside returned objects before returning
+                    var normalized = result.Select(r =>
+                    {
+                        var dict = r.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(r));
+                        var url = dict.ContainsKey("urlAnhPhong") ? dict["urlAnhPhong"]?.ToString() : null;
+                        dict["urlAnhPhong"] = ResolveImageUrl(url as string);
+                        return dict;
+                    }).ToList();
+
+                    return Ok(normalized);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error in GetTopRooms2025: {ex.Message}");
+                return StatusCode(500, new { error = ex.Message, details = ex.ToString() });
+            }
         }
        
     }

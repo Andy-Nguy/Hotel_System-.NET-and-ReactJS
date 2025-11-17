@@ -82,13 +82,15 @@ namespace Hotel_System.API.Services
             var checkInDate = DateOnly.FromDateTime(checkIn);
             var checkOutDate = DateOnly.FromDateTime(checkOut);
 
+            var now = DateTime.UtcNow;
+
             // Get booked room IDs using a single optimized query
             // Also fetch the matching DatPhong rows so we can log and inspect them when debugging
             var overlappingDatPhongs = await _context.DatPhongs
                 .Where(dp => dp.Idphong != null &&
-                      new[] { 1, 2, 3 }.Contains(dp.TrangThai) &&
-                      dp.NgayNhanPhong < checkOutDate &&
-                      dp.NgayTraPhong > checkInDate)
+                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                    dp.NgayNhanPhong < checkOutDate &&
+                    dp.NgayTraPhong > checkInDate)
                 .ToListAsync();
 
             if (overlappingDatPhongs.Any())
@@ -103,14 +105,14 @@ namespace Hotel_System.API.Services
             var bookedRoomIds = await (
                 from dp in _context.DatPhongs
                 where dp.Idphong != null &&
-                      new[] { 1, 2, 3 }.Contains(dp.TrangThai) &&
+                      ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select dp.Idphong
             ).Union(
                 from ct in _context.ChiTietDatPhongs
                 join dp in _context.DatPhongs on ct.IDDatPhong equals dp.IddatPhong
-                where new[] { 1, 2, 3 }.Contains(dp.TrangThai) &&
+                where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select ct.IDPhong
@@ -143,16 +145,55 @@ namespace Hotel_System.API.Services
                 .OrderBy(p => p.RoomNumber)
                 .ToListAsync();
 
-            var availableRooms = availableRoomsQuery.Select(r => new AvailableRoomResponse
+            // Get active promotions for the rooms
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var roomIds = availableRoomsQuery.Select(r => r.RoomId).ToList();
+            
+            var promotionsDict = await _context.KhuyenMaiPhongs
+                .Include(kmp => kmp.IdkhuyenMaiNavigation)
+                .Where(kmp => roomIds.Contains(kmp.Idphong) &&
+                             kmp.IsActive &&
+                             kmp.IdkhuyenMaiNavigation.TrangThai == "active" &&
+                             kmp.IdkhuyenMaiNavigation.NgayBatDau <= today &&
+                             kmp.IdkhuyenMaiNavigation.NgayKetThuc >= today)
+                .GroupBy(kmp => kmp.Idphong)
+                .ToDictionaryAsync(
+                    g => g.Key,
+                    g => g.OrderByDescending(kmp => kmp.IdkhuyenMaiNavigation.GiaTriGiam).First()
+                );
+
+            var availableRooms = availableRoomsQuery.Select(r => 
             {
-                RoomId = r.RoomId,
-                RoomName = r.RoomName,
-                RoomNumber = r.RoomNumber,
-                Description = r.Description,
-                BasePricePerNight = r.BasePricePerNight,
-                RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
-                RoomTypeName = r.RoomTypeName,
-                MaxOccupancy = r.MaxOccupancy
+                var response = new AvailableRoomResponse
+                {
+                    RoomId = r.RoomId,
+                    RoomName = r.RoomName,
+                    RoomNumber = r.RoomNumber,
+                    Description = r.Description,
+                    BasePricePerNight = r.BasePricePerNight,
+                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomTypeName = r.RoomTypeName,
+                    MaxOccupancy = r.MaxOccupancy
+                };
+
+                // Apply promotion if available
+                if (promotionsDict.TryGetValue(r.RoomId, out var promotion))
+                {
+                    var promo = promotion.IdkhuyenMaiNavigation;
+                    response.PromotionName = promo.TenKhuyenMai;
+                    response.DiscountPercent = promo.GiaTriGiam;
+                    
+                    if (promo.LoaiGiamGia == "percent" && promo.GiaTriGiam.HasValue)
+                    {
+                        response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
+                    }
+                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    {
+                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                    }
+                }
+
+                return response;
             }).ToList();
 
             _logger.LogInformation($"Available rooms count: {availableRooms.Count}");
@@ -167,13 +208,14 @@ namespace Hotel_System.API.Services
 
             var checkInDate = DateOnly.FromDateTime(checkIn);
             var checkOutDate = DateOnly.FromDateTime(checkOut);
+            var now = DateTime.UtcNow;
 
             // Get booked room IDs using same optimized query as other method
             var overlappingDatPhongs2 = await _context.DatPhongs
                 .Where(dp => dp.Idphong != null &&
-                      new[] { 1, 2, 3 }.Contains(dp.TrangThai) &&
-                      dp.NgayNhanPhong < checkOutDate &&
-                      dp.NgayTraPhong > checkInDate)
+                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                    dp.NgayNhanPhong < checkOutDate &&
+                    dp.NgayTraPhong > checkInDate)
                 .ToListAsync();
 
             if (overlappingDatPhongs2.Any())
@@ -188,14 +230,14 @@ namespace Hotel_System.API.Services
             var bookedRoomIds = await (
                 from dp in _context.DatPhongs
                 where dp.Idphong != null &&
-                      new[] { 1, 2, 3 }.Contains(dp.TrangThai) &&
+                      ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select dp.Idphong
             ).Union(
                 from ct in _context.ChiTietDatPhongs
                 join dp in _context.DatPhongs on ct.IDDatPhong equals dp.IddatPhong
-                where new[] { 1, 2, 3 }.Contains(dp.TrangThai) &&
+                where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select ct.IDPhong
@@ -227,16 +269,55 @@ namespace Hotel_System.API.Services
                 .OrderBy(p => p.RoomNumber)
                 .ToListAsync();
 
-            var availableRooms = availableRoomsQuery.Select(r => new AvailableRoomResponse
+            // Get active promotions for the rooms
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var roomIds = availableRoomsQuery.Select(r => r.RoomId).ToList();
+            
+            var promotionsDict = await _context.KhuyenMaiPhongs
+                .Include(kmp => kmp.IdkhuyenMaiNavigation)
+                .Where(kmp => roomIds.Contains(kmp.Idphong) &&
+                             kmp.IsActive &&
+                             kmp.IdkhuyenMaiNavigation.TrangThai == "active" &&
+                             kmp.IdkhuyenMaiNavigation.NgayBatDau <= today &&
+                             kmp.IdkhuyenMaiNavigation.NgayKetThuc >= today)
+                .GroupBy(kmp => kmp.Idphong)
+                .ToDictionaryAsync(
+                    g => g.Key,
+                    g => g.OrderByDescending(kmp => kmp.IdkhuyenMaiNavigation.GiaTriGiam).First()
+                );
+
+            var availableRooms = availableRoomsQuery.Select(r => 
             {
-                RoomId = r.RoomId,
-                RoomName = r.RoomName,
-                RoomNumber = r.RoomNumber,
-                Description = r.Description,
-                BasePricePerNight = r.BasePricePerNight,
-                RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
-                RoomTypeName = r.RoomTypeName,
-                MaxOccupancy = r.MaxOccupancy
+                var response = new AvailableRoomResponse
+                {
+                    RoomId = r.RoomId,
+                    RoomName = r.RoomName,
+                    RoomNumber = r.RoomNumber,
+                    Description = r.Description,
+                    BasePricePerNight = r.BasePricePerNight,
+                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomTypeName = r.RoomTypeName,
+                    MaxOccupancy = r.MaxOccupancy
+                };
+
+                // Apply promotion if available
+                if (promotionsDict.TryGetValue(r.RoomId, out var promotion))
+                {
+                    var promo = promotion.IdkhuyenMaiNavigation;
+                    response.PromotionName = promo.TenKhuyenMai;
+                    response.DiscountPercent = promo.GiaTriGiam;
+                    
+                    if (promo.LoaiGiamGia == "percent" && promo.GiaTriGiam.HasValue)
+                    {
+                        response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
+                    }
+                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    {
+                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                    }
+                }
+
+                return response;
             }).ToList();
 
             _logger.LogInformation($"Available rooms by type count: {availableRooms.Count}");

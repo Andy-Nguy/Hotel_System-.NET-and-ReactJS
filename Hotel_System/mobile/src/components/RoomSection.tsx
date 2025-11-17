@@ -1,0 +1,282 @@
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+} from "react-native";
+import { Image } from "expo-image";
+import { COLORS, SIZES, SHADOWS } from "../constants/theme";
+import { Room } from "../api/roomsApi";
+
+interface RoomSectionProps {
+  room: Room;
+  onPress: () => void;
+}
+
+const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  const handleImageScroll = (event: any) => {
+    const index = Math.round(
+      event.nativeEvent.contentOffset.x / event.nativeEvent.layoutMeasurement.width
+    );
+    setActiveImageIndex(index);
+  };
+
+  // Price calculation: determine promotional price when promotions exist
+  const basePrice = Number(room.giaCoBanMotDem) || 0;
+  const promotion = room.promotions && room.promotions.length > 0 ? room.promotions[0] : null;
+  const getPromoPrice = () => {
+    if (!promotion) return basePrice;
+    if (promotion.type === "percent") {
+      const pct = Number(promotion.value) || 0;
+      return Math.round(basePrice * (1 - pct / 100));
+    }
+    const val = Number(promotion.value) || 0;
+    return Math.max(0, basePrice - val);
+  };
+  const displayPrice = getPromoPrice();
+  const hasPromotion = !!promotion && displayPrice !== basePrice;
+
+  return (
+    <TouchableOpacity
+      style={styles.roomCard}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      {/* Image Carousel */}
+      <View style={styles.carouselContainer}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onMomentumScrollEnd={handleImageScroll}
+        >
+          <Image
+            source={{ uri: room.urlAnhPhong }}
+            style={styles.carouselImage}
+            contentFit="cover"
+          />
+          {room.promotions && room.promotions.length > 0 && (
+            <Image
+              source={{ uri: room.urlAnhPhong }}
+              style={styles.carouselImage}
+              contentFit="cover"
+            />
+          )}
+        </ScrollView>
+
+        {/* Image Indicators */}
+        <View style={styles.indicatorContainer}>
+          <View style={[styles.indicator, activeImageIndex === 0 && styles.indicatorActive]} />
+          {room.promotions && room.promotions.length > 0 && (
+            <View style={[styles.indicator, activeImageIndex === 1 && styles.indicatorActive]} />
+          )}
+        </View>
+
+        {/* Promotion Badge */}
+        {room.promotions && room.promotions.length > 0 && (
+          <View style={styles.promotionBadge}>
+            <Text style={styles.promotionBadgeText}>
+              {room.promotions[0].type === 'percent' 
+                ? `-${room.promotions[0].value}%` 
+                : `- ${room.promotions[0].value}`}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Room Info */}
+      <View style={styles.roomInfo}>
+        <Text style={styles.roomTitle} numberOfLines={2}>
+          {room.tenPhong}
+        </Text>
+        
+        <View style={styles.ratingRow}>
+          <Text style={styles.stars}>⭐⭐⭐⭐⭐</Text>
+          <Text style={styles.ratingCount}>(124 đánh giá)</Text>
+        </View>
+
+        <Text style={styles.roomDescription} numberOfLines={2}>
+          {room.moTa || "Phòng tiêu chuẩn với đầy đủ tiện ích"}
+        </Text>
+
+        {/* Price & CTA */}
+        <View style={styles.priceRow}>
+          <View style={hasPromotion ? styles.priceInfoPromoContainer : styles.priceInfo}>
+            <Text style={styles.priceLabel}>Từ</Text>
+
+            {hasPromotion ? (
+              <View style={styles.promoStack}>
+                <Text style={styles.originalPrice}>{basePrice.toLocaleString()} VND</Text>
+                <View style={styles.promoRow}>
+                  <Text style={styles.promoPrice}>{displayPrice.toLocaleString()} VND</Text>
+                  <Text style={styles.priceUnit}>/ đêm</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.priceInfoRow}>
+                <Text style={styles.price}>{displayPrice.toLocaleString()} VND</Text>
+                <Text style={styles.priceUnit}>/ đêm</Text>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.ctaButton}
+            onPress={onPress}
+          >
+            <Text style={styles.ctaButtonText}>Đặt phòng</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const styles = StyleSheet.create({
+  roomCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    overflow: "hidden",
+    // increase spacing between room cards for more even layout
+    marginBottom: SIZES.padding * 1.5,
+    ...SHADOWS.medium,
+  },
+  carouselContainer: {
+    position: "relative",
+    width: "100%",
+    height: 200,
+    backgroundColor: "#f0f0f0",
+  },
+  carouselImage: {
+    width: Dimensions.get("window").width - SIZES.padding * 2,
+    height: 200,
+  },
+  indicatorContainer: {
+    position: "absolute",
+    bottom: 10,
+    left: "50%",
+    transform: [{ translateX: -10 }],
+    flexDirection: "row",
+    gap: 6,
+  },
+  indicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
+  },
+  indicatorActive: {
+    backgroundColor: "#ffffff",
+  },
+  promotionBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    backgroundColor: "#FF6B6B",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  promotionBadgeText: {
+    color: COLORS.white,
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  roomInfo: {
+    padding: SIZES.padding,
+  },
+  roomTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    marginBottom: 8,
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 6,
+  },
+  stars: {
+    fontSize: 14,
+  },
+  ratingCount: {
+    fontSize: 12,
+    color: "#888",
+  },
+  roomDescription: {
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  priceLabel: {
+    fontSize: 11,
+    color: "#999",
+    marginRight: 6,
+  },
+  price: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  priceUnit: {
+    fontSize: 11,
+    color: "#999",
+  },
+  originalPrice: {
+    fontSize: 12,
+    color: "#999",
+    textDecorationLine: "line-through",
+    marginLeft: 0,
+    alignSelf: "flex-start",
+  },
+  priceInfo: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
+  priceInfoRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
+  priceInfoPromoContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  promoStack: {
+    flexDirection: "column",
+    marginLeft: 6,
+  },
+  promoRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
+  promoPrice: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#E53935",
+  },
+  ctaButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  ctaButtonText: {
+    color: COLORS.white,
+    fontWeight: "700",
+    fontSize: 13,
+  },
+});
+
+export default RoomSection;

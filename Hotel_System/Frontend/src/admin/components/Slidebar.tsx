@@ -212,6 +212,23 @@ const Slidebar: React.FC = () => {
           routeFragment="admin/bookings"
           label="Quản lý đặt phòng"
         />
+        <NavItem
+          key="invoices"
+          routeFragment="admin/invoices"
+          label="Quản lý hoá đơn"
+        />
+        <NavItem
+          key="checkout"
+          routeFragment="admin/checkout"
+          label="Quản lý Checkout"
+        />
+        {/* === THÊM: NavItem loyalty (giữ nguyên như bạn viết) === */}
+        <NavItem
+          key="loyalty"
+          routeFragment="admin/loyalty"
+          label="Điểm tích lũy & Cấp bậc"
+        />
+
         <MenuItem
           icon={
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">

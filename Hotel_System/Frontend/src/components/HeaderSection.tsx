@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 const HeaderSection: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -38,6 +38,9 @@ const HeaderSection: React.FC = () => {
     }
   };
 
+  const headerRef = useRef<HTMLElement | null>(null);
+  const [spacerHeight, setSpacerHeight] = useState<number>(0);
+
   useEffect(() => {
     setCurrentRoute(resolveRoute());
     // ensure auth state is read on mount
@@ -48,9 +51,23 @@ const HeaderSection: React.FC = () => {
     };
     window.addEventListener("hashchange", onLocationChange);
     window.addEventListener("popstate", onLocationChange);
+
+    // set spacer height to header height to avoid content overlap
+    const updateSpacer = () => {
+      try {
+        const h = headerRef.current?.offsetHeight ?? 0;
+        setSpacerHeight(h);
+      } catch {
+        setSpacerHeight(0);
+      }
+    };
+    updateSpacer();
+    window.addEventListener("resize", updateSpacer);
+
     return () => {
       window.removeEventListener("hashchange", onLocationChange);
       window.removeEventListener("popstate", onLocationChange);
+      window.removeEventListener("resize", updateSpacer);
     };
   }, []);
 
@@ -80,7 +97,12 @@ const HeaderSection: React.FC = () => {
   };
 
   return (
-    <header className="header-section">
+    <>
+      <header
+        ref={headerRef}
+        className="header-section"
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: '#fff', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}
+      >
       <div className="top-nav">
         <div className="container">
           <div className="row">
@@ -110,7 +132,7 @@ const HeaderSection: React.FC = () => {
                     <i className="fa fa-instagram"></i>
                   </a>
                 </div>
-                <a href="#" className="bk-btn">
+                <a href="/rooms" className="bk-btn">
                   Booking Now
                 </a>
                 <div className="language-option">
@@ -134,6 +156,7 @@ const HeaderSection: React.FC = () => {
           </div>
         </div>
       </div>
+
       <div className="menu-item">
         <div className="container">
           <div className="row">
@@ -203,10 +226,29 @@ const HeaderSection: React.FC = () => {
                         Rooms
                       </a>
                     </li>
-                    <li>
-                      <a href="#">About Us</a>
+                    <li
+                      className={
+                        currentRoute === "/AboutUsPage" || currentRoute === "#AboutUsPage"
+                          ? "active"
+                          : ""
+                      }
+                    >
+                      <a
+                        href="/AboutUsPage"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          try {
+                            window.history.pushState(null, "", "/AboutUsPage");
+                            window.dispatchEvent(new PopStateEvent("popstate"));
+                          } catch {
+                            window.location.href = "/AboutUsPage";
+                          }
+                        }}
+                      >
+                        About Us
+                      </a>
                     </li>
-                    <li>
+                    {/* <li>
                       <a href="#">Pages</a>
                       <ul className="dropdown">
                         <li>
@@ -222,12 +264,31 @@ const HeaderSection: React.FC = () => {
                           <a href="#">Premium Room</a>
                         </li>
                       </ul>
-                    </li>
-                    <li>
+                    </li> */}
+                    {/* <li>
                       <a href="#">News</a>
-                    </li>
-                    <li>
-                      <a href="#">Contact</a>
+                    </li> */}
+                    <li
+                      className={
+                        currentRoute === "/contact" || currentRoute === "#contact"
+                          ? "active"
+                          : ""
+                      }
+                    >
+                      <a
+                        href="/contact"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          try {
+                            window.history.pushState(null, "", "/contact");
+                            window.dispatchEvent(new PopStateEvent("popstate"));
+                          } catch {
+                            window.location.href = "/contact";
+                          }
+                        }}
+                      >
+                        Contact
+                      </a>
                     </li>
                     <li>
                       <a href="#">
@@ -369,7 +430,11 @@ const HeaderSection: React.FC = () => {
           </div>
         </div>
       </div>
-    </header>
+      </header>
+
+      {/* spacer to avoid content being covered by fixed header */}
+      <div style={{ height: spacerHeight, width: '100%' }} aria-hidden />
+    </>
   );
 };
 

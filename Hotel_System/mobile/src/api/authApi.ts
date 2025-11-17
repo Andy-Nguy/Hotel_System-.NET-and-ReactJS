@@ -1,8 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// Force backend host for mobile testing (use this IP for iPhone/device)
-// All requests will go to: http://192.168.1.129:8080
-const BASE_URL = "http://192.168.1.129:8080";
+import { DEFAULT_BASE_URL } from "../config/apiConfig";
+const BASE_URL = DEFAULT_BASE_URL;
 
 // Type definitions
 export type RegisterRequest = {
@@ -133,7 +131,7 @@ export async function getProfile() {
 
 export async function getBookings() {
   const token = await AsyncStorage.getItem("hs_token");
-  const res = await fetch(`${BASE_URL}/api/Bookings/my`, {
+  const res = await fetch(`${BASE_URL}/api/datphong`, {
     method: "GET",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });

@@ -1,9 +1,5 @@
 import React, { useEffect, useState } from "react";
-import serviceApi, {
-  Service,
-  ServiceDetail,
-  ServiceUsage,
-} from "../../api/serviceApi";
+import serviceApi, { Service, ServiceUsage } from "../../api/serviceApi";
 import ServiceSection from "../components/ServiceSection";
 import Slidebar from "../components/Slidebar";
 import HeaderSection from "../components/HeaderSection";
@@ -44,7 +40,7 @@ const ServiceManager: React.FC = () => {
   // details modal state
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailService, setDetailService] = useState<Service | null>(null);
-  const [serviceDetails, setServiceDetails] = useState<ServiceDetail[]>([]);
+  const [serviceDetails, setServiceDetails] = useState<Service[]>([]);
   const [serviceUsage, setServiceUsage] = useState<ServiceUsage[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailEditMode, setDetailEditMode] = useState(false);
@@ -80,14 +76,13 @@ const ServiceManager: React.FC = () => {
     setImageUrlInput(s.hinhDichVu ?? "");
     setModalFile(null);
     
-    // Fetch and populate service details (TTDichVu) if editing
-    serviceApi.getServiceDetails(s.iddichVu).then((details) => {
-      if (details.length > 0) {
-        const detail = details[0];
+    // Fetch merged service data (includes TTDichVu fields) and populate modal details
+    serviceApi.getServiceById(s.iddichVu).then((d) => {
+      if (d) {
         setModalDetails({
-          thongTinDv: detail.thongTinDv ?? "",
-          thoiLuongUocTinh: detail.thoiLuongUocTinh ?? 60,
-          ghiChu: detail.ghiChu ?? "",
+          thongTinDv: d.thongTinDv ?? "",
+          thoiLuongUocTinh: d.thoiLuongUocTinh ?? 60,
+          ghiChu: d.ghiChu ?? "",
         });
       } else {
         setModalDetails({ thongTinDv: "", thoiLuongUocTinh: 60, ghiChu: "" });
@@ -119,19 +114,17 @@ const ServiceManager: React.FC = () => {
       console.log("[DEBUG] Fresh service fetched:", freshService);
       setDetailService(freshService);
       
-      console.log("[DEBUG] Fetching details from endpoint: /api/DichVu/" + s.iddichVu + "/details");
-      const details = await serviceApi.getServiceDetails(s.iddichVu);
-      console.log("[DEBUG] ✅ Service Details API response:", details);
-      console.log("[DEBUG] Details length:", details.length);
-      if (details.length > 0) {
-        console.log("[DEBUG] First detail object:", details[0]);
-      }
+      console.log("[DEBUG] Fetch merged service data from getServiceById for id:", s.iddichVu);
+      const merged = await serviceApi.getServiceById(s.iddichVu);
+      console.log("[DEBUG] ✅ Merged service response:", merged);
       
       console.log("[DEBUG] Fetching usage from endpoint: /api/DichVu/" + s.iddichVu + "/usage");
       const usage = await serviceApi.getServiceUsage(s.iddichVu);
       console.log("[DEBUG] ✅ Service Usage API response:", usage);
       
-      setServiceDetails(details);
+      // Service details are now included in 'merged' (single object). For compatibility
+      // keep serviceDetails as array shape expected by UI.
+      setServiceDetails(merged ? [merged as any] : []);
       setServiceUsage(usage);
     } catch (err) {
       console.error("[DEBUG] ❌ Error loading details:", err);
@@ -150,13 +143,13 @@ const ServiceManager: React.FC = () => {
       const freshService = await serviceApi.getServiceById(s.iddichVu);
       setDetailService(freshService);
       
-      const [details, usage] = await Promise.all([
-        serviceApi.getServiceDetails(s.iddichVu),
+      const [merged, usage] = await Promise.all([
+        serviceApi.getServiceById(s.iddichVu),
         serviceApi.getServiceUsage(s.iddichVu),
       ]);
-      console.log("Service Details fetched:", details);
+      console.log("Service Details fetched (merged):", merged);
       console.log("Service Usage fetched:", usage);
-      setServiceDetails(details);
+      setServiceDetails(merged ? [merged as any] : []);
       setServiceUsage(usage);
     } catch (err) {
       console.error("Error loading details for edit:", err);
@@ -175,6 +168,10 @@ const ServiceManager: React.FC = () => {
         thoiGianBatDau: updatedService.thoiGianBatDau,
         thoiGianKetThuc: updatedService.thoiGianKetThuc,
         trangThai: isActive ? "Đang hoạt động" : "Ngưng hoạt động",
+        // Include detail fields
+        thongTinDv: updatedService.thongTinDv,
+        thoiLuongUocTinh: updatedService.thoiLuongUocTinh,
+        ghiChu: updatedService.ghiChu,
       };
       await serviceApi.updateService(updatedService.iddichVu, payload);
       
@@ -215,12 +212,7 @@ const ServiceManager: React.FC = () => {
     try {
       let imageUrl = modalForm.hinhDichVu ?? "";
       if (modalFile) {
-        // Create a renamed file with format: DV_tenDichVu.ext
-        const fileExtension = modalFile.name.split('.').pop() || 'jpg';
-        const newFileName = `DV_${modalForm.tenDichVu}.${fileExtension}`;
-        const renamedFile = new File([modalFile], newFileName, { type: modalFile.type });
-        
-        const res = await serviceApi.uploadServiceImage(renamedFile);
+        const res = await serviceApi.uploadServiceImage(modalFile, editing?.iddichVu, modalForm.tenDichVu);
         // Store only the fileName (e.g., "DV_Spa L'Occitane.jpg"), not the full URL path
         imageUrl = res.fileName;
       }
@@ -245,28 +237,23 @@ const ServiceManager: React.FC = () => {
 
       // Create or update TTDichVu (service details)
       // Always create/update TTDichVu, even if user didn't fill it in, to ensure consistency
-      const detailPayload: Partial<ServiceDetail> = {
+      const detailPayload: Partial<Service> = {
         thongTinDv: modalDetails.thongTinDv,
         thoiLuongUocTinh: modalDetails.thoiLuongUocTinh,
         ghiChu: modalDetails.ghiChu,
       };
       
       try {
-        // Check if detail exists
-        const existingDetails = await serviceApi.getServiceDetails(serviceId);
-        console.log("Existing details for service:", existingDetails);
-        if (existingDetails.length > 0) {
-          // Update existing detail
-          await serviceApi.updateServiceDetail(existingDetails[0].idttdichVu, detailPayload);
-          console.log("Updated detail:", existingDetails[0].idttdichVu);
-        } else {
-          // Create new detail
-          await serviceApi.createServiceDetail(serviceId, detailPayload);
-          console.log("Created new detail with payload:", detailPayload);
-        }
+        // The API now stores detail fields on the main service. Update the service with
+        // the detail payload to persist thongTinDv / thoiLuongUocTinh / ghiChu.
+        await serviceApi.updateService(serviceId, {
+          thongTinDv: detailPayload.thongTinDv,
+          thoiLuongUocTinh: detailPayload.thoiLuongUocTinh,
+          ghiChu: detailPayload.ghiChu,
+        });
+        console.log('Updated merged service with detail payload');
       } catch (detailErr) {
-        console.error("Error saving service detail:", detailErr);
-        // Don't fail the whole operation if detail save fails
+        console.error('Error saving service detail (merged):', detailErr);
       }
 
       setModalForm({ tenDichVu: "", tienDichVu: 0, hinhDichVu: "", thoiGianBatDau: "08:00:00", thoiGianKetThuc: "22:00:00", trangThai: "Đang hoạt động" });
@@ -883,7 +870,7 @@ const ServiceManager: React.FC = () => {
 // ServiceDetailModal Component
 interface ServiceDetailModalProps {
   service: Service;
-  details: ServiceDetail[];
+  details: Service[];
   usage: ServiceUsage[];
   loading: boolean;
   onClose: () => void;
@@ -909,6 +896,7 @@ const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
   const [imageUrlInput, setImageUrlInput] = React.useState<string>(
     service.hinhDichVu ?? ""
   );
+  const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [isActive, setIsActive] = React.useState(
     service.trangThai !== "Ngưng hoạt động"
   );
@@ -934,6 +922,7 @@ const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
     reader.onload = () => {
       const result = reader.result as string;
       setForm((prev) => ({ ...prev, hinhDichVu: result }));
+      setImageFile(file);
     };
     reader.readAsDataURL(file);
   };
@@ -1658,6 +1647,119 @@ const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
                 </div>
               </div>
 
+              {/* Detail Fields Section */}
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: 16,
+                  borderRadius: 8,
+                  background: "#f9fafb",
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                <h5
+                  style={{
+                    margin: "0 0 16px",
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: "#1f2937",
+                  }}
+                >
+                  Thông tin chi tiết dịch vụ
+                </h5>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 16,
+                    marginBottom: 16,
+                  }}
+                >
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontWeight: 600,
+                        marginBottom: 4,
+                      }}
+                    >
+                      Mô tả dịch vụ
+                    </label>
+                    <textarea
+                      value={form.thongTinDv ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, thongTinDv: e.target.value })
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #d1d5db",
+                        fontFamily: "inherit",
+                        minHeight: 80,
+                        resize: "vertical",
+                      }}
+                      placeholder="Nhập mô tả chi tiết về dịch vụ..."
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontWeight: 600,
+                        marginBottom: 4,
+                      }}
+                    >
+                      Thời lượng ước tính (phút)
+                    </label>
+                    <input
+                      type="number"
+                      value={String(form.thoiLuongUocTinh ?? "")}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          thoiLuongUocTinh: Number(e.target.value) || 0,
+                        })
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #d1d5db",
+                      }}
+                      placeholder="60"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontWeight: 600,
+                        marginBottom: 4,
+                      }}
+                    >
+                      Ghi chú
+                    </label>
+                    <input
+                      type="text"
+                      value={form.ghiChu ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, ghiChu: e.target.value })
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #d1d5db",
+                      }}
+                      placeholder="Ghi chú thêm nếu có..."
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Status Toggle Section */}
               <div
                 style={{
@@ -1926,9 +2028,32 @@ const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
                     ❌ Hủy
                   </button>
                   <button
-                    onClick={() => {
-                      onEdit(form, isActive);
-                      setIsEditing(false);
+                    onClick={async () => {
+                      try {
+                        // If user selected a file, upload it first and use returned fileName
+                        if (imageFile) {
+                          const uploadRes = await serviceApi.uploadServiceImage(imageFile, form.iddichVu, form.tenDichVu);
+                          const fileName = uploadRes?.fileName ?? imageFile.name;
+                          setForm((prev) => ({ ...prev, hinhDichVu: fileName }));
+                          // ensure updated form is passed
+                          await onEdit({ ...form, hinhDichVu: fileName }, isActive);
+                        } else {
+                          // If hinhDichVu is a data URL, we should not send it — try to detect
+                          const v = form.hinhDichVu ?? "";
+                          if (v.startsWith("data:") || v.startsWith("blob:")) {
+                            // No file object but data URL present — attempt to strip and warn
+                            alert('Vui lòng chọn ảnh rồi nhấn Lưu để tải ảnh lên.');
+                          } else {
+                            await onEdit(form, isActive);
+                          }
+                        }
+                      } catch (err) {
+                        console.error('Error uploading image in detail modal', err);
+                        alert('Lỗi khi tải ảnh lên');
+                      } finally {
+                        setIsEditing(false);
+                        setImageFile(null);
+                      }
                     }}
                     style={{
                       padding: "12px 24px",

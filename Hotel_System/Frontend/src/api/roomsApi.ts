@@ -41,6 +41,10 @@ export interface Room {
   moTa?: string | null;
   soNguoiToiDa?: number | null;
   giaCoBanMotDem?: number | null;
+  basePricePerNight?: number | null;
+  discountedPrice?: number | null;
+  promotionName?: string | null;
+  discountPercent?: number | null;
   xepHangSao?: number | null;
   trangThai?: string | null;
   urlAnhPhong?: string | null;
@@ -189,7 +193,10 @@ export async function updateRoom(id: string, payload: Partial<Room>): Promise<vo
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Failed to update room: ${res.status}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => null);
+    throw new Error(`Failed to update room: ${res.status}${text ? ` - ${text}` : ''}`);
+  }
 }
 
 export async function deleteRoom(id: string): Promise<void> {
@@ -286,6 +293,10 @@ export async function postCheckAvailableRooms(
     moTa: r.moTa ?? r.MoTa ?? r.description ?? r.Description,
     soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa ?? r.maxOccupancy ?? r.MaxOccupancy,
     giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.basePricePerNight ?? r.BasePricePerNight,
+    basePricePerNight: r.basePricePerNight ?? r.BasePricePerNight,
+    discountedPrice: r.discountedPrice ?? r.DiscountedPrice,
+    promotionName: r.promotionName ?? r.PromotionName,
+    discountPercent: r.discountPercent ?? r.DiscountPercent,
     xepHangSao: r.xepHangSao ?? r.XepHangSao,
     trangThai: r.trangThai ?? r.TrangThai,
     urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong ?? r.roomImageUrl ?? r.RoomImageUrl,
