@@ -63,6 +63,15 @@ export const checkoutApi = {
   // 4. Hoàn tất trả phòng
   completeCheckout: (id: string | number) =>
     fetchJson(`/api/Checkout/complete/${id}`, { method: 'POST' }),
+
+  // 5. Thêm dịch vụ vào hóa đơn của booking
+  // Business rule: always finds THE ONE invoice for the booking by IDDatPhong
+  addServiceToInvoice: (payload: { IDDatPhong: string | number; DichVu: Array<{ IddichVu: string | number; TienDichVu?: number; DonGia?: number; TenDichVu?: string; TongTien?: number; GhiChu?: string }> }) =>
+    fetchJson(`/api/Checkout/add-service-to-invoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
 };
 
 export default checkoutApi;

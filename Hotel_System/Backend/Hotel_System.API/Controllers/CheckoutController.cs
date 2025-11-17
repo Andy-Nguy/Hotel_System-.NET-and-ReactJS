@@ -12,7 +12,8 @@ namespace Hotel_System.API.Controllers
     // ==================== DTO CHO THÊM DỊCH VỤ VÀO HÓA ĐƠN CŨ ====================
     public class AddServiceToInvoiceRequest
     {
-        public string HoaDonId { get; set; } = string.Empty;
+        // Changed from HoaDonId to IDDatPhong - business rule: always find THE ONE invoice for a booking by IDDatPhong
+        public string IDDatPhong { get; set; } = string.Empty;
         public List<ServiceItem> DichVu { get; set; } = new();
     }
 
@@ -20,6 +21,12 @@ namespace Hotel_System.API.Controllers
     {
         public string IddichVu { get; set; } = string.Empty;
         public decimal? TienDichVu { get; set; } // Đây là thành tiền của 1 cái (đơn giá × số lượng sẽ tính ở backend)
+        // Optional fields from FE (front-end may provide these; server will prefer DB values when available)
+        public string? TenDichVu { get; set; }
+        public decimal? DonGia { get; set; }
+        // FE may precompute a line total (donGia * quantity), use this when provided
+        public decimal? TongTien { get; set; }
+        public string? GhiChu { get; set; }
     }
 
     public class PayQrRequest
@@ -95,10 +102,13 @@ namespace Hotel_System.API.Controllers
                 }
             }
 
+            // NOTE: deposit (TienCoc) is only for display. The canonical "paid" amount is HoaDon.TienThanhToan
+            // (which may already include deposit). Do not subtract deposit again when calculating remaining.
             decimal deposit = booking.TienCoc ?? 0m;
             decimal paidAmount = booking.HoaDons?.Sum(h => h.TienThanhToan ?? 0m) ?? 0m;
             decimal tongTien = roomTotal + serviceTotal;
-            decimal remaining = Math.Max(0m, tongTien - deposit - paidAmount);
+            // Remaining is total minus the amount that has already been recorded as paid on invoices.
+            decimal remaining = Math.Max(0m, tongTien - paidAmount);
 
             var invoices = booking.HoaDons != null
                 ? booking.HoaDons.Select(h => new
@@ -136,74 +146,101 @@ namespace Hotel_System.API.Controllers
         [HttpPost("add-service-to-invoice")]
         public async Task<IActionResult> AddServiceToInvoice([FromBody] AddServiceToInvoiceRequest req)
         {
-            if (req == null || string.IsNullOrWhiteSpace(req.HoaDonId) || req.DichVu == null || !req.DichVu.Any())
+            if (req == null || string.IsNullOrWhiteSpace(req.IDDatPhong) || req.DichVu == null || !req.DichVu.Any())
                 return BadRequest(new { message = "Dữ liệu không hợp lệ." });
 
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // ========== BỨC 1: LẤY HÓADA ĐN HIỆN CÓ THEO IDDatPhong ==========
+                // Business rule: ALWAYS find THE ONE and ONLY invoice for a booking by IDDatPhong
+                // Never query by invoice status (TrangThaiThanhToan)
+                // Never create a new invoice based on payment status
                 var hoaDon = await _context.HoaDons
                     .Include(h => h.Cthddvs)
                     .Include(h => h.IddatPhongNavigation)
                         .ThenInclude(dp => dp.ChiTietDatPhongs)
-                    .FirstOrDefaultAsync(h => h.IdhoaDon == req.HoaDonId);
+                    .Where(h => h.IddatPhong == req.IDDatPhong)
+                    .OrderByDescending(h => h.IdhoaDon)  // Get most recent if multiple
+                    .FirstOrDefaultAsync();
 
                 if (hoaDon == null)
-                    return NotFound(new { message = "Không tìm thấy hóa đơn." });
+                    return NotFound(new { message = "Không tìm thấy hóa đơn cho đặt phòng này." });
 
-                    foreach (var item in req.DichVu)
+                // ========== BƯỚC 2: INSERT DỊCH VỤ VÀO CTHDDV ==========
+                foreach (var item in req.DichVu)
+                {
+                    // Deduce the line total to store in CTHDDV: prefer FE-provided "TongTien",
+                    // else fallback to TienDichVu then DonGia. We do NOT merge entries or check duplicates.
+                    var lineTotal = item.TongTien ?? item.TienDichVu ?? item.DonGia ?? 0m;
+                    _context.Cthddvs.Add(new Cthddv
                     {
-                        // Treat incoming TienDichVu as the line total; do not store quantity
-                        var lineTotal = item.TienDichVu ?? 0m;
-                        _context.Cthddvs.Add(new Cthddv
-                        {
-                            IdhoaDon = hoaDon.IdhoaDon,
-                            IddichVu = item.IddichVu,
-                            TienDichVu = Math.Round(lineTotal),
-                            ThoiGianThucHien = DateTime.Now,
-                            TrangThai = "Hoạt động"
-                        });
-                    }
+                        IdhoaDon = hoaDon.IdhoaDon,
+                        IddichVu = item.IddichVu,
+                        TienDichVu = Math.Round(lineTotal),
+                        ThoiGianThucHien = DateTime.Now,
+                        TrangThai = "Hoạt động"
+                    });
+                }
 
                 await _context.SaveChangesAsync();
 
-                // TÍNH LẠI TỔNG TIỀN HÓA ĐƠN + ĐỒNG BỘ VỚI ĐẶT PHÒNG
+                // ========== BƯỚC 3: CẬP NHẬT TỔNG TIỀN HÓA ĐƠN (KHÔNG TẠO MỚI) ==========
+                // TongTien = TienPhong + TongDichVu
                 await RecomputeInvoiceAndBookingTotal(hoaDon);
 
-                // If booking was already marked as fully paid (TrangThaiThanhToan == 2)
-                // but adding services introduces an outstanding amount on the invoice,
-                // set booking.TrangThaiThanhToan = 3 (đã thanh toán nhưng chưa hoàn tất)
-                try
+                // ========== BƯỚC 4: NẾU HÓA ĐƠN ĐANG LÀ 2 (ĐÃ THANH TOÁN) → CHUYỂN VỀ 1 ==========
+                var booking = hoaDon.IddatPhongNavigation;
+                if (booking != null)
                 {
-                    var booking = hoaDon.IddatPhongNavigation;
-                    if (booking != null)
+                    // If adding services introduces a remaining amount to collect → downgrade from "fully paid" to "pending"
+                    if (hoaDon.TrangThaiThanhToan == 2)
                     {
-                        // was fully paid before adding services?
-                        // Note: booking.TrangThaiThanhToan may have been 2 (fully paid)
-                        // After recompute, hoaDon.TienThanhToan holds the remaining amount to collect for this invoice
-                        var wasFullyPaid = booking.TrangThaiThanhToan == 2;
-                        var remainingForInvoice = hoaDon.TienThanhToan ?? 0m;
-                        if (wasFullyPaid && remainingForInvoice > 0m)
+                        decimal tongTienValue = hoaDon.TongTien;
+                        decimal tienThanhToanValue = hoaDon.TienThanhToan ?? 0m;
+                        decimal remainingForInvoice = tongTienValue - tienThanhToanValue;
+                        if (remainingForInvoice > 0m)
                         {
-                            booking.TrangThaiThanhToan = 3; // paid but not completed
-                            await _context.SaveChangesAsync();
+                            hoaDon.TrangThaiThanhToan = 1; // chuyển về chưa thanh toán đủ
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to update booking payment status after adding services");
-                    // don't fail the whole operation for a logging/update issue
-                }
 
+                // ========== BƯỚC 5 & 6: GIỮ NGUYÊN TienThanhToan VÀ TÍNH SoTienConLai ==========
+                // TienThanhToan: không giảm, không reset, không sửa (already preserved by RecomputeInvoiceAndBookingTotal)
+                // SoTienConLai = TongTien - TienThanhToan (calculated on-the-fly for response)
+                // Compute service subtotal for this invoice (from CTHDDV)
+                var tongTienDichVu = await _context.Cthddvs
+                    .Where(c => c.IdhoaDon == hoaDon.IdhoaDon && c.TrangThai == "Hoạt động")
+                    .SumAsync(c => c.TienDichVu ?? 0m);
+
+                decimal tongTienForResponse = hoaDon.TongTien;
+                decimal tienThanhToanForResponse = hoaDon.TienThanhToan ?? 0m;
+                decimal soTienConLai = Math.Max(0m, tongTienForResponse - tienThanhToanForResponse);
+
+                await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                // Prepare a compact invoice object for FE (authoritative DB values)
+                var hoaDonObj = new
+                {
+                    idHoaDon = hoaDon.IdhoaDon,
+                    idDatPhong = hoaDon.IddatPhong,
+                    ngayLap = hoaDon.NgayLap,
+                    tienPhong = hoaDon.TienPhong,
+                    tongTien = hoaDon.TongTien,
+                    tienThanhToan = hoaDon.TienThanhToan,
+                    trangThaiThanhToan = hoaDon.TrangThaiThanhToan
+                };
 
                 return Ok(new
                 {
                     message = "Đã thêm dịch vụ và cập nhật hóa đơn thành công!",
-                    hoaDonId = hoaDon.IdhoaDon,
-                    tongTien = hoaDon.TongTien,
-                    tienThanhToan = hoaDon.TienThanhToan
+                    hoaDon = hoaDonObj,
+                    tongTienDichVu = tongTienDichVu,
+                    tongTienHoaDon = hoaDon.TongTien,
+                    tienThanhToan = hoaDon.TienThanhToan ?? 0m,
+                    soTienConLai = soTienConLai
                 });
             }
             catch (Exception ex)
@@ -243,21 +280,9 @@ namespace Hotel_System.API.Controllers
                 // Recompute totals for the target invoice (this will set targetInvoice.TongTien appropriately)
                 await RecomputeInvoiceAndBookingTotal(targetInvoice);
 
-                var deposit = booking.TienCoc ?? 0m;
-                // If client provides an amount, use it; otherwise determine sensible default:
-                // - If there are already paid invoices for this booking, do NOT subtract deposit again; default to remaining on this invoice
-                // - Otherwise (no prior paid invoices), subtract deposit from this invoice remaining
-                var hasPaidBefore = booking.HoaDons?.Where(h => h.IdhoaDon != targetInvoice.IdhoaDon && h.TrangThaiThanhToan == 2).Any() ?? false;
-
-                decimal defaultAmount;
-                if (hasPaidBefore)
-                {
-                    defaultAmount = Math.Max(0m, (targetInvoice.TongTien - (targetInvoice.TienThanhToan ?? 0m)));
-                }
-                else
-                {
-                    defaultAmount = Math.Max(0m, (targetInvoice.TongTien - deposit - (targetInvoice.TienThanhToan ?? 0m)));
-                }
+                // Default amount for confirming payment: collect the remaining balance of this invoice
+                // TienCoc is used for display only; the canonical paid amount is stored on invoices (TienThanhToan).
+                decimal defaultAmount = Math.Max(0m, (targetInvoice.TongTien - (targetInvoice.TienThanhToan ?? 0m)));
 
                 var amount = req?.Amount ?? defaultAmount;
 
@@ -386,8 +411,10 @@ namespace Hotel_System.API.Controllers
                 decimal tienThanhToan = 0m;
                 if (trangThaiThanhToan == 2)
                 {
-                    // Fully paid: collect remaining after deposit
-                    tienThanhToan = Math.Max(0m, tongTien - tienCoc);
+                    // Fully paid: record the invoice-level paid amount as the full invoice total.
+                    // NOTE: TienCoc is a separate historical field and should not be subtracted here;
+                    // TienThanhToan is the canonical total paid value and may include earlier deposits.
+                    tienThanhToan = tongTien;
                 }
                 else
                 {
@@ -564,14 +591,9 @@ namespace Hotel_System.API.Controllers
                 }
                 else
                 {
-                    if (hasPaidBeforeForOtherInvoices)
-                    {
-                        amount = Math.Max(0m, (hoaDon.TongTien - (hoaDon.TienThanhToan ?? 0m)));
-                    }
-                    else
-                    {
-                        amount = Math.Max(0m, (hoaDon.TongTien - (booking.TienCoc ?? 0m)));
-                    }
+                    // Default: request the remaining balance for the invoice itself. Do not subtract booking.TienCoc
+                    // separately; TienThanhToan is the authoritative paid amount (may include deposit).
+                    amount = Math.Max(0m, (hoaDon.TongTien - (hoaDon.TienThanhToan ?? 0m)));
                 }
                 if (req.Amount.HasValue && req.Amount.Value > 0m) amount = req.Amount.Value;
 
@@ -738,48 +760,73 @@ namespace Hotel_System.API.Controllers
             // 4. TỔNG CUỐI CÙNG CHO TOÀN BOOKING ĐÃ CÓ VAT 10%
             decimal bookingTongPhaiThu = Math.Round(bookingTongChuaVat * 1.1m, 0, MidpointRounding.AwayFromZero);
 
-            // 5. TIỀN ĐÃ THU TRƯỚC ĐÓ (cọc + tất cả hóa đơn đã thanh toán)
-            decimal daThuTruoc = (booking.TienCoc ?? 0m) +
-                                 (booking.HoaDons?
+            // 5. TIỀN ĐÃ THU TRƯỚC ĐÓ
+            // Use only TienThanhToan on fully paid invoices as the authoritative "money received" value.
+            // TienCoc is only for display and historical record; DO NOT include it here to avoid double-counting.
+            decimal daThuTruoc = booking.HoaDons?
                                      .Where(h => h.TrangThaiThanhToan == 2)
-                                     .Sum(h => h.TienThanhToan ?? 0m) ?? 0m);
+                                     .Sum(h => h.TienThanhToan ?? 0m) ?? 0m;
 
-            // 6. Quy tắc VAT theo yêu cầu:
-            // - Nếu chưa có khoản thanh toán nào trước đó (daThuTruoc chỉ là tiền cọc hoặc 0),
-            //   thì tính VAT 10% duy nhất trên tổng (tiền phòng + tất cả dịch vụ) — gán toàn bộ tổng cho hoadon.
-            // - Nếu đã có thanh toán trước đó (ví dụ đã thanh toán tiền phòng),
-            //   thì cho hoadon hiện tại chỉ chịu VAT trên phần thành tiền của hoadon (thường là dịch vụ mới),
-            //   không tính lại VAT cho phần đã thu trước.
+            // LOGIC XỬ LÝ HÓA ĐƠN PHÒNG ĐƯỢC TRẢ TIỀN TRƯỚC
+            // Nếu khách đã trả tiền phòng trước khi check-in (TienThanhToan != null),
+            // và sau đó thêm dịch vụ:
+            // - Giữ nguyên TienThanhToan (số tiền đã trả)
+            // - Cập nhật TongTien = TienPhong + TongDichVu (với VAT 10%)
+            // - Nếu TongTien > TienThanhToan, đặt TrangThaiThanhToan = 1 (chưa thanh toán đủ)
+            // - SoTienConLai = TongTien - TienThanhToan (để FE hiển thị)
 
-            // Tính tổng tiền chưa VAT của phần nằm trong hoadon hiện tại (room part + services belonging to this hoaDon)
+            // Lấy tiền đã thanh toán riêng cho hóa đơn này
+            var tienThanhToanCu = hoaDon.TienThanhToan ?? 0m;
+
+            // Tính tổng tiền chưa VAT của hóa đơn này
             decimal thisInvoiceServiceChuaVat = hoaDon.Cthddvs?.Where(c => c.TrangThai == "Hoạt động").Sum(c => c.TienDichVu ?? 0m) ?? 0m;
-            // If HoaDon.TienPhong is present, treat it as the room portion already assigned to this invoice (chưa VAT)
             decimal thisInvoiceRoomChuaVat = 0m;
             if (hoaDon.GetType().GetProperty("TienPhong") != null && hoaDon.TienPhong > 0)
             {
-                // HoaDon.TienPhong stores room amount (integer), treat as chua VAT
                 thisInvoiceRoomChuaVat = (decimal)hoaDon.TienPhong;
             }
-
             decimal thisInvoiceChuaVat = thisInvoiceRoomChuaVat + thisInvoiceServiceChuaVat;
 
-            // Số tiền đã thanh toán cho các hóa đơn khác trước khi tính hoadon này
-            decimal paidBeforeThisInvoice = booking.HoaDons?.Where(h => h.IdhoaDon != hoaDon.IdhoaDon && h.TrangThaiThanhToan == 2).Sum(h => h.TienThanhToan ?? 0m) ?? 0m;
+            // Tính tổng tiền cho hóa đơn này với VAT 10%
+            decimal tongTienMoiVoiVat = Math.Round(thisInvoiceChuaVat * 1.1m, 0, MidpointRounding.AwayFromZero);
 
-            if (paidBeforeThisInvoice <= 0m)
+            // Cập nhật TongTien
+            hoaDon.TongTien = tongTienMoiVoiVat;
+            // If booking has a recorded deposit (`TienCoc`) that hasn't yet been attributed
+            // into invoice-level paid totals (TienThanhToan), attribute the missing amount to
+            // this invoice so that there's a single canonical source: HoaDon.TienThanhToan.
+            // NOTE: TienCoc remains a historical/display field on booking and should not be
+            // subtracted twice in calculations.
+            var bookingTienCoc = booking.TienCoc ?? 0m;
+            var totalPaidAcrossInvoices = booking.HoaDons?.Sum(h => h.TienThanhToan ?? 0m) ?? 0m;
+
+            if (bookingTienCoc > 0m && totalPaidAcrossInvoices < bookingTienCoc)
             {
-                // Chưa có thanh toán trước đó: hoadon checkout đầu tiên chịu toàn bộ thuế trên booking
-                hoaDon.TongTien = bookingTongPhaiThu;
-                // Lưu tiền phòng chưa VAT tổng (dành cho invoice hiển thị)
-                if (hoaDon.GetType().GetProperty("TienPhong") != null)
-                    hoaDon.TienPhong = (int)Math.Round(roomTotalChuaVat);
+                // amount that still needs to be represented on invoices to reflect the deposit
+                var missing = bookingTienCoc - totalPaidAcrossInvoices;
+                // only attribute up to the remaining amount of this invoice
+                var currentPaid = hoaDon.TienThanhToan ?? 0m;
+                var availableToAdd = Math.Max(0m, hoaDon.TongTien - currentPaid);
+                var toAdd = Math.Min(missing, availableToAdd);
+                if (toAdd > 0m)
+                {
+                    hoaDon.TienThanhToan = currentPaid + toAdd;
+                }
+            }
+
+            // After potentially attributing deposit, update payment status based on invoice-level paid total
+            var finalPaid = hoaDon.TienThanhToan ?? 0m;
+            if (finalPaid >= hoaDon.TongTien && hoaDon.TongTien > 0m)
+            {
+                hoaDon.TrangThaiThanhToan = 2; // fully paid
+            }
+            else if (finalPaid > 0m)
+            {
+                hoaDon.TrangThaiThanhToan = 1; // partial / pending
             }
             else
             {
-                // Đã có thanh toán trước đó: chỉ tính tổng cho hoadon này trên phần của nó (chỉ áp VAT trên phần này)
-                decimal tongThisInvoiceWithVat = Math.Round(thisInvoiceChuaVat * 1.1m, 0, MidpointRounding.AwayFromZero);
-                // Nếu invoice có phần đã thu trước (hoaDon.TienThanhToan), giữ nguyên (KHÔNG GHI ĐÈ)
-                hoaDon.TongTien = tongThisInvoiceWithVat;
+                hoaDon.TrangThaiThanhToan = 0; // unpaid
             }
 
             // Đồng bộ booking tổng tiền (luôn là toàn booking)

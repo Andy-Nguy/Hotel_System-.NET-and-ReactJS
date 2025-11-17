@@ -42,11 +42,13 @@ const PaymentModal: React.FC<Props> = ({
     : 0;
   const paid = invoicePaid > 0 ? invoicePaid : Number(summary?.money?.paidAmount ?? 0);
   // Compute totals on the client side: total = (room + services) + VAT
-  // The amount the guest needs to pay = total - deposit - alreadyPaid (from invoice DB if available)
+  // The amount the guest needs to pay = TOTAL - ĐÃ THANH TOÁN
+  // Important: `paid` is the canonical paid amount (HoaDon.TienThanhToan) and already includes any deposit.
+  // We must NOT subtract `deposit` again here.
   const subTotal = roomTotal + serviceTotal; // trước VAT
   const vat = Math.round(subTotal * 0.1);
   const total = Math.round(subTotal + vat);
-  const needToPay = Math.max(0, total - deposit - paid);
+  const needToPay = Math.max(0, total - paid);
 
   useEffect(() => {
     if (visible) {
@@ -120,11 +122,11 @@ const PaymentModal: React.FC<Props> = ({
             <span style={{ color: '#d4380d' }}>{total.toLocaleString()} đ</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Tiền cọc:</span>
-            <strong>- {deposit.toLocaleString()} đ</strong>
+            <span>Tiền cọc (chỉ để hiển thị):</span>
+            <strong>{deposit.toLocaleString()} đ</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Đã thanh toán (trước đó):</span>
+            <span>Đã thanh toán (bao gồm tiền cọc):</span>
             <strong>- {paid.toLocaleString()} đ</strong>
           </div>
           <Divider />

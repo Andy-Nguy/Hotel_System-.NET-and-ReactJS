@@ -15,9 +15,20 @@ export interface UsingBooking {
   soDem?: number;
   tongTien?: number;
   tienCoc?: number;
+  tienThanhToan?: number; // Amount prepaid (kept separate from tongTien)
   trangThai?: number;
   trangThaiThanhToan?: number;
 }
+
+/**
+ * Helper: Calculate remaining balance for a booking
+ * SoTienConLai = TongTien - TienThanhToan
+ */
+export const calculateRemainingBalance = (booking: UsingBooking): number => {
+  const tongTien = booking.tongTien ?? 0;
+  const tienThanhToan = booking.tienThanhToan ?? 0;
+  return Math.max(0, tongTien - tienThanhToan);
+};
 
 /**
  * GET /api/CheckIn

@@ -25,6 +25,7 @@ export interface BookingRow {
   SoDem?: number;
   TongTien: number;
   TienCoc?: number;
+  TienThanhToan?: number; // Amount prepaid (separate from TongTien)
   TrangThai: number;
   TrangThaiThanhToan: number;
   ChiTietDatPhongs?: Array<any>;
@@ -319,7 +320,7 @@ const CheckInManager: React.FC = () => {
         if (safeTongTien <= 0) safeTongTien = Math.max(1, computedTotalWithVat, Math.round(roomTotalForCalc));
 
         const res = await checkoutApi.createInvoice({
-          IDDatPhong: paymentRow.IddatPhong,
+          IDDatPhong: paymentRow!.IddatPhong,
           PhuongThucThanhToan: method,
           // Mark paid for cash checkouts, pending for online
           TrangThaiThanhToan: method === 2 ? 1 : 2,
@@ -376,53 +377,21 @@ const CheckInManager: React.FC = () => {
   const key = `add_service_${paymentRow.IddatPhong}`;
   msg.loading({ content: 'Đang thêm dịch vụ...', key, duration: 0 });
       try {
-        // try to get current summary to find existing invoice
-        let sum: any = null;
-        try { sum = await checkoutApi.getSummary(paymentRow.IddatPhong); } catch { sum = null; }
-        const existingInvoiceId = sum?.invoices?.[0]?.IDHoaDon ?? sum?.invoices?.[0]?.id ?? null;
-
-        if (existingInvoiceId) {
-          await fetchJson('/api/Checkout/add-service-to-invoice', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ HoaDonId: existingInvoiceId, DichVu: selectedServices.map(s => ({ IddichVu: String(s.serviceId), TienDichVu: Math.round(Number(s.price) || 0) })) })
-          });
-        } else {
-          // No invoice exists: automatically create one and include selected services so server
-          // will persist CTHDDV rows in the same transaction.
-          try {
-            // Compute reasonable totals: prefer server summary if available, otherwise fall back to booking values
-            const roomTotal = Number(sum?.money?.roomTotal ?? paymentRow?.TongTien ?? 0);
-            const servicesPayload = selectedServices.map(s => ({ IddichVu: String(s.serviceId), TienDichVu: Math.round(Number(s.price) || 0) }));
-            const servicesTotalLocal = servicesPayload.reduce((acc, it) => acc + (it.TienDichVu || 0), 0);
-            // Compute a safe TongTien: room + services, then apply VAT 10% (server will recompute as well)
-            const subtotal = (roomTotal || 0) + servicesTotalLocal;
-            const tongTien = Math.max(1, Math.round(subtotal * 1.1));
-
-            const createPayload: any = {
-              IDDatPhong: paymentRow?.IddatPhong,
-              PhuongThucThanhToan: 1,
-              // mark as pending payment by default
-              TrangThaiThanhToan: 1,
-              GhiChu: 'Tạo hóa đơn tự động khi thêm dịch vụ',
-              TongTien: tongTien,
-              TienPhong: Math.round(roomTotal || 0),
-              SoLuongNgay: paymentRow?.SoDem ?? 1,
-              Services: servicesPayload
-            };
-
-            const res: any = await checkoutApi.createInvoice(createPayload);
-            // createInvoice will also persist service lines when Services is provided
-            // If backend returned an invoice id, treat as success
-            if (!res || !(res.idHoaDon || res.id || res.idHoaDon === '')) {
-              throw new Error('Không thể tạo hóa đơn tự động');
-            }
-          } catch (ce: any) {
-            msg.destroy(key);
-            msg.error(ce?.message || 'Không thể tạo hóa đơn tự động để thêm dịch vụ');
-            return;
-          }
-        }
+        // The business rule is: ONE booking has ONE invoice.
+        // If an invoice exists, we add services to it.
+        // If it does NOT exist, we create it.
+        // The backend's `add-service-to-invoice` endpoint handles both cases now.
+        await checkoutApi.addServiceToInvoice({
+          IDDatPhong: paymentRow.IddatPhong,
+          DichVu: selectedServices.map(s => ({
+            IddichVu: String(s.serviceId),
+            TenDichVu: s.serviceName,
+            DonGia: Math.round(Number(s.price) || 0),
+            TongTien: Math.round(Number((s.price || 0) * (s.quantity || 1)) || 0),
+            TienDichVu: Math.round(Number((s.price || 0) * (s.quantity || 1)) || 0),
+            GhiChu: ''
+          }))
+        });
 
         msg.success('Thêm dịch vụ thành công');
         // mark booking so UI can show "Xem hóa đơn"
@@ -504,10 +473,16 @@ const CheckInManager: React.FC = () => {
         msg.error('Chưa có hóa đơn để thêm dịch vụ!');
         return;
       }
-      await fetchJson('/api/Checkout/add-service-to-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ HoaDonId: existingInvoiceId, DichVu: selectedServices.map(s => ({ IddichVu: String(s.serviceId), TienDichVu: Math.round(Number(s.price) || 0) })) })
+      await checkoutApi.addServiceToInvoice({
+        IDDatPhong: paymentRow!.IddatPhong,
+        DichVu: selectedServices.map(s => ({
+          IddichVu: String(s.serviceId),
+          TenDichVu: s.serviceName,
+          DonGia: Math.round(Number(s.price) || 0),
+          TongTien: Math.round(Number((s.price || 0) * (s.quantity || 1)) || 0),
+          TienDichVu: Math.round(Number((s.price || 0) * (s.quantity || 1)) || 0),
+          GhiChu: ''
+        }))
       });
       msg.success('Thêm dịch vụ thành công');
       // keep UI consistent with 'using' flow: mark booking to show invoice details and keep it visible

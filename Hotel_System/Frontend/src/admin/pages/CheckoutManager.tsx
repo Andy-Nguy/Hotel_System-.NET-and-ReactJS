@@ -386,7 +386,7 @@ const CheckoutManager: React.FC = () => {
           await fetchJson('/api/Checkout/add-service-to-invoice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ HoaDonId: existingInvoiceId, DichVu: selectedServices.map(s => ({ IddichVu: String(s.serviceId), TienDichVu: Math.round(Number(s.price) || 0) })) })
+            body: JSON.stringify({ IDDatPhong: paymentRow.IddatPhong, DichVu: selectedServices.map(s => ({ IddichVu: String(s.serviceId), TienDichVu: Math.round(Number(s.price) || 0) })) })
           });
         } else {
           // Do NOT auto-create invoice when adding services.
@@ -425,7 +425,7 @@ const CheckoutManager: React.FC = () => {
       await fetchJson('/api/Checkout/add-service-to-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ HoaDonId: existingInvoiceId, DichVu: selectedServices.map(s => ({ IddichVu: String(s.serviceId), TienDichVu: Math.round(Number(s.price) || 0) })) })
+        body: JSON.stringify({ IDDatPhong: paymentRow.IddatPhong, DichVu: selectedServices.map(s => ({ IddichVu: String(s.serviceId), TienDichVu: Math.round(Number(s.price) || 0) })) })
       });
       msg.success('Thêm dịch vụ thành công');
       setServiceModalVisible(false);
