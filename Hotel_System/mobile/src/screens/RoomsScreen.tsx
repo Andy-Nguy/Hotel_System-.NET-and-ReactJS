@@ -434,14 +434,14 @@ const RoomsScreen: React.FC = () => {
           <>
             <View style={[styles.sectionTitle, styles.sectionTitleSpacing]}>
               <Text style={styles.span}>TOP PHÒNG ĐƯỢC ƯA CHUỘNG</Text>
-              <Text style={styles.h2}>Chào mừng đến với Robins Villa</Text>
+              <Text style={styles.h2}>Phong cách thượng lưu  Điểm nhấn của năm</Text>
             </View>
 
             <TopRoom topCount={5} onRoomPress={handleTopRoomPress} />
 
             <View style={[styles.sectionTitle, styles.sectionTitleSpacing]}>
               <Text style={styles.span}>DANH SÁCH PHÒNG</Text>
-              <Text style={styles.h2}>Chào mừng đến với Robins Villa</Text>
+              <Text style={styles.h2}>Sống sang trọn vẹn</Text>
             </View>
           </>
         }
