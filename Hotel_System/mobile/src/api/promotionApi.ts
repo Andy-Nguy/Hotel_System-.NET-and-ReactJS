@@ -1,6 +1,6 @@
-import { DEFAULT_BASE_URL } from "../config/apiConfig";
+import { DEFAULT_BASE_URL, buildApiUrl } from "../config/apiConfig";
 
-const API_BASE = `${DEFAULT_BASE_URL}/api/KhuyenMai`;
+const API_BASE = buildApiUrl("/api/KhuyenMai");
 
 // ============================================
 // Type Definitions
