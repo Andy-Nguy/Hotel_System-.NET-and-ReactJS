@@ -74,18 +74,22 @@ const Promotion: React.FC<Props> = ({
 
   // Use only real data from props or DB; do not fall back to mock values.
   const promo = remotePromo;
-  const imageSrc =
-    imageUri && imageUri.length > 0 ? imageUri : promo?.hinhAnhBanner;
+  // Ensure image src is a string when used as ImageBackground source
+  const imageSrcRaw = imageUri && imageUri.length > 0 ? imageUri : promo?.hinhAnhBanner;
+  const imageSrc = imageSrcRaw ? String(imageSrcRaw) : null;
 
-  const titleText = title && title.length > 0 ? title : promo?.tenKhuyenMai;
-  const descriptionText = description || promo?.moTa;
+  // Force title and description to strings when rendering to avoid passing
+  // objects or arrays directly as children to <Text>
+  const titleText = title && title.length > 0 ? String(title) : promo?.tenKhuyenMai ? String(promo.tenKhuyenMai) : "";
+  const descriptionText = description ? String(description) : promo?.moTa ? String(promo.moTa) : "";
 
+  // Use JSON stringification for objects in debug logs to avoid interfering with React rendering
   console.log("[Promotion] render - imageSrc:", imageSrc);
   console.log("[Promotion] render - titleText:", titleText);
   console.log("[Promotion] render - descriptionText:", descriptionText);
-  console.log("[Promotion] render - promo:", promo);
+  console.log("[Promotion] render - promo:", promo ? JSON.stringify(promo) : null);
   console.log("[Promotion] render - loading:", loading);
-  console.log("[Promotion] render - error:", error);
+  console.log("[Promotion] render - error:", error ? String(error) : null);
 
   // If no real data is available, render nothing (no mock data)
   if (!imageSrc && !titleText && !descriptionText) {
@@ -170,12 +174,12 @@ const Promotion: React.FC<Props> = ({
 
           <View style={styles.content} pointerEvents="box-none">
             <Text numberOfLines={3} style={styles.title}>
-              {titleText}
+              {String(titleText)}
             </Text>
 
             {descriptionText ? (
-              <Text numberOfLines={2} style={styles.description}>
-                {descriptionText}
+                <Text numberOfLines={2} style={styles.description}>
+                {String(descriptionText)}
               </Text>
             ) : null}
 
