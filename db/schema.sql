@@ -320,7 +320,7 @@ CREATE TABLE DatPhong (
     TongTien DECIMAL(18,2) NOT NULL,
     TienCoc DECIMAL(18,2) DEFAULT 0,
     TrangThai INT NOT NULL,          -- 1:Chờ XN, 2:Đã XN, 0:Hủy, 3:Đang dùng, 4:Hoàn thành
-    TrangThaiThanhToan INT NOT NULL, -- 1:Chưa TT, 2:Đã TT, 0:Đã cọc, -1:Chưa cọc
+    TrangThaiThanhToan INT NOT NULL, -- 1:Chưa TT, 2:Đã TT, 0:Đã cọc,
     CONSTRAINT FK_DatPhong_KhachHang FOREIGN KEY (IDKhachHang)
         REFERENCES KhachHang(IDKhachHang)
         ON DELETE SET NULL ON UPDATE CASCADE,
@@ -586,4 +586,29 @@ CREATE TABLE ThongKeDoanhThuKhachSan (
         REFERENCES DatPhong(IDDatPhong)
         ON DELETE NO ACTION ON UPDATE NO ACTION
 );
+GO
+
+
+CREATE PROCEDURE sp_TopPhong2025
+    @Top INT = 5  -- Số lượng phòng muốn lấy
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        p.IDPhong,
+        p.TenPhong,
+        COUNT(dp.IDDatPhong) AS SoLanSuDung,
+        SUM(dp.SoDem) AS TongDem,
+        MAX(p.UrlAnhPhong) AS UrlAnhPhong
+    FROM DatPhong dp
+    INNER JOIN Phong p ON dp.IDPhong = p.IDPhong
+    INNER JOIN HoaDon hd ON dp.IDDatPhong = hd.IDDatPhong
+    WHERE dp.TrangThai = 4                 -- Hoàn thành
+      AND hd.TrangThaiThanhToan = 2       -- Đã thanh toán
+      AND YEAR(dp.NgayNhanPhong) = 2025   -- Năm 2025
+    GROUP BY p.IDPhong, p.TenPhong
+    ORDER BY SoLanSuDung DESC, TongDem DESC
+    OFFSET 0 ROWS FETCH NEXT @Top ROWS ONLY;
+END;
 GO

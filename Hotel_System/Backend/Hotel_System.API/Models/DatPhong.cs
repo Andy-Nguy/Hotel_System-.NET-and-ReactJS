@@ -19,6 +19,10 @@ public partial class DatPhong
 
     public int? SoDem { get; set; }
 
+    public int? SoNguoi { get; set; }
+
+    public int? SoLuongPhong { get; set; }
+
     public decimal TongTien { get; set; }
 
     public decimal? TienCoc { get; set; }
@@ -26,6 +30,9 @@ public partial class DatPhong
     public int TrangThai { get; set; }
 
     public int TrangThaiThanhToan { get; set; }
+
+    // Thời hạn giữ phòng (nếu có). Tên cột DB: ThoiHan
+    public DateTime? ThoiHan { get; set; }
 
     public virtual ICollection<HoaDon> HoaDons { get; set; } = new List<HoaDon>();
 

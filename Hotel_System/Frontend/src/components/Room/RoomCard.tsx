@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Button, Tag } from "antd";
+
 import type { Room } from "../../../../Frontend/src/api/roomsApi";
 import type { Promotion } from "../../../../Frontend/src/api/promotionApi";
 import { getAllPromotions } from "../../../../Frontend/src/api/promotionApi";
@@ -13,7 +14,7 @@ type Props = {
   room: Room;
   onOpenDetail: (room: Room) => void;
   onBook: (room: Room) => void;
-  bookButtonText?: string; // Thêm prop này
+  bookButtonText?: string;
 };
 
 function formatPrice(v?: number | null) {
@@ -25,21 +26,16 @@ const RoomCard: React.FC<Props> = ({
   room,
   onOpenDetail,
   onBook,
-  bookButtonText = "Đặt phòng ngay",
+  bookButtonText = "Khám phá phòng",
 }) => {
-  // Default fallback (served from Frontend `public/` -> available at /img/...)
-  // Use an existing image from Frontend/public/img/room to avoid 404.
-  // Use a fallback image that exists in public/img/room to avoid 404 spam
-  const defaultWebp = "/img/room/room-6.jpg"; // room-6.jpg exists in public
+  const defaultWebp = "/img/room/room-6.jpg";
 
-  // Support several possible field names returned by backend (roomImageUrl, urlAnhPhong, UrlAnhPhong)
   const rawImageField =
     (room as any).roomImageUrl ??
     (room as any).RoomImageUrl ??
     (room as any).urlAnhPhong ??
-    (room as any).UrlAnhPhong ??
-    (room as any).UrlAnhPhong ??
-    (room as any).urlAnhPhong;
+    (room as any).UrlAnhPhong;
+
   let imageBase = "";
   if (rawImageField) {
     const u = String(rawImageField).trim();
@@ -48,23 +44,24 @@ const RoomCard: React.FC<Props> = ({
     } else if (u.startsWith("/")) {
       imageBase = u;
     } else {
-      // try relative path under /img/room and also backend base if configured
       imageBase = `/img/room/${u}`;
     }
   }
 
-  // Only work with webp files - no jpg conversion
-  const imageWebp = imageBase; // use the original path (already .webp from database)
+  const imageWebp = imageBase;
 
   const [selectedSrc, setSelectedSrc] = useState<string>(
     imageWebp || defaultWebp
   );
   const [loaded, setLoaded] = useState(false);
   const [promotion, setPromotion] = useState<Promotion | null>(null);
+  const [titleFontSize, setTitleFontSize] = useState<number>(30);
+  const titleRef = useRef<HTMLHeadingElement | null>(null);
 
-  // Only try webp files - no jpg conversion needed
+  // LOAD IMAGE
   useEffect(() => {
     let canceled = false;
+
     const tryLoad = (srcs: string[]) => {
       if (srcs.length === 0) {
         if (!canceled) {
@@ -75,45 +72,36 @@ const RoomCard: React.FC<Props> = ({
       }
       const s = srcs[0];
       const img = new Image();
-      // allow CORS image loading if backend serves with CORS headers
       img.crossOrigin = "anonymous";
       img.onload = () => {
         if (canceled) return;
-        console.debug("RoomCard: image loaded", s);
         setSelectedSrc(s);
         setLoaded(true);
       };
-      img.onerror = (e) => {
-        // only log first failure to reduce console noise
-        try {
-          console.debug &&
-            console.debug("RoomCard: failed to load image, trying next", s);
-        } catch {}
+      img.onerror = () => {
         tryLoad(srcs.slice(1));
       };
       img.src = s;
     };
 
-    // Build unique candidate list (try explicit imageBase, backend-prefixed, then fallback)
-    const candidates = [] as string[];
+    const candidates: string[] = [];
     const apiBase = ((import.meta as any).env?.VITE_API_BASE as string) || "";
+
     if (imageWebp) candidates.push(imageWebp);
-    // if image is a filename-relative (no leading slash) we already prefixed to /img/room/<file>
-    // additionally try backend absolute URL if VITE_API_BASE is set
+
     if (apiBase && imageWebp && !imageWebp.startsWith("http")) {
       const trimmed = imageWebp.startsWith("/")
         ? imageWebp.slice(1)
         : imageWebp;
       candidates.push(`${apiBase.replace(/\/$/, "")}/${trimmed}`);
     }
+
     if (!candidates.includes(defaultWebp)) candidates.push(defaultWebp);
-    // final fallback: small inline SVG data URL to avoid any network request
+
     const svgFallback = `data:image/svg+xml;utf8,${encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450"><rect width="100%" height="100%" fill="#eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#999" font-family="Arial" font-size="24">No image</text></svg>'
     )}`;
     candidates.push(svgFallback);
-
-    console.debug("RoomCard: image candidates", candidates);
 
     tryLoad(candidates);
 
@@ -122,20 +110,24 @@ const RoomCard: React.FC<Props> = ({
     };
   }, [imageWebp]);
 
-  // Fetch any active promotion that applies to this room (if any)
+  // LOAD PROMOTION
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
         const promos = await getAllPromotions("active");
         if (cancelled) return;
-        const found = promos.find((p) =>
-          Array.isArray(p.khuyenMaiPhongs) &&
-          p.khuyenMaiPhongs.some((r) => String(r.idphong) === String(room.idphong))
+
+        const found = promos.find(
+          (p) =>
+            Array.isArray(p.khuyenMaiPhongs) &&
+            p.khuyenMaiPhongs.some(
+              (r) => String(r.idphong) === String(room.idphong)
+            )
         );
+
         if (!cancelled) setPromotion(found || null);
       } catch (err) {
-        // ignore errors silently — promotions are optional
         console.debug("RoomCard: failed to load promotions", err);
       }
     };
@@ -145,6 +137,79 @@ const RoomCard: React.FC<Props> = ({
     };
   }, [room.idphong]);
 
+  // Auto-adjust title font size to keep it on one line and avoid affecting card heights
+  useEffect(() => {
+    let mounted = true;
+
+    const adjust = () => {
+      const el = titleRef.current;
+      if (!el) return;
+
+      // start from default large size
+      const computedStyle = window.getComputedStyle(el);
+      const fontFamily = computedStyle.fontFamily || 'Arial, sans-serif';
+
+      let size = 30;
+      const minSize = 14;
+
+      // Apply sizes until the text fits within its container width (single line)
+      const fitsAt = (s: number) => {
+        el.style.fontSize = s + 'px';
+        // ensure single-line measurement
+        el.style.whiteSpace = 'nowrap';
+        const fits = el.scrollWidth <= el.clientWidth + 1; // small tolerance
+        return fits;
+      };
+
+      // fast path: if already fits at current state, use that
+      if (fitsAt(size)) {
+        if (mounted) setTitleFontSize(size);
+        return;
+      }
+
+      while (size > minSize) {
+        size -= 1;
+        if (fitsAt(size)) break;
+      }
+
+      if (mounted) setTitleFontSize(size);
+    };
+
+    // wait for next tick so layout computed
+    const id = window.setTimeout(adjust, 0);
+
+    window.addEventListener('resize', adjust);
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(id);
+      window.removeEventListener('resize', adjust);
+    };
+  }, [room.tenPhong]);
+
+  // Price calculations for display
+  const basePrice: number | null =
+    ((room as any).giaCoBanMotDem ?? (room as any).basePricePerNight) ?? null;
+
+  // Determine discount according to promotion type
+  const promoValue = promotion?.giaTriGiam ?? 0; // could be percent or amount
+  const isPercent = promotion?.loaiGiamGia === "percent";
+  const isAmount = promotion?.loaiGiamGia === "amount";
+  const hasDiscount = !!promotion && !!basePrice && promoValue > 0 && (isPercent || isAmount);
+
+  let discountedPrice: number | null = null;
+  let savings = 0;
+  if (hasDiscount && basePrice) {
+    if (isPercent) {
+      discountedPrice = Math.round(basePrice * (1 - (promoValue / 100)));
+      savings = basePrice - (discountedPrice ?? 0);
+    } else if (isAmount) {
+      // promoValue is fixed amount in VND
+      discountedPrice = Math.max(0, Math.round(basePrice - promoValue));
+      savings = basePrice - discountedPrice;
+    }
+  }
+
   return (
     <div
       style={{
@@ -153,13 +218,11 @@ const RoomCard: React.FC<Props> = ({
         overflow: "hidden",
         background: "#fff",
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-        // THAY ĐỔI 1: Biến thẻ (card) thành flex-column
         display: "flex",
         flexDirection: "column",
-        height: "100%", // Đảm bảo thẻ lấp đầy ô grid/flex cha
+        height: "100%",
       }}
     >
-            {/* Render image as a background */}     {" "}
       <div
         role="img"
         aria-label={room.tenPhong ?? "Phòng"}
@@ -171,18 +234,17 @@ const RoomCard: React.FC<Props> = ({
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
-          flexShrink: 0, // Ngăn ảnh bị co lại
+          flexShrink: 0,
           position: "relative",
         }}
       >
-        {/* Promotion badge */}
         {promotion && (
           <div
             style={{
               position: "absolute",
               top: 10,
               left: 10,
-              zIndex: 20,
+              // zIndex: 20,
               display: "flex",
               alignItems: "center",
               gap: 8,
@@ -206,76 +268,154 @@ const RoomCard: React.FC<Props> = ({
           </div>
         )}
       </div>
-           {" "}
-      <div
-        style={{
-          padding: 18,
-          // THAY ĐỔI 2: Biến khu vực nội dung thành flex-column
-          display: "flex",
-          flexDirection: "column",
-          flexGrow: 1, // Yêu cầu nó lấp đầy không gian còn lại
-        }}
-      >
-        {/* THAY ĐỔI 3: Tạo một wrapper cho nội dung trên */}
-        {/* Wrapper này sẽ giãn ra để đẩy "footer" xuống */}
+
+        <div
+          style={{
+            padding: 18,
+            display: "flex",
+            flexDirection: "column",
+            flexGrow: 1,
+          }}
+        >
         <div style={{ flexGrow: 1 }}>
-                 {" "}
-          <h2 style={{ margin: 0, fontSize: 30, fontWeight: "bold" }}>
+          <h2
+            ref={(el) => (titleRef.current = el)}
+            style={{
+              margin: 0,
+              fontSize: titleFontSize,
+              fontWeight: "bold",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
             {room.tenPhong ?? "Phòng nghỉ"}
           </h2>
-                 {" "}
-          <a
-            onClick={() => onOpenDetail(room)}
-            style={{
-              display: "inline-block",
-              marginBottom: 12,
-              color: "#dfa974",
-              textDecoration: "none",
-              borderBottom: "2px solid #dfa974",
-              paddingBottom: 2,
-              cursor: "pointer",
-              fontWeight: "bold",
-              lineHeight: 1.2,
-            }}
-          >
-            Xem thông tin phòng chi tiết
-          </a>
+
+          {/* Removed inline detail link — primary CTA now opens detail (luxury "Khám phá phòng") */}
+
+          {/* Price Display */}
+          <div style={{ marginTop: 12, marginBottom: 16, minHeight: 60 }}>
+            {hasDiscount && discountedPrice ? (
+              // --- DISCOUNT VIEW ---
+              <div>
+                <div style={{ fontSize: 15, color: "#999", textDecoration: "line-through" }}>
+                  {formatPrice(basePrice)}
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4, flexWrap: 'nowrap' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <div style={{ fontSize: 25, fontWeight: 700, color: "#dfa974", lineHeight: 1 }}>
+                        {formatPrice(discountedPrice)}
+                      </div>
+                      <div style={{ fontSize: 13, color: "#666", fontWeight: 500, whiteSpace: 'nowrap' }}>/đêm</div>
+                    </div>
+                  <Tag
+                    color="gold"
+                    style={{
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      fontSize: 11,
+                      padding: '3px 6px',
+                      lineHeight: 1,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      marginRight: 2,
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    TIẾT KIỆM {promotion?.loaiGiamGia === "percent" ? `${promoValue}%` : `${promoValue?.toLocaleString?.() ?? promoValue}đ`}
+                  </Tag>
+                </div>
+              </div>
+            ) : (
+              // --- REGULAR PRICE VIEW ---
+              <div>
+                <div style={{ fontSize: 10, color: "#888" }}>Giá mỗi đêm từ</div>
+                <div style={{ display: "inline-flex", alignItems: "baseline", gap: 8, marginTop: 4, whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
+                  <div style={{ fontSize: 25, fontWeight: 700, color: "#333", lineHeight: 1, flexShrink: 0 }}>
+                    {formatPrice(basePrice)}
+                  </div>
+                  <div style={{ fontSize: 14, color: "#666", fontWeight: 500, whiteSpace: 'nowrap' }}>/đêm</div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        {/* THAY ĐỔI 4: Tạo một wrapper cho "footer" */}
-        {/* Wrapper này sẽ KHÔNG giãn ra (flexShrink: 0) */}
+
         <div>
-          <div
-            style={{
-              marginBottom: 10,
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <Button
-              type="primary"
-              onClick={() => onBook(room)}
-              style={{
-                background: "#dfa974",
-                borderColor: "#dfa974",
-                height: 64,
-                fontSize: 18,
-                width: "min(420px, 85%)",
-              }}
-            >
-              {bookButtonText}
-            </Button>
-          </div>
-                 {" "}
-          <div
-            style={{ fontSize: 12, color: "#666" /* Bỏ margin bottom ở đây */ }}
-          >
-                      Giá bao gồm phí dịch vụ 5% mỗi lần lưu trú, nhưng không
-            bao gồm thuế        {" "}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* If on select-room page, show both Select and View Detail buttons.
+                Otherwise keep the original big CTA that opens details. */}
+            {typeof window !== 'undefined' && window.location.pathname.startsWith('/select-room') ? (
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <Button
+                  type="primary"
+                  onClick={() => onBook(room)}
+                  aria-label="Chọn phòng"
+                  style={{
+                    background: 'linear-gradient(135deg, #dfa974 0%, #d89860 100%)',
+                    borderColor: 'transparent',
+                    height: 48,
+                    fontSize: 16,
+                    padding: '0 24px',
+                    borderRadius: 10,
+                    boxShadow: '0 8px 20px rgba(217,152,96,0.14)',
+                    color: '#fff',
+                    fontWeight: 700,
+                  }}
+                >
+                  Chọn phòng
+                </Button>
+
+                <Button
+                  onClick={() => onOpenDetail(room)}
+                  aria-label="Xem chi tiết"
+                  style={{
+                    height: 48,
+                    fontSize: 15,
+                    padding: '0 18px',
+                    borderRadius: 10,
+                  }}
+                >
+                  Xem chi tiết
+                </Button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  marginBottom: 10,
+                  display: 'flex',
+                  justifyContent: 'center',
+                }}
+              >
+                <Button
+                  type="primary"
+                  onClick={() => onOpenDetail(room)}
+                  aria-label="Khám phá phòng"
+                  style={{
+                    background: 'linear-gradient(135deg, #dfa974 0%, #d89860 100%)',
+                    borderColor: 'transparent',
+                    height: 64,
+                    fontSize: 18,
+                    width: 'min(420px, 85%)',
+                    borderRadius: 12,
+                    boxShadow: '0 10px 30px rgba(217,152,96,0.18)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    letterSpacing: '0.2px',
+                  }}
+                >
+                  {bookButtonText}
+                </Button>
+              </div>
+            )}
+
+            <div style={{ fontSize: 12, color: '#666' }}>
+              Giá bao gồm phí dịch vụ 5% nhưng không bao gồm thuế
+            </div>
           </div>
         </div>
-             {" "}
       </div>
-         {" "}
     </div>
   );
 };

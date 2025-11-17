@@ -9,11 +9,13 @@ import {
   Col,
   Button,
   Divider,
+  message,
 } from "antd";
 import { CheckCircleOutlined, UserOutlined } from "@ant-design/icons";
 import RoomCard from "../components/Room/RoomCard";
 import DetailRoom from "../components/Room/DetailRoom";
 import BookingProgress from "../components/BookingProgress";
+import ServicesSelector from "../components/ServicesSelector";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -21,6 +23,13 @@ const { Title, Text } = Typography;
 interface SelectedRoom {
   roomNumber: number;
   room: any;
+}
+
+interface SelectedService {
+  serviceId: string;
+  serviceName: string;
+  price: number;
+  quantity: number;
 }
 
 const SelectRoomPage: React.FC = () => {
@@ -38,6 +47,12 @@ const SelectRoomPage: React.FC = () => {
   const [currentRoomNumber, setCurrentRoomNumber] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedServices, setSelectedServices] = useState<SelectedService[]>(
+    []
+  );
+  const [servicesTotal, setServicesTotal] = useState(0);
+  const [selectionComplete, setSelectionComplete] = useState(false);
+  const [extraSelectAlert, setExtraSelectAlert] = useState<string | null>(null);
 
   // Modal detail room
   const [detailVisible, setDetailVisible] = useState(false);
@@ -51,6 +66,17 @@ const SelectRoomPage: React.FC = () => {
       try {
         const parsed = JSON.parse(roomsFromSession);
         console.log("Available rooms from sessionStorage:", parsed);
+        // Log chi tiết từng phòng để kiểm tra giá khuyến mãi
+        parsed.forEach((room: any, index: number) => {
+          console.log(`Room ${index + 1}:`, {
+            tenPhong: room.tenPhong,
+            giaCoBanMotDem: room.giaCoBanMotDem,
+            basePricePerNight: room.basePricePerNight,
+            discountedPrice: room.discountedPrice,
+            promotionName: room.promotionName,
+            discountPercent: room.discountPercent,
+          });
+        });
         setAvailableRooms(parsed);
         setLoading(false);
       } catch (e) {
@@ -65,14 +91,33 @@ const SelectRoomPage: React.FC = () => {
     }
   }, []);
 
+  // auto hide inline alert after a short time (kept here so hooks order stable)
+  React.useEffect(() => {
+    if (!extraSelectAlert) return;
+    const t = setTimeout(() => setExtraSelectAlert(null), 5000);
+    return () => clearTimeout(t);
+  }, [extraSelectAlert]);
+
   const handleSelectRoom = (room: any) => {
     // Kiểm tra xem phòng đã được chọn chưa
     const alreadySelected = selectedRooms.some(
       (sr) => sr.room.idphong === room.idphong
     );
 
+    // If the room is already selected, notify user
     if (alreadySelected) {
-      alert("Phòng này đã được chọn!");
+      message.info("Phòng này đã được chọn!");
+      return;
+    }
+
+    // Prevent selecting additional rooms when user already selected the maximum allowed
+    if (selectedRooms.length >= totalRooms) {
+      const txt =
+        "Bạn đã chọn đủ số phòng rồi. Xóa phòng hiện tại để chọn phòng khác.";
+      // show toast
+      message.warning(txt);
+      // show inline alert banner for stronger visibility
+      setExtraSelectAlert(txt);
       return;
     }
 
@@ -83,20 +128,12 @@ const SelectRoomPage: React.FC = () => {
     ];
     setSelectedRooms(newSelectedRooms);
 
-    // Nếu đã chọn đủ số phòng, chuyển sang trang thanh toán
-    if (currentRoomNumber >= totalRooms) {
-      // Lưu thông tin đặt phòng vào sessionStorage
-      sessionStorage.setItem(
-        "bookingInfo",
-        JSON.stringify({
-          selectedRooms: newSelectedRooms,
-          checkIn,
-          checkOut,
-          guests,
-          totalRooms,
-        })
-      );
-      window.location.href = "/checkout";
+    // Nếu đã chọn đủ số phòng, đánh dấu hoàn tất nhưng không chuyển ngay —
+    // cho phép người dùng chọn dịch vụ hoặc bấm Thanh toán để tiếp tục.
+    if (newSelectedRooms.length >= totalRooms) {
+      setSelectionComplete(true);
+      // keep currentRoomNumber at last room for review
+      setCurrentRoomNumber(totalRooms);
     } else {
       // Chuyển sang chọn phòng tiếp theo
       setCurrentRoomNumber(currentRoomNumber + 1);
@@ -110,6 +147,8 @@ const SelectRoomPage: React.FC = () => {
     setSelectedRooms(newSelectedRooms);
     // Quay lại chọn phòng vừa xóa
     setCurrentRoomNumber(roomNumber);
+    // Update completion flag if user removed a room
+    setSelectionComplete(newSelectedRooms.length >= totalRooms);
   };
 
   const handleOpenDetail = (room: any) => {
@@ -129,6 +168,8 @@ const SelectRoomPage: React.FC = () => {
         "bookingInfo",
         JSON.stringify({
           selectedRooms,
+          selectedServices,
+          servicesTotal,
           checkIn,
           checkOut,
           guests,
@@ -142,6 +183,24 @@ const SelectRoomPage: React.FC = () => {
     setCurrentRoomNumber(roomNum);
   };
 
+  const handleProceedToCheckout = () => {
+    // Only allow when selectionComplete is true
+    if (!selectionComplete || selectedRooms.length < totalRooms) return;
+    sessionStorage.setItem(
+      "bookingInfo",
+      JSON.stringify({
+        selectedRooms,
+        selectedServices,
+        servicesTotal,
+        checkIn,
+        checkOut,
+        guests,
+        totalRooms,
+      })
+    );
+    window.location.href = "/checkout";
+  };
+
   const calculateTotal = () => {
     if (!selectedRooms) return 0;
 
@@ -152,10 +211,21 @@ const SelectRoomPage: React.FC = () => {
     );
 
     const totalPrice = selectedRooms.reduce((sum, sr) => {
-      return sum + (sr.room.giaCoBanMotDem || 0) * nights;
+      // Sử dụng giá sau khuyến mãi nếu có, nếu không thì dùng giá cơ bản
+      const price =
+        sr.room.discountedPrice &&
+        sr.room.discountedPrice < sr.room.basePricePerNight
+          ? sr.room.discountedPrice
+          : sr.room.basePricePerNight || sr.room.giaCoBanMotDem;
+      return sum + (price || 0) * nights;
     }, 0);
 
     return totalPrice;
+  };
+
+  const handleServicesChange = (services: SelectedService[], total: number) => {
+    setSelectedServices(services);
+    setServicesTotal(total);
   };
 
   if (loading) {
@@ -224,6 +294,18 @@ const SelectRoomPage: React.FC = () => {
           selectedRoomNumbers={selectedRooms.map((sr) => sr.roomNumber)}
         />
 
+        {extraSelectAlert && (
+          <div style={{ marginTop: 12 }}>
+            <Alert
+              type="warning"
+              message={extraSelectAlert}
+              showIcon
+              closable
+              onClose={() => setExtraSelectAlert(null)}
+            />
+          </div>
+        )}
+
         <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
           {/* Main content */}
           <Col xs={24} lg={16}>
@@ -287,10 +369,43 @@ const SelectRoomPage: React.FC = () => {
                     >
                       <Text strong>Phòng {i + 1}</Text>
                       {selected && (
-                        <Text>
-                          {(selected.room.giaCoBanMotDem || 0).toLocaleString()}
-                          đ
-                        </Text>
+                        <div style={{ textAlign: "right" }}>
+                          {selected.room.discountedPrice &&
+                          selected.room.discountedPrice <
+                            (selected.room.basePricePerNight ||
+                              selected.room.giaCoBanMotDem) ? (
+                            <>
+                              <Text
+                                delete
+                                type="secondary"
+                                style={{ fontSize: "12px" }}
+                              >
+                                {(
+                                  selected.room.basePricePerNight ||
+                                  selected.room.giaCoBanMotDem ||
+                                  0
+                                ).toLocaleString()}
+                                đ
+                              </Text>
+                              <br />
+                              <Text strong style={{ color: "#dfa974" }}>
+                                {(
+                                  selected.room.discountedPrice || 0
+                                ).toLocaleString()}
+                                đ
+                              </Text>
+                            </>
+                          ) : (
+                            <Text>
+                              {(
+                                selected.room.basePricePerNight ||
+                                selected.room.giaCoBanMotDem ||
+                                0
+                              ).toLocaleString()}
+                              đ
+                            </Text>
+                          )}
+                        </div>
                       )}
                     </div>
                     <div
@@ -317,9 +432,56 @@ const SelectRoomPage: React.FC = () => {
                 );
               })}
               <Divider />
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <Text strong>Tổng chi phí của lần lưu trú:</Text>
+
+              {/* Services Selector */}
+              <ServicesSelector onServicesChange={handleServicesChange} />
+
+              <Divider />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
+                <Text strong>Tiền phòng:</Text>
                 <Text strong>{calculateTotal().toLocaleString()}đ</Text>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
+                <Text strong>Tiền dịch vụ:</Text>
+                <Text strong>{servicesTotal.toLocaleString()}đ</Text>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: 12,
+                  background: "#f5f5f5",
+                  borderRadius: 6,
+                }}
+              >
+                <Text strong style={{ fontSize: 16 }}>
+                  Tổng chi phí:
+                </Text>
+                <Text strong style={{ fontSize: 16, color: "#dfa974" }}>
+                  {(calculateTotal() + servicesTotal).toLocaleString()}đ
+                </Text>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <Button
+                  type="primary"
+                  block
+                  disabled={selectedRooms.length < totalRooms}
+                  onClick={handleProceedToCheckout}
+                >
+                  Thanh toán
+                </Button>
               </div>
             </Card>
           </Col>

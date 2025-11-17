@@ -5,6 +5,14 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { COLORS, SIZES } from "../constants/theme";
 import HomeScreen from "../screens/HomeScreen";
 import CheckAvailableRoomsScreen from "../screens/CheckAvailableRoomsScreen";
+import PromotionDetail from "../screens/PromotionDetail";
+import RoomTypeDetail from "../screens/RoomTypeDetail";
+import ServiceDetail from "../screens/ServiceDetail";
+import SelectRoomsScreen from "../screens/SelectRoomsScreen";
+import ServicesSelectionScreen from "../screens/ServicesSelectionScreen";
+import CheckoutScreen from "../screens/CheckoutScreen";
+import PaymentScreen from "../screens/PaymentScreen";
+import BookingSuccessScreen from "../screens/BookingSuccessScreen";
 import RoomsScreen from "../screens/RoomsScreen";
 import BookingsScreen from "../screens/BookingsScreen";
 import OffersScreen from "../screens/OffersScreen";
@@ -21,6 +29,25 @@ export type TabParamList = {
 export type HomeStackParamList = {
   Home: undefined;
   CheckAvailableRooms: undefined;
+  PromotionDetail: { promotionId: string };
+  RoomTypeDetail: { idloaiPhong: string; tenLoaiPhong: string };
+  ServiceDetail: { serviceId: string };
+  SelectRooms: {
+    checkIn: string;
+    checkOut: string;
+    guests: number;
+    availableRooms: any[];
+  };
+  ServicesSelection: {
+    selectedRooms: any[];
+    checkIn: string;
+    checkOut: string;
+    guests: number;
+    rooms: number;
+  };
+  Checkout: undefined;
+  Payment: undefined;
+  BookingSuccess: undefined;
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -33,6 +60,20 @@ const HomeStackNavigator: React.FC = () => {
       <HomeStack.Screen
         name="CheckAvailableRooms"
         component={CheckAvailableRoomsScreen}
+      />
+      <HomeStack.Screen name="PromotionDetail" component={PromotionDetail} />
+      <HomeStack.Screen name="RoomTypeDetail" component={RoomTypeDetail} />
+      <HomeStack.Screen name="ServiceDetail" component={ServiceDetail} />
+      <HomeStack.Screen name="SelectRooms" component={SelectRoomsScreen} />
+      <HomeStack.Screen
+        name="ServicesSelection"
+        component={ServicesSelectionScreen}
+      />
+      <HomeStack.Screen name="Checkout" component={CheckoutScreen} />
+      <HomeStack.Screen name="Payment" component={PaymentScreen} />
+      <HomeStack.Screen
+        name="BookingSuccess"
+        component={BookingSuccessScreen}
       />
     </HomeStack.Navigator>
   );

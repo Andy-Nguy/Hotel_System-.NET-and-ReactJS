@@ -6,51 +6,23 @@ const AboutUs: React.FC = () => {
   return (
     <View style={styles.section}>
       <View style={styles.sectionTitle}>
-        <Text style={styles.span}>About Us</Text>
-        <Text style={styles.h2}>Welcome to Robins Villa</Text>
+        <Text style={styles.span}>Về Chúng Tôi</Text>
+        <Text style={styles.h2}>Chào mừng đến với Robins Villa</Text>
       </View>
 
       <View style={styles.content}>
         <Image
-          source={{
-            uri: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800",
-          }}
+          source={require("../assets/img/aboutus.jpg")}
           style={styles.image}
           resizeMode="cover"
         />
 
         <View style={styles.textContainer}>
           <Text style={styles.description}>
-            Robins Villa is a premier hotel providing exceptional hospitality
-            and luxury accommodations. We are dedicated to making your stay
-            unforgettable with our world-class services and amenities.
+            Giữa làn sương Đà Lạt, Robins Villa mang đến không gian nghỉ dưỡng
+            yên bình và tinh tế. Nơi bạn chạm vào vẻ đẹp của thiên nhiên và tìm
+            lại sự an yên trong từng khoảnh khắc.
           </Text>
-
-          <View style={styles.features}>
-            <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>🏆</Text>
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>Excellence</Text>
-                <Text style={styles.featureDesc}>Award-winning service</Text>
-              </View>
-            </View>
-
-            <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>🌟</Text>
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>Luxury</Text>
-                <Text style={styles.featureDesc}>Premium facilities</Text>
-              </View>
-            </View>
-
-            <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>💎</Text>
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>Comfort</Text>
-                <Text style={styles.featureDesc}>Unforgettable experience</Text>
-              </View>
-            </View>
-          </View>
         </View>
       </View>
     </View>
@@ -59,7 +31,7 @@ const AboutUs: React.FC = () => {
 
 const styles = StyleSheet.create({
   section: {
-    paddingVertical: SIZES.padding * 3,
+    paddingTop: SIZES.padding * 3,
     paddingHorizontal: SIZES.padding,
     backgroundColor: COLORS.white,
   },
@@ -98,7 +70,7 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     lineHeight: 28,
     textAlign: "center",
-    marginBottom: SIZES.margin * 2,
+    // marginBottom: SIZES.margin,
   },
   features: {
     width: "100%",

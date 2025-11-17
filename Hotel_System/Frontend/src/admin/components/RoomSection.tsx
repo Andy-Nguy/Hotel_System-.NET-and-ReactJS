@@ -35,9 +35,7 @@ const RoomSection: React.FC = () => {
   const [detailRoom, setDetailRoom] = useState<Room | null>(null);
   // when opening detail we may want to start in edit mode immediately
   const [detailStartEditing, setDetailStartEditing] = useState(false);
-  // status modal
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [statusTarget, setStatusTarget] = useState<Room | null>(null);
+  // status modal removed: we use a simple toggle that persists directly to the API
 
   const load = async () => {
     setLoading(true);
@@ -54,32 +52,7 @@ const RoomSection: React.FC = () => {
   };
 
   useEffect(() => { load(); }, []);
-
-  // allow other parts to open the status modal via a CustomEvent (used by detail modal)
-  useEffect(() => {
-    const handler = (e: any) => {
-      try {
-        const d = e?.detail;
-        if (!d) return;
-        const id = d.id;
-        const current = d.current;
-        // find room by id
-        const found = rooms.find(r => String(r.idphong) === String(id));
-        if (found) {
-          setStatusTarget(found);
-          setShowStatusModal(true);
-        } else {
-          // if not found, still open with minimal info
-          setStatusTarget({ idphong: id } as Room);
-          setShowStatusModal(true);
-        }
-      } catch (err) {
-        // ignore
-      }
-    };
-    window.addEventListener('openStatusFromDetail', handler as EventListener);
-    return () => window.removeEventListener('openStatusFromDetail', handler as EventListener);
-  }, [rooms]);
+  // No custom event listener: use direct toggle function instead
 
   const filtered = rooms.filter(r => {
     if (typeFilter && String(r.idloaiPhong) !== String(typeFilter)) return false;
@@ -95,24 +68,18 @@ const RoomSection: React.FC = () => {
 
   const saveDetail = async (updated: Room) => {
     try {
-      await updateRoom(updated.idphong, updated);
+      // Sanitize status: backend only accepts "Trống" or "Bảo trì" from user updates.
+      const payload: Partial<Room> = { ...updated };
+      if ((payload.trangThai ?? '').toLowerCase() === 'đang sử dụng') {
+        // Do not send 'Đang sử dụng' as it's system-calculated; omit the field so backend won't change it.
+        delete (payload as any).trangThai;
+      }
+      await updateRoom(updated.idphong, payload);
       await load();
       setShowDetail(false);
     } catch (e) {
       console.error(e);
       alert('Lỗi lưu phòng');
-    }
-  };
-
-  const quickToggleStatus = async (r: Room) => {
-    // legacy quick toggle replaced by status modal — kept for backward compat but not used
-    const newStatus = (r.trangThai === 'Bảo trì') ? 'Trống' : 'Bảo trì';
-    try {
-      await updateRoom(r.idphong, { trangThai: newStatus });
-      await load();
-    } catch (e) {
-      console.error(e);
-      alert('Lỗi cập nhật trạng thái');
     }
   };
 
@@ -129,19 +96,7 @@ const RoomSection: React.FC = () => {
 
   if (loading) return <div>Đang tải phòng...</div>;
 
-  const openStatusModal = (r: Room) => { setStatusTarget(r); setShowStatusModal(true); };
-
-  const handleStatusSave = async (rId: string, newStatus: string) => {
-    try {
-      await updateRoom(rId, { trangThai: newStatus });
-      await load();
-      setShowStatusModal(false);
-      setStatusTarget(null);
-    } catch (e) {
-      console.error(e);
-      alert('Lỗi cập nhật trạng thái');
-    }
-  };
+  // status is toggled inline via quickToggleStatus; no separate save handler needed
 
   
 
@@ -273,7 +228,7 @@ const RoomSection: React.FC = () => {
                 gap: 4,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                 backdropFilter: 'blur(8px)'
-              }}>
+                }}>
                 {statusEmoji(r.trangThai)} {r.trangThai ?? 'Chưa rõ'}
               </div>
             </div>
@@ -359,14 +314,11 @@ const RoomSection: React.FC = () => {
       {showDetail && detailRoom && (
         <RoomDetailModal room={detailRoom} types={types} initialEdit={detailStartEditing} onClose={() => { setShowDetail(false); setDetailStartEditing(false); }} onSave={saveDetail} />
       )}
-      {showStatusModal && statusTarget && (
-        <StatusModal current={statusTarget.trangThai ?? ''} roomId={statusTarget.idphong} onClose={() => { setShowStatusModal(false); setStatusTarget(null); }} onSave={handleStatusSave} />
-      )}
     </div>
   );
 };
 
-const RoomDetailModal: React.FC<{ room: Room; types: RoomType[]; initialEdit?: boolean; onClose: () => void; onSave: (r: Room) => void }> = ({ room, types, initialEdit, onClose, onSave }) => {
+const RoomDetailModal: React.FC<{ room: Room; types: RoomType[]; initialEdit?: boolean; onClose: () => void; onSave: (r: Room) => void; onToggleStatus?: (r: Room) => void }> = ({ room, types, initialEdit, onClose, onSave }) => {
   const [form, setForm] = useState<Room>({ ...room });
   const [isEditing, setIsEditing] = useState(initialEdit ?? false);
 
@@ -596,7 +548,6 @@ const RoomDetailModal: React.FC<{ room: Room; types: RoomType[]; initialEdit?: b
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db' }}
                   >
                     <option value="Trống">Trống</option>
-                    <option value="Đang sử dụng">Đang sử dụng</option>
                     <option value="Bảo trì">Bảo trì</option>
                   </select>
                 </div>
@@ -672,24 +623,6 @@ const RoomDetailModal: React.FC<{ room: Room; types: RoomType[]; initialEdit?: b
                   >
                     ✏️ Sửa thông tin
                   </button>
-                  <button 
-                    onClick={() => window.dispatchEvent(new CustomEvent('openStatusFromDetail', { detail: { id: form.idphong, current: form.trangThai } }))}
-                    style={{ 
-                      padding: '12px 24px', 
-                      borderRadius: 8, 
-                      border: 'none',
-                      background: '#f59e0b',
-                      color: 'white',
-                      fontSize: 16,
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8
-                    }}
-                  >
-                    🔄 Cập nhật trạng thái
-                  </button>
                 </>
               ) : (
                 <>
@@ -739,24 +672,6 @@ const RoomDetailModal: React.FC<{ room: Room; types: RoomType[]; initialEdit?: b
   );
 };
 
-const StatusModal: React.FC<{ current: string; roomId: string; onClose: () => void; onSave: (id: string, newStatus: string) => void }> = ({ current, roomId, onClose, onSave }) => {
-  const [value, setValue] = useState(current || 'Trống');
-  return (
-    <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
-      <div style={{ width: 420, background: '#fff', borderRadius: 12, padding: 18 }} onClick={e => e.stopPropagation()}>
-        <h3>Chọn trạng thái mới cho phòng {roomId}</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-          <label><input type="radio" name="status" checked={value === 'Trống'} onChange={() => setValue('Trống')} /> Trống</label>
-          <label><input type="radio" name="status" checked={value === 'Đang sử dụng'} onChange={() => setValue('Đang sử dụng')} /> Đang sử dụng</label>
-          <label><input type="radio" name="status" checked={value === 'Bảo trì'} onChange={() => setValue('Bảo trì')} /> Bảo trì</label>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-          <button onClick={onClose} style={{ padding: '8px 12px', borderRadius: 8 }}>❌ Hủy</button>
-          <button onClick={() => onSave(roomId, value)} style={{ padding: '8px 12px', borderRadius: 8, background: '#10b981', color: '#fff' }}>💾 Lưu</button>
-        </div>
-      </div>
-    </div>
-  );
-};
+// StatusModal removed — status is toggled inline via badge or detail button.
 
 export default RoomSection;

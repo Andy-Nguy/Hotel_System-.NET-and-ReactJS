@@ -10,7 +10,9 @@ import {
   DatePicker,
   Typography,
   Layout,
+  Button,
 } from "antd";
+import { CloseOutlined } from '@ant-design/icons';
 import RoomCard from "../components/Room/RoomCard";
 import DetailRoom from "../components/Room/DetailRoom";
 import BookingForm from "../components/BookingForm";
@@ -87,6 +89,8 @@ const RoomPage: React.FC = () => {
 
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
+      // Hide rooms under maintenance from public listing
+      if ((room.trangThai ?? '').toString().toLowerCase().includes('bảo trì')) return false;
       if (filterRoomType && room.idloaiPhong !== filterRoomType) {
         return false;
       }
@@ -127,6 +131,16 @@ const RoomPage: React.FC = () => {
     alert(
       `Tiếp tục đặt phòng: ${room.tenPhong ?? room.soPhong ?? room.idphong}`
     );
+  };
+
+  const resetFilters = () => {
+    setFilterDates(null);
+    setFilterGuests(null);
+    setFilterRoomType(null);
+    setFilterRating(null);
+    setFilterPriceRange(priceBounds);
+    setAvailableRooms(null);
+    setBookingMessage(null);
   };
 
   const handleBookingResults = (
@@ -249,6 +263,7 @@ const RoomPage: React.FC = () => {
                 placeholder="Tất cả"
                 style={{ width: "100%" }}
                 allowClear
+                value={filterGuests ?? undefined}
                 onChange={setFilterGuests}
               >
                 <Select.Option value={1}>1 người</Select.Option>
@@ -263,6 +278,7 @@ const RoomPage: React.FC = () => {
                 placeholder="Tất cả"
                 style={{ width: "100%" }}
                 allowClear
+                value={filterRoomType ?? undefined}
                 onChange={setFilterRoomType}
               >
                 {roomTypes
@@ -280,6 +296,7 @@ const RoomPage: React.FC = () => {
                 placeholder="Tất cả"
                 style={{ width: "100%" }}
                 allowClear
+                value={filterRating ?? undefined}
                 onChange={setFilterRating}
               >
                 <Select.Option value={5}>5 sao</Select.Option>
@@ -303,14 +320,10 @@ const RoomPage: React.FC = () => {
                 }}
               />
             </Col>
+              <Col xs={12} md={6} lg={3} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                <Button onClick={resetFilters} icon={<CloseOutlined />}>Xóa bộ lọc</Button>
+              </Col>
           </Row>
-
-          <Alert
-            type="info"
-            message="Các bộ lọc nâng cao (Tiện nghi, Đánh giá, Khuyến mãi) sẽ sớm được cập nhật khi có dữ liệu."
-            style={{ marginTop: 16 }}
-            showIcon
-          />
         </Card>
 
         <div
@@ -331,9 +344,10 @@ const RoomPage: React.FC = () => {
             />
           )}
 
-          {(() => {
-            const roomsToDisplay =
-              availableRooms !== null ? availableRooms : filteredRooms;
+            {(() => {
+            // Ensure maintenance rooms are hidden even when availableRooms is provided
+            const source = availableRooms !== null ? availableRooms : filteredRooms;
+            const roomsToDisplay = source.filter(r => !((r.trangThai ?? '').toString().toLowerCase().includes('bảo trì')));
             return roomsToDisplay.length === 0 ? (
               <Alert
                 message="Không tìm thấy phòng"

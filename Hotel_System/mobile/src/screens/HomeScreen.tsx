@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -13,7 +13,12 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "../components/AppIcon";
+import AboutUs from "../components/AboutUs";
+import BlogSection from "../components/BlogSection";
+import Promotion from "../components/Promotion";
+import RoomType from "../components/RoomType";
+import Services from "../components/Services";
 
 const HomeScreen: React.FC = () => {
   const { userInfo } = useAuth();
@@ -33,6 +38,10 @@ const HomeScreen: React.FC = () => {
     } catch (e) {
       return "Nguyen";
     }
+  };
+
+  const handleSearchFocus = () => {
+    navigation.navigate("CheckAvailableRooms" as never);
   };
 
   return (
@@ -61,7 +70,7 @@ const HomeScreen: React.FC = () => {
           {/* Hero Search Bar - Floating */}
           <View style={styles.heroSearchContainer}>
             <View style={styles.searchBox}>
-              <Icon
+              <AppIcon
                 name="search"
                 size={20}
                 color="#999"
@@ -69,10 +78,11 @@ const HomeScreen: React.FC = () => {
               />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Can I help you?"
+                placeholder="Tìm phòng phù hợp với bạn ..."
                 placeholderTextColor="#999"
                 value={searchText}
                 onChangeText={setSearchText}
+                onFocus={handleSearchFocus}
               />
             </View>
           </View>
@@ -80,9 +90,9 @@ const HomeScreen: React.FC = () => {
           {/* Hero Content - Bottom */}
           <View style={styles.heroContent}>
             <Text style={styles.heroTitle}>
-              Elite Stays Await, Unlock Up to 20K Points
+              Đẳng cấp chờ đón bạn – Ưu đãi không giới hạn
             </Text>
-            <Text style={styles.heroSubtext}>Get the offer →</Text>
+            {/* <Text style={styles.heroSubtext}>Nhận ưu đãi ngay →</Text> */}
           </View>
         </ImageBackground>
       </View>
@@ -90,27 +100,25 @@ const HomeScreen: React.FC = () => {
       {/* Bottom Info Bar */}
       <View style={styles.bottomBar}>
         <View style={styles.bottomLeft}>
-          <Text style={styles.bottomLabel}>Hello, {getUserName()}</Text>
+          <Text style={styles.bottomLabel}>Xin chào, {getUserName()}</Text>
         </View>
         <TouchableOpacity style={styles.bottomRight}>
-          <Text style={styles.bottomStats}>0 Nights • 0 Pts</Text>
+          <Text style={styles.bottomStats}>0 Đêm • 0 Điểm</Text>
           <Text style={styles.bottomArrow}>›</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Check Available Rooms Button */}
-      <View style={styles.checkRoomsContainer}>
-        <TouchableOpacity
-          style={styles.checkRoomsButton}
-          onPress={() => navigation.navigate("CheckAvailableRooms" as never)}
-        >
-          <Text style={styles.checkRoomsText}>Check Available Rooms</Text>
-          <Icon name="search" size={20} color={COLORS.white} />
-        </TouchableOpacity>
-      </View>
+      <AboutUs />
 
+      {/* Promotion: Promotion will fetch latest promotion itself when no props provided */}
+      <Promotion navigation={navigation} />
+
+      <RoomType />
+      <Services />
       {/* Bottom Spacing */}
       <View style={styles.spacing} />
+
+      <BlogSection />
     </ScrollView>
   );
 };
@@ -174,12 +182,15 @@ const styles = StyleSheet.create({
     fontSize: 20,
     marginRight: 8,
     color: "#999",
+    width: 28,
+    textAlign: "center",
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: COLORS.secondary,
     padding: 0,
+    minHeight: 36,
   },
   heroContent: {
     paddingHorizontal: SIZES.padding * 1.5,

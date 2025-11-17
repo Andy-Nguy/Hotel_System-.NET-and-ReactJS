@@ -3,7 +3,6 @@ import OffcanvasMenu from "../components/OffcanvasMenu";
 import HeaderSection from "../components/HeaderSection";
 import HeroSection from "../components/HeroSection";
 import PromotionSection from "../components/PromotionSection";
-import AboutUs from "../components/AboutUs";
 import Services from "../components/Services";
 import HomeRoom from "../components/HomeRoom";
 import Testimonial from "../components/Testimonial";
@@ -16,12 +15,20 @@ import RoomPage from "./RoomPage";
 import ProfilePage from "./ProfilePage";
 import SelectRoomPage from "./SelectRoomPage";
 import CheckoutPage from "./CheckoutPage";
+import PaymentPage from "./PaymentPage";
 import AdminDashboard from "../admin/pages/dashboard";
 import RoomManager from "../admin/pages/RoomManager";
 import AmenticsManager from "../admin/pages/AmenticsManager";
 import ServiceManager from "../admin/pages/ServiceManager";
 import PromotionManager from "../admin/pages/PromotionManager";
 import BookingManager from "../admin/pages/BookingManager";
+import InvoicesManager from "../admin/pages/InvoicesManager";
+import CheckoutManager from "../admin/pages/CheckoutManager";
+import LoyaltyManager from "../admin/pages/LoyaltyManager";
+import BookingSuccessPage from "./BookingSuccessPage";
+import AboutUsSection from "../components/AboutUsSection";
+import AboutUsPage from "./AboutUsPage";
+import ContactPage from "./ContactPage";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
@@ -220,6 +227,28 @@ const MainPage: React.FC = () => {
     );
   }
 
+  if (route === "#AboutUsPage" || route === "/AboutUsPage") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <AboutUsPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#contact" || route === "/contact") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <ContactPage />
+        <FooterSection />
+      </>
+    );
+  }
+
   if (route === "#profile" || route === "/profile") {
     return (
       <>
@@ -248,6 +277,28 @@ const MainPage: React.FC = () => {
         <OffcanvasMenu />
         <HeaderSection />
         <CheckoutPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#payment" || route === "/payment") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <PaymentPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#booking-success" || route === "/booking-success") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <BookingSuccessPage />
         <FooterSection />
       </>
     );
@@ -307,15 +358,42 @@ const MainPage: React.FC = () => {
     return <BookingManager />;
   }
 
+  // Admin invoices page route (accessible at /admin/invoices or #admin/invoices)
+  if (
+    route === "#admin/invoices" ||
+    route === "/admin/invoices" ||
+    route === "#/admin/invoices"
+  ) {
+    return <InvoicesManager />;
+  }
+
+  // Admin checkout management (accessible at /admin/checkout)
+  if (
+    route === "#admin/checkout" ||
+    route === "/admin/checkout" ||
+    route === "#/admin/checkout"
+  ) {
+    return <CheckoutManager />;
+  }
+
+  // Admin loyalty / points management route (accessible at /admin/loyalty or #admin/loyalty)
+  if (
+    route === "#admin/loyalty" ||
+    route === "/admin/loyalty" ||
+    route === "#/admin/loyalty"
+  ) {
+    return <LoyaltyManager />;
+  }
+
   return (
     <>
       <OffcanvasMenu />
       <HeaderSection />
 
       <HeroSection />
-      <AboutUs />
+      <AboutUsSection />
       <PromotionSection />
-      
+
       <HomeRoom />
       <Services />
       {/* <Testimonial /> */}

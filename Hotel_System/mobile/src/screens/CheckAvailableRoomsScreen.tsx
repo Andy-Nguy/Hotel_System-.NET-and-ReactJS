@@ -9,14 +9,16 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Modal,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "../components/AppIcon";
 import { checkAvailableRooms, AvailableRoom } from "../api/roomsApi";
+import AvailableRoomCard from "../components/AvailableRoomCard";
 
 const CheckAvailableRoomsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -27,8 +29,12 @@ const CheckAvailableRoomsScreen: React.FC = () => {
     new Date(Date.now() + 86400000).toISOString().split("T")[0]
   );
   const [guests, setGuests] = useState(1);
+  const [rooms, setRooms] = useState(1);
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedRoomDetail, setSelectedRoomDetail] =
+    useState<AvailableRoom | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
   const [searched, setSearched] = useState(false);
 
   // Date picker states
@@ -107,6 +113,24 @@ const CheckAvailableRoomsScreen: React.FC = () => {
     }
   };
 
+  const openRoomDetail = (room: AvailableRoom) => {
+    setSelectedRoomDetail(room);
+    setModalVisible(true);
+  };
+
+  const closeRoomDetail = () => {
+    setModalVisible(false);
+    setSelectedRoomDetail(null);
+  };
+
+  const calculateNights = () => {
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+    return Math.ceil(
+      (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+  };
+
   const renderStars = (rating: number) => {
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 !== 0;
@@ -125,84 +149,19 @@ const CheckAvailableRoomsScreen: React.FC = () => {
   };
 
   const renderRoomItem = ({ item }: { item: AvailableRoom }) => (
-    <TouchableOpacity style={styles.card}>
-      {/* Room Image */}
-      <View style={styles.imageContainer}>
-        {item.roomImageUrl ? (
-          <Image
-            source={{ uri: item.roomImageUrl }}
-            style={styles.roomImage}
-            contentFit="cover"
-            onError={(e) =>
-              console.log("Image load error:", item.roomImageUrl, e)
-            }
-            onLoad={() =>
-              console.log("Image loaded successfully:", item.roomImageUrl)
-            }
-          />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>🏨</Text>
-          </View>
-        )}
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: "#4CAF50" }]}>
-          <Text style={styles.statusText}>Còn phòng</Text>
-        </View>
-      </View>
-
-      {/* Room Info */}
-      <View style={styles.content}>
-        {/* Title Section */}
-        <View style={styles.titleSection}>
-          <Text style={styles.roomName} numberOfLines={2}>
-            {item.roomTypeName || "Unknown Room"}
-          </Text>
-          <Text style={styles.roomNumber}>Phòng {item.roomNumber || "-"}</Text>
-        </View>
-
-        {/* Rating */}
-        <View style={styles.ratingSection}>
-          <Text style={styles.stars}>{renderStars(4.5)}</Text>
-          <Text style={styles.ratingText}>4.5/5</Text>
-        </View>
-
-        {/* Description/Features */}
-        {item.description && (
-          <Text style={styles.description} numberOfLines={2}>
-            {item.description}
-          </Text>
-        )}
-
-        {/* Amenities - Key Features */}
-        <View style={styles.amenitiesSection}>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>📶 Wi-Fi</Text>
-          </View>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>
-              🛏️ {item.maxOccupancy || "-"} guests
-            </Text>
-          </View>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>🏊 Pool</Text>
-          </View>
-        </View>
-
-        {/* Price Section */}
-        <View style={styles.priceSection}>
-          <Text style={styles.priceLabel}>Giá/đêm:</Text>
-          <Text style={styles.price}>
-            ${Number(item.basePricePerNight || 0).toLocaleString()}
-          </Text>
-        </View>
-
-        {/* View Details Button */}
-        <TouchableOpacity style={styles.detailButton}>
-          <Text style={styles.detailButtonText}>Xem chi tiết</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+    <AvailableRoomCard
+      room={item}
+      onOpenDetail={() => openRoomDetail(item)}
+      onSelect={() =>
+        (navigation as any).navigate("SelectRooms", {
+          checkIn,
+          checkOut,
+          guests,
+          rooms,
+          availableRooms,
+        })
+      }
+    />
   );
 
   return (
@@ -213,7 +172,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Icon name="arrow-left" size={20} color={COLORS.secondary} />
+          <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Kiểm tra phòng trống</Text>
         <View style={{ width: 20 }} />
@@ -234,7 +193,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               style={styles.dateInput}
               onPress={() => setCheckInPickerVisibility(true)}
             >
-              <Icon
+              <AppIcon
                 name="calendar"
                 size={20}
                 color={COLORS.primary}
@@ -246,7 +205,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                   {formatDateShort(checkIn)}
                 </Text>
               </View>
-              <Icon name="chevron-down" size={16} color={COLORS.gray} />
+              <AppIcon name="chevron-down" size={16} color={COLORS.gray} />
             </TouchableOpacity>
           </View>
 
@@ -257,7 +216,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               style={styles.dateInput}
               onPress={() => setCheckOutPickerVisibility(true)}
             >
-              <Icon
+              <AppIcon
                 name="calendar"
                 size={20}
                 color={COLORS.primary}
@@ -269,7 +228,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                   {formatDateShort(checkOut)}
                 </Text>
               </View>
-              <Icon name="chevron-down" size={16} color={COLORS.gray} />
+              <AppIcon name="chevron-down" size={16} color={COLORS.gray} />
             </TouchableOpacity>
           </View>
 
@@ -281,7 +240,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                 style={styles.guestButton}
                 onPress={() => setGuests(Math.max(1, guests - 1))}
               >
-                <Icon name="minus" size={16} color={COLORS.primary} />
+                <AppIcon name="minus" size={16} color={COLORS.primary} />
               </TouchableOpacity>
               <View style={styles.guestCount}>
                 <Text style={styles.guestCountText}>{guests}</Text>
@@ -291,7 +250,30 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                 style={styles.guestButton}
                 onPress={() => setGuests(Math.min(10, guests + 1))}
               >
-                <Icon name="plus" size={16} color={COLORS.primary} />
+                <AppIcon name="plus" size={16} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Number of Rooms */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Số lượng phòng</Text>
+            <View style={styles.guestSelector}>
+              <TouchableOpacity
+                style={styles.guestButton}
+                onPress={() => setRooms(Math.max(1, rooms - 1))}
+              >
+                <AppIcon name="minus" size={16} color={COLORS.primary} />
+              </TouchableOpacity>
+              <View style={styles.guestCount}>
+                <Text style={styles.guestCountText}>{rooms}</Text>
+                <Text style={styles.guestLabel}>phòng</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.guestButton}
+                onPress={() => setRooms(Math.min(10, rooms + 1))}
+              >
+                <AppIcon name="plus" size={16} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -308,7 +290,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               <ActivityIndicator color={COLORS.white} />
             ) : (
               <>
-                <Icon name="search" size={18} color={COLORS.white} />
+                <AppIcon name="search" size={18} color={COLORS.white} />
                 <Text style={styles.searchButtonText}>Tìm phòng trống</Text>
               </>
             )}
@@ -357,16 +339,122 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               />
             ) : (
               <View style={styles.noResults}>
-                <Icon name="bed" size={48} color="#ccc" />
+                <AppIcon name="bed" size={48} color="#ccc" />
                 <Text style={styles.noResultsText}>Không có phòng phù hợp</Text>
                 <Text style={styles.noResultsSubtext}>
                   Thử chọn ngày khác hoặc ít khách hơn
                 </Text>
               </View>
             )}
+
+            {availableRooms.length > 0 && (
+              <TouchableOpacity
+                style={styles.continueButton}
+                onPress={() =>
+                  (navigation as any).navigate("SelectRooms", {
+                    checkIn,
+                    checkOut,
+                    guests,
+                    rooms,
+                    availableRooms,
+                  })
+                }
+              >
+                <Text style={styles.continueButtonText}>
+                  Tiếp tục đặt phòng
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
+
+      {/* Room Detail Modal */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeRoomDetail}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chi tiết phòng</Text>
+              <TouchableOpacity
+                onPress={closeRoomDetail}
+                style={styles.closeButton}
+              >
+                <AppIcon name="close" size={24} color={COLORS.secondary} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedRoomDetail && (
+              <ScrollView style={styles.modalBody}>
+                <View style={styles.modalImageContainer}>
+                  {selectedRoomDetail.roomImageUrl ? (
+                    <Image
+                      source={{ uri: selectedRoomDetail.roomImageUrl }}
+                      style={styles.modalImage}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={styles.modalImagePlaceholder}>
+                      <Text style={styles.modalImagePlaceholderText}>🏨</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.modalInfo}>
+                  <Text style={styles.modalRoomName}>
+                    {selectedRoomDetail.roomTypeName}
+                  </Text>
+                  <Text style={styles.modalRoomNumber}>
+                    Phòng {selectedRoomDetail.roomNumber}
+                  </Text>
+
+                  <View style={styles.modalRating}>
+                    <Text style={styles.modalStars}>{renderStars(4.5)}</Text>
+                    <Text style={styles.modalRatingText}>4.5/5</Text>
+                  </View>
+
+                  {selectedRoomDetail.description && (
+                    <Text style={styles.modalDescription}>
+                      {selectedRoomDetail.description}
+                    </Text>
+                  )}
+
+                  <View style={styles.modalPriceSection}>
+                    <Text style={styles.modalPriceLabel}>Giá/đêm:</Text>
+                    <Text style={styles.modalPrice}>
+                      $
+                      {Number(
+                        selectedRoomDetail.basePricePerNight || 0
+                      ).toLocaleString()}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.modalNights}>
+                    Số đêm: {calculateNights()} | Tổng: $
+                    {(
+                      Number(selectedRoomDetail.basePricePerNight || 0) *
+                      calculateNights()
+                    ).toLocaleString()}
+                  </Text>
+                </View>
+              </ScrollView>
+            )}
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={closeRoomDetail}
+              >
+                <Text style={styles.modalCancelText}>Đóng</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -573,12 +661,29 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   detailButton: {
+    backgroundColor: COLORS.secondary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    flex: 1,
+  },
+  detailButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  buttonSection: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  selectButton: {
     backgroundColor: COLORS.primary,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
+    flex: 1,
   },
-  detailButtonText: {
+  selectButtonText: {
     color: COLORS.white,
     fontSize: 14,
     fontWeight: "600",
@@ -653,6 +758,146 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray,
     marginTop: 2,
+  },
+  continueButton: {
+    backgroundColor: "#d47153ff",
+    paddingVertical: SIZES.padding,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: SIZES.padding,
+  },
+  continueButtonText: {
+    ...FONTS.h4,
+    color: COLORS.white,
+    fontWeight: "600",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    width: "90%",
+    maxHeight: "80%",
+    ...SHADOWS.medium,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: SIZES.padding,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGray,
+  },
+  modalTitle: {
+    ...FONTS.h2,
+    fontWeight: "700",
+    color: COLORS.secondary,
+  },
+  closeButton: {
+    padding: 8,
+  },
+  modalBody: {
+    padding: SIZES.padding,
+  },
+  modalImageContainer: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    overflow: "hidden",
+    marginBottom: SIZES.padding,
+  },
+  modalImage: {
+    width: "100%",
+    height: "100%",
+  },
+  modalImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalImagePlaceholderText: {
+    fontSize: 48,
+  },
+  modalInfo: {
+    paddingVertical: SIZES.padding,
+  },
+  modalRoomName: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    marginBottom: 8,
+  },
+  modalRoomNumber: {
+    fontSize: 16,
+    color: COLORS.gray,
+    marginBottom: 12,
+  },
+  modalRating: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  modalStars: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  modalRatingText: {
+    fontSize: 14,
+    color: COLORS.secondary,
+    fontWeight: "600",
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: COLORS.gray,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  modalPriceSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e0e0e0",
+    marginBottom: 12,
+  },
+  modalPriceLabel: {
+    fontSize: 14,
+    color: COLORS.gray,
+    fontWeight: "500",
+  },
+  modalPrice: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  modalNights: {
+    fontSize: 14,
+    color: COLORS.secondary,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  modalFooter: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: COLORS.lightGray,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: SIZES.padding,
+    alignItems: "center",
+  },
+  modalCancelText: {
+    ...FONTS.h4,
+    color: COLORS.gray,
+    fontWeight: "600",
   },
 });
 
