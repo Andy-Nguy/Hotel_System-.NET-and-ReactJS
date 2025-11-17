@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Hotel_System.API.Models;
@@ -38,6 +39,15 @@ namespace Hotel_System.API.Controllers
         [HttpPost("hoa-don")]
         public async Task<IActionResult> CreateInvoice([FromBody] HoaDonPaymentRequest request)
         {
+            // If model binding/validation failed, return detailed errors to help the client debug.
+            if (!ModelState.IsValid)
+            {
+                // Log all model state errors for server-side debugging
+                var errors = string.Join("; ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
+                _logger.LogWarning("CreateInvoice: model validation failed: {Errors}", errors);
+                return BadRequest(new { message = "Validation failed", errors = ModelState });
+            }
+
             using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -52,8 +62,80 @@ namespace Hotel_System.API.Controllers
                 // Fallback số ngày
                 var soNgay = request.SoLuongNgay ?? datPhong.SoDem ?? 1;
 
-                // Fallback tiền phòng từ chi tiết nếu client không gửi
-                var tienPhongTinh = datPhong.ChiTietDatPhongs.Sum(ct => (ct.GiaPhong * soNgay));
+                // Apply promotions to booking room lines so that ChiTietDatPhong.ThanhTien
+                // stores the post-discount line total (Giá phòng sau KM × số đêm).
+                // This ensures the saved ThanhTien reflects discounts and the invoice/booking totals
+                // use the discounted values.
+                try
+                {
+                    var roomIds = datPhong.ChiTietDatPhongs?.Select(ct => ct.IDPhong).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList() ?? new System.Collections.Generic.List<string>();
+                    if (roomIds.Any())
+                    {
+                        var now = DateTime.Now;
+                        var promos = _context.KhuyenMaiPhongs
+                            .Include(kmp => kmp.IdkhuyenMaiNavigation)
+                            .Where(kmp => roomIds.Contains(kmp.Idphong) && kmp.IdkhuyenMaiNavigation != null
+                                && kmp.IdkhuyenMaiNavigation.TrangThai == "active"
+                                && kmp.IdkhuyenMaiNavigation.NgayBatDau <= DateOnly.FromDateTime(now)
+                                && kmp.IdkhuyenMaiNavigation.NgayKetThuc >= DateOnly.FromDateTime(now))
+                            .ToList();
+
+                        foreach (var ct in datPhong.ChiTietDatPhongs ?? new System.Collections.Generic.List<ChiTietDatPhong>())
+                        {
+                            // Số đêm theo dòng (ct.SoDem kiểu int), fallback sang tổng số ngày
+                            var nights = (ct.SoDem > 0) ? ct.SoDem : (datPhong.SoDem ?? 1);
+                            if (nights <= 0) nights = 1;
+
+                            // initial per-night price
+                            var initialPerNight = ct.GiaPhong;
+
+                            decimal sumPercent = 0m;
+                            decimal sumFixed = 0m; // fixed amount discounts (treated as total fixed off the whole line)
+
+                            var roomPromos = promos.Where(p => p.Idphong == ct.IDPhong).Select(p => p.IdkhuyenMaiNavigation).Where(km => km != null).ToList();
+                            foreach (var km in roomPromos)
+                            {
+                                if (km != null && km.GiaTriGiam.HasValue)
+                                {
+                                    var kind = km.LoaiGiamGia ?? string.Empty;
+                                    if (kind.IndexOf("percent", StringComparison.OrdinalIgnoreCase) >= 0 || kind.Contains("%"))
+                                    {
+                                        // percentage discount
+                                        sumPercent += km.GiaTriGiam.Value;
+                                    }
+                                    else
+                                    {
+                                        // fixed discount applied to the entire line
+                                        sumFixed += km.GiaTriGiam.Value;
+                                    }
+                                }
+                            }
+
+                            // cap percent to 100
+                            if (sumPercent > 100m) sumPercent = 100m;
+
+                            // distribute fixed total across nights if any
+                            decimal fixedPerNight = nights > 0 ? (sumFixed / (decimal)nights) : sumFixed;
+
+                            var perNightAfterPercent = initialPerNight * (1 - (sumPercent / 100m));
+                            var perNightAfter = Math.Max(0m, perNightAfterPercent - fixedPerNight);
+
+                            var lineTotal = perNightAfter * nights;
+                            // Lưu ThànhTiền sau KM (làm tròn về đơn vị đồng, away from zero)
+                            ct.ThanhTien = Math.Round(lineTotal, 0, MidpointRounding.AwayFromZero);
+                        }
+
+                        // Cập nhật lại tổng tiền đặt phòng = tổng ThànhTiền sau KM
+                        datPhong.TongTien = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "PaymentController: failed to apply promotions to ChiTietDatPhongs — continuing with original prices");
+                }
+
+                // Fallback tiền phòng từ chi tiết nếu client không gửi — after applying promos we use ThanhTien
+                var tienPhongTinh = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m;
                 int tienPhong = request.TienPhong ?? (int)Math.Round(tienPhongTinh);
 
                 // Tổng cuối cùng do FE tính (đã gồm phòng sau KM + dịch vụ + VAT)
@@ -64,10 +146,10 @@ namespace Hotel_System.API.Controllers
                     tongTien = datPhong.TongTien;
                     if (tongTien <= 0m)
                     {
-                        try { tongTien = datPhong.ChiTietDatPhongs.Sum(ct => ct.ThanhTien); }
+                        try { tongTien = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m; }
                         catch { tongTien = 0m; }
                     }
-                    _logger.LogInformation("PaymentController: request.TongTien missing/zero, fallback tongTien={TongTien}", tongTien);
+_logger.LogInformation("PaymentController: request.TongTien missing/zero, fallback tongTien={TongTien}", tongTien);
                 }
 
                 // Lấy tiền cọc hiện có trên DatPhong làm nguồn dữ liệu mặc định
@@ -124,7 +206,7 @@ namespace Hotel_System.API.Controllers
                     NgayLap = DateTime.Now,
                     TienPhong = tienPhong,
                     Slngay = soNgay,
-                    TongTien = tongTien,
+TongTien = tongTien,
                     TienCoc = tienCoc,
                     TrangThaiThanhToan = trangThaiThanhToan,
                     TienThanhToan = tienThanhToan,
@@ -179,8 +261,7 @@ namespace Hotel_System.API.Controllers
                             ThoiGianKetThuc = thoiGianKetThuc,
                             TrangThai = "new"
                         };
-
-                        _context.Cthddvs.Add(cthd);
+_context.Cthddvs.Add(cthd);
                     }
                 }
 
@@ -202,7 +283,26 @@ namespace Hotel_System.API.Controllers
                 var customerName = datPhong.IdkhachHangNavigation?.HoTen ?? "Quý khách";
                 if (!string.IsNullOrWhiteSpace(customerEmail))
                 {
-                    await SendInvoiceEmail(customerEmail, customerName, hoaDon);
+                    // fire-and-forget email (don't fail the request if email fails)
+                    _ = SendInvoiceEmail(customerEmail, customerName, hoaDon);
+                }
+
+                // If payment method is online (2) provide a payment URL so frontend can show QR
+                string? paymentUrl = null;
+                try
+                {
+                    if (request.PhuongThucThanhToan == 2)
+                    {
+                        // amount for QR: prefer hoaDon.TienThanhToan (amount to collect), fallback to hoaDon.TongTien
+                        var amt = (decimal?)(hoaDon.TienThanhToan ?? hoaDon.TongTien) ?? 0m;
+                        var amtInt = (long)Math.Round(amt);
+                        var addInfo = System.Net.WebUtility.UrlEncode($"Thanh toan {datPhong.IddatPhong}");
+                        paymentUrl = $"https://img.vietqr.io/image/bidv-8639699999-print.png?amount={amtInt}&addInfo={addInfo}";
+                    }
+                }
+                catch
+                {
+                    paymentUrl = null;
                 }
 
                 return Ok(new
@@ -211,14 +311,17 @@ namespace Hotel_System.API.Controllers
                     idDatPhong = datPhong.IddatPhong,
                     tongTien = hoaDon.TongTien,
                     tienCoc = hoaDon.TienCoc,
-                    tienThanhToan = hoaDon.TienThanhToan
+                    tienThanhToan = hoaDon.TienThanhToan,
+                    paymentUrl
                 });
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
                 _logger.LogError(ex, "Lỗi khi tạo hóa đơn");
-                return StatusCode(500, new { message = "Lỗi khi tạo hóa đơn", error = ex.Message });
+                // Include inner exception message (if any) to aid debugging when SaveChanges fails
+                var inner = ex.InnerException?.Message;
+                return StatusCode(500, new { message = "Lỗi khi tạo hóa đơn", error = ex.Message, innerError = inner });
             }
         }
 
@@ -243,7 +346,7 @@ namespace Hotel_System.API.Controllers
 
                 // Áp dụng domain: chỉ 1 (chưa TT) hoặc 2 (đã TT)
                 dp.TrangThaiThanhToan = request.TrangThaiThanhToan == 2 ? 2 : 1;
-                await _context.SaveChangesAsync();
+await _context.SaveChangesAsync();
 
                 // Hóa đơn mới nhất
                 var hd = dp.HoaDons.OrderByDescending(h => h.NgayLap).FirstOrDefault();
@@ -309,9 +412,34 @@ namespace Hotel_System.API.Controllers
                 3 => "Thanh toán tại quầy",
                 _ => "Không xác định"
             };
-            var gw = string.IsNullOrWhiteSpace(req.PaymentGateway) ? "" : $" | Gateway: {req.PaymentGateway}";
+var gw = string.IsNullOrWhiteSpace(req.PaymentGateway) ? "" : $" | Gateway: {req.PaymentGateway}";
             var custom = string.IsNullOrWhiteSpace(req.GhiChu) ? "" : $" | {req.GhiChu}";
             return $"PTTT: {method}{gw}{custom}".Trim(' ', '|');
+        }
+
+        private DateTime? TryParseIso(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+
+            // Try DateTimeOffset first (handles ISO/Z and offsets), then fall back to invariant DateTime parse
+            if (DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
+            {
+                return dto.DateTime;
+            }
+
+            if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal | DateTimeStyles.AllowWhiteSpaces, out var dt))
+            {
+                return dt;
+            }
+
+            // last attempt: try common ISO formats
+            var formats = new[] { "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ssZ", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd" };
+            if (DateTime.TryParseExact(s, formats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out dt))
+            {
+                return dt;
+            }
+
+            return null;
         }
 
         // Gửi email hóa đơn VỚI BODY
@@ -380,7 +508,7 @@ Khách Sạn Robins Villa
         {
             try
             {
-                var type = _emailService.GetType();
+var type = _emailService.GetType();
 
                 // 1) (to,name,subject,body,bool)
                 var m5 = type.GetMethod("SendEmailAsync", new[] { typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool) });

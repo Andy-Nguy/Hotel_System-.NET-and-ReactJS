@@ -114,6 +114,7 @@ public class HoaDonPaymentRequest
     
     // Optional list of service lines attached to the invoice
     public List<ServiceLineDto>? Services { get; set; }
+
 }
 
 /// <summary>
@@ -130,6 +131,49 @@ public class PaymentCallbackRequest
     public string? PaymentGateway { get; set; }
 
     public DateTime? PaymentTime { get; set; }
+}
+
+/// <summary>
+/// Dòng dịch vụ được gửi kèm khi tạo hóa đơn
+/// </summary>
+public class ServiceLineRequest
+{
+    /// <summary>
+    /// ID dịch vụ (IDDichVu)
+    /// </summary>
+    public string? IddichVu { get; set; }
+
+    /// <summary>
+    /// Số lượng dịch vụ
+    /// </summary>
+    // removed: quantity is no longer used in CTHDDV
+
+    /// <summary>
+    /// Đơn giá của dịch vụ (nếu client có)
+    /// </summary>
+    public decimal? DonGia { get; set; }
+
+    /// <summary>
+    /// Tổng tiền dòng (donGia * soLuong) nếu client có gửi
+    /// </summary>
+    // TienDichVu represents the line total (no quantity multiplication)
+    public decimal? TienDichVu { get; set; }
+
+    /// <summary>
+    /// ID phòng nếu dịch vụ gắn cho phòng cụ thể
+    /// </summary>
+    public string? Idphong { get; set; }
+
+    /// <summary>
+    /// Số phòng/roomNumber nếu client dùng cách đánh số phòng
+    /// </summary>
+    public int? SoPhong { get; set; }
+
+    /// <summary>
+    /// Thời gian bắt đầu/ket thuc (ISO string) - optional
+    /// </summary>
+    public string? ThoiGianBatDau { get; set; }
+    public string? ThoiGianKetThuc { get; set; }
 }
 
 /// <summary>

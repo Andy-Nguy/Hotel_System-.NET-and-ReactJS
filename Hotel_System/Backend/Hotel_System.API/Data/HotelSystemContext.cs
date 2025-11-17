@@ -70,7 +70,7 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.IddichVu)
                 .HasMaxLength(50)
                 .HasColumnName("IDDichVu");
-            entity.Property(e => e.IdhoaDon)
+                entity.Property(e => e.IdhoaDon)
                 .HasMaxLength(50)
                 .HasColumnName("IDHoaDon");
             entity.Property(e => e.TienDichVu)
@@ -161,6 +161,9 @@ public partial class HotelSystemContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("IDPhong");
             entity.Property(e => e.NgayDatPhong).HasDefaultValueSql("(CONVERT([date],getdate()))");
+            entity.Property(e => e.SoNguoi).HasColumnName("SoNguoi");
+            entity.Property(e => e.SoLuongPhong).HasColumnName("SoLuongPhong");
+            entity.Property(e => e.ThoiHan).HasColumnName("ThoiHan");
             entity.Property(e => e.TienCoc)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");

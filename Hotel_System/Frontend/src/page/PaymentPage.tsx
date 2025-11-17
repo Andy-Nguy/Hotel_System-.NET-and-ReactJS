@@ -133,7 +133,6 @@ const PaymentPage: React.FC = () => {
         }
       } catch {}
     }
-
     const token = localStorage.getItem("hs_token");
     if (token) {
       fetch("/api/auth/profile", {
