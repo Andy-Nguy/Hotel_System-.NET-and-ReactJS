@@ -18,6 +18,7 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import AppIcon from "../components/AppIcon";
 import { checkAvailableRooms, AvailableRoom } from "../api/roomsApi";
+import AvailableRoomCard from "../components/AvailableRoomCard";
 
 const CheckAvailableRoomsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -148,107 +149,19 @@ const CheckAvailableRoomsScreen: React.FC = () => {
   };
 
   const renderRoomItem = ({ item }: { item: AvailableRoom }) => (
-    <TouchableOpacity style={styles.card}>
-      {/* Room Image */}
-      <View style={styles.imageContainer}>
-        {item.roomImageUrl ? (
-          <Image
-            source={{ uri: item.roomImageUrl }}
-            style={styles.roomImage}
-            contentFit="cover"
-            onError={(e) =>
-              console.log("Image load error:", item.roomImageUrl, e)
-            }
-            onLoad={() =>
-              console.log("Image loaded successfully:", item.roomImageUrl)
-            }
-          />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>🏨</Text>
-          </View>
-        )}
-        {/* Status Badge */}
-        <View style={[styles.statusBadge, { backgroundColor: "#4CAF50" }]}>
-          <Text style={styles.statusText}>Còn phòng</Text>
-        </View>
-      </View>
-
-      {/* Room Info */}
-      <View style={styles.content}>
-        {/* Title Section */}
-        <View style={styles.titleSection}>
-          <Text style={styles.roomName} numberOfLines={2}>
-            {item.roomTypeName || "Unknown Room"}
-          </Text>
-          <Text style={styles.roomNumber}>Phòng {item.roomNumber || "-"}</Text>
-        </View>
-
-        {/* Rating */}
-        <View style={styles.ratingSection}>
-          <Text style={styles.stars}>{renderStars(4.5)}</Text>
-          <Text style={styles.ratingText}>4.5/5</Text>
-        </View>
-
-        {/* Description/Features */}
-        {item.description && (
-          <Text style={styles.description} numberOfLines={2}>
-            {item.description}
-          </Text>
-        )}
-
-        {/* Amenities - Key Features */}
-        <View style={styles.amenitiesSection}>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>📶 Wi-Fi</Text>
-          </View>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>
-              🛏️ {item.maxOccupancy || "-"} guests
-            </Text>
-          </View>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>🏊 Pool</Text>
-          </View>
-        </View>
-
-        {/* Price Section */}
-        <View style={styles.priceSection}>
-          <Text style={styles.priceLabel}>Giá/đêm:</Text>
-          <Text style={styles.price}>
-            ${Number(item.basePricePerNight || 0).toLocaleString()}
-          </Text>
-        </View>
-
-        {/* View Details Button */}
-        <View style={styles.buttonSection}>
-          <TouchableOpacity
-            style={styles.detailButton}
-            onPress={() => openRoomDetail(item)}
-          >
-            <Text style={styles.detailButtonText}>Xem chi tiết</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.selectButton}
-            onPress={() =>
-              navigation.navigate(
-                "SelectRooms" as never,
-                {
-                  checkIn,
-                  checkOut,
-                  guests,
-                  rooms,
-                  availableRooms,
-                } as never
-              )
-            }
-          >
-            <Text style={styles.selectButtonText}>Chọn phòng</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
+    <AvailableRoomCard
+      room={item}
+      onOpenDetail={() => openRoomDetail(item)}
+      onSelect={() =>
+        (navigation as any).navigate("SelectRooms", {
+          checkIn,
+          checkOut,
+          guests,
+          rooms,
+          availableRooms,
+        })
+      }
+    />
   );
 
   return (
@@ -438,16 +351,13 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.continueButton}
                 onPress={() =>
-                  navigation.navigate(
-                    "SelectRooms" as never,
-                    {
-                      checkIn,
-                      checkOut,
-                      guests,
-                      rooms,
-                      availableRooms,
-                    } as never
-                  )
+                  (navigation as any).navigate("SelectRooms", {
+                    checkIn,
+                    checkOut,
+                    guests,
+                    rooms,
+                    availableRooms,
+                  })
                 }
               >
                 <Text style={styles.continueButtonText}>
