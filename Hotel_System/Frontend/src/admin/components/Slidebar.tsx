@@ -222,6 +222,11 @@ const Slidebar: React.FC = () => {
           routeFragment="admin/checkout"
           label="Quản lý Checkout"
         />
+        <NavItem
+          key="checkin"
+          routeFragment="admin/checkin"
+          label="Quản lý Check-in"
+        />
         {/* === THÊM: NavItem loyalty (giữ nguyên như bạn viết) === */}
         <NavItem
           key="loyalty"

@@ -33,6 +33,10 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 
   const [promotion, setPromotion] = React.useState<Promotion | null>(null);
 
+  const rawStatus = (room as any).TrangThai || (room as any).trangThai || (room as any).status || "";
+  const statusStr = String(rawStatus || "").toLowerCase();
+  const isSoldOut = statusStr === "occupied" || statusStr === "soldout" || statusStr === "sold out" || statusStr === "unavailable";
+
   React.useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -171,6 +175,7 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
             <Button
               type="default"
               onClick={() => {
+                if (isSoldOut) return;
                 try {
                   if (promotion) {
                     sessionStorage.setItem(
@@ -183,16 +188,17 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
                 }
                 onBook(room);
               }}
+              disabled={isSoldOut}
               style={{
                 borderRadius: 6,
-                background: "#4a5a4a",
+                background: isSoldOut ? '#cfcfcf' : '#4a5a4a',
                 color: "#fff",
-                borderColor: "#4a5a4a",
+                borderColor: isSoldOut ? '#cfcfcf' : '#4a5a4a',
                 padding: "8px 20px",
                 height: "auto",
               }}
             >
-              Đặt ngay
+              {isSoldOut ? 'Hết phòng' : 'Đặt ngay'}
             </Button>
           </div>
 

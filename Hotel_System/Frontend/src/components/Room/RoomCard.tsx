@@ -56,6 +56,11 @@ const RoomCard: React.FC<Props> = ({
   const [loaded, setLoaded] = useState(false);
   const [promotion, setPromotion] = useState<Promotion | null>(null);
 
+  // Determine sold/out status from room payload (may come from backend or merged by frontend)
+  const rawStatus = (room as any).TrangThai || (room as any).trangThai || (room as any).status || "";
+  const statusStr = String(rawStatus || "").toLowerCase();
+  const isSoldOut = statusStr === "occupied" || statusStr === "soldout" || statusStr === "sold out" || statusStr === "unavailable";
+
   // LOAD IMAGE
   useEffect(() => {
     let canceled = false;
@@ -172,6 +177,22 @@ const RoomCard: React.FC<Props> = ({
           position: "relative",
         }}
       >
+        {isSoldOut && (
+          <div style={{
+            position: 'absolute',
+            top: 10,
+            right: 10,
+            background: 'rgba(0,0,0,0.6)',
+            color: '#fff',
+            padding: '6px 10px',
+            borderRadius: 6,
+            fontWeight: 700,
+            zIndex: 30,
+            fontSize: 12
+          }}>
+            Đã đặt / Hết phòng
+          </div>
+        )}
         {promotion && (
           <div
             style={{
@@ -274,7 +295,8 @@ const RoomCard: React.FC<Props> = ({
           >
             <Button
               type="primary"
-              onClick={() => onBook(room)}
+              onClick={() => !isSoldOut && onBook(room)}
+              disabled={isSoldOut}
               style={{
                 background: "#dfa974",
                 borderColor: "#dfa974",
@@ -283,7 +305,7 @@ const RoomCard: React.FC<Props> = ({
                 width: "min(420px, 85%)",
               }}
             >
-              {bookButtonText}
+              {isSoldOut ? "Hết phòng" : bookButtonText}
             </Button>
           </div>
 

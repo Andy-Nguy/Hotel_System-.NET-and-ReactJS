@@ -1,92 +1,68 @@
-// Checkout API helper
-// Centralized frontend functions for the admin checkout workflow.
-// Each function calls a corresponding backend endpoint if available and returns sensible null/fallback values otherwise.
+// src/api/checkoutApi.ts
+// Use Vite env var when provided, otherwise fall back to the backend dev URL.
+// In dev this should match the backend launch URL (see Backend/Hotel_System.API/Properties/launchSettings.json).
+const API_BASE = "";
 
-const API_BASE = ""; // relative paths so dev proxy forwards /api
-
-async function fetchJson(endpoint: string, init?: RequestInit) {
-  try {
-    const res = await fetch(`${API_BASE}${endpoint}`, init);
-    if (res.status === 404 || res.status === 204) return null;
-    const text = await res.text().catch(() => "");
-    const data = text ? JSON.parse(text) : null;
-    if (!res.ok) {
-      // throw for non-GET so callers can show messages
-      const method = (init && (init.method as string)) ?? 'GET';
-      if (method.toUpperCase() !== 'GET') {
-        throw new Error(data?.message ?? `HTTP ${res.status}`);
-      }
-      return null;
-    }
-    return data;
-  } catch (err: any) {
-    console.warn(`checkoutApi ${endpoint} failed:`, err?.message ?? err);
-    return null;
+const fetchJson = async (endpoint: string, init?: RequestInit) => {
+  const url = `${API_BASE}${endpoint}`;
+  // helpful debug when requests are routed to the wrong origin (405 from Vite server)
+  // open browser console Network tab to inspect the actual outgoing request
+  // and adjust Vite proxy or API_BASE accordingly.
+  // eslint-disable-next-line no-console
+  console.debug('[api] request', init?.method ?? 'GET', url);
+  const res = await fetch(url, init);
+  const text = await res.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!res.ok) {
+    // prefer explicit server message, otherwise include full response body for easier debugging
+    const payload = data && typeof data === 'object' ? (data.message ?? JSON.stringify(data)) : String(data ?? text ?? `HTTP ${res.status}`);
+    throw new Error(payload || `HTTP ${res.status}`);
   }
-}
-
-// Search booking by code / room number / guest name
-export async function searchBooking(query: { code?: string; room?: string; guest?: string }) {
-  const qs = new URLSearchParams();
-  if (query.code) qs.set('code', query.code);
-  if (query.room) qs.set('room', query.room);
-  if (query.guest) qs.set('guest', query.guest);
-  return await fetchJson(`/api/Checkout/search?${qs.toString()}`);
-}
-
-// Get booking details and charges (server-calculated if available)
-export async function getBookingDetails(bookingId: string | number) {
-  return await fetchJson(`/api/Checkout/bookings/${bookingId}`);
-}
-
-// Get room status (housekeeping check) and attached notes
-export async function getRoomStatus(roomId: string | number) {
-  return await fetchJson(`/api/Checkout/rooms/${roomId}/status`);
-}
-
-// Add or update incidental charges (food, spa, minibar, damages)
-export async function addIncidentalCharge(bookingId: string | number, payload: { description: string; amount: number }) {
-  return await fetchJson(`/api/Checkout/bookings/${bookingId}/charges`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-}
-
-// Generate invoice (server calculates taxes/fees if supported)
-export async function generateInvoice(bookingId: string | number, options?: { includeVat?: boolean; serviceFeePercent?: number }) {
-  const body = { includeVat: options?.includeVat ?? true, serviceFeePercent: options?.serviceFeePercent ?? 5 };
-  return await fetchJson(`/api/Checkout/bookings/${bookingId}/invoice`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-
-// Process payment -- returns receipt / status
-export async function processPayment(bookingId: string | number, payload: { method: string; amount: number; reference?: string }) {
-  return await fetchJson(`/api/Checkout/bookings/${bookingId}/payment`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-}
-
-// Finalize checkout: sets booking/room status, issues invoice, add loyalty points, send email
-export async function finalizeCheckout(bookingId: string | number, payload?: { addLoyalty?: boolean; loyaltyPoints?: number; note?: string }) {
-  return await fetchJson(`/api/Checkout/bookings/${bookingId}/finalize`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload ?? {}),
-  });
-}
-
-export default {
-  searchBooking,
-  getBookingDetails,
-  getRoomStatus,
-  addIncidentalCharge,
-  generateInvoice,
-  processPayment,
-  finalizeCheckout,
+  return data;
 };
+
+export const checkoutApi = {
+  // 1. Lấy tóm tắt thanh toán (luôn dùng cái này)
+  getSummary: (id: string | number) =>
+    fetchJson(`/api/Checkout/summary/${id}`),
+
+  // 2. Tạo hóa đơn + thêm dịch vụ mới (Checkout endpoint)
+  createInvoice: (payload: {
+    IDDatPhong: string;
+    PhuongThucThanhToan: 1 | 2 | 3;
+    TrangThaiThanhToan?: number;
+    GhiChu?: string;
+    TongTien?: number;
+    TienPhong?: number;
+    SoLuongNgay?: number;
+    Services?: Array<{ IddichVu: string | number; SoLuong?: number; DonGia?: number; TienDichVu?: number }>;
+    ServicesTotal?: number;
+  }) => fetchJson(`/api/Checkout/hoa-don`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }),
+
+  // 3. Xác nhận đã thanh toán (tiền mặt / QR)
+  confirmPaid: (id: string | number, payload?: { Amount?: number; HoaDonId?: string }) =>
+    fetchJson(`/api/Checkout/confirm-paid/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload ?? {}),
+    }),
+
+  // 3b. Initiate an online QR payment (create or use invoice, return paymentUrl)
+  payQr: (payload: { IDDatPhong: string | number; HoaDonId?: string; Amount?: number; Services?: Array<{ IddichVu: string | number; TienDichVu?: number }>; Note?: string }) =>
+    fetchJson(`/api/Checkout/pay-qr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+
+  // 4. Hoàn tất trả phòng
+  completeCheckout: (id: string | number) =>
+    fetchJson(`/api/Checkout/complete/${id}`, { method: 'POST' }),
+};
+
+export default checkoutApi;
