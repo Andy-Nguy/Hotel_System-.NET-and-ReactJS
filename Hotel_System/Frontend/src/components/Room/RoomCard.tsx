@@ -144,10 +144,24 @@ const RoomCard: React.FC<Props> = ({
   const basePrice: number | null =
     ((room as any).giaCoBanMotDem ?? (room as any).basePricePerNight) ?? null;
 
-  const discountPercent = promotion?.giaTriGiam ?? 0;
-  const hasDiscount = !!promotion && !!basePrice && discountPercent > 0;
-  const discountedPrice = hasDiscount && basePrice ? Math.round(basePrice * (1 - discountPercent / 100)) : null;
-  const savings = hasDiscount && discountedPrice ? basePrice - discountedPrice : 0;
+  // Determine discount according to promotion type
+  const promoValue = promotion?.giaTriGiam ?? 0; // could be percent or amount
+  const isPercent = promotion?.loaiGiamGia === "percent";
+  const isAmount = promotion?.loaiGiamGia === "amount";
+  const hasDiscount = !!promotion && !!basePrice && promoValue > 0 && (isPercent || isAmount);
+
+  let discountedPrice: number | null = null;
+  let savings = 0;
+  if (hasDiscount && basePrice) {
+    if (isPercent) {
+      discountedPrice = Math.round(basePrice * (1 - (promoValue / 100)));
+      savings = basePrice - (discountedPrice ?? 0);
+    } else if (isAmount) {
+      // promoValue is fixed amount in VND
+      discountedPrice = Math.max(0, Math.round(basePrice - promoValue));
+      savings = basePrice - discountedPrice;
+    }
+  }
 
   return (
     <div
@@ -266,7 +280,9 @@ const RoomCard: React.FC<Props> = ({
                   <div style={{ fontSize: 25, fontWeight: 700, color: "#dfa974", lineHeight: 1 }}>
                     {formatPrice(discountedPrice)}
                   </div>
-                  <Tag color="gold" style={{fontWeight: 'bold' }}>TIẾT KIỆM {discountPercent}%</Tag>
+                  <Tag color="gold" style={{ fontWeight: "bold" }}>
+                    TIẾT KIỆM {promotion?.loaiGiamGia === "percent" ? `${promoValue}%` : `${promoValue?.toLocaleString?.() ?? promoValue}đ`}
+                  </Tag>
                 </div>
                 <div style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>/đêm</div>
               </div>
