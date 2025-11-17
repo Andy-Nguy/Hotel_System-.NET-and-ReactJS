@@ -59,7 +59,28 @@ const BookingProgress: React.FC<BookingProgressProps> = ({
 
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto 24px auto" }}>
-      <Steps current={currentIndex} items={items} />
+      {/* Minor visual tweaks: ensure step icon number is vertically centered with its title */}
+      <style>{`
+        /* Compact steps: smaller icons, tighter spacing and vertically centered */
+        .ant-steps { padding: 0; }
+        .ant-steps-item { padding: 0 10px; }
+        .ant-steps-item-icon {
+          display: flex !important;
+          align-items: center;
+          justify-content: center;
+          width: 32px !important;
+          height: 32px !important;
+          border-radius: 32px !important;
+          font-size: 14px !important;
+        }
+        .ant-steps-item-content { display: flex; align-items: center; gap: 8px; }
+        .ant-steps-item-title { font-size: 14px; margin: 0; }
+        /* Move connecting line to align with smaller icon */
+        .ant-steps-item-tail {
+          top: 16px !important;
+        }
+      `}</style>
+      <Steps current={currentIndex} items={items} size="small" />
     </div>
   );
 };

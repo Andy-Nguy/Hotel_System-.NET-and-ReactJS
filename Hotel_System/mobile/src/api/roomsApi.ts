@@ -56,6 +56,17 @@ export type Room = {
   promotions?: Promotion[];
 };
 
+export type TopRoom = {
+  idPhong: string;
+  tenPhong: string;
+  soLanSuDung: number;
+  tongDem: number;
+  urlAnhPhong?: string;
+  giaCoBanMotDem?: number;
+  xepHangSao?: number;
+  tenLoaiPhong?: string;
+};
+
 export type AvailableRoom = {
   roomId: string;
   roomNumber: string;
@@ -401,9 +412,86 @@ export async function checkAvailableRoomsByType(
   throw new Error("Failed to check available rooms by type from all endpoints");
 }
 
+/**
+ * Get top rooms for 2025 based on booking frequency
+ * @param top - Number of top rooms to retrieve (default: 5)
+ * @returns Array of TopRoom objects
+ */
+export async function getTopRooms2025(top: number = 5): Promise<TopRoom[]> {
+  console.log(`🔍 Fetching top ${top} rooms for 2025...`);
+  
+  const cacheKey = getCacheKey(`/api/Phong/top-rooms-2025?top=${top}`);
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const errors: string[] = [];
+  for (const baseUrl of BASE_URLS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+    try {
+      const url = `${baseUrl}/api/Phong/top-rooms-2025?top=${top}`;
+      console.log(`🌐 Trying GET top rooms: ${url}`);
+
+      const res = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await handleRes(res);
+        console.log("✅ GET top rooms success:", data);
+
+        // Handle response structure
+        if (Array.isArray(data)) {
+          // Normalize image URLs
+          const normalized = data.map((room: any) => ({
+            ...room,
+            urlAnhPhong: normalizeImageUrl(room.urlAnhPhong, baseUrl),
+          }));
+          setCachedData(cacheKey, normalized);
+          return normalized;
+        } else if (data && Array.isArray(data.data)) {
+          const normalized = data.data.map((room: any) => ({
+            ...room,
+            urlAnhPhong: normalizeImageUrl(room.urlAnhPhong, baseUrl),
+          }));
+          setCachedData(cacheKey, normalized);
+          return normalized;
+        } else {
+          console.warn("GET top rooms unexpected response shape", data);
+          setCachedData(cacheKey, []);
+          return [];
+        }
+      } else {
+        const msg = `⚠️ ${baseUrl} returned ${res.status} ${res.statusText}`;
+        console.warn(msg);
+        errors.push(msg);
+      }
+    } catch (error: any) {
+      const baseMsg = error?.name === "AbortError"
+        ? `⏰ Timeout with ${baseUrl} after ${TIMEOUT_MS}ms`
+        : `❌ Failed GET top rooms with ${baseUrl}: ${error?.message || error}`;
+      console.warn(baseMsg);
+      errors.push(baseMsg);
+      continue;
+    }
+  }
+
+  // If we reach here, all endpoints failed — include collected messages to aid debugging
+  const combined = errors.length > 0 ? errors.join("; ") : "Unknown network error";
+  throw new Error(`Failed to get top rooms from all endpoints: ${combined}`);
+}
+
 export default {
   getRooms,
   getRoomById,
   checkAvailableRooms,
   checkAvailableRoomsByType,
+  getTopRooms2025,
 };
