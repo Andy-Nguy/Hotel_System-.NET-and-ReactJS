@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Button, Tag } from "antd";
 
 import type { Room } from "../../../../Frontend/src/api/roomsApi";
@@ -55,6 +55,8 @@ const RoomCard: React.FC<Props> = ({
   );
   const [loaded, setLoaded] = useState(false);
   const [promotion, setPromotion] = useState<Promotion | null>(null);
+  const [titleFontSize, setTitleFontSize] = useState<number>(30);
+  const titleRef = useRef<HTMLHeadingElement | null>(null);
 
   // LOAD IMAGE
   useEffect(() => {
@@ -134,6 +136,56 @@ const RoomCard: React.FC<Props> = ({
       cancelled = true;
     };
   }, [room.idphong]);
+
+  // Auto-adjust title font size to keep it on one line and avoid affecting card heights
+  useEffect(() => {
+    let mounted = true;
+
+    const adjust = () => {
+      const el = titleRef.current;
+      if (!el) return;
+
+      // start from default large size
+      const computedStyle = window.getComputedStyle(el);
+      const fontFamily = computedStyle.fontFamily || 'Arial, sans-serif';
+
+      let size = 30;
+      const minSize = 14;
+
+      // Apply sizes until the text fits within its container width (single line)
+      const fitsAt = (s: number) => {
+        el.style.fontSize = s + 'px';
+        // ensure single-line measurement
+        el.style.whiteSpace = 'nowrap';
+        const fits = el.scrollWidth <= el.clientWidth + 1; // small tolerance
+        return fits;
+      };
+
+      // fast path: if already fits at current state, use that
+      if (fitsAt(size)) {
+        if (mounted) setTitleFontSize(size);
+        return;
+      }
+
+      while (size > minSize) {
+        size -= 1;
+        if (fitsAt(size)) break;
+      }
+
+      if (mounted) setTitleFontSize(size);
+    };
+
+    // wait for next tick so layout computed
+    const id = window.setTimeout(adjust, 0);
+
+    window.addEventListener('resize', adjust);
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(id);
+      window.removeEventListener('resize', adjust);
+    };
+  }, [room.tenPhong]);
 
   // Price calculations for display
   const basePrice: number | null =
@@ -217,16 +269,26 @@ const RoomCard: React.FC<Props> = ({
         )}
       </div>
 
-      <div
-        style={{
-          padding: 18,
-          display: "flex",
-          flexDirection: "column",
-          flexGrow: 1,
-        }}
-      >
+        <div
+          style={{
+            padding: 18,
+            display: "flex",
+            flexDirection: "column",
+            flexGrow: 1,
+          }}
+        >
         <div style={{ flexGrow: 1 }}>
-          <h2 style={{ margin: 0, fontSize: 30, fontWeight: "bold" }}>
+          <h2
+            ref={(el) => (titleRef.current = el)}
+            style={{
+              margin: 0,
+              fontSize: titleFontSize,
+              fontWeight: "bold",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
             {room.tenPhong ?? "Phòng nghỉ"}
           </h2>
 
@@ -240,25 +302,40 @@ const RoomCard: React.FC<Props> = ({
                 <div style={{ fontSize: 15, color: "#999", textDecoration: "line-through" }}>
                   {formatPrice(basePrice)}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
-                  <div style={{ fontSize: 25, fontWeight: 700, color: "#dfa974", lineHeight: 1 }}>
-                    {formatPrice(discountedPrice)}
-                  </div>
-                  <Tag color="gold" style={{ fontWeight: "bold" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4, flexWrap: 'nowrap' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <div style={{ fontSize: 25, fontWeight: 700, color: "#dfa974", lineHeight: 1 }}>
+                        {formatPrice(discountedPrice)}
+                      </div>
+                      <div style={{ fontSize: 13, color: "#666", fontWeight: 500, whiteSpace: 'nowrap' }}>/đêm</div>
+                    </div>
+                  <Tag
+                    color="gold"
+                    style={{
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      fontSize: 11,
+                      padding: '3px 6px',
+                      lineHeight: 1,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      marginRight: 2,
+                      boxSizing: 'border-box',
+                    }}
+                  >
                     TIẾT KIỆM {promotion?.loaiGiamGia === "percent" ? `${promoValue}%` : `${promoValue?.toLocaleString?.() ?? promoValue}đ`}
                   </Tag>
                 </div>
-                <div style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>/đêm</div>
               </div>
             ) : (
               // --- REGULAR PRICE VIEW ---
               <div>
                 <div style={{ fontSize: 10, color: "#888" }}>Giá mỗi đêm từ</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "4px" }}>
-                  <div style={{ fontSize: 25, fontWeight: 700, color: "#333", lineHeight: 1 }}>
+                <div style={{ display: "inline-flex", alignItems: "baseline", gap: 8, marginTop: 4, whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
+                  <div style={{ fontSize: 25, fontWeight: 700, color: "#333", lineHeight: 1, flexShrink: 0 }}>
                     {formatPrice(basePrice)}
                   </div>
-                  <div style={{ fontSize: 14, color: "#666", fontWeight: 500 }}>/đêm</div>
+                  <div style={{ fontSize: 14, color: "#666", fontWeight: 500, whiteSpace: 'nowrap' }}>/đêm</div>
                 </div>
               </div>
             )}
@@ -266,36 +343,76 @@ const RoomCard: React.FC<Props> = ({
         </div>
 
         <div>
-          <div
-            style={{
-              marginBottom: 10,
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <Button
-              type="primary"
-              onClick={() => onOpenDetail(room)}
-              aria-label="Khám phá phòng"
-              style={{
-                background: "linear-gradient(135deg, #dfa974 0%, #d89860 100%)",
-                borderColor: "transparent",
-                height: 64,
-                fontSize: 18,
-                width: "min(420px, 85%)",
-                borderRadius: 12,
-                boxShadow: "0 10px 30px rgba(217,152,96,0.18)",
-                color: '#fff',
-                fontWeight: 700,
-                letterSpacing: '0.2px'
-              }}
-            >
-              {bookButtonText}
-            </Button>
-          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* If on select-room page, show both Select and View Detail buttons.
+                Otherwise keep the original big CTA that opens details. */}
+            {typeof window !== 'undefined' && window.location.pathname.startsWith('/select-room') ? (
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <Button
+                  type="primary"
+                  onClick={() => onBook(room)}
+                  aria-label="Chọn phòng"
+                  style={{
+                    background: 'linear-gradient(135deg, #dfa974 0%, #d89860 100%)',
+                    borderColor: 'transparent',
+                    height: 48,
+                    fontSize: 16,
+                    padding: '0 24px',
+                    borderRadius: 10,
+                    boxShadow: '0 8px 20px rgba(217,152,96,0.14)',
+                    color: '#fff',
+                    fontWeight: 700,
+                  }}
+                >
+                  Chọn phòng
+                </Button>
 
-          <div style={{ fontSize: 12, color: "#666" }}>
-            Giá bao gồm phí dịch vụ 5% nhưng không bao gồm thuế
+                <Button
+                  onClick={() => onOpenDetail(room)}
+                  aria-label="Xem chi tiết"
+                  style={{
+                    height: 48,
+                    fontSize: 15,
+                    padding: '0 18px',
+                    borderRadius: 10,
+                  }}
+                >
+                  Xem chi tiết
+                </Button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  marginBottom: 10,
+                  display: 'flex',
+                  justifyContent: 'center',
+                }}
+              >
+                <Button
+                  type="primary"
+                  onClick={() => onOpenDetail(room)}
+                  aria-label="Khám phá phòng"
+                  style={{
+                    background: 'linear-gradient(135deg, #dfa974 0%, #d89860 100%)',
+                    borderColor: 'transparent',
+                    height: 64,
+                    fontSize: 18,
+                    width: 'min(420px, 85%)',
+                    borderRadius: 12,
+                    boxShadow: '0 10px 30px rgba(217,152,96,0.18)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    letterSpacing: '0.2px',
+                  }}
+                >
+                  {bookButtonText}
+                </Button>
+              </div>
+            )}
+
+            <div style={{ fontSize: 12, color: '#666' }}>
+              Giá bao gồm phí dịch vụ 5% nhưng không bao gồm thuế
+            </div>
           </div>
         </div>
       </div>

@@ -333,6 +333,118 @@ namespace Hotel_System.API.Controllers
 
             return NoContent();
         }
+
+        // GET: api/Phong/top-rooms-2025?top=5
+        [HttpGet("top-rooms-2025")]
+        public async Task<IActionResult> GetTopRooms2025([FromQuery] int top = 5)
+        {
+            try
+            {
+                Console.WriteLine($"🔍 PhongController: Getting top {top} rooms for 2025...");
+
+                // Execute stored procedure with ADO.NET to tolerate missing columns
+                var conn = _context.Database.GetDbConnection();
+                await using (conn)
+                {
+                    if (conn.State != System.Data.ConnectionState.Open)
+                        await conn.OpenAsync();
+
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "sp_TopPhong2025";
+                    cmd.CommandType = System.Data.CommandType.StoredProcedure;
+
+                    var param = cmd.CreateParameter();
+                    param.ParameterName = "@Top";
+                    param.Value = top;
+                    param.DbType = System.Data.DbType.Int32;
+                    cmd.Parameters.Add(param);
+
+                    var list = new List<object>();
+                    using var reader = await cmd.ExecuteReaderAsync();
+                    // Build a map of column name (lower) to ordinal for defensive reads
+                    var colMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        colMap[reader.GetName(i)] = i;
+                    }
+
+                    while (await reader.ReadAsync())
+                    {
+                        string GetStringOrNull(string[] possibleNames)
+                        {
+                            foreach (var n in possibleNames)
+                            {
+                                if (colMap.TryGetValue(n, out var idx) && !reader.IsDBNull(idx))
+                                    return reader.GetValue(idx)?.ToString();
+                            }
+                            return null;
+                        }
+
+                        int? GetIntOrNull(string[] possibleNames)
+                        {
+                            foreach (var n in possibleNames)
+                            {
+                                if (colMap.TryGetValue(n, out var idx) && !reader.IsDBNull(idx))
+                                {
+                                    if (int.TryParse(reader.GetValue(idx)?.ToString(), out var v)) return v;
+                                    try { return Convert.ToInt32(reader.GetValue(idx)); } catch { }
+                                }
+                            }
+                            return null;
+                        }
+
+                        decimal? GetDecimalOrNull(string[] possibleNames)
+                        {
+                            foreach (var n in possibleNames)
+                            {
+                                if (colMap.TryGetValue(n, out var idx) && !reader.IsDBNull(idx))
+                                {
+                                    try { return Convert.ToDecimal(reader.GetValue(idx)); } catch { }
+                                }
+                            }
+                            return null;
+                        }
+
+                        var obj = new
+                        {
+                            idPhong = GetStringOrNull(new[] { "IDPhong", "IdPhong", "IDPHONG", "Idphong" }),
+                            tenPhong = GetStringOrNull(new[] { "TenPhong", "tenPhong", "TENPHONG" }),
+                            soLanSuDung = GetIntOrNull(new[] { "SoLanSuDung", "SoLanSuDung" }) ?? 0,
+                            tongDem = GetIntOrNull(new[] { "TongDem", "TongDem" }) ?? 0,
+                            urlAnhPhong = GetStringOrNull(new[] { "UrlAnhPhong", "UrlAnhPhong" }),
+                            giaCoBanMotDem = GetDecimalOrNull(new[] { "GiaCoBanMotDem", "GiaCoBanMotDem" }),
+                            xepHangSao = GetIntOrNull(new[] { "XepHangSao", "XepHangSao" }),
+                            tenLoaiPhong = GetStringOrNull(new[] { "TenLoaiPhong", "TenLoaiPhong" })
+                        };
+
+                        list.Add(obj);
+                    }
+
+                    var result = ((List<object>)list).Select(r =>
+                    {
+                        // r is anonymous type; return as dynamic object already shaped correctly
+                        return r;
+                    }).ToList();
+
+                    Console.WriteLine($"✅ Returning {result.Count} top rooms (ADO.NET)");
+                    // Normalize UrlAnhPhong values inside returned objects before returning
+                    var normalized = result.Select(r =>
+                    {
+                        var dict = r.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(r));
+                        var url = dict.ContainsKey("urlAnhPhong") ? dict["urlAnhPhong"]?.ToString() : null;
+                        dict["urlAnhPhong"] = ResolveImageUrl(url as string);
+                        return dict;
+                    }).ToList();
+
+                    return Ok(normalized);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error in GetTopRooms2025: {ex.Message}");
+                return StatusCode(500, new { error = ex.Message, details = ex.ToString() });
+            }
+        }
        
     }
 }
