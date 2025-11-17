@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,9 +7,9 @@ import {
   Modal,
   FlatList,
   TouchableWithoutFeedback,
-} from 'react-native';
-import Icon from 'react-native-vector-icons/FontAwesome';
-import { COLORS } from '../constants/theme';
+} from "react-native";
+import AppIcon from "./AppIcon";
+import { COLORS } from "../constants/theme";
 
 interface GuestSelectorProps {
   value: number;
@@ -18,16 +18,16 @@ interface GuestSelectorProps {
 }
 
 const GUEST_OPTIONS = [
-  { value: 1, label: '1 khách' },
-  { value: 2, label: '2 khách' },
-  { value: 3, label: '3 khách' },
-  { value: 4, label: '4 khách' },
+  { value: 1, label: "1 khách" },
+  { value: 2, label: "2 khách" },
+  { value: 3, label: "3 khách" },
+  { value: 4, label: "4 khách" },
 ];
 
 const GuestSelector: React.FC<GuestSelectorProps> = ({
   value,
   onChange,
-  label = 'Số khách',
+  label = "Số khách",
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -45,11 +45,21 @@ const GuestSelector: React.FC<GuestSelectorProps> = ({
         style={styles.selectorButton}
         onPress={() => setModalVisible(true)}
       >
-        <Icon name="users" size={18} color={COLORS.gray} style={{ width: 24, marginRight: 10 }} />
+        <AppIcon
+          name="users"
+          size={18}
+          color={COLORS.gray}
+          style={{ width: 24, marginRight: 10 }}
+        />
         <Text style={styles.selectorText}>
-          {selectedOption?.label || 'Chọn số khách'}
+          {selectedOption?.label || "Chọn số khách"}
         </Text>
-        <Icon name="chevron-down" size={14} color={COLORS.gray} style={{ marginLeft: 8 }} />
+        <AppIcon
+          name="chevron-down"
+          size={14}
+          color={COLORS.gray}
+          style={{ marginLeft: 8 }}
+        />
       </TouchableOpacity>
 
       <Modal
@@ -65,7 +75,7 @@ const GuestSelector: React.FC<GuestSelectorProps> = ({
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Chọn số khách</Text>
                   <TouchableOpacity onPress={() => setModalVisible(false)}>
-                    <Icon name="times" size={20} color={COLORS.secondary} />
+                    <AppIcon name="times" size={20} color={COLORS.secondary} />
                   </TouchableOpacity>
                 </View>
                 <FlatList
@@ -79,10 +89,12 @@ const GuestSelector: React.FC<GuestSelectorProps> = ({
                       ]}
                       onPress={() => handleSelect(item.value)}
                     >
-                      <Icon
+                      <AppIcon
                         name="user"
                         size={16}
-                        color={value === item.value ? COLORS.primary : COLORS.gray}
+                        color={
+                          value === item.value ? COLORS.primary : COLORS.gray
+                        }
                         style={{ width: 20, marginRight: 12 }}
                       />
                       <Text
@@ -94,7 +106,11 @@ const GuestSelector: React.FC<GuestSelectorProps> = ({
                         {item.label}
                       </Text>
                       {value === item.value && (
-                        <Icon name="check" size={16} color={COLORS.primary} />
+                        <AppIcon
+                          name="check"
+                          size={16}
+                          color={COLORS.primary}
+                        />
                       )}
                     </TouchableOpacity>
                   )}
@@ -114,19 +130,19 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.secondary,
     marginBottom: 6,
   },
   selectorButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     height: 48,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     borderRadius: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     // use explicit spacing for icons/text
   },
   selectorText: {
@@ -136,41 +152,41 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 20,
-    maxHeight: '50%',
+    maxHeight: "50%",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: "#e0e0e0",
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.secondary,
   },
   optionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 16,
     // replace gap with margins
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   optionItemSelected: {
-    backgroundColor: '#f0f8ff',
+    backgroundColor: "#f0f8ff",
   },
   optionText: {
     flex: 1,
@@ -178,7 +194,7 @@ const styles = StyleSheet.create({
     color: COLORS.secondary,
   },
   optionTextSelected: {
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.primary,
   },
 });

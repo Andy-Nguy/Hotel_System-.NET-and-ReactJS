@@ -13,7 +13,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
-import Icon from 'react-native-vector-icons/FontAwesome';
+import AppIcon from "../components/AppIcon";
 import AboutUs from "../components/AboutUs";
 import BlogSection from "../components/BlogSection";
 import Promotion from "../components/Promotion";
@@ -70,7 +70,7 @@ const HomeScreen: React.FC = () => {
           {/* Hero Search Bar - Floating */}
           <View style={styles.heroSearchContainer}>
             <View style={styles.searchBox}>
-              <Icon
+              <AppIcon
                 name="search"
                 size={20}
                 color="#999"
@@ -107,15 +107,12 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.bottomArrow}>›</Text>
         </TouchableOpacity>
       </View>
-      
+
       <AboutUs />
 
-
       {/* Promotion: Promotion will fetch latest promotion itself when no props provided */}
-      <Promotion
-        navigation={navigation}
-      />
-      
+      <Promotion navigation={navigation} />
+
       <RoomType />
       <Services />
       {/* Bottom Spacing */}
@@ -186,7 +183,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     color: "#999",
     width: 28,
-    textAlign: 'center',
+    textAlign: "center",
   },
   searchInput: {
     flex: 1,

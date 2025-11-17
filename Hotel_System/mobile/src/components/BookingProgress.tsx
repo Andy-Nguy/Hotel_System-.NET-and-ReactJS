@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "./AppIcon";
 
 interface BookingProgressProps {
   totalRooms?: number;
@@ -40,8 +40,9 @@ const BookingProgress: React.FC<BookingProgressProps> = ({
   items.push({
     title: "Dịch vụ",
     status: servicesStatus,
-    icon: "🛎️",
-    isEmoji: true,
+    icon: "bell",
+    library: "FontAwesome",
+    isEmoji: false,
   });
 
   // Thanh toán
@@ -54,16 +55,18 @@ const BookingProgress: React.FC<BookingProgressProps> = ({
   items.push({
     title: "Thanh toán",
     status: paymentStatus,
-    icon: "💳",
-    isEmoji: true,
+    icon: "credit-card",
+    library: "FontAwesome",
+    isEmoji: false,
   });
 
   // Hoàn tất
   items.push({
     title: "Hoàn tất",
     status: currentStage === "complete" ? "finish" : "wait",
-    icon: "✅",
-    isEmoji: true,
+    icon: "check-circle",
+    library: "FontAwesome",
+    isEmoji: false,
   });
 
   return (
@@ -96,8 +99,9 @@ const BookingProgress: React.FC<BookingProgressProps> = ({
                   {item.icon}
                 </Text>
               ) : (
-                <Icon
+                <AppIcon
                   name={item.icon}
+                  library={item.library}
                   size={16}
                   color={
                     item.status === "finish"

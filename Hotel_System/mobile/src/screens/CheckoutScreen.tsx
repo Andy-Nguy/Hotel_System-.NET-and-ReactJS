@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "../components/AppIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BookingProgress from "../components/BookingProgress";
 import { useAuth } from "../context/AuthContext";
@@ -289,7 +289,7 @@ const CheckoutScreen: React.FC = () => {
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
-            <Icon name="arrow-left" size={20} color={COLORS.secondary} />
+            <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Thông tin đặt phòng</Text>
           <View style={{ width: 20 }} />
@@ -332,7 +332,9 @@ const CheckoutScreen: React.FC = () => {
 
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Số khách:</Text>
-              <Text style={styles.summaryValue}>{bookingInfo.guests}</Text>
+              <Text style={styles.summaryValue}>
+                {String(bookingInfo.guests)}
+              </Text>
             </View>
 
             <View style={styles.roomList}>
@@ -345,12 +347,14 @@ const CheckoutScreen: React.FC = () => {
                   </Text>
                   <Text style={styles.roomPrice}>
                     $
-                    {(typeof sr.room.discountedPrice === "number"
-                      ? sr.room.discountedPrice
-                      : typeof sr.room.basePricePerNight === "number"
-                      ? sr.room.basePricePerNight
-                      : 0
-                    ).toLocaleString()}{" "}
+                    {String(
+                      (typeof sr.room.discountedPrice === "number"
+                        ? sr.room.discountedPrice
+                        : typeof sr.room.basePricePerNight === "number"
+                        ? sr.room.basePricePerNight
+                        : 0
+                      ).toLocaleString()
+                    )}{" "}
                     x {nights} đêm
                   </Text>
                 </View>
@@ -368,13 +372,17 @@ const CheckoutScreen: React.FC = () => {
                       </Text>
                       <Text style={styles.roomPrice}>
                         $
-                        {typeof service.price === "number"
-                          ? service.price.toLocaleString()
-                          : "0"}{" "}
+                        {String(
+                          typeof service.price === "number"
+                            ? service.price.toLocaleString()
+                            : "0"
+                        )}{" "}
                         x{" "}
-                        {typeof service.quantity === "number"
-                          ? service.quantity
-                          : 1}
+                        {String(
+                          typeof service.quantity === "number"
+                            ? service.quantity
+                            : 1
+                        )}
                       </Text>
                     </View>
                   ))}
@@ -388,7 +396,7 @@ const CheckoutScreen: React.FC = () => {
               <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
               {isLoggedIn && (
                 <View style={styles.loggedInBadge}>
-                  <Icon name="user" size={12} color={COLORS.success} />
+                  <AppIcon name="user" size={12} color={COLORS.success} />
                   <Text style={styles.loggedInText}>Đã đăng nhập</Text>
                 </View>
               )}
@@ -491,21 +499,21 @@ const CheckoutScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Chính sách & lưu ý</Text>
 
             <View style={styles.policyItem}>
-              <Icon name="clock-o" size={16} color={COLORS.primary} />
+              <AppIcon name="clock-o" size={16} color={COLORS.primary} />
               <Text style={styles.policyText}>
                 Giờ nhận phòng: 14:00, trả phòng: 12:00
               </Text>
             </View>
 
             <View style={styles.policyItem}>
-              <Icon name="ban" size={16} color={COLORS.error} />
+              <AppIcon name="ban" size={16} color={COLORS.error} />
               <Text style={styles.policyText}>
                 Hút thuốc nghiêm cấm trong phòng
               </Text>
             </View>
 
             <View style={styles.policyItem}>
-              <Icon name="undo" size={16} color={COLORS.success} />
+              <AppIcon name="undo" size={16} color={COLORS.success} />
               <Text style={styles.policyText}>Miễn phí hủy trong 24 giờ</Text>
             </View>
           </View>

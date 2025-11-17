@@ -12,8 +12,9 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "../components/AppIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { buildApiUrl } from "../config/apiConfig";
 import BookingProgress from "../components/BookingProgress";
 
 interface InvoiceInfo {
@@ -135,19 +136,26 @@ const PaymentScreen: React.FC = () => {
         }${paymentRef ? ` | Mã GD: ${paymentRef}` : ""}`,
         PaymentGateway:
           selectedMethod === "bank-transfer" ? "VietQR" : selectedMethod,
-        Services: [], // No services for now
+        Services:
+          invoiceInfo.selectedServices && invoiceInfo.selectedServices.length
+            ? invoiceInfo.selectedServices.map((svc: any) => ({
+                IddichVu: svc.serviceId || svc.iddichVu || svc.serviceId,
+                SoLuong: svc.quantity || svc.soLuong || 1,
+                DonGia: svc.price || svc.donGia || 0,
+                TienDichVu:
+                  (svc.price || svc.donGia || 0) *
+                  (svc.quantity || svc.soLuong || 1),
+              }))
+            : [],
       };
 
-      const response = await fetch(
-        "http://localhost:5000/api/Payment/hoa-don",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(invoicePayload),
-        }
-      );
+      const response = await fetch(buildApiUrl("/api/Payment/hoa-don"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(invoicePayload),
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -190,9 +198,18 @@ const PaymentScreen: React.FC = () => {
       navigation.navigate("BookingSuccess" as never);
     } catch (error: any) {
       console.error("Error:", error);
+      const errMsg =
+        error?.message ||
+        (typeof error === "string" ? error : null) ||
+        "Có lỗi xảy ra. Vui lòng thử lại.";
+      console.error(
+        "Payment error details, API base:",
+        buildApiUrl("/"),
+        errMsg
+      );
       Alert.alert(
         "Lỗi thanh toán",
-        error.message || "Có lỗi xảy ra. Vui lòng thử lại."
+        `${errMsg}\n(Thử kiểm tra biến DEFAULT_BASE_URL trong mobile/src/config/apiConfig.ts)`
       );
     } finally {
       setProcessingPayment(false);
@@ -238,7 +255,7 @@ const PaymentScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Icon name="arrow-left" size={20} color={COLORS.secondary} />
+          <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Thanh toán</Text>
         <View style={{ width: 20 }} />
@@ -247,7 +264,7 @@ const PaymentScreen: React.FC = () => {
         currentStage="checkout"
         totalRooms={invoiceInfo.rooms.length}
         selectedRoomNumbers={invoiceInfo.rooms.map((_, index) => index + 1)}
-      />{" "}
+      />
       <ScrollView
         style={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -258,7 +275,9 @@ const PaymentScreen: React.FC = () => {
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Mã đặt phòng:</Text>
-            <Text style={styles.summaryValue}>{invoiceInfo.idDatPhong}</Text>
+            <Text style={styles.summaryValue}>
+              {String(invoiceInfo.idDatPhong)}
+            </Text>
           </View>
 
           <View style={styles.summaryRow}>
@@ -277,7 +296,9 @@ const PaymentScreen: React.FC = () => {
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Số đêm:</Text>
-            <Text style={styles.summaryValue}>{invoiceInfo.nights}</Text>
+            <Text style={styles.summaryValue}>
+              {String(invoiceInfo.nights)}
+            </Text>
           </View>
 
           <View style={styles.roomList}>
@@ -285,15 +306,18 @@ const PaymentScreen: React.FC = () => {
             {invoiceInfo.rooms.map((room: any, index: number) => (
               <View key={index} style={styles.roomItem}>
                 <Text style={styles.roomName}>
-                  Phòng {room.roomNumber}: {room.room.roomTypeName}
+                  Phòng {String(room.roomNumber)}:{" "}
+                  {String(room.room.roomTypeName)}
                 </Text>
                 <Text style={styles.roomPrice}>
                   $
-                  {(
-                    room.room.discountedPrice ||
-                    room.room.basePricePerNight ||
-                    0
-                  ).toLocaleString()}
+                  {String(
+                    (
+                      room.room.discountedPrice ||
+                      room.room.basePricePerNight ||
+                      0
+                    ).toLocaleString()
+                  )}
                 </Text>
               </View>
             ))}
@@ -306,9 +330,12 @@ const PaymentScreen: React.FC = () => {
                 {invoiceInfo.selectedServices.map(
                   (service: any, index: number) => (
                     <View key={index} style={styles.roomItem}>
-                      <Text style={styles.roomName}>{service.serviceName}</Text>
+                      <Text style={styles.roomName}>
+                        {String(service.serviceName)}
+                      </Text>
                       <Text style={styles.roomPrice}>
-                        ${service.price.toLocaleString()} x {service.quantity}
+                        ${String(service.price.toLocaleString())} x{" "}
+                        {String(service.quantity)}
                       </Text>
                     </View>
                   )
@@ -331,7 +358,7 @@ const PaymentScreen: React.FC = () => {
               onPress={() => setSelectedMethod(method.key)}
             >
               <View style={styles.methodContent}>
-                <Icon
+                <AppIcon
                   name={method.icon as any}
                   size={24}
                   color={
@@ -506,7 +533,7 @@ const PaymentScreen: React.FC = () => {
                 ).toLocaleString()}
                 đ
               </Text>
-              <Text style={styles.qrSubtext}>Mã GD: {paymentRef}</Text>
+              <Text style={styles.qrSubtext}>Mã GD: {String(paymentRef)}</Text>
             </View>
 
             <TouchableOpacity

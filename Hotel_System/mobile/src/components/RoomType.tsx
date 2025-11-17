@@ -11,10 +11,10 @@ import {
 import { Image } from "expo-image";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
-import Icon from 'react-native-vector-icons/FontAwesome';
 import { getRooms, Room } from "../api/roomsApi";
 
 const { width } = Dimensions.get("window");
+import AppIcon from "./AppIcon";
 const CARD_WIDTH = width * 0.78;
 
 interface RoomTypeData {
@@ -99,7 +99,7 @@ const RoomType: React.FC = () => {
           />
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Icon name="image" size={44} color="#e0e0e0" />
+            <AppIcon name="image" size={44} color="#e0e0e0" />
           </View>
         )}
 
@@ -118,7 +118,7 @@ const RoomType: React.FC = () => {
 
           <View style={styles.overlayRow}>
             <Text style={styles.overlayPrice}>
-              <Text style={{ fontSize: 14 }}>🏨</Text> Từ{' '}
+              <Text style={{ fontSize: 14 }}>🏨</Text> Từ{" "}
               {Number(item.minPrice).toLocaleString()} VND
             </Text>
           </View>
@@ -149,7 +149,7 @@ const RoomType: React.FC = () => {
         />
       ) : (
         <View style={styles.emptyContainer}>
-          <Icon name="bed" size={40} color="#ccc" />
+          <AppIcon name="bed" size={40} color="#ccc" />
           <Text style={styles.emptyText}>Không có loại phòng</Text>
         </View>
       )}

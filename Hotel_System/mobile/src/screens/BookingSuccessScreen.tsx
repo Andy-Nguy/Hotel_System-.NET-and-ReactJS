@@ -9,8 +9,10 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { buildApiUrl } from "../config/apiConfig";
+import { Linking } from "react-native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
-import Icon from "react-native-vector-icons/FontAwesome";
+import AppIcon from "../components/AppIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BookingProgress from "../components/BookingProgress";
 
@@ -95,7 +97,27 @@ const BookingSuccessScreen: React.FC = () => {
   };
 
   const handleDownloadInvoice = () => {
-    Alert.alert("Thông báo", "Tính năng tải hóa đơn sẽ được cập nhật sau");
+    // Try open invoice PDF from server if available
+    const idHoaDon =
+      paymentInfo?.idHoaDon || (bookingData as any)?.idHoaDon || null;
+    if (!idHoaDon) {
+      Alert.alert("Lỗi", "Không tìm thấy mã hóa đơn");
+      return;
+    }
+
+    const url = buildApiUrl(`/api/Payment/invoice/${idHoaDon}/pdf`);
+    Linking.canOpenURL(url)
+      .then((supported) => {
+        if (!supported) {
+          Alert.alert("Lỗi", "Không thể mở liên kết tải hóa đơn");
+        } else {
+          return Linking.openURL(url);
+        }
+      })
+      .catch((err) => {
+        console.error("Open invoice URL failed", err);
+        Alert.alert("Lỗi", "Không thể mở liên kết hóa đơn");
+      });
   };
 
   const formatDate = (dateStr?: string) => {
@@ -140,7 +162,7 @@ const BookingSuccessScreen: React.FC = () => {
         {/* Success Message */}
         <View style={styles.successCard}>
           <View style={styles.successIcon}>
-            <Icon name="check-circle" size={60} color="#52c41a" />
+            <AppIcon name="check-circle" size={60} color="#52c41a" />
           </View>
 
           <Text style={styles.successTitle}>Đặt phòng thành công!</Text>
@@ -160,17 +182,17 @@ const BookingSuccessScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
 
           <View style={styles.infoRow}>
-            <Icon name="user" size={16} color={COLORS.primary} />
+            <AppIcon name="user" size={16} color={COLORS.primary} />
             <Text style={styles.infoText}>{bookingData.customerName}</Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Icon name="envelope" size={16} color={COLORS.primary} />
+            <AppIcon name="envelope" size={16} color={COLORS.primary} />
             <Text style={styles.infoText}>{bookingData.customerEmail}</Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Icon name="phone" size={16} color={COLORS.primary} />
+            <AppIcon name="phone" size={16} color={COLORS.primary} />
             <Text style={styles.infoText}>{bookingData.customerPhone}</Text>
           </View>
         </View>
@@ -255,7 +277,7 @@ const BookingSuccessScreen: React.FC = () => {
 
           {paymentInfo?.paymentStatus === "paid" && (
             <View style={[styles.statusCard, styles.statusPaid]}>
-              <Icon name="check-circle" size={20} color="#52c41a" />
+              <AppIcon name="check-circle" size={20} color="#52c41a" />
               <View style={styles.statusContent}>
                 <Text style={styles.statusTitle}>Đã thanh toán</Text>
                 <Text style={styles.statusMessage}>
@@ -267,7 +289,7 @@ const BookingSuccessScreen: React.FC = () => {
 
           {paymentInfo?.paymentStatus === "deposit" && (
             <View style={[styles.statusCard, styles.statusDeposit]}>
-              <Icon name="clock-o" size={20} color="#fa8c16" />
+              <AppIcon name="clock-o" size={20} color="#fa8c16" />
               <View style={styles.statusContent}>
                 <Text style={styles.statusTitle}>Đã đặt cọc</Text>
                 <Text style={styles.statusMessage}>
@@ -286,7 +308,7 @@ const BookingSuccessScreen: React.FC = () => {
 
           {paymentInfo?.paymentStatus === "unpaid" && (
             <View style={[styles.statusCard, styles.statusUnpaid]}>
-              <Icon name="home" size={20} color="#1890ff" />
+              <AppIcon name="home" size={20} color="#1890ff" />
               <View style={styles.statusContent}>
                 <Text style={styles.statusTitle}>Thanh toán tại khách sạn</Text>
                 <Text style={styles.statusMessage}>
@@ -302,26 +324,26 @@ const BookingSuccessScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Lưu ý quan trọng</Text>
 
           <View style={styles.noteItem}>
-            <Icon name="clock-o" size={16} color={COLORS.primary} />
+            <AppIcon name="clock-o" size={16} color={COLORS.primary} />
             <Text style={styles.noteText}>
               Giờ nhận phòng: 14:00, trả phòng: 12:00
             </Text>
           </View>
 
           <View style={styles.noteItem}>
-            <Icon name="ban" size={16} color="#ff4d4f" />
+            <AppIcon name="ban" size={16} color="#ff4d4f" />
             <Text style={styles.noteText}>
               Hút thuốc nghiêm cấm trong phòng
             </Text>
           </View>
 
           <View style={styles.noteItem}>
-            <Icon name="undo" size={16} color="#52c41a" />
+            <AppIcon name="undo" size={16} color="#52c41a" />
             <Text style={styles.noteText}>Miễn phí hủy trong 24 giờ</Text>
           </View>
 
           <View style={styles.noteItem}>
-            <Icon name="phone" size={16} color={COLORS.primary} />
+            <AppIcon name="phone" size={16} color={COLORS.primary} />
             <Text style={styles.noteText}>Hỗ trợ 24/7: 1900-xxxx</Text>
           </View>
         </View>
@@ -333,12 +355,12 @@ const BookingSuccessScreen: React.FC = () => {
           style={styles.downloadButton}
           onPress={handleDownloadInvoice}
         >
-          <Icon name="download" size={16} color={COLORS.primary} />
+          <AppIcon name="download" size={16} color={COLORS.primary} />
           <Text style={styles.downloadButtonText}>Tải hóa đơn PDF</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.homeButton} onPress={handleBackToHome}>
-          <Icon name="home" size={16} color={COLORS.white} />
+          <AppIcon name="home" size={16} color={COLORS.white} />
           <Text style={styles.homeButtonText}>Về trang chủ</Text>
         </TouchableOpacity>
       </View>
