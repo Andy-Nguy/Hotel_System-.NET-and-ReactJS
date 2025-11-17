@@ -81,7 +81,8 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       bodyStyle={{ background: "#fff" }}
       centered
       style={{ top: 20 }}
-      maskStyle={{ backgroundColor: "rgba(0, 0, 0, 0.65)" }}
+      zIndex={10010}
+      maskStyle={{ backgroundColor: "rgba(0, 0, 0, 0.65)", zIndex: 10005 }}
     >
       {/* === FIX: Dùng margin âm để "ăn" hết padding của body === */}
       <div

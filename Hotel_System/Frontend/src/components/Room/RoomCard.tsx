@@ -26,7 +26,7 @@ const RoomCard: React.FC<Props> = ({
   room,
   onOpenDetail,
   onBook,
-  bookButtonText = "Đặt phòng ngay",
+  bookButtonText = "Khám phá phòng",
 }) => {
   const defaultWebp = "/img/room/room-6.jpg";
 
@@ -57,9 +57,17 @@ const RoomCard: React.FC<Props> = ({
   const [promotion, setPromotion] = useState<Promotion | null>(null);
 
   // Determine sold/out status from room payload (may come from backend or merged by frontend)
-  const rawStatus = (room as any).TrangThai || (room as any).trangThai || (room as any).status || "";
+  const rawStatus =
+    (room as any).TrangThai ||
+    (room as any).trangThai ||
+    (room as any).status ||
+    "";
   const statusStr = String(rawStatus || "").toLowerCase();
-  const isSoldOut = statusStr === "occupied" || statusStr === "soldout" || statusStr === "sold out" || statusStr === "unavailable";
+  const isSoldOut =
+    statusStr === "occupied" ||
+    statusStr === "soldout" ||
+    statusStr === "sold out" ||
+    statusStr === "unavailable";
 
   // LOAD IMAGE
   useEffect(() => {
@@ -142,19 +150,20 @@ const RoomCard: React.FC<Props> = ({
 
   // Price calculations for display
   const basePrice: number | null =
-    ((room as any).giaCoBanMotDem ?? (room as any).basePricePerNight) ?? null;
+    (room as any).giaCoBanMotDem ?? (room as any).basePricePerNight ?? null;
 
   // Determine discount according to promotion type
   const promoValue = promotion?.giaTriGiam ?? 0; // could be percent or amount
   const isPercent = promotion?.loaiGiamGia === "percent";
   const isAmount = promotion?.loaiGiamGia === "amount";
-  const hasDiscount = !!promotion && !!basePrice && promoValue > 0 && (isPercent || isAmount);
+  const hasDiscount =
+    !!promotion && !!basePrice && promoValue > 0 && (isPercent || isAmount);
 
   let discountedPrice: number | null = null;
   let savings = 0;
   if (hasDiscount && basePrice) {
     if (isPercent) {
-      discountedPrice = Math.round(basePrice * (1 - (promoValue / 100)));
+      discountedPrice = Math.round(basePrice * (1 - promoValue / 100));
       savings = basePrice - (discountedPrice ?? 0);
     } else if (isAmount) {
       // promoValue is fixed amount in VND
@@ -192,18 +201,20 @@ const RoomCard: React.FC<Props> = ({
         }}
       >
         {isSoldOut && (
-          <div style={{
-            position: 'absolute',
-            top: 10,
-            right: 10,
-            background: 'rgba(0,0,0,0.6)',
-            color: '#fff',
-            padding: '6px 10px',
-            borderRadius: 6,
-            fontWeight: 700,
-            zIndex: 30,
-            fontSize: 12
-          }}>
+          <div
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              background: "rgba(0,0,0,0.6)",
+              color: "#fff",
+              padding: "6px 10px",
+              borderRadius: 6,
+              fontWeight: 700,
+              zIndex: 30,
+              fontSize: 12,
+            }}
+          >
             Đã đặt / Hết phòng
           </div>
         )}
@@ -251,50 +262,78 @@ const RoomCard: React.FC<Props> = ({
             {room.tenPhong ?? "Phòng nghỉ"}
           </h2>
 
-          <a
-            onClick={() => onOpenDetail(room)}
-            style={{
-              display: "inline-block",
-              marginBottom: 12,
-              color: "#dfa974",
-              textDecoration: "none",
-              borderBottom: "2px solid #dfa974",
-              paddingBottom: 2,
-              cursor: "pointer",
-              fontWeight: "bold",
-              lineHeight: 1.2,
-            }}
-          >
-            Xem thông tin phòng chi tiết
-          </a>
+          {/* Removed inline detail link — primary CTA now opens detail (luxury "Khám phá phòng") */}
 
           {/* Price Display */}
           <div style={{ marginTop: 12, marginBottom: 16, minHeight: 60 }}>
             {hasDiscount && discountedPrice ? (
               // --- DISCOUNT VIEW ---
               <div>
-                <div style={{ fontSize: 15, color: "#999", textDecoration: "line-through" }}>
+                <div
+                  style={{
+                    fontSize: 15,
+                    color: "#999",
+                    textDecoration: "line-through",
+                  }}
+                >
                   {formatPrice(basePrice)}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
-                  <div style={{ fontSize: 25, fontWeight: 700, color: "#dfa974", lineHeight: 1 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    marginTop: "4px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 25,
+                      fontWeight: 700,
+                      color: "#dfa974",
+                      lineHeight: 1,
+                    }}
+                  >
                     {formatPrice(discountedPrice)}
                   </div>
                   <Tag color="gold" style={{ fontWeight: "bold" }}>
-                    TIẾT KIỆM {promotion?.loaiGiamGia === "percent" ? `${promoValue}%` : `${promoValue?.toLocaleString?.() ?? promoValue}đ`}
+                    TIẾT KIỆM{" "}
+                    {promotion?.loaiGiamGia === "percent"
+                      ? `${promoValue}%`
+                      : `${promoValue?.toLocaleString?.() ?? promoValue}đ`}
                   </Tag>
                 </div>
-                <div style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>/đêm</div>
+                <div style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>
+                  /đêm
+                </div>
               </div>
             ) : (
               // --- REGULAR PRICE VIEW ---
               <div>
-                <div style={{ fontSize: 10, color: "#888" }}>Giá mỗi đêm từ</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginTop: "4px" }}>
-                  <div style={{ fontSize: 25, fontWeight: 700, color: "#333", lineHeight: 1 }}>
+                <div style={{ fontSize: 10, color: "#888" }}>
+                  Giá mỗi đêm từ
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: "8px",
+                    marginTop: "4px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 25,
+                      fontWeight: 700,
+                      color: "#333",
+                      lineHeight: 1,
+                    }}
+                  >
                     {formatPrice(basePrice)}
                   </div>
-                  <div style={{ fontSize: 14, color: "#666", fontWeight: 500 }}>/đêm</div>
+                  <div style={{ fontSize: 14, color: "#666", fontWeight: 500 }}>
+                    /đêm
+                  </div>
                 </div>
               </div>
             )}
@@ -311,14 +350,19 @@ const RoomCard: React.FC<Props> = ({
           >
             <Button
               type="primary"
-              onClick={() => !isSoldOut && onBook(room)}
-              disabled={isSoldOut}
+              onClick={() => onOpenDetail(room)}
+              aria-label="Khám phá phòng"
               style={{
-                background: "#dfa974",
-                borderColor: "#dfa974",
+                background: "linear-gradient(135deg, #dfa974 0%, #d89860 100%)",
+                borderColor: "transparent",
                 height: 64,
                 fontSize: 18,
                 width: "min(420px, 85%)",
+                borderRadius: 12,
+                boxShadow: "0 10px 30px rgba(217,152,96,0.18)",
+                color: "#fff",
+                fontWeight: 700,
+                letterSpacing: "0.2px",
               }}
             >
               {isSoldOut ? "Hết phòng" : bookButtonText}
