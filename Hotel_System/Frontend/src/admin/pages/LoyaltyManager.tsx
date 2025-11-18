@@ -10,7 +10,7 @@ interface CustomerLoyalty {
   email?: string;
   soDienThoai?: string;
   tichDiem: number;
-  tier: string; // Bronze, Silver, Gold, Platinum
+  tier: string; // Silver, Gold, Platinum, Diamond
 }
 
 interface MembershipTier {
@@ -20,11 +20,12 @@ interface MembershipTier {
   benefits: string;
 }
 
+// Updated tiers: Silver -> Gold -> Platinum -> Diamond
 const defaultTiers: MembershipTier[] = [
-  { name: "Bronze", minPoints: 0, color: "#cd7f32", benefits: "Cơ bản" },
-  { name: "Silver", minPoints: 100, color: "#c0c0c0", benefits: "Giảm 5%" },
-  { name: "Gold", minPoints: 500, color: "#ffd700", benefits: "Giảm 10%" },
-  { name: "Platinum", minPoints: 1000, color: "#e5e4e2", benefits: "Giảm 15%, ưu tiên phòng" },
+  { name: "Silver", minPoints: 0, color: "#c0c0c0", benefits: "Cơ bản" },
+  { name: "Gold", minPoints: 100, color: "#ffd700", benefits: "Giảm 5%" },
+  { name: "Platinum", minPoints: 500, color: "#e5e4e2", benefits: "Giảm 10%" },
+  { name: "Diamond", minPoints: 1000, color: "#b9f2ff", benefits: "Giảm 15%, ưu tiên phòng" },
 ];
 
 const fetchJson = async (url: string, init?: RequestInit) => {
