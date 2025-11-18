@@ -138,4 +138,20 @@ export async function getBookings() {
   return handleRes(res);
 }
 
-export default { register, verifyOtp, login, getProfile, getBookings };
+export async function getMyBookingHistory() {
+  const token = await AsyncStorage.getItem("hs_token");
+  const res = await fetch(`${BASE_URL}/api/DatPhong/LichSuDatPhong`, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  return handleRes(res);
+}
+
+export default {
+  register,
+  verifyOtp,
+  login,
+  getProfile,
+  getBookings,
+  getMyBookingHistory,
+};
