@@ -24,9 +24,9 @@ export interface UpdateBookingRequest {
   trangThaiThanhToan?: number;
 }
 
-// Backend runs (launch profile `http`) on: http://0.0.0.0:8080 (accessible as http://localhost:8080)
-// Use http://localhost:8080 to avoid TLS dev-certificate issues during local development.
-const API_BASE_URL = "http://localhost:8080/api";
+// Use relative '/api' so Vite dev proxy forwards calls to the backend (https://localhost:5001)
+// This avoids CORS and TLS dev-certificate issues in dev mode.
+const API_BASE_URL = "/api";
 
 export const getBookings = async (): Promise<Booking[]> => {
   const response = await axios.get(`${API_BASE_URL}/DatPhong`);
@@ -34,7 +34,12 @@ export const getBookings = async (): Promise<Booking[]> => {
 };
 
 export const getBookingById = async (id: string): Promise<Booking> => {
-  const response = await axios.get(`${API_BASE_URL}/DatPhong/${id}`);
+  const token = localStorage.getItem("hs_token");
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await axios.get(`${API_BASE_URL}/DatPhong/${id}`, {
+    headers,
+  });
   return response.data;
 };
 
@@ -47,6 +52,22 @@ export const updateBooking = async (
 
 export const deleteBooking = async (id: string): Promise<void> => {
   await axios.delete(`${API_BASE_URL}/DatPhong/${id}`);
+};
+
+/**
+ * GET /api/DatPhong/LichSuDatPhong
+ * Lấy lịch sử đặt phòng của user hiện tại dựa trên JWT
+ */
+export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
+  const token = localStorage.getItem("hs_token");
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await axios.get(`${API_BASE_URL}/DatPhong/LichSuDatPhong`, {
+    headers,
+  });
+  const raw = response.data || [];
+  // backend returns an array of bookings (PascalCase); normalize each
+  return (raw as any[]).map(normalizeBookingSummary);
 };
 /**
  * Booking Management API
@@ -93,13 +114,24 @@ export interface BookingDetail {
     giaPhong: number;
     soDem: number;
     thanhTien: number;
+    moTa?: string;
+    giaCoBanMotDem?: number;
+    idLoaiPhong?: string;
+    tenLoaiPhong?: string;
+    urlAnhPhong?: string;
+    soNguoiToiDa?: number;
+    xepHangSao?: number;
   }>;
+  tenKhachHang?: string;
+  emailKhachHang?: string;
 }
 
 export interface BookingSummary {
   idDatPhong: string;
   idHoaDon?: string;
   bookingCode: string;
+  tenKhachHang?: string;
+  emailKhachHang?: string;
   ngayDatPhong?: string;
   ngayNhanPhong: string;
   ngayTraPhong: string;
@@ -110,6 +142,29 @@ export interface BookingSummary {
   trangThaiText: string;
   trangThaiThanhToan: number;
   trangThaiThanhToanText: string;
+  rooms?: Array<{
+    tenPhong?: string;
+    soPhong?: string;
+    giaPhong?: number;
+    soDem?: number;
+    thanhTien?: number;
+    moTa?: string;
+    giaCoBanMotDem?: number;
+    idLoaiPhong?: string;
+    tenLoaiPhong?: string;
+    urlAnhPhong?: string;
+    soNguoiToiDa?: number;
+    xepHangSao?: number;
+  }>;
+  services?: Array<{
+    idCthdDv?: number;
+    idHoaDon?: string;
+    idDichVu?: string;
+    tenDichVu?: string;
+    tienDichVu?: number;
+    thoiGianThucHien?: string;
+    trangThai?: string;
+  }>;
 }
 
 export interface RescheduleRequest {
@@ -197,15 +252,33 @@ function normalizeBookingDetail(data: any): BookingDetail {
       data.trangThaiThanhToanText ||
       data.TrangThaiThanhToanText ||
       "Không xác định",
-    ghiChu: data.ghiChu || data.GhiChu,
-    rooms: (data.rooms || data.Rooms || []).map((r: any) => ({
-      idPhong: r.idPhong || r.IdPhong || "",
-      soPhong: r.soPhong || r.SoPhong || "",
-      tenPhong: r.tenPhong || r.TenPhong,
-      giaPhong: r.giaPhong || r.GiaPhong || 0,
-      soDem: r.soDem || r.SoDem || 0,
-      thanhTien: r.thanhTien || r.ThanhTien || 0,
+    tenKhachHang: data.tenKhachHang || data.TenKhachHang || data.TenKhachHang,
+    emailKhachHang:
+      data.emailKhachHang || data.EmailKhachHang || data.EmailKhachHang,
+    rooms: (
+      data.ChiTietDatPhongs ||
+      data.chiTietDatPhongs ||
+      data.ChiTiet ||
+      data.rooms ||
+      data.Rooms ||
+      []
+    ).map((ct: any) => ({
+      tenPhong: ct.TenPhongChiTiet || ct.tenPhong || ct.TenPhong || ct.tenPhong,
+      soPhong: ct.SoPhongChiTiet || ct.soPhong || ct.SoPhong || ct.soPhong,
+      giaPhong: ct.GiaPhong || ct.giaPhong || ct.GiaPhong || 0,
+      soDem: ct.SoDem || ct.soDem || 0,
+      thanhTien: ct.ThanhTien || ct.thanhTien || 0,
+      moTa: ct.MoTaPhongChiTiet || ct.moTa || ct.MoTa,
+      giaCoBanMotDem:
+        ct.GiaCoBanMotDem || ct.giaCoBanMotDem || ct.GiaCoBanMotDem,
+      idLoaiPhong: ct.IdLoaiPhong || ct.idLoaiPhong || ct.IdLoaiPhong,
+      tenLoaiPhong: ct.TenLoaiPhong || ct.tenLoaiPhong || ct.TenLoaiPhong,
+      urlAnhPhong: ct.UrlAnhPhong || ct.urlAnhPhong || ct.UrlAnhPhong,
+      soNguoiToiDa: ct.SoNguoiToiDa || ct.soNguoiToiDa || ct.SoNguoiToiDa,
+      xepHangSao: ct.XepHangSao || ct.xepHangSao || ct.XepHangSao,
     })),
+    ghiChu: data.ghiChu || data.GhiChu,
+    // `rooms` already mapped from ChiTietDatPhongs or data.rooms
   };
 }
 
@@ -213,6 +286,38 @@ function normalizeBookingDetail(data: any): BookingDetail {
  * Normalize booking summary response
  */
 function normalizeBookingSummary(data: any): BookingSummary {
+  // Fallback helpers: map numeric status to readable Vietnamese when backend doesn't provide text
+  function mapBookingStatusText(status: number | undefined | null) {
+    // Schema mapping: 1 = Chờ XN, 2 = Đã XN, 0 = Hủy, 3 = Đang dùng, 4 = Hoàn thành
+    switch (status) {
+      case 1:
+        return "Chờ xác nhận"; // waiting for confirmation
+      case 2:
+        return "Đã xác nhận"; // confirmed
+      case 0:
+        return "Đã hủy"; // canceled
+      case 3:
+        return "Đang sử dụng"; // checked-in
+      case 4:
+        return "Hoàn thành"; // finished
+      default:
+        return "Không xác định";
+    }
+  }
+
+  function mapPaymentStatusText(status: number | undefined | null) {
+    // Mapping follows PaymentPage conventions: 1 = chưa thanh toán, 0 = đã cọc, 2 = đã thanh toán
+    switch (status) {
+      case 0:
+        return "Đã cọc";
+      case 1:
+        return "Chưa thanh toán";
+      case 2:
+        return "Đã thanh toán";
+      default:
+        return "Không xác định";
+    }
+  }
   return {
     idDatPhong: data.idDatPhong || data.IddatPhong || "",
     idHoaDon: data.idHoaDon || data.IdhoaDon,
@@ -224,12 +329,49 @@ function normalizeBookingSummary(data: any): BookingSummary {
     soPhong: data.soPhong || data.SoPhong || 0,
     tongTien: data.tongTien || data.TongTien || 0,
     trangThai: data.trangThai ?? data.TrangThai ?? 0,
-    trangThaiText: data.trangThaiText || data.TrangThaiText || "Không xác định",
+    // Prefer server-provided human text; otherwise map numeric code to readable text
+    trangThaiText:
+      data.trangThaiText ||
+      data.TrangThaiText ||
+      mapBookingStatusText(data.TrangThai ?? data.trangThai),
     trangThaiThanhToan: data.trangThaiThanhToan ?? data.TrangThaiThanhToan ?? 0,
     trangThaiThanhToanText:
       data.trangThaiThanhToanText ||
       data.TrangThaiThanhToanText ||
-      "Không xác định",
+      mapPaymentStatusText(data.TrangThaiThanhToan ?? data.trangThaiThanhToan),
+    tenKhachHang: data.tenKhachHang || data.TenKhachHang,
+    emailKhachHang: data.emailKhachHang || data.EmailKhachHang,
+    services: (data.services || data.Services || []).map((s: any) => ({
+      idCthdDv: s.idcthddv || s.Idcthddv || s.IdCthdDv,
+      idHoaDon: s.idhoaDon || s.IdhoaDon || s.IdHoaDon,
+      idDichVu: s.iddichVu || s.IddichVu || s.IdDichVu,
+      tenDichVu: s.tenDichVu || s.TenDichVu,
+      tienDichVu: s.tienDichVu || s.TienDichVu,
+      thoiGianThucHien: s.thoiGianThucHien || s.ThoiGianThucHien,
+      trangThai: s.trangThai || s.TrangThai,
+    })),
+    rooms: (
+      data.ChiTietDatPhongs ||
+      data.chiTietDatPhongs ||
+      data.ChiTiet ||
+      data.rooms ||
+      data.Rooms ||
+      []
+    ).map((ct: any) => ({
+      tenPhong: ct.TenPhongChiTiet || ct.tenPhong || ct.TenPhong || ct.tenPhong,
+      soPhong: ct.SoPhongChiTiet || ct.soPhong || ct.SoPhong || ct.soPhong,
+      giaPhong: ct.GiaPhong || ct.giaPhong || ct.GiaPhong || 0,
+      soDem: ct.SoDem || ct.soDem || 0,
+      thanhTien: ct.ThanhTien || ct.thanhTien || 0,
+      moTa: ct.MoTaPhongChiTiet || ct.moTa || ct.MoTa,
+      giaCoBanMotDem:
+        ct.GiaCoBanMotDem || ct.giaCoBanMotDem || ct.GiaCoBanMotDem,
+      idLoaiPhong: ct.IdLoaiPhong || ct.idLoaiPhong || ct.IdLoaiPhong,
+      tenLoaiPhong: ct.TenLoaiPhong || ct.tenLoaiPhong || ct.TenLoaiPhong,
+      urlAnhPhong: ct.UrlAnhPhong || ct.urlAnhPhong || ct.UrlAnhPhong,
+      soNguoiToiDa: ct.SoNguoiToiDa || ct.soNguoiToiDa || ct.SoNguoiToiDa,
+      xepHangSao: ct.XepHangSao || ct.xepHangSao || ct.XepHangSao,
+    })),
   };
 }
 
@@ -280,9 +422,12 @@ export async function rescheduleBooking(
   bookingId: string,
   request: RescheduleRequest
 ): Promise<RescheduleResult> {
+  const token = localStorage.getItem("hs_token");
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}/${bookingId}/reschedule`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(request),
   });
 
@@ -309,8 +454,12 @@ export async function rescheduleBooking(
  * (Chỉ cho phép hủy trước 24h nhận phòng và chưa thanh toán)
  */
 export async function cancelBooking(bookingId: string): Promise<void> {
+  const token = localStorage.getItem("hs_token");
+  const headers: any = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}/${bookingId}/cancel`, {
     method: "DELETE",
+    headers,
   });
 
   const result = await handleJson(response);

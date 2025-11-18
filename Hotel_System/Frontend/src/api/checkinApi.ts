@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:8080/api";
+const API_BASE_URL = "/api";
 
 // Minimal type for the check-in / using booking list returned by CheckInController
 export interface UsingBooking {
@@ -78,7 +78,9 @@ export const cancelCheckIn = async (id: string): Promise<void> => {
 
 /** POST /api/CheckIn/complete-payment/{id} - mark booking as paid but keep status as 'Đang sử dụng' */
 export const completePayment = async (id: string): Promise<any> => {
-  const res = await axios.post(`${API_BASE_URL}/CheckIn/complete-payment/${id}`);
+  const res = await axios.post(
+    `${API_BASE_URL}/CheckIn/complete-payment/${id}`
+  );
   return res.data;
 };
 
@@ -111,13 +113,22 @@ export const deleteBooking = async (id: string): Promise<void> => {
 };
 
 /** Helper: update payment status */
-export const updatePaymentStatus = async (id: string, status: number): Promise<void> => {
+export const updatePaymentStatus = async (
+  id: string,
+  status: number
+): Promise<void> => {
   await updateBooking(id, { trangThaiThanhToan: status });
 };
 
 /** PUT /api/DatPhong/{id}/reschedule - change dates */
-export const rescheduleBooking = async (id: string, body: { ngayNhanPhong: string; ngayTraPhong: string; }): Promise<any> => {
-  const res = await axios.put(`${API_BASE_URL}/DatPhong/${id}/reschedule`, body);
+export const rescheduleBooking = async (
+  id: string,
+  body: { ngayNhanPhong: string; ngayTraPhong: string }
+): Promise<any> => {
+  const res = await axios.put(
+    `${API_BASE_URL}/DatPhong/${id}/reschedule`,
+    body
+  );
   return res.data;
 };
 

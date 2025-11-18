@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
 using Hotel_System.API.Services;
 using Hotel_System.API.DTOs;
+using System.Security.Claims;
 
 namespace Hotel_System.API.Controllers
 {
@@ -19,6 +20,94 @@ namespace Hotel_System.API.Controllers
             _context = context;
             _emailService = emailService;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// GET: api/DatPhong/LichSuDatPhong
+        /// Trả về lịch sử đặt phòng của user hiện tại (theo JWT NameIdentifier => IdkhachHang)
+        /// </summary>
+        [HttpGet("LichSuDatPhong")]
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        public async Task<IActionResult> GetBookingHistory()
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                {
+                    return Unauthorized(new { message = "Token không hợp lệ hoặc không có thông tin người dùng." });
+                }
+
+                var bookings = await _context.DatPhongs
+                    .Where(dp => dp.IdkhachHang == userId)
+                    .Include(dp => dp.IdkhachHangNavigation)
+                    .Include(dp => dp.IdphongNavigation)
+                    .Include(dp => dp.ChiTietDatPhongs)
+                        .ThenInclude(ct => ct.Phong)
+                            .ThenInclude(p => p!.IdloaiPhongNavigation)
+                    .Include(dp => dp.HoaDons)
+                        .ThenInclude(h => h.Cthddvs)
+                            .ThenInclude(c => c.IddichVuNavigation)
+                    .OrderByDescending(dp => dp.NgayDatPhong)
+                    .ToListAsync();
+
+                var result = bookings.Select(dp => new
+                {
+                    dp.IddatPhong,
+                    dp.IdkhachHang,
+                    TenKhachHang = dp.IdkhachHangNavigation?.HoTen,
+                    EmailKhachHang = dp.IdkhachHangNavigation?.Email,
+                    dp.Idphong,
+                    TenPhong = dp.IdphongNavigation?.TenPhong,
+                    SoPhong = dp.IdphongNavigation?.SoPhong,
+                    NgayDatPhong = dp.NgayDatPhong.HasValue ? dp.NgayDatPhong.Value.ToString("yyyy-MM-dd") : null,
+                    NgayNhanPhong = dp.NgayNhanPhong.ToString("yyyy-MM-dd"),
+                    NgayTraPhong = dp.NgayTraPhong.ToString("yyyy-MM-dd"),
+                    dp.SoDem,
+                    dp.SoNguoi,
+                    dp.SoLuongPhong,
+                    dp.TongTien,
+                    dp.TienCoc,
+                    dp.TrangThai,
+                    dp.TrangThaiThanhToan,
+                    ChiTietDatPhongs = dp.ChiTietDatPhongs.Select(ct => new
+                    {
+                        ct.IDChiTiet,
+                        ct.IDPhong,
+                        TenPhongChiTiet = ct.Phong?.TenPhong,
+                        MoTaPhongChiTiet = ct.Phong?.MoTa,
+                        GiaCoBanMotDem = ct.Phong?.GiaCoBanMotDem,
+                        IdLoaiPhong = ct.Phong?.IdloaiPhong,
+                        TenLoaiPhong = ct.Phong?.IdloaiPhongNavigation?.TenLoaiPhong,
+                        UrlAnhPhong = ct.Phong?.UrlAnhPhong,
+                        SoNguoiToiDa = ct.Phong?.SoNguoiToiDa,
+                        XepHangSao = ct.Phong?.XepHangSao,
+                        SoPhongChiTiet = ct.Phong?.SoPhong,
+                        ct.SoDem,
+                        ct.GiaPhong,
+                        ct.ThanhTien,
+                        ct.GhiChu
+                    }).ToList(),
+                    Services = dp.HoaDons?.SelectMany(h => h.Cthddvs ?? new List<Cthddv>())
+                        .Select(c => new
+                        {
+                            c.Idcthddv,
+                            c.IdhoaDon,
+                            c.IddichVu,
+                            TenDichVu = c.IddichVuNavigation?.TenDichVu,
+                            c.TienDichVu,
+                            c.ThoiGianThucHien,
+                            c.TrangThai
+                        }).ToList()
+                }).ToList();
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi lấy lịch sử đặt phòng");
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
 
         /// <summary>
@@ -142,6 +231,7 @@ namespace Hotel_System.API.Controllers
                     .Include(dp => dp.IdphongNavigation)
                     .Include(dp => dp.ChiTietDatPhongs)
                         .ThenInclude(ct => ct.Phong)
+                            .ThenInclude(p => p!.IdloaiPhongNavigation)
                     .ToListAsync();
 
                 var result = bookings.Select(dp => new
@@ -168,6 +258,13 @@ namespace Hotel_System.API.Controllers
                         ct.IDChiTiet,
                         ct.IDPhong,
                         TenPhongChiTiet = ct.Phong?.TenPhong,
+                        MoTaPhongChiTiet = ct.Phong?.MoTa,
+                        GiaCoBanMotDem = ct.Phong?.GiaCoBanMotDem,
+                        IdLoaiPhong = ct.Phong?.IdloaiPhong,
+                        TenLoaiPhong = ct.Phong?.IdloaiPhongNavigation?.TenLoaiPhong,
+                        UrlAnhPhong = ct.Phong?.UrlAnhPhong,
+                        SoNguoiToiDa = ct.Phong?.SoNguoiToiDa,
+                        XepHangSao = ct.Phong?.XepHangSao,
                         SoPhongChiTiet = ct.Phong?.SoPhong,
                         ct.SoDem,
                         ct.GiaPhong,
@@ -194,6 +291,9 @@ namespace Hotel_System.API.Controllers
                     .Include(dp => dp.IdphongNavigation)
                     .Include(dp => dp.ChiTietDatPhongs)
                         .ThenInclude(ct => ct.Phong)
+                    .Include(dp => dp.HoaDons)
+                        .ThenInclude(h => h.Cthddvs)
+                            .ThenInclude(c => c.IddichVuNavigation)
                     .FirstOrDefaultAsync(dp => dp.IddatPhong == id);
 
                 if (booking == null)
@@ -225,12 +325,31 @@ namespace Hotel_System.API.Controllers
                         ct.IDChiTiet,
                         ct.IDPhong,
                         TenPhongChiTiet = ct.Phong?.TenPhong,
+                        MoTaPhongChiTiet = ct.Phong?.MoTa,
+                        GiaCoBanMotDem = ct.Phong?.GiaCoBanMotDem,
+                        IdLoaiPhong = ct.Phong?.IdloaiPhong,
+                        TenLoaiPhong = ct.Phong?.IdloaiPhongNavigation?.TenLoaiPhong,
+                        UrlAnhPhong = ct.Phong?.UrlAnhPhong,
+                        SoNguoiToiDa = ct.Phong?.SoNguoiToiDa,
+                        XepHangSao = ct.Phong?.XepHangSao,
                         SoPhongChiTiet = ct.Phong?.SoPhong,
                         ct.SoDem,
                         ct.GiaPhong,
                         ct.ThanhTien,
                         ct.GhiChu
                     }).ToList()
+                    ,
+                    Services = booking.HoaDons?.SelectMany(h => h.Cthddvs ?? new List<Cthddv>())
+                        .Select(c => new
+                        {
+                            c.Idcthddv,
+                            c.IdhoaDon,
+                            c.IddichVu,
+                            TenDichVu = c.IddichVuNavigation?.TenDichVu,
+                            c.TienDichVu,
+                            c.ThoiGianThucHien,
+                            c.TrangThai
+                        }).ToList()
                 };
 
                 return Ok(result);
