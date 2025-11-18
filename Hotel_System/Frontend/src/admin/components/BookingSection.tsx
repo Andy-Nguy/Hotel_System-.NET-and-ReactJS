@@ -138,7 +138,9 @@ const BookingSection: React.FC = () => {
       case 2:
         return "Đã xác nhận";
       case 3:
-        return "Đã trả phòng";
+        return "Đang dùng";
+      case 4:
+        return "Hoàn thành";
       default:
         return "Chưa rõ";
     }
@@ -153,6 +155,8 @@ const BookingSection: React.FC = () => {
       case 2:
         return "#10b981";
       case 3:
+        return "#3b82f6";
+      case 4:
         return "#6b7280";
       default:
         return "#6b7280";
@@ -471,9 +475,10 @@ const BookingSection: React.FC = () => {
                 }}
               >
                 <option value={0}>Đã hủy</option>
-                <option value={1}>Đã xác nhận</option>
-                <option value={2}>Đang ở</option>
-                <option value={3}>Đã trả phòng</option>
+                <option value={1}>Chờ xác nhận</option>
+                <option value={2}>Đã xác nhận</option>
+                <option value={3}>Đang dùng</option>
+                <option value={4}>Hoàn thành</option>
               </select>
 
               <select
@@ -718,22 +723,24 @@ const BookingSection: React.FC = () => {
                         Xác nhận
                       </button>
                     )}
-                    {b.trangThai !== 0 && b.trangThai !== 3 && (
-                      <button
-                        onClick={() => handleCancelBooking(b.iddatPhong)}
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: 8,
-                          border: "1px solid #ef4444",
-                          background: "#fff",
-                          color: "#ef4444",
-                          cursor: "pointer",
-                          fontSize: 12,
-                        }}
-                      >
-                        Hủy
-                      </button>
-                    )}
+                    {b.trangThai !== 0 &&
+                      b.trangThai !== 3 &&
+                      b.trangThai !== 4 && (
+                        <button
+                          onClick={() => handleCancelBooking(b.iddatPhong)}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: 8,
+                            border: "1px solid #ef4444",
+                            background: "#fff",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            fontSize: 12,
+                          }}
+                        >
+                          Hủy
+                        </button>
+                      )}
                     <button
                       onClick={() => openModal(b)}
                       style={{
