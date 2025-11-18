@@ -30,6 +30,7 @@ import BookingSuccessPage from "./BookingSuccessPage";
 import AboutUsSection from "../components/AboutUsSection";
 import AboutUsPage from "./AboutUsPage";
 import ContactPage from "./ContactPage";
+import MyBookingsPage from "./MyBookingsPage";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
@@ -256,6 +257,17 @@ const MainPage: React.FC = () => {
         <OffcanvasMenu />
         <HeaderSection />
         <ProfilePage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#bookings" || route === "/bookings") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <MyBookingsPage />
         <FooterSection />
       </>
     );
