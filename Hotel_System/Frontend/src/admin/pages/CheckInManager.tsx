@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Slidebar from '../components/Slidebar';
 import HeaderSection from '../components/HeaderSection';
-import { Button, Card, Input, message, Space, Modal, DatePicker, Form } from 'antd';
+import { Button, Card, Input, message, Space, Modal, DatePicker, TimePicker, Form } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import checkoutApi from '../../api/checkout.Api';
 import checkinApi from '../../api/checkinApi';
+import { getRooms, Room } from '../../api/roomsApi';
 
 import CheckinTable from '../components/checkin/CheckinTable';
 import PaymentModal from '../components/checkout/PaymentModal';
@@ -158,6 +159,11 @@ const CheckInManager: React.FC = () => {
   const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
   const [invoiceData, setInvoiceData] = useState<any | null>(null);
   const [refreshAfterInvoiceClose, setRefreshAfterInvoiceClose] = useState(false);
+  // Extend stay modal
+  const [extendModalVisible, setExtendModalVisible] = useState(false);
+  const [extendRow, setExtendRow] = useState<BookingRow | null>(null);
+  const [extendDate, setExtendDate] = useState<Dayjs | null>(null);
+  const [extendTime, setExtendTime] = useState<Dayjs | null>(dayjs('12:00', 'HH:mm'));
 
   // Services state
   const [serviceModalVisible, setServiceModalVisible] = useState(false);
@@ -166,6 +172,31 @@ const CheckInManager: React.FC = () => {
 
   // Track booking ids that should show "Xem hóa đơn" after adding services in 'using' mode
   const [viewInvoiceIds, setViewInvoiceIds] = useState<string[]>([]);
+
+  // Change room modal state
+  const [changeRoomModalVisible, setChangeRoomModalVisible] = useState(false);
+  const [changeRoomRow, setChangeRoomRow] = useState<BookingRow | null>(null);
+  const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
+  const [selectedNewRoomId, setSelectedNewRoomId] = useState<string | null>(null);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+
+  const openChangeRoomModal = async (row: BookingRow) => {
+    setChangeRoomRow(row);
+    setChangeRoomModalVisible(true);
+    setSelectedNewRoomId(null);
+    try {
+      setRoomsLoading(true);
+      const rooms = await getRooms();
+      // filter only rooms marked as 'Trống' and exclude current room
+      const free = (rooms || []).filter(r => (r.trangThai ?? '').toLowerCase().includes('trống') && r.idphong !== row.Idphong);
+      setAvailableRooms(free);
+    } catch (e) {
+      setAvailableRooms([]);
+      msg.error('Không tải được danh sách phòng');
+    } finally {
+      setRoomsLoading(false);
+    }
+  };
 
   const handleAddService = (row: BookingRow) => {
     setPaymentRow(row);
@@ -741,6 +772,10 @@ const CheckInManager: React.FC = () => {
                 <Button onClick={load}>Tải lại</Button>
               </Space>
             </Card>
+            <div style={{ marginBottom: 12, color: '#374151', fontSize: 13 }}>
+              <strong>Giờ nhận / trả phòng tiêu chuẩn:</strong> Nhận phòng lúc <strong>14:00</strong>, Trả phòng lúc <strong>12:00</strong> trưa.
+            </div>
+          </div>
           </div>
 
           <Card>
@@ -752,6 +787,8 @@ const CheckInManager: React.FC = () => {
               onComplete={completeCheckout}
               onAddService={handleAddService}
               onViewInvoice={onViewInvoice}
+              onExtend={(r) => { setExtendRow(r); setExtendDate(r.NgayTraPhong ? dayjs(r.NgayTraPhong) : null); setExtendModalVisible(true); }}
+                onChangeRoom={(r) => { openChangeRoomModal(r); }}
               viewInvoiceIds={viewInvoiceIds}
               viewMode={viewMode}
               onViewChange={(mode: 'using' | 'checkin') => setViewMode(mode)}
@@ -871,7 +908,110 @@ const CheckInManager: React.FC = () => {
               }
             }}
           />
-          </div>
+
+          <Modal
+            title={extendRow ? `Gia hạn - ${extendRow.IddatPhong}` : 'Gia hạn đặt phòng'}
+            open={extendModalVisible}
+            onCancel={() => { setExtendModalVisible(false); setExtendRow(null); setExtendDate(null); }}
+            footer={[
+              <Button key="cancel" onClick={() => { setExtendModalVisible(false); setExtendRow(null); setExtendDate(null); }}>Hủy</Button>,
+              <Button key="extend" type="primary" onClick={async () => {
+                if (!extendRow || !extendDate) { msg.error('Vui lòng chọn ngày trả mới'); return; }
+                try {
+                  const chosenDate = extendDate.format('YYYY-MM-DD');
+                  const chosenTime = extendTime ? extendTime.format('HH:mm') : '12:00';
+                  const currentCheckout = extendRow.NgayTraPhong ? String(extendRow.NgayTraPhong).slice(0, 10) : null;
+
+                  // If chosen date is after current checkout date -> use extendBooking
+                  if (currentCheckout && dayjs(chosenDate).isAfter(dayjs(currentCheckout))) {
+                    const resp = await checkinApi.extendBooking(extendRow.IddatPhong, chosenDate);
+                    msg.success(resp?.message || 'Gia hạn thành công');
+                    setData(prev => (prev || []).map(p => p.IddatPhong === extendRow.IddatPhong
+                      ? { ...p, NgayTraPhong: resp?.newCheckout ?? chosenDate, TongTien: resp?.total ?? p.TongTien }
+                      : p
+                    ));
+                  }
+                  else if (currentCheckout && dayjs(chosenDate).isSame(dayjs(currentCheckout))) {
+                    // same-day: if chosenTime <= 12:00 -> nothing to do
+                    const chosenT = dayjs(chosenTime, 'HH:mm');
+                    const standardCheckoutT = dayjs('12:00', 'HH:mm');
+                    if (chosenT.isBefore(standardCheckoutT) || chosenT.isSame(standardCheckoutT)) {
+                      msg.info('Thời gian trả mới không trễ hơn giờ chuẩn. Không cần gia hạn.');
+                    } else {
+                      // call late-checkout with actual datetime
+                      const actualIso = `${chosenDate}T${chosenTime}:00`;
+                      const resp = await checkinApi.lateCheckout(extendRow.IddatPhong, actualIso);
+                      msg.success(resp?.message || 'Gia hạn thêm giờ thành công');
+                      setData(prev => (prev || []).map(p => p.IddatPhong === extendRow.IddatPhong
+                        ? { ...p, NgayTraPhong: resp?.newCheckout ?? p.NgayTraPhong, TongTien: resp?.total ?? p.TongTien }
+                        : p
+                      ));
+                    }
+                  }
+                  else {
+                    // chosen date before current checkout - invalid
+                    msg.error('Ngày trả mới phải bằng hoặc sau ngày trả hiện tại.');
+                  }
+
+                  setExtendModalVisible(false);
+                  setExtendRow(null);
+                  setExtendDate(null);
+                  // still refresh from server to ensure authoritative data
+                  await load();
+                } catch (err: any) {
+                  msg.error(err?.message || 'Gia hạn thất bại');
+                }
+              }}>Xác nhận gia hạn</Button>
+            ]}
+          >
+            <div>
+              <p>Chọn ngày trả mới cho đặt phòng: <strong>{extendRow?.IddatPhong}</strong></p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <DatePicker value={extendDate} onChange={(d) => setExtendDate(d)} format="YYYY-MM-DD" />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>Chọn giờ trả (mặc định 12:00)</div>
+                  <TimePicker value={extendTime} onChange={(t) => setExtendTime(t)} format="HH:mm" />
+                </div>
+              </div>
+            </div>
+          </Modal>
+
+          <Modal
+            title={changeRoomRow ? `Đổi phòng - ${changeRoomRow.IddatPhong}` : 'Đổi phòng'}
+            open={changeRoomModalVisible}
+            onCancel={() => { setChangeRoomModalVisible(false); setChangeRoomRow(null); setSelectedNewRoomId(null); }}
+            footer={[
+              <Button key="cancel" onClick={() => { setChangeRoomModalVisible(false); setChangeRoomRow(null); setSelectedNewRoomId(null); }}>Hủy</Button>,
+              <Button key="change" type="primary" onClick={async () => {
+                if (!changeRoomRow || !selectedNewRoomId) { msg.error('Vui lòng chọn phòng mới'); return; }
+                try {
+                  const resp = await checkinApi.changeRoom(changeRoomRow.IddatPhong, selectedNewRoomId);
+                  msg.success(resp?.message || 'Đổi phòng thành công');
+                  // update local data
+                  setData(prev => (prev || []).map(p => p.IddatPhong === changeRoomRow.IddatPhong ? { ...p, Idphong: selectedNewRoomId } : p));
+                  setChangeRoomModalVisible(false);
+                  setChangeRoomRow(null);
+                  setSelectedNewRoomId(null);
+                  await load();
+                } catch (e: any) {
+                  msg.error(e?.message || 'Đổi phòng thất bại');
+                }
+              }}>Xác nhận đổi</Button>
+            ]}
+          >
+            <div>
+              <p>Chọn phòng mới cho đặt phòng: <strong>{changeRoomRow?.IddatPhong}</strong></p>
+              <div style={{ marginBottom: 8 }}>
+                <select style={{ padding: '8px', width: '100%' }} value={selectedNewRoomId ?? ''} onChange={(e) => setSelectedNewRoomId(e.target.value)}>
+                  <option value="">-- Chọn phòng trống --</option>
+                  {(availableRooms || []).map(r => (
+                    <option key={r.idphong} value={r.idphong}>{r.tenPhong ?? r.soPhong ?? r.idphong} {r.tenLoaiPhong ? `(${r.tenLoaiPhong})` : ''} - {r.trangThai}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ fontSize: 13, color: '#6b7280' }}>{(availableRooms || []).length} phòng trống tìm thấy</div>
+            </div>
+          </Modal>
         </main>
       </div>
     </div>

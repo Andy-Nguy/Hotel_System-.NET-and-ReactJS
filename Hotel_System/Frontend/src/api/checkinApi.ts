@@ -84,11 +84,26 @@ export const completePayment = async (id: string): Promise<any> => {
   return res.data;
 };
 
-// (default export will be declared at EOF to include booking helpers as well)
+/** POST /api/CheckIn/change-room/{id} - change booking's room to another available room */
+export const changeRoom = async (id: string, newRoomId: string): Promise<any> => {
+  const res = await axios.post(`${API_BASE_URL}/CheckIn/change-room/${id}`, { newRoomId });
+  return res.data;
+};
 
-// --- Booking management helpers (mirror some BookingApi endpoints)
-// These are provided so UI code can use `checkinApi` for booking operations
-// without importing the separate bookingApi module.
+/** POST /api/CheckIn/extend/{id} - extend checkout date */
+export const extendBooking = async (id: string, newCheckout: string): Promise<any> => {
+  const res = await axios.post(`${API_BASE_URL}/CheckIn/extend/${id}`, { newCheckout });
+  return res.data;
+};
+
+/** POST /api/CheckIn/late-checkout/{id} - apply late checkout fee (actualCheckout optional ISO datetime) */
+export const lateCheckout = async (id: string, actualCheckout?: string): Promise<any> => {
+  const payload: any = {};
+  if (actualCheckout) payload.actualCheckout = actualCheckout;
+  const res = await axios.post(`${API_BASE_URL}/CheckIn/late-checkout/${id}`, payload);
+  return res.data;
+};
+
 
 /** GET /api/DatPhong - list all bookings */
 export const getBookings = async (): Promise<any[]> => {
@@ -139,6 +154,10 @@ const _default = {
   getCheckinById,
   confirmCheckIn,
   cancelCheckIn,
+
+  extendBooking,
+  lateCheckout,
+  changeRoom,
 
   // booking helpers
   getBookings,
