@@ -132,15 +132,6 @@ const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) 
           </div>
         </div>
       </div>
-
-      {showStats && (
-        <div style={{ display: "flex", gap: 18, marginTop: 20 }}>
-          <StatCard title="Weekly sales" value="714k" accent="#3b82f6" />
-          <StatCard title="New users" value="1.35m" accent="#a78bfa" />
-          <StatCard title="Purchase orders" value="1.72m" accent="#f59e0b" />
-          <StatCard title="Messages" value="234" accent="#f97373" />
-        </div>
-      )}
     </header>
   );
 };

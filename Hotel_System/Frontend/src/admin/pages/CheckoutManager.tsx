@@ -422,6 +422,10 @@ const CheckoutManager: React.FC = () => {
         message.error('Chưa có hóa đơn để thêm dịch vụ!');
         return;
       }
+      if (!paymentRow) {
+        message.error('Không có đặt phòng được chọn');
+        return;
+      }
       await fetchJson('/api/Checkout/add-service-to-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -584,8 +588,10 @@ const CheckoutManager: React.FC = () => {
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <Slidebar />
       <div style={{ marginLeft: 240 }}>
-        <HeaderSection />
-        <main style={{ padding: 24 }}>
+        <HeaderSection showStats={false} />
+        <main style={{ padding: '0px 60px' }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 8px 24px rgba(2,6,23,0.06)' }}>
+            <h2 style={{ marginBottom: 16 }}>Quản lý trả phòng</h2>
           {contextHolder}
 
           <Card style={{ marginBottom: 12 }}>
@@ -723,6 +729,7 @@ const CheckoutManager: React.FC = () => {
               }
             }}
           />
+          </div>
         </main>
       </div>
     </div>

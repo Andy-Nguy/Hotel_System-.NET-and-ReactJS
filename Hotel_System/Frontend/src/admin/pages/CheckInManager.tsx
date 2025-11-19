@@ -701,17 +701,27 @@ const CheckInManager: React.FC = () => {
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <Slidebar />
       <div style={{ marginLeft: 240 }}>
-        <HeaderSection />
-        <main style={{ padding: 24 }}>
+        <HeaderSection showStats={false} />
+        <main style={{ padding: '0px 60px' }}>
           {contextHolder}
 
-          {/* Full Booking management section embedded on the Check-in page */}
-          <Card style={{ marginBottom: 12 }}>
-            <h3 style={{ marginBottom: 12 }}>Quản Lý Check-In</h3>
-            <CheckinSection />
-          </Card>
-<div style={{ marginBottom: 12 }}>
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              padding: 20,
+              boxShadow: '0 8px 24px rgba(2,6,23,0.06)'
+            }}
+          >
+            <h2 style={{ marginBottom: 16 }}>Quản lý nhận phòng</h2>
+
+            {/* Full Booking management section embedded on the Check-in page */}
             <Card style={{ marginBottom: 12 }}>
+              <h3 style={{ marginBottom: 12 }}>Quản Lý Check-In</h3>
+              <CheckinSection />
+            </Card>
+            <div style={{ marginBottom: 12 }}>
+              <Card style={{ marginBottom: 12 }}>
               <Space wrap>
                 <Input.Search placeholder="Tìm mã đặt / khách / email" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
                 <select
@@ -861,6 +871,7 @@ const CheckInManager: React.FC = () => {
               }
             }}
           />
+          </div>
         </main>
       </div>
     </div>

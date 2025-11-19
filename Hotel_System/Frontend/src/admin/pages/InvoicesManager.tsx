@@ -248,8 +248,10 @@ const InvoicesManager: React.FC = () => {
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
       <Slidebar />
       <div style={{ marginLeft: 240 }}>
-        <HeaderSection />
-        <main style={{ padding: "24px 36px" }}>
+        <HeaderSection showStats={false} />
+        <main style={{ padding: "0px 60px" }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 8px 24px rgba(2,6,23,0.06)' }}>
+            <h2 style={{ marginBottom: 16 }}>Quản lý hóa đơn</h2>
           <Card style={{ marginBottom: 16 }}>
             <Space wrap>
               <DatePicker value={from} onChange={(d) => setFrom(d)} placeholder="Từ ngày" />
@@ -301,6 +303,7 @@ const InvoicesManager: React.FC = () => {
               </div>
             ) : null}
           </Modal>
+          </div>
         </main>
       </div>
     </div>
