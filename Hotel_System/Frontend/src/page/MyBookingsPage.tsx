@@ -65,6 +65,13 @@ const { Title, Text } = Typography;
 const MyBookingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<BookingSummary[]>([]);
+  const [openPanelId, setOpenPanelId] = useState<string | null>(null);
+
+  // Reschedule state & handlers
+  const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] =
+    useState<BookingSummary | null>(null);
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
 
   // Use JWT token to fetch booking history (backend reads NameIdentifier claim)
   const token = localStorage.getItem("hs_token");
@@ -96,14 +103,6 @@ const MyBookingsPage: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Cancel button removed - no UI trigger
-
-  // Reschedule state & handlers
-  const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
-  const [rescheduleTarget, setRescheduleTarget] =
-    useState<BookingSummary | null>(null);
-  const [rescheduleLoading, setRescheduleLoading] = useState(false);
 
   const openRescheduleModal = (b: BookingSummary) => {
     const { canModify, reason } = canModifyBooking(b);
@@ -184,6 +183,13 @@ const MyBookingsPage: React.FC = () => {
     return (
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
         {bookings.map((b) => {
+          // Normalized id for panel key; try multiple fields returned by API
+          const panelId =
+            b.idDatPhong ||
+            (b as any).IddatPhong ||
+            b.bookingCode ||
+            (b as any).bookingId ||
+            "";
           const { statusColor, paymentColor } = getStatusBadge(
             b.trangThai,
             b.trangThaiThanhToan
@@ -236,6 +242,18 @@ const MyBookingsPage: React.FC = () => {
                       {b.trangThaiThanhToanText}
                     </Tag>
                   </Space>
+                  <Button
+                    type="text"
+                    icon={<EyeOutlined />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenPanelId((prev) =>
+                        prev === panelId ? null : panelId
+                      );
+                    }}
+                    title={openPanelId === panelId ? "Đóng" : "Xem chi tiết"}
+                    size="large"
+                  />
                 </div>
 
                 {/* BOOKING INFO */}
@@ -248,6 +266,7 @@ const MyBookingsPage: React.FC = () => {
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 260 }}>
+                    {/* Booking code and meta are presented below */}
                     <div style={{ marginBottom: 8 }}>
                       <Text strong style={{ fontSize: 15 }}>
                         Đơn đặt phòng: {b.bookingCode}
@@ -295,8 +314,25 @@ const MyBookingsPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <Collapse ghost>
-                  <Collapse.Panel header="Xem chi tiết" key="1">
+                <Collapse
+                  ghost
+                  accordion
+                  activeKey={openPanelId ?? undefined}
+                  onChange={(key) =>
+                    setOpenPanelId(
+                      Array.isArray(key)
+                        ? (key[0] as string)
+                        : (key as string) || null
+                    )
+                  }
+                >
+                  <Collapse.Panel
+                    header={`Xem chi tiết — ${b.rooms?.length || 0} phòng · ${
+                      b.services?.length || 0
+                    } dịch vụ`}
+                    key={panelId}
+                    collapsible="disabled"
+                  >
                     {/* CUSTOMER INFO */}
                     <div style={{ marginBottom: 16 }}>
                       <Title level={5} style={{ marginBottom: 12 }}>
