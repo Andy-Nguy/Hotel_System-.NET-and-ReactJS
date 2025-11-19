@@ -21,6 +21,8 @@ interface Props {
   onOpenPaymentForm?: (row: BookingRow) => void;
   onAddService?: (row: BookingRow) => void;
   onViewInvoice?: (row: BookingRow) => void;
+  onExtend?: (row: BookingRow) => void;
+  onChangeRoom?: (row: BookingRow) => void;
   viewInvoiceIds?: string[];
   viewMode?: 'using' | 'checkin';
   onViewChange?: (mode: 'using' | 'checkin') => void;
@@ -34,6 +36,8 @@ const CheckinTable: React.FC<Props> = ({
   onOpenPaymentForm,
   onAddService,
   onViewInvoice,
+  onExtend,
+  onChangeRoom,
   viewInvoiceIds,
   viewMode = 'using',
   onViewChange
@@ -57,6 +61,8 @@ const CheckinTable: React.FC<Props> = ({
         return (
           <Space>
             <Button onClick={() => onAddService?.(r)}>Thêm dịch vụ</Button>
+            <Button onClick={() => onExtend?.(r)}>Gia hạn</Button>
+            <Button onClick={() => onChangeRoom?.(r)}>Đổi phòng</Button>
             { (typeof (onViewInvoice) === 'function') && (Array.isArray(viewInvoiceIds) && viewInvoiceIds.includes(r.IddatPhong)) && (
               <Button type="default" onClick={() => onViewInvoice?.(r)}>Xem chi tiết</Button>
             ) }

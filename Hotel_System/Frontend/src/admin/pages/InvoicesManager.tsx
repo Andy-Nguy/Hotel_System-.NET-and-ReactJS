@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Slidebar from "../components/Slidebar";
 import HeaderSection from "../components/HeaderSection";
 import { Button, Card, DatePicker, Input, Select, Space, Table, Tag, message, Modal, Statistic, Row, Col } from "antd";
+import { DownloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { Dayjs } from "dayjs";
 import { getRoomTypes } from "../../api/roomsApi";
@@ -141,57 +142,43 @@ const InvoicesManager: React.FC = () => {
     );
   }, [data, keyword]);
 
-  // derive customer options from loaded data
-  const customerOptions = useMemo(() => {
-    const map = new Map<number, { id: number; hoTen?: string }>();
-    data.forEach(d => {
-      const id = d.customer?.id;
-      if (typeof id === 'number' && !map.has(id)) map.set(id, { id, hoTen: d.customer?.hoTen });
+    const downloadPdf = (row: InvoiceRow) => {
+  // Tải PDF hóa đơn – cực kỳ ổn định, không lỗi 500, không bị mở tab mới
+  const url = `/api/Payment/invoice/${row.idHoaDon}/pdf`;
+
+  fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/pdf',
+    },
+  })
+    .then(res => {
+      if (!res.ok) {
+        return res.text().then(text => {
+          throw new Error(`Lỗi ${res.status}: ${text.substring(0, 200)}`);
+        });
+      }
+      return res.blob();
+    })
+    .then(blob => {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `HoaDon_${row.idHoaDon}.pdf`;  // tên file đẹp
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+
+      message.success("Đã tải hóa đơn thành công!");
+    })
+    .catch(err => {
+      console.error("Lỗi tải PDF:", err);
+      message.error(err.message || "Không thể tải hóa đơn PDF");
     });
-    return Array.from(map.values()).map(c => ({ value: c.id, label: c.hoTen || `KH ${c.id}` }));
-  }, [data]);
+};
 
-  const resendEmail = async (row: InvoiceRow) => {
-    try {
-      await fetchJson(`/api/Payment/invoice/${row.idHoaDon}/send-email`, { method: "POST" });
-      message.success("Đã gửi lại email hóa đơn");
-    } catch (e: any) {
-      message.error(e.message || "Gửi email thất bại");
-    }
-  };
-
-  const downloadPdf = (row: InvoiceRow) => {
-    const link = document.createElement("a");
-    link.href = `/api/Payment/invoice/${row.idHoaDon}/pdf`;
-    link.target = "_blank";
-    link.click();
-  };
-
-  const addAdjustment = (row: InvoiceRow) => {
-    let inputAmount = 0;
-    let inputDesc = "";
-    const modal = Modal.confirm({
-      title: `Phụ phí / Điều chỉnh - HĐ ${row.idHoaDon}`,
-      content: (
-        <Space direction="vertical" style={{ width: "100%" }}>
-          <Input type="number" placeholder="Số tiền (+/-)" onChange={(e) => (inputAmount = Number(e.target.value))} />
-          <Input placeholder="Mô tả (tùy chọn)" onChange={(e) => (inputDesc = e.target.value)} />
-        </Space>
-      ),
-      onOk: async () => {
-        try {
-          await fetchJson(`/api/Payment/invoice/${row.idHoaDon}/adjustments`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ amount: inputAmount, description: inputDesc }),
-          });
-          message.success("Đã cập nhật phụ phí");
-          load();
-        } catch (e: any) {
-          message.error(e.message || "Cập nhật thất bại");
-        }
-      },
-    });
+  const handleDownloadPdf = (row: InvoiceRow) => {
+    downloadPdf(row);
   };
 
   const updateStatus = async (row: InvoiceRow, newStatus: number) => {
@@ -228,19 +215,24 @@ const InvoicesManager: React.FC = () => {
     { title: "Thanh toán", dataIndex: "tienThanhToan", key: "tienThanhToan", align: "right", render: (v) => Number(v).toLocaleString() },
     { title: "Trạng thái", dataIndex: "trangThaiThanhToan", key: "status", render: (s) => <Tag color={statusColor(s)}>{statusText(s)}</Tag> },
     { title: "Thao tác", key: "actions", fixed: "right", render: (_, r) => (
-      <Space>
-        <Button onClick={() => downloadPdf(r)}>PDF</Button>
-        <Select
-          size="small"
-          value={r.trangThaiThanhToan}
-          style={{ width: 140 }}
-          onChange={(val) => updateStatus(r, val)}
-          options={[
-            { value: 1, label: "Chờ xử lý" },
-            { value: 2, label: "Đã thanh toán" },
-          ]}
-        />
-      </Space>
+      // Prevent clicks inside the actions cell from bubbling to the row onClick
+      <div onClick={(e) => e.stopPropagation()}>
+        <Space>
+          <Button icon={<DownloadOutlined />} onClick={(e) => { e.stopPropagation(); handleDownloadPdf(r); }}>Tải hóa đơn PDF</Button>
+          <Select
+            size="small"
+            value={r.trangThaiThanhToan}
+            style={{ width: 140 }}
+            // stopPropagation on Select click and ensure change handler doesn't bubble
+            onClick={(e) => e.stopPropagation()}
+            onChange={(val, opt) => { /* stop event propagation handled above */ updateStatus(r, val as number); }}
+            options={[
+              { value: 1, label: "Chờ xử lý" },
+              { value: 2, label: "Đã thanh toán" },
+            ]}
+          />
+        </Space>
+      </div>
     )},
   ];
 
@@ -254,7 +246,7 @@ const InvoicesManager: React.FC = () => {
             <Space wrap>
               <DatePicker value={from} onChange={(d) => setFrom(d)} placeholder="Từ ngày" />
               <DatePicker value={to} onChange={(d) => setTo(d)} placeholder="Đến ngày" />
-              <Select allowClear placeholder="Khách hàng" style={{ width: 220 }} value={selectedCustomer} onChange={(v) => setSelectedCustomer(v)} options={customerOptions} />
+              <Select allowClear placeholder="Khách hàng" style={{ width: 220 }} value={selectedCustomer} onChange={(v) => setSelectedCustomer(v)} />
               <Select
                 allowClear
                 placeholder="Trạng thái"

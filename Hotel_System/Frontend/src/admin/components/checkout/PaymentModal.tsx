@@ -76,7 +76,23 @@ const PaymentModal: React.FC<Props> = ({
         {summary?.items?.length > 0 && (
           <Table size="small" pagination={false} dataSource={summary.items} style={{ marginBottom: 16 }}
             columns={[
-              { title: 'Phòng', render: (_, r: any) => <strong>{r.tenPhong || r.TenPhong}</strong> },
+              {
+  title: 'Phong',
+  render: (_: any, r: any) => {
+    const idPhong  = r.idPhong ?? r.IDPhong ?? r.IdPhong ?? '';
+    const tenPhong = r.tenPhong ?? r.TenPhong ?? r.Phong?.TenPhong ?? ''; // lấy từ API
+    const name = [tenPhong].filter(Boolean).join(' '); // "Deluxe Room 102"
+
+    return (
+      <div>
+        <div style={{ fontWeight: 600 }}>{name || '-'}</div>
+        {(idPhong) && <div style={{ color: '#64748b' }}>{idPhong}</div>}
+      </div>
+    );
+  },
+},
+              
+              { title: 'Phong', render: (_: any, r: any) => r.idPhong ?? r.IDPhong ?? r.IdPhong ?? r.TenPhong ?? r.SoPhong ?? '-' },
               { title: 'Số đêm', dataIndex: 'soDem', align: 'center' },
               { title: 'Giá/đêm', render: (_, r: any) => `${Number(r.giaPhong || 0).toLocaleString()} đ`, align: 'right' },
               { title: 'Thành tiền', render: (_, r: any) => `${Number(r.thanhTien || 0).toLocaleString()} đ`, align: 'right' },

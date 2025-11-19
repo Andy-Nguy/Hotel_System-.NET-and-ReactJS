@@ -1,5 +1,7 @@
 using Hotel_System.API.Models;
 using Hotel_System.API.Services;
+using QuestPDF;
+using QuestPDF.Infrastructure;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -11,6 +13,10 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure QuestPDF license for the running app so PDF generation
+// won't throw the library's runtime license/usage exception.
+// Using the Community license here is suitable for open-source / development use.
+QuestPDF.Settings.License = LicenseType.Community;
 // ==========================================
 // 1️⃣ Add services to the container
 // ==========================================
