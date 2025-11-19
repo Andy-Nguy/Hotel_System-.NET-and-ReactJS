@@ -10,7 +10,7 @@ export const COLORS = {
   background: "#f9f9f9",
   success: "#28a745",
   error: "#dc3545",
-  warning: "#ffc107",
+  warning: "#dfa974",
   overlay: "rgba(0, 0, 0, 0.4)",
   overlayDark: "rgba(25, 25, 26, 0.9)",
   border: "#e8e8e8",
