@@ -34,30 +34,69 @@ function getProp(obj: any, ...names: string[]) {
 }
 
 // Status badge helper
-const getStatusBadge = (
-  trangThai?: number | null,
-  trangThaiThanhToan?: number | null
+const getStatusBadgeStyle = (
+  type: "booking" | "payment",
+  status?: number | null
 ) => {
-  const isCancelled = trangThai === 0;
-  const isPaid = trangThaiThanhToan === 2;
-  const isConfirmed = trangThai === 2;
-  const isInUse = trangThai === 3;
-  const isCompleted = trangThai === 4;
+  let style = {
+    backgroundColor: AppColors.lightGray,
+    borderColor: AppColors.gray,
+    textColor: AppColors.secondary,
+  };
 
-  let statusColor = COLORS.gray;
-  let paymentColor = COLORS.gray;
+  if (type === "booking") {
+    switch (status) {
+      case 0: // Cancelled
+        style = {
+          backgroundColor: "#fff1f0",
+          borderColor: AppColors.error,
+          textColor: AppColors.error,
+        };
+        break;
+      case 1: // Pending
+        style = {
+          backgroundColor: "#fffbe6",
+          borderColor: AppColors.warning,
+          textColor: AppColors.warning,
+        };
+        break;
+      case 2: // Confirmed
+      case 3: // In Use
+      case 4: // Completed
+        style = {
+          backgroundColor: "#f6ffed",
+          borderColor: AppColors.success,
+          textColor: AppColors.success,
+        };
+        break;
+    }
+  } else if (type === "payment") {
+    switch (status) {
+      case 0: // Deposit
+        style = {
+          backgroundColor: "#e6f7ff",
+          borderColor: AppColors.primary,
+          textColor: AppColors.primary,
+        };
+        break;
+      case 1: // Unpaid
+        style = {
+          backgroundColor: "#fff1f0",
+          borderColor: AppColors.error,
+          textColor: AppColors.error,
+        };
+        break;
+      case 2: // Paid
+        style = {
+          backgroundColor: "#f6ffed",
+          borderColor: AppColors.success,
+          textColor: AppColors.success,
+        };
+        break;
+    }
+  }
 
-  if (isCancelled) statusColor = COLORS.error;
-  else if (isCompleted) statusColor = COLORS.success;
-  else if (isInUse) statusColor = COLORS.warning;
-  else if (isConfirmed) statusColor = COLORS.success;
-  else statusColor = COLORS.warning;
-
-  if (isPaid) paymentColor = COLORS.success;
-  else if (trangThaiThanhToan === 0) paymentColor = COLORS.primary;
-  else paymentColor = COLORS.warning;
-
-  return { statusColor, paymentColor };
+  return style;
 };
 
 // NOTE: `mapBookingStatusText`, `mapPaymentStatusText`, and `getRoomDisplayName`
@@ -359,10 +398,10 @@ const BookingsScreen: React.FC = () => {
     const statusCode = rawStatus !== undefined ? Number(rawStatus) : undefined;
     const paymentCode =
       rawPayment !== undefined ? Number(rawPayment) : undefined;
-    const { statusColor, paymentColor } = getStatusBadge(
-      statusCode,
-      paymentCode
-    );
+
+    const bookingStatusStyle = getStatusBadgeStyle("booking", statusCode);
+    const paymentStatusStyle = getStatusBadgeStyle("payment", paymentCode);
+
     const roomsArray =
       getProp(
         item,
@@ -386,21 +425,47 @@ const BookingsScreen: React.FC = () => {
           style={[
             styles.cardHeader,
             {
-              backgroundColor: statusColor,
+              borderTopColor: bookingStatusStyle.borderColor,
             },
           ]}
         >
           <Text style={styles.bookingCode}>
-            #{getProp(item, "bookingCode", "BookingCode", "idDatPhong")}
+            {getProp(item, "bookingCode", "BookingCode", "idDatPhong")}
           </Text>
           <View style={styles.statusTags}>
-            <View style={[styles.statusTag, { backgroundColor: statusColor }]}>
-              <Text style={styles.statusTagText}>
+            <View
+              style={[
+                styles.statusTag,
+                {
+                  backgroundColor: bookingStatusStyle.backgroundColor,
+                  borderColor: bookingStatusStyle.borderColor,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusTagText,
+                  { color: bookingStatusStyle.textColor },
+                ]}
+              >
                 {item.trangThaiText || mapBookingStatusText(statusCode)}
               </Text>
             </View>
-            <View style={[styles.statusTag, { backgroundColor: paymentColor }]}>
-              <Text style={styles.statusTagText}>
+            <View
+              style={[
+                styles.statusTag,
+                {
+                  backgroundColor: paymentStatusStyle.backgroundColor,
+                  borderColor: paymentStatusStyle.borderColor,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusTagText,
+                  { color: paymentStatusStyle.textColor },
+                ]}
+              >
                 {item.trangThaiThanhToanText ||
                   mapPaymentStatusText(paymentCode)}
               </Text>
@@ -569,7 +634,7 @@ const styles = StyleSheet.create({
   },
   bookingCard: {
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radiusLarge,
+    borderRadius: SIZES.radius,
     marginBottom: SIZES.margin * 1.5,
     ...SHADOWS.medium,
     overflow: "hidden",
@@ -580,30 +645,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.base,
+    backgroundColor: COLORS.white,
+    borderTopWidth: 4,
   },
   bookingCode: {
     ...FONTS.body3,
-    color: COLORS.white,
+    color: COLORS.secondary,
     fontWeight: "bold",
   },
   statusTags: {
     flexDirection: "row",
-    gap: SIZES.base / 2,
+    gap: SIZES.base,
   },
   statusTag: {
     paddingHorizontal: SIZES.base,
     paddingVertical: 4,
     borderRadius: SIZES.radius,
-    marginLeft: SIZES.base,
+    borderWidth: 1,
   },
   statusTagText: {
     ...FONTS.body5,
-    color: COLORS.white,
     fontWeight: "bold",
-    textTransform: "uppercase",
   },
   cardContent: {
-    padding: SIZES.padding,
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.padding,
   },
   roomSummaryText: {
     ...FONTS.h4,
