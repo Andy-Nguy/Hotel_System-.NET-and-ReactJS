@@ -71,4 +71,6 @@ export async function getInvoiceDetail(id: string): Promise<{ data: InvoiceDetai
   return { data: res } as { data: InvoiceDetail };
 }
 
+
+
 export default { getInvoices, getSummary, getInvoiceDetail };

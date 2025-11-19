@@ -36,7 +36,7 @@ const InvoiceModal: React.FC<Props> = ({
     const promo = Number(it?.GiamGia ?? it?.giamGia ?? it?.discount ?? 0) || 0;
     const discounted = Math.max(0, rawThanh - promo);
     return {
-      ID: it?.id ?? it?.IDChiTiet ?? idx,
+      IDPhong: it?.IDPhong ?? it?.idPhong ?? it?.IdPhong ?? it?.Phong?.Idphong ?? it?.SoPhong ?? it?.soPhong ?? null,
       TenPhong: it?.TenPhong ?? it?.tenPhong ?? it?.Phong?.TenPhong ?? '-',
       SoPhong: it?.SoPhong ?? it?.soPhong ?? null,
       SoDem: Number(it?.SoDem ?? it?.soDem ?? 1),
@@ -131,13 +131,7 @@ const InvoiceModal: React.FC<Props> = ({
             <Descriptions.Item label="Trả phòng">
               {paymentRow?.NgayTraPhong?.slice(0, 10) ?? '-'}
             </Descriptions.Item>
-              <Descriptions.Item label="Phòng" span={2}>
-                {normalized.map((r: any) => (
-                  <div key={r.ID}>
-                    <strong>{r.TenPhong}</strong> {r.SoPhong && `(Phòng ${r.SoPhong})`}
-                  </div>
-                ))}
-              </Descriptions.Item>
+             
           </Descriptions>
 
           {/* Bảng phòng */}
@@ -162,6 +156,7 @@ const InvoiceModal: React.FC<Props> = ({
                     </div>
                   ),
                 },
+                
                 { title: 'Số đêm', dataIndex: 'SoDem', align: 'center' },
                 { title: 'Giá/đêm', dataIndex: 'GiaPhong', align: 'right', render: (v: any) => Number(v ?? 0).toLocaleString() + ' đ' },
                 {
