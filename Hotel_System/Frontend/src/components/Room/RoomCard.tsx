@@ -58,6 +58,19 @@ const RoomCard: React.FC<Props> = ({
   const [titleFontSize, setTitleFontSize] = useState<number>(30);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
 
+  // Determine sold/out status from room payload (may come from backend or merged by frontend)
+  const rawStatus =
+    (room as any).TrangThai ||
+    (room as any).trangThai ||
+    (room as any).status ||
+    "";
+  const statusStr = String(rawStatus || "").toLowerCase();
+  const isSoldOut =
+    statusStr === "occupied" ||
+    statusStr === "soldout" ||
+    statusStr === "sold out" ||
+    statusStr === "unavailable";
+
   // LOAD IMAGE
   useEffect(() => {
     let canceled = false;
@@ -147,16 +160,16 @@ const RoomCard: React.FC<Props> = ({
 
       // start from default large size
       const computedStyle = window.getComputedStyle(el);
-      const fontFamily = computedStyle.fontFamily || 'Arial, sans-serif';
+      const fontFamily = computedStyle.fontFamily || "Arial, sans-serif";
 
       let size = 30;
       const minSize = 14;
 
       // Apply sizes until the text fits within its container width (single line)
       const fitsAt = (s: number) => {
-        el.style.fontSize = s + 'px';
+        el.style.fontSize = s + "px";
         // ensure single-line measurement
-        el.style.whiteSpace = 'nowrap';
+        el.style.whiteSpace = "nowrap";
         const fits = el.scrollWidth <= el.clientWidth + 1; // small tolerance
         return fits;
       };
@@ -178,30 +191,31 @@ const RoomCard: React.FC<Props> = ({
     // wait for next tick so layout computed
     const id = window.setTimeout(adjust, 0);
 
-    window.addEventListener('resize', adjust);
+    window.addEventListener("resize", adjust);
 
     return () => {
       mounted = false;
       window.clearTimeout(id);
-      window.removeEventListener('resize', adjust);
+      window.removeEventListener("resize", adjust);
     };
   }, [room.tenPhong]);
 
   // Price calculations for display
   const basePrice: number | null =
-    ((room as any).giaCoBanMotDem ?? (room as any).basePricePerNight) ?? null;
+    (room as any).giaCoBanMotDem ?? (room as any).basePricePerNight ?? null;
 
   // Determine discount according to promotion type
   const promoValue = promotion?.giaTriGiam ?? 0; // could be percent or amount
   const isPercent = promotion?.loaiGiamGia === "percent";
   const isAmount = promotion?.loaiGiamGia === "amount";
-  const hasDiscount = !!promotion && !!basePrice && promoValue > 0 && (isPercent || isAmount);
+  const hasDiscount =
+    !!promotion && !!basePrice && promoValue > 0 && (isPercent || isAmount);
 
   let discountedPrice: number | null = null;
   let savings = 0;
   if (hasDiscount && basePrice) {
     if (isPercent) {
-      discountedPrice = Math.round(basePrice * (1 - (promoValue / 100)));
+      discountedPrice = Math.round(basePrice * (1 - promoValue / 100));
       savings = basePrice - (discountedPrice ?? 0);
     } else if (isAmount) {
       // promoValue is fixed amount in VND
@@ -238,6 +252,24 @@ const RoomCard: React.FC<Props> = ({
           position: "relative",
         }}
       >
+        {isSoldOut && (
+          <div
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              background: "rgba(0,0,0,0.6)",
+              color: "#fff",
+              padding: "6px 10px",
+              borderRadius: 6,
+              fontWeight: 700,
+              zIndex: 30,
+              fontSize: 12,
+            }}
+          >
+            Đã đặt / Hết phòng
+          </div>
+        )}
         {promotion && (
           <div
             style={{
@@ -269,17 +301,17 @@ const RoomCard: React.FC<Props> = ({
         )}
       </div>
 
-        <div
-          style={{
-            padding: 18,
-            display: "flex",
-            flexDirection: "column",
-            flexGrow: 1,
-          }}
-        >
+      <div
+        style={{
+          padding: 18,
+          display: "flex",
+          flexDirection: "column",
+          flexGrow: 1,
+        }}
+      >
         <div style={{ flexGrow: 1 }}>
           <h2
-            ref={(el) => (titleRef.current = el)}
+            ref={(el: any) => (titleRef.current = el)}
             style={{
               margin: 0,
               fontSize: titleFontSize,
@@ -299,43 +331,112 @@ const RoomCard: React.FC<Props> = ({
             {hasDiscount && discountedPrice ? (
               // --- DISCOUNT VIEW ---
               <div>
-                <div style={{ fontSize: 15, color: "#999", textDecoration: "line-through" }}>
+                <div
+                  style={{
+                    fontSize: 15,
+                    color: "#999",
+                    textDecoration: "line-through",
+                  }}
+                >
                   {formatPrice(basePrice)}
                 </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4, flexWrap: 'nowrap' }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      <div style={{ fontSize: 25, fontWeight: 700, color: "#dfa974", lineHeight: 1 }}>
-                        {formatPrice(discountedPrice)}
-                      </div>
-                      <div style={{ fontSize: 13, color: "#666", fontWeight: 500, whiteSpace: 'nowrap' }}>/đêm</div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: 8,
+                    marginTop: 4,
+                    flexWrap: "nowrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "baseline",
+                      gap: 6,
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 25,
+                        fontWeight: 700,
+                        color: "#dfa974",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {formatPrice(discountedPrice)}
                     </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#666",
+                        fontWeight: 500,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      /đêm
+                    </div>
+                  </div>
                   <Tag
                     color="gold"
                     style={{
                       fontWeight: 700,
-                      whiteSpace: 'nowrap',
+                      whiteSpace: "nowrap",
                       fontSize: 11,
-                      padding: '3px 6px',
+                      padding: "3px 6px",
                       lineHeight: 1,
-                      display: 'inline-flex',
-                      alignItems: 'center',
+                      display: "inline-flex",
+                      alignItems: "center",
                       marginRight: 2,
-                      boxSizing: 'border-box',
+                      boxSizing: "border-box",
                     }}
                   >
-                    TIẾT KIỆM {promotion?.loaiGiamGia === "percent" ? `${promoValue}%` : `${promoValue?.toLocaleString?.() ?? promoValue}đ`}
+                    TIẾT KIỆM{" "}
+                    {promotion?.loaiGiamGia === "percent"
+                      ? `${promoValue}%`
+                      : `${promoValue?.toLocaleString?.() ?? promoValue}đ`}
                   </Tag>
                 </div>
               </div>
             ) : (
               // --- REGULAR PRICE VIEW ---
               <div>
-                <div style={{ fontSize: 10, color: "#888" }}>Giá mỗi đêm từ</div>
-                <div style={{ display: "inline-flex", alignItems: "baseline", gap: 8, marginTop: 4, whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
-                  <div style={{ fontSize: 25, fontWeight: 700, color: "#333", lineHeight: 1, flexShrink: 0 }}>
+                <div style={{ fontSize: 10, color: "#888" }}>
+                  Giá mỗi đêm từ
+                </div>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "baseline",
+                    gap: 8,
+                    marginTop: 4,
+                    whiteSpace: "nowrap",
+                    flexWrap: "nowrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 25,
+                      fontWeight: 700,
+                      color: "#333",
+                      lineHeight: 1,
+                      flexShrink: 0,
+                    }}
+                  >
                     {formatPrice(basePrice)}
                   </div>
-                  <div style={{ fontSize: 14, color: "#666", fontWeight: 500, whiteSpace: 'nowrap' }}>/đêm</div>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      color: "#666",
+                      fontWeight: 500,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    /đêm
+                  </div>
                 </div>
               </div>
             )}
@@ -343,24 +444,28 @@ const RoomCard: React.FC<Props> = ({
         </div>
 
         <div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {/* If on select-room page, show both Select and View Detail buttons.
                 Otherwise keep the original big CTA that opens details. */}
-            {typeof window !== 'undefined' && window.location.pathname.startsWith('/select-room') ? (
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            {typeof window !== "undefined" &&
+            window.location.pathname.startsWith("/select-room") ? (
+              <div
+                style={{ display: "flex", gap: 10, justifyContent: "center" }}
+              >
                 <Button
                   type="primary"
                   onClick={() => onBook(room)}
                   aria-label="Chọn phòng"
                   style={{
-                    background: 'linear-gradient(135deg, #dfa974 0%, #d89860 100%)',
-                    borderColor: 'transparent',
+                    background:
+                      "linear-gradient(135deg, #dfa974 0%, #d89860 100%)",
+                    borderColor: "transparent",
                     height: 48,
                     fontSize: 16,
-                    padding: '0 24px',
+                    padding: "0 24px",
                     borderRadius: 10,
-                    boxShadow: '0 8px 20px rgba(217,152,96,0.14)',
-                    color: '#fff',
+                    boxShadow: "0 8px 20px rgba(217,152,96,0.14)",
+                    color: "#fff",
                     fontWeight: 700,
                   }}
                 >
@@ -373,7 +478,7 @@ const RoomCard: React.FC<Props> = ({
                   style={{
                     height: 48,
                     fontSize: 15,
-                    padding: '0 18px',
+                    padding: "0 18px",
                     borderRadius: 10,
                   }}
                 >
@@ -384,8 +489,8 @@ const RoomCard: React.FC<Props> = ({
               <div
                 style={{
                   marginBottom: 10,
-                  display: 'flex',
-                  justifyContent: 'center',
+                  display: "flex",
+                  justifyContent: "center",
                 }}
               >
                 <Button
@@ -393,16 +498,17 @@ const RoomCard: React.FC<Props> = ({
                   onClick={() => onOpenDetail(room)}
                   aria-label="Khám phá phòng"
                   style={{
-                    background: 'linear-gradient(135deg, #dfa974 0%, #d89860 100%)',
-                    borderColor: 'transparent',
+                    background:
+                      "linear-gradient(135deg, #dfa974 0%, #d89860 100%)",
+                    borderColor: "transparent",
                     height: 64,
                     fontSize: 18,
-                    width: 'min(420px, 85%)',
+                    width: "min(420px, 85%)",
                     borderRadius: 12,
-                    boxShadow: '0 10px 30px rgba(217,152,96,0.18)',
-                    color: '#fff',
+                    boxShadow: "0 10px 30px rgba(217,152,96,0.18)",
+                    color: "#fff",
                     fontWeight: 700,
-                    letterSpacing: '0.2px',
+                    letterSpacing: "0.2px",
                   }}
                 >
                   {bookButtonText}
@@ -410,7 +516,7 @@ const RoomCard: React.FC<Props> = ({
               </div>
             )}
 
-            <div style={{ fontSize: 12, color: '#666' }}>
+            <div style={{ fontSize: 12, color: "#666" }}>
               Giá bao gồm phí dịch vụ 5% nhưng không bao gồm thuế
             </div>
           </div>

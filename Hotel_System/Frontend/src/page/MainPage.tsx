@@ -24,11 +24,13 @@ import PromotionManager from "../admin/pages/PromotionManager";
 import BookingManager from "../admin/pages/BookingManager";
 import InvoicesManager from "../admin/pages/InvoicesManager";
 import CheckoutManager from "../admin/pages/CheckoutManager";
+import CheckInManager from "../admin/pages/CheckInManager";
 import LoyaltyManager from "../admin/pages/LoyaltyManager";
 import BookingSuccessPage from "./BookingSuccessPage";
 import AboutUsSection from "../components/AboutUsSection";
 import AboutUsPage from "./AboutUsPage";
 import ContactPage from "./ContactPage";
+import MyBookingsPage from "./MyBookingsPage";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
@@ -260,6 +262,17 @@ const MainPage: React.FC = () => {
     );
   }
 
+  if (route === "#bookings" || route === "/bookings") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <MyBookingsPage />
+        <FooterSection />
+      </>
+    );
+  }
+
   if (route === "#select-room" || route === "/select-room") {
     return (
       <>
@@ -374,6 +387,15 @@ const MainPage: React.FC = () => {
     route === "#/admin/checkout"
   ) {
     return <CheckoutManager />;
+  }
+
+  // Admin check-in management (accessible at /admin/checkin)
+  if (
+    route === "#admin/checkin" ||
+    route === "/admin/checkin" ||
+    route === "#/admin/checkin"
+  ) {
+    return <CheckInManager />;
   }
 
   // Admin loyalty / points management route (accessible at /admin/loyalty or #admin/loyalty)

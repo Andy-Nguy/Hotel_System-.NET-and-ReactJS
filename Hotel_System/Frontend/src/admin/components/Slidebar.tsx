@@ -113,7 +113,7 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
           background: active ? "#e6f0ff" : "transparent",
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
+justifyContent: "center",
         }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -222,6 +222,11 @@ const Slidebar: React.FC = () => {
           routeFragment="admin/checkout"
           label="Quản lý Checkout"
         />
+        <NavItem
+          key="checkin"
+          routeFragment="admin/checkin"
+          label="Quản lý Check-in"
+        />
         {/* === THÊM: NavItem loyalty (giữ nguyên như bạn viết) === */}
         <NavItem
           key="loyalty"
@@ -240,7 +245,7 @@ const Slidebar: React.FC = () => {
         />
         <MenuItem
           icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M4 4h16v12H4zM4 20h16v-2H4z" fill="#4b5563" />
             </svg>
           }
@@ -277,6 +282,7 @@ const Slidebar: React.FC = () => {
           label="Not found"
         />
       </nav>
+      
     </aside>
   );
 };

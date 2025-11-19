@@ -51,9 +51,6 @@ public partial class HotelSystemContext : DbContext
 
     public virtual DbSet<TtdichVu> TtdichVus { get; set; }
 
-    // DbSet for stored procedure result
-    public virtual DbSet<Hotel_System.API.DTOs.TopRoomResponse> TopRoomResponses { get; set; }
-
 //     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 // #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
 //         => optionsBuilder.UseSqlServer("Server=localhost;Database=HotelSystem;Trusted_Connection=True;TrustServerCertificate=True;");
@@ -70,7 +67,7 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.IddichVu)
                 .HasMaxLength(50)
                 .HasColumnName("IDDichVu");
-            entity.Property(e => e.IdhoaDon)
+                entity.Property(e => e.IdhoaDon)
                 .HasMaxLength(50)
                 .HasColumnName("IDHoaDon");
             entity.Property(e => e.TienDichVu)
@@ -161,6 +158,9 @@ public partial class HotelSystemContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("IDPhong");
             entity.Property(e => e.NgayDatPhong).HasDefaultValueSql("(CONVERT([date],getdate()))");
+            entity.Property(e => e.SoNguoi).HasColumnName("SoNguoi");
+            entity.Property(e => e.SoLuongPhong).HasColumnName("SoLuongPhong");
+            entity.Property(e => e.ThoiHan).HasColumnName("ThoiHan");
             entity.Property(e => e.TienCoc)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
@@ -226,6 +226,7 @@ public partial class HotelSystemContext : DbContext
                 .HasForeignKey(d => d.IddatPhong)
                 .HasConstraintName("FK_HoaDon_DatPhong");
         });
+
 
         modelBuilder.Entity<KhachHang>(entity =>
         {
@@ -498,13 +499,6 @@ public partial class HotelSystemContext : DbContext
             entity.HasOne(d => d.IddichVuNavigation).WithMany(p => p.TtdichVus)
                 .HasForeignKey(d => d.IddichVu)
                 .HasConstraintName("FK_TTDichVu_DichVu");
-        });
-
-        // Configure TopRoomResponse as a keyless entity for stored procedure results
-        modelBuilder.Entity<Hotel_System.API.DTOs.TopRoomResponse>(entity =>
-        {
-            entity.HasNoKey();
-            entity.ToView(null); // Indicates this is not mapped to a table or view
         });
 
         OnModelCreatingPartial(modelBuilder);

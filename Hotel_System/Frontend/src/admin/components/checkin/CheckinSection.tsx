@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
 import {
-  getBookings,
-  Booking,
-  updateBooking,
-  deleteBooking,
-} from "../../api/bookingApi";
+  getTodayBookings,
+  getCheckinById,
+  confirmCheckIn,
+  cancelCheckIn,
+  UsingBooking,
+} from "../../../api/checkinApi";
 
-const BookingSection: React.FC = () => {
-  const [bookings, setBookings] = useState<Booking[]>([]);
+const CheckinSection: React.FC = () => {
+  const [Bookings, setBookings] = useState<UsingBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -18,61 +19,30 @@ const BookingSection: React.FC = () => {
 
   const loadBookings = async () => {
     try {
-      const data = await getBookings();
-      setBookings(data);
+      setLoading(true);
+      const data = await getTodayBookings();
+      setBookings(data || []);
     } catch (error) {
-      console.error("Failed to load bookings", error);
+      console.error("Failed to load Bookings", error);
+      setBookings([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateStatus = async (id: string, newStatus: number) => {
-    try {
-      await updateBooking(id, { trangThai: newStatus });
-      await loadBookings(); // Reload list
-      alert("Cập nhật trạng thái thành công!");
-    } catch (error) {
-      console.error("Failed to update booking", error);
-      alert("Lỗi khi cập nhật trạng thái.");
-    }
-  };
-
-  const handleUpdatePaymentStatus = async (
-    id: string,
-    newPaymentStatus: number
-  ) => {
-    try {
-      await updateBooking(id, { trangThaiThanhToan: newPaymentStatus });
-      await loadBookings(); // Reload list
-      alert("Cập nhật trạng thái thanh toán thành công!");
-    } catch (error) {
-      console.error("Failed to update payment status", error);
-      alert("Lỗi khi cập nhật trạng thái thanh toán.");
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Bạn có chắc muốn xóa đặt phòng này?")) return;
-    try {
-      await deleteBooking(id);
-      await loadBookings(); // Reload list
-      alert("Xóa đặt phòng thành công!");
-    } catch (error) {
-      console.error("Failed to delete booking", error);
-      alert("Lỗi khi xóa đặt phòng.");
-    }
-  };
+  // Booking update/delete operations are intentionally omitted here.
+  // Use check-in APIs (confirmCheckIn / cancelCheckIn) for check-in flows.
 
   const handleConfirmBooking = async (id: string) => {
     if (!confirm("Xác nhận đặt phòng này và gửi mail xác nhận cho khách?"))
       return;
     try {
-      await updateBooking(id, { trangThai: 2 });
+      // Call CheckInController to mark Booking as 'Đang sử dụng' (TrangThai = 3)
+      await confirmCheckIn(id);
       await loadBookings();
       alert("Đã xác nhận và gửi mail (nếu cấu hình SMTP).");
     } catch (error) {
-      console.error("Failed to confirm booking", error);
+      console.error("Failed to BookingBooking", error);
       alert("Lỗi khi xác nhận đặt phòng.");
     }
   };
@@ -83,23 +53,34 @@ const BookingSection: React.FC = () => {
     )
       return;
     try {
-      await updateBooking(id, { trangThai: 0 });
+      // Call CheckInController cancel endpoint so room status is freed on server
+      await cancelCheckIn(id);
       await loadBookings();
       alert("Đã huỷ đặt phòng và gửi mail (nếu cấu hình SMTP).");
     } catch (error) {
-      console.error("Failed to cancel booking", error);
+      console.error("Failed to cancel Booking", error);
       alert("Lỗi khi huỷ đặt phòng.");
     }
   };
 
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<any | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 8;
 
-  const openModal = (b: Booking) => {
-    setSelectedBooking(b);
-    setShowModal(true);
+  const openModal = (b: UsingBooking) => {
+    // load detailed booking from checkin API for modal
+    (async () => {
+      try {
+        const detail = await getCheckinById(b.iddatPhong);
+        setSelectedBooking(detail || b);
+        setShowModal(true);
+      } catch (err) {
+        console.error("Failed to load booking detail", err);
+        setSelectedBooking(b);
+        setShowModal(true);
+      }
+    })();
   };
 
   const closeModal = () => {
@@ -107,8 +88,8 @@ const BookingSection: React.FC = () => {
     setSelectedBooking(null);
   };
 
-  const filteredBookings = bookings.filter((b) => {
-    if (statusFilter && b.trangThai.toString() !== statusFilter) return false;
+  const filteredBookings = Bookings.filter((b) => {
+    if (statusFilter && (b.trangThai ?? 0).toString() !== statusFilter) return false;
     if (query) {
       const q = query.toLowerCase();
       if (
@@ -138,9 +119,7 @@ const BookingSection: React.FC = () => {
       case 2:
         return "Đã xác nhận";
       case 3:
-        return "Đang dùng";
-      case 4:
-        return "Hoàn thành";
+        return "Đã trả phòng";
       default:
         return "Chưa rõ";
     }
@@ -155,8 +134,6 @@ const BookingSection: React.FC = () => {
       case 2:
         return "#10b981";
       case 3:
-        return "#3b82f6";
-      case 4:
         return "#6b7280";
       default:
         return "#6b7280";
@@ -210,7 +187,7 @@ const BookingSection: React.FC = () => {
       >
         <div>
           <div style={{ color: "#6b7280", fontSize: 13 }}>
-            {bookings.length} đặt phòng tổng • {filteredBookings.length} hiển
+            {Bookings.length} đặt phòng tổng • {filteredBookings.length} hiển
             thị
           </div>
         </div>
@@ -285,7 +262,7 @@ const BookingSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal: booking details */}
+      {/* Modal: Booking details */}
       {showModal && selectedBooking && (
         <div
           style={{
@@ -419,23 +396,20 @@ const BookingSection: React.FC = () => {
             <div style={{ marginTop: 12 }}>
               <strong>Ghi chú / Thông tin thêm:</strong>
               <div style={{ marginTop: 8, color: "#374151" }}>
-                {(selectedBooking as any).ghiChu ||
-                  (selectedBooking as any).note ||
+                {(selectedBooking as any)?.ghiChu ||
+                  (selectedBooking as any)?.note ||
                   "Không có"}
               </div>
             </div>
 
-            <div style={{ marginTop: 14 }}>
+            <div style={{ marginTop: 12 }}>
               <strong>Chi tiết các phòng trong đơn:</strong>
-              {selectedBooking.chiTietDatPhongs &&
+              {selectedBooking?.chiTietDatPhongs &&
               selectedBooking.chiTietDatPhongs.length > 0 ? (
                 <ul style={{ marginTop: 8 }}>
-                  {selectedBooking.chiTietDatPhongs.map((ct) => (
-                    <li key={ct.idChiTiet} style={{ marginBottom: 6 }}>
-                      <strong>{ct.tenPhongChiTiet || ct.idPhong}</strong> —{" "}
-                      {ct.soDem} đêm • {ct.giaPhong.toLocaleString()} VND/đêm ={" "}
-                      {ct.thanhTien.toLocaleString()} VND{" "}
-                      {ct.ghiChu ? `— ${ct.ghiChu}` : ""}
+                  {selectedBooking.chiTietDatPhongs.map((ct: any) => (
+                    <li key={ct.idChiTiet || ct.id} style={{ marginBottom: 6 }}>
+                      <strong>{ct.tenPhongChiTiet || ct.idPhong}</strong> — {ct.soDem} đêm • {ct.giaPhong?.toLocaleString?.() || 0} VND/đêm = {ct.thanhTien?.toLocaleString?.() || 0} VND {ct.ghiChu ? `— ${ct.ghiChu}` : ""}
                     </li>
                   ))}
                 </ul>
@@ -455,75 +429,16 @@ const BookingSection: React.FC = () => {
                 alignItems: "center",
               }}
             >
-              <select
-                value={selectedBooking.trangThai}
-                onChange={async (e) => {
-                  const v = parseInt(e.target.value);
-                  if (!selectedBooking) return;
-                  await handleUpdateStatus(selectedBooking.iddatPhong, v);
-                  await loadBookings();
-                  const updated =
-                    bookings.find(
-                      (x) => x.iddatPhong === selectedBooking.iddatPhong
-                    ) || null;
-                  setSelectedBooking(updated);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                }}
-              >
-                <option value={0}>Đã hủy</option>
-                <option value={1}>Chờ xác nhận</option>
-                <option value={2}>Đã xác nhận</option>
-                <option value={3}>Đang dùng</option>
-                <option value={4}>Hoàn thành</option>
-              </select>
-
-              <select
-                value={selectedBooking.trangThaiThanhToan}
-                onChange={async (e) => {
-                  const v = parseInt(e.target.value);
-                  if (!selectedBooking) return;
-                  await handleUpdatePaymentStatus(
-                    selectedBooking.iddatPhong,
-                    v
-                  );
-                  await loadBookings();
-                  const updated =
-                    bookings.find(
-                      (x) => x.iddatPhong === selectedBooking.iddatPhong
-                    ) || null;
-                  setSelectedBooking(updated);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                }}
-              >
-                <option value={0}>Chưa thanh toán</option>
-                <option value={1}>Đã đặt cọc</option>
-                <option value={2}>Đã thanh toán</option>
-              </select>
-
               <button
-                onClick={async () => {
-                  if (!selectedBooking) return;
-                  if (!confirm("Xác nhận xóa?")) return;
-                  await handleDelete(selectedBooking.iddatPhong);
-                  closeModal();
-                }}
+                onClick={() => closeModal()}
                 style={{
                   padding: "8px 12px",
-                  background: "#ef4444",
-                  color: "#fff",
-                  border: "none",
                   borderRadius: 8,
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
                 }}
               >
-                Xóa
+                Đóng
               </button>
             </div>
           </div>
@@ -652,10 +567,10 @@ const BookingSection: React.FC = () => {
                 </td>
                 <td style={{ padding: 12, color: "#475569" }}>
                   <div>
-                    {new Date(b.ngayNhanPhong).toLocaleDateString("vi-VN")}
+                    {b.ngayNhanPhong ? new Date(b.ngayNhanPhong).toLocaleDateString("vi-VN") : "-"}
                   </div>
                   <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                    {new Date(b.ngayTraPhong).toLocaleDateString("vi-VN")}
+                    {b.ngayTraPhong ? new Date(b.ngayTraPhong).toLocaleDateString("vi-VN") : "-"}
                   </div>
                 </td>
                 <td
@@ -666,21 +581,21 @@ const BookingSection: React.FC = () => {
                     color: "#0f172a",
                   }}
                 >
-                  {b.tongTien.toLocaleString()} đ
+                  {(b.tongTien ?? 0).toLocaleString()} đ
                 </td>
                 <td style={{ padding: 12, textAlign: "center" }}>
                   <span
                     style={{
                       padding: "4px 10px",
                       borderRadius: 999,
-                      background: `${getStatusColor(b.trangThai)}15`,
-                      color: getStatusColor(b.trangThai),
+                      background: `${getStatusColor(b.trangThai ?? 0)}15`,
+                      color: getStatusColor(b.trangThai ?? 0),
                       fontWeight: 700,
                       fontSize: 12,
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {getStatusLabel(b.trangThai)}
+                    {getStatusLabel(b.trangThai ?? 0)}
                   </span>
                 </td>
                 <td style={{ padding: 12, textAlign: "center" }}>
@@ -688,14 +603,14 @@ const BookingSection: React.FC = () => {
                     style={{
                       padding: "4px 10px",
                       borderRadius: 6,
-                      background: getPaymentStatusColor(b.trangThaiThanhToan)
+                      background: getPaymentStatusColor(b.trangThaiThanhToan ?? 0)
                         .bg,
-                      color: getPaymentStatusColor(b.trangThaiThanhToan).color,
+                      color: getPaymentStatusColor(b.trangThaiThanhToan ?? 0).color,
                       fontWeight: 700,
                       fontSize: 12,
                     }}
                   >
-                    {getPaymentStatusLabel(b.trangThaiThanhToan)}
+                    {getPaymentStatusLabel(b.trangThaiThanhToan ?? 0)}
                   </span>
                 </td>
                 <td style={{ padding: 12, textAlign: "right" }}>
@@ -706,7 +621,7 @@ const BookingSection: React.FC = () => {
                       justifyContent: "flex-end",
                     }}
                   >
-                    {b.trangThai === 1 && (
+                    { (b.trangThai === 2) && (
                       <button
                         onClick={() => handleConfirmBooking(b.iddatPhong)}
                         style={{
@@ -723,24 +638,22 @@ const BookingSection: React.FC = () => {
                         Xác nhận
                       </button>
                     )}
-                    {b.trangThai !== 0 &&
-                      b.trangThai !== 3 &&
-                      b.trangThai !== 4 && (
-                        <button
-                          onClick={() => handleCancelBooking(b.iddatPhong)}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: 8,
-                            border: "1px solid #ef4444",
-                            background: "#fff",
-                            color: "#ef4444",
-                            cursor: "pointer",
-                            fontSize: 12,
-                          }}
-                        >
-                          Hủy
-                        </button>
-                      )}
+                    {b.trangThai !== 0 && b.trangThai !== 3 && (
+                      <button
+                        onClick={() => handleCancelBooking(b.iddatPhong)}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 8,
+                          border: "1px solid #ef4444",
+                          background: "#fff",
+                          color: "#ef4444",
+                          cursor: "pointer",
+                          fontSize: 12,
+                        }}
+                      >
+                        Hủy
+                      </button>
+                    )}
                     <button
                       onClick={() => openModal(b)}
                       style={{
@@ -818,4 +731,4 @@ const BookingSection: React.FC = () => {
   );
 };
 
-export default BookingSection;
+export default CheckinSection;

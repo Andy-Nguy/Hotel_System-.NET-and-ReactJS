@@ -12,6 +12,7 @@ interface UserProfile {
 
 const ProfilePage: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loyalty, setLoyalty] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +36,14 @@ const ProfilePage: React.FC = () => {
         if (response.ok) {
           const data = await response.json();
           setProfile(data);
+            // fetch loyalty info
+            try {
+              const resp2 = await fetch("/api/auth/loyalty", { headers: { Authorization: `Bearer ${token}` } });
+              if (resp2.ok) {
+                const d2 = await resp2.json();
+                setLoyalty(d2);
+              }
+            } catch {}
         } else {
           setError("Không thể tải thông tin cá nhân");
         }
@@ -127,10 +136,33 @@ const ProfilePage: React.FC = () => {
                 <div className="col-md-6">
                   <div className="form-group">
                     <label>Tích điểm:</label>
-                    <p>{profile?.tichDiem || 0}</p>
+                      <p>{profile?.tichDiem || 0}</p>
+                      {loyalty && (
+                        <small className="text-muted">Hạng: {loyalty.tier} · {loyalty.totalSpent?.toLocaleString()} ₫ · {loyalty.totalNights} đêm</small>
+                      )}
                   </div>
                 </div>
               </div>
+                {loyalty && (
+                  <div style={{ marginTop: 12 }}>
+                    <h5>Ưu đãi thành viên</h5>
+                    <p>1 điểm = {loyalty.vndPerPoint?.toLocaleString()} ₫ (hạng {loyalty.tier})</p>
+                    <div>
+                      <ul>
+                        {Array.isArray(loyalty.rewards) && loyalty.rewards.map((r: any) => (
+                          <li key={r.id} style={{ marginBottom: 6 }}>
+                            <strong>{r.name}</strong> — {r.description} — <em>{r.costPoints} điểm</em>
+                            {r.canRedeem ? (
+                              <button style={{ marginLeft: 8 }} className="btn btn-sm btn-primary">Đổi</button>
+                            ) : (
+                              <button style={{ marginLeft: 8 }} className="btn btn-sm btn-secondary" disabled>Không đủ điểm</button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
             </div>
           </div>
         </div>
