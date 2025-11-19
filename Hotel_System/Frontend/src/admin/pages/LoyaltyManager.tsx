@@ -211,7 +211,7 @@ const LoyaltyManager: React.FC = () => {
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
       <Slidebar />
       <div style={{ marginLeft: 280 }}>
-        <HeaderSection />
+        <HeaderSection showStats={false} />
         <main style={{ padding: "24px 36px" }}>
           <Tabs
             defaultActiveKey="customers"
