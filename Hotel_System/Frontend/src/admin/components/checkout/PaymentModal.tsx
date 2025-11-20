@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, InputNumber, Select, Table, Divider, Spin, Tag, Input, message } from 'antd';
+import { Modal, Form, InputNumber, Select, Table, Divider, Spin, Tag, Input, message, Button } from 'antd';
 
 interface Props {
   visible: boolean;
@@ -56,11 +56,31 @@ const PaymentModal: React.FC<Props> = ({
     }
   }, [needToPay, visible, form]);
 
+  // Determine if invoice/booking is already fully paid (server uses 2)
+  // Support different casing and string/number types
+  const invoiceStatus = Array.isArray(summary?.invoices) && summary.invoices.length > 0
+    ? (summary.invoices[0].trangThaiThanhToan ?? summary.invoices[0].TrangThaiThanhToan ?? summary.invoices[0].trangThaiThanhToan)
+    : undefined;
+  const statusCandidates = [
+    invoiceStatus,
+    paymentRow?.TrangThaiThanhToan,
+    paymentRow?.trangThaiThanhToan,
+  ];
+  const isPaid = statusCandidates.some((v) => String(v ?? '').trim() === '2');
+
   // onOk should delegate to parent submit handler (onSubmit)
 
   return (
-    <Modal title={`Thanh toán – ${paymentRow?.IddatPhong}`} open={visible} onCancel={onCancel} onOk={onSubmit}
-      okText="Xác nhận" cancelText="Hủy" width={900}>
+    <Modal
+      title={`Thanh toán – ${paymentRow?.IddatPhong}`}
+      open={visible}
+      onCancel={onCancel}
+      onOk={onSubmit}
+      okText="Xác nhận"
+      cancelText="Hủy"
+      width={900}
+      footer={isPaid ? [<Button key="close" onClick={onCancel}>Đóng</Button>] : undefined}
+    >
       <Spin spinning={summaryLoading}>
         <Form form={form} layout="vertical">
         {/* Header */}

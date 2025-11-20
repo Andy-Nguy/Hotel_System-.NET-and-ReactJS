@@ -58,11 +58,23 @@ const CheckoutTable: React.FC<Props> = ({
         if (viewMode === 'checkout') {
           return (
             <Space>
-              {isCompleted
-                ? <Button disabled>Đã hoàn tất</Button>
-                // When in checkout mode, delegate to onViewInvoice so the parent can show the invoice form
-                : <Button type="primary" onClick={() => onViewInvoice ? onViewInvoice(r) : onComplete(r)}>Xác nhận trả phòng</Button>}
-                <Button type="primary" danger={false} onClick={() => (typeof (/* istanbul ignore next */ (onOpenPaymentForm)) === 'function' ? onOpenPaymentForm!(r) : onPay?.(r))} disabled={isPaid || isCompleted}>Xác nhận thanh toán</Button>
+              {isCompleted ? (
+                <Button disabled>Đã hoàn tất</Button>
+              ) : (
+                <>
+                  {/* Show 'Xác nhận trả phòng' only when booking is already paid */}
+                  {isPaid && (
+                    <Button type="primary" onClick={() => onViewInvoice ? onViewInvoice(r) : onComplete(r)}>Xác nhận trả phòng</Button>
+                  )}
+
+                  {/* Show 'Xác nhận thanh toán' only when booking is NOT paid */}
+                  {!isPaid && (
+                    <Button type="primary" danger={false} onClick={() => (typeof (/* istanbul ignore next */ (onOpenPaymentForm)) === 'function' ? onOpenPaymentForm!(r) : onPay?.(r))}>
+                      Xác nhận thanh toán
+                    </Button>
+                  )}
+                </>
+              )}
             </Space>
           );
         }

@@ -206,6 +206,20 @@ namespace Hotel_System.API.Controllers
                             hoaDon.TrangThaiThanhToan = 1; // chuyển về chưa thanh toán đủ
                         }
                     }
+                    // Additionally, if after recompute the invoice has a remaining balance,
+                    // mark the booking's payment status as pending (1) so the UI row reflects DB state.
+                    try
+                    {
+                        decimal remainingForBookingInvoice = (hoaDon.TongTien - (hoaDon.TienThanhToan ?? 0m));
+                        if (remainingForBookingInvoice > 0m)
+                        {
+                            booking.TrangThaiThanhToan = 1;
+                        }
+                    }
+                    catch
+                    {
+                        // ignore any unexpected issues calculating remaining — do not break the flow
+                    }
                 }
 
                 // ========== BƯỚC 5 & 6: GIỮ NGUYÊN TienThanhToan VÀ TÍNH SoTienConLai ==========

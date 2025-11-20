@@ -36,7 +36,7 @@ const InvoiceModal: React.FC<Props> = ({
     const promo = Number(it?.GiamGia ?? it?.giamGia ?? it?.discount ?? 0) || 0;
     const discounted = Math.max(0, rawThanh - promo);
     return {
-      ID: it?.id ?? it?.IDChiTiet ?? idx,
+      IDPhong: it?.IDPhong ?? it?.idPhong ?? it?.IdPhong ?? it?.Phong?.Idphong ?? it?.SoPhong ?? it?.soPhong ?? null,
       TenPhong: it?.TenPhong ?? it?.tenPhong ?? it?.Phong?.TenPhong ?? '-',
       SoPhong: it?.SoPhong ?? it?.soPhong ?? null,
       SoDem: Number(it?.SoDem ?? it?.soDem ?? 1),
@@ -89,6 +89,14 @@ const InvoiceModal: React.FC<Props> = ({
   const needToPay = Math.max(0, finalTotal - alreadyPaid);
   // ========================================
 
+  // Determine if the invoice/row is already fully paid (server uses 2 = fully paid)
+  const isPaid = [
+    invoiceData?.TrangThaiThanhToan,
+    invoiceData?.trangThaiThanhToan,
+    paymentRow?.TrangThaiThanhToan,
+    paymentRow?.trangThaiThanhToan,
+  ].some((v) => Number(v) === 2);
+
   return (
     <Modal
       title={invoiceData ? `Hóa đơn - ${invoiceData?.IDHoaDon ?? invoiceData?.idHoaDon ?? ''}` : 'Hóa đơn'}
@@ -98,9 +106,12 @@ const InvoiceModal: React.FC<Props> = ({
       centered
       footer={[
         <Button key="close" onClick={onClose}>Đóng</Button>,
-        <Button key="complete" type="primary" onClick={handleComplete}>
-          Hoàn tất thanh toán
-        </Button>,
+        // Hide the confirm button when the invoice/row is already marked as paid
+        !isPaid && (
+          <Button key="complete" type="primary" onClick={handleComplete}>
+            Hoàn tất thanh toán
+          </Button>
+        ),
       ]}
     >
       {invoiceData ? (
