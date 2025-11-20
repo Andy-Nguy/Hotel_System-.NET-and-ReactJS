@@ -52,12 +52,14 @@ namespace Hotel_System.API.Controllers
         private readonly HotelSystemContext _context;
         private readonly ILogger<CheckoutController> _logger;
         private readonly Hotel_System.API.Services.IEmailService _emailService;
+        private readonly Hotel_System.API.Services.EmailTemplateRenderer _templateRenderer;
 
-        public CheckoutController(HotelSystemContext context, ILogger<CheckoutController> logger, Hotel_System.API.Services.IEmailService emailService)
+        public CheckoutController(HotelSystemContext context, ILogger<CheckoutController> logger, Hotel_System.API.Services.IEmailService emailService, Hotel_System.API.Services.EmailTemplateRenderer templateRenderer)
         {
             _context = context;
             _logger = logger;
             _emailService = emailService;
+            _templateRenderer = templateRenderer;
         }
 
         // GET: api/Checkout/summary/{idDatPhong} – DÙNG CHÍNH TRONG FRONTEND
@@ -664,30 +666,27 @@ namespace Hotel_System.API.Controllers
                 // Remove any newlines and trim to a reasonable length
                 var emailSubject = System.Text.RegularExpressions.Regex.Replace(rawSubject, "\r\n?|\n", " ").Trim();
                 if (emailSubject.Length > 200) emailSubject = emailSubject.Substring(0, 200) + "...";
-                var reviewUrl = $"{Request.Scheme}://{Request.Host}/review/{hoaDon.IddatPhong}";
+                var placeholders = new Dictionary<string, string>
+                {
+                    ["CustomerName"] = hoTen,
+                    ["InvoiceId"] = hoaDon.IdhoaDon,
+                    ["BookingId"] = hoaDon.IddatPhong ?? string.Empty,
+                    ["InvoiceDate"] = hoaDon.NgayLap.HasValue ? hoaDon.NgayLap.Value.ToString("dd/MM/yyyy HH:mm:ss") : string.Empty,
+                    ["TotalAmount"] = hoaDon.TongTien.ToString("N0"),
+                    ["PaidAmount"] = (hoaDon.TienThanhToan ?? 0m).ToString("N0"),
+                    ["ReviewUrl"] = $"{Request.Scheme}://{Request.Host}/review/{hoaDon.IddatPhong}"
+                };
 
-                                var emailBodyHtml = $@"<html><body>
-<p>Kính gửi Quý khách <strong>{System.Net.WebUtility.HtmlEncode(hoTen)}</strong>,</p>
-<p><strong>🎉 THANH TOÁN THÀNH CÔNG</strong>! Cảm ơn Quý khách đã sử dụng dịch vụ của Khách Sạn Robins Villa.</p>
-<h3>Thông tin hóa đơn</h3>
-<ul>
-    <li><strong>Mã hóa đơn:</strong> {System.Net.WebUtility.HtmlEncode(hoaDon.IdhoaDon)}</li>
-    <li><strong>Mã đặt phòng:</strong> {System.Net.WebUtility.HtmlEncode(hoaDon.IddatPhong)}</li>
-    <li><strong>Ngày lập:</strong> {hoaDon.NgayLap:dd/MM/yyyy HH:mm:ss}</li>
-    <li><strong>Tổng tiền:</strong> {hoaDon.TongTien:N0} VNĐ</li>
-    <li><strong>Tiền đã thanh toán:</strong> {hoaDon.TienThanhToan:N0} VNĐ</li>
-</ul>
-<p>Xin vui lòng lưu lại email này như biên lai thanh toán điện tử.</p>
-<p><strong>Chúng tôi rất mong nhận được phản hồi từ Quý khách.</strong></p>
-<p>Mọi góp ý của Quý khách sẽ giúp chúng tôi nâng cao chất lượng dịch vụ.</p>
-<p>Nếu Quý khách cần hỗ trợ thêm, xin vui lòng liên hệ với bộ phận chăm sóc khách hàng của chúng tôi.</p>
-<p>Xin chân thành cảm ơn và mong được phục vụ Quý khách trong những lần tiếp theo.</p>
-<p>Vui lòng dành chút thời gian để đánh giá trải nghiệm của bạn:</p>
-<p><a href=""{reviewUrl}"" target=""_blank"">Gửi đánh giá cho chúng tôi</a></p>
-<p>Trân trọng,<br/>Khách Sạn Robins Villa</p>
-</body></html>";
-
-                await _emailService.SendEmailAsync(email, emailSubject, emailBodyHtml, true);
+                var html = _templateRenderer.Render("invoice.html", placeholders);
+                if (!string.IsNullOrWhiteSpace(html))
+                {
+                    await _emailService.SendEmailAsync(email, emailSubject, html, true);
+                }
+                else
+                {
+                    var text = _templateRenderer.Render("invoice.txt", placeholders);
+                    await _emailService.SendEmailAsync(email, emailSubject, text, false);
+                }
             }
             catch (Exception ex)
             {

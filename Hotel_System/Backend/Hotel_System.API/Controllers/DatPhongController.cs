@@ -14,12 +14,14 @@ namespace Hotel_System.API.Controllers
         private readonly HotelSystemContext _context;
         private readonly IEmailService _emailService;
         private readonly ILogger<DatPhongController> _logger;
+        private readonly Hotel_System.API.Services.EmailTemplateRenderer _templateRenderer;
 
-        public DatPhongController(HotelSystemContext context, IEmailService emailService, ILogger<DatPhongController> logger)
+        public DatPhongController(HotelSystemContext context, IEmailService emailService, ILogger<DatPhongController> logger, Hotel_System.API.Services.EmailTemplateRenderer templateRenderer)
         {
             _context = context;
             _emailService = emailService;
             _logger = logger;
+            _templateRenderer = templateRenderer;
         }
 
         /// <summary>
@@ -200,6 +202,34 @@ namespace Hotel_System.API.Controllers
                 await _context.SaveChangesAsync();
 
                 await transaction.CommitAsync();
+
+                // Gửi email thông báo giữ phòng (nếu có email khách)
+                try
+                {
+                    var to = khachHang?.Email;
+                    if (!string.IsNullOrWhiteSpace(to))
+                    {
+                        var placeholders = new Dictionary<string, string>
+                        {
+                            ["CustomerName"] = khachHang.HoTen ?? string.Empty,
+                            ["BookingId"] = datPhong.IddatPhong,
+                            ["Checkin"] = datPhong.NgayNhanPhong.ToString("yyyy-MM-dd"),
+                            ["Checkout"] = datPhong.NgayTraPhong.ToString("yyyy-MM-dd"),
+                            ["Nights"] = (datPhong.SoDem ?? 0).ToString(),
+                            ["HoldExpires"] = datPhong.ThoiHan?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? string.Empty
+                        };
+
+                        var html = _templateRenderer.Render("booking_hold.html", placeholders);
+                        if (!string.IsNullOrWhiteSpace(html))
+                        {
+                            await _emailService.SendEmailAsync(to, "Xác nhận giữ phòng - " + datPhong.IddatPhong, html, true);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send reservation hold email for booking {id}", datPhong.IddatPhong);
+                }
 
                 return Ok(new
                 {
@@ -402,19 +432,22 @@ namespace Hotel_System.API.Controllers
                     {
                         try
                         {
-                            if (booking.TrangThai == 2)
-                            {
-                                var subject = "Xác nhận đặt phòng - " + booking.IddatPhong;
-                                var body = $"Xin chào {booking.IdkhachHangNavigation?.HoTen},<br/><br/>Đặt phòng <strong>{booking.IddatPhong}</strong> của bạn đã được xác nhận.<br/>Ngày nhận: {booking.NgayNhanPhong:d}<br/>Ngày trả: {booking.NgayTraPhong:d}<br/>Tổng tiền: {booking.TongTien:C}<br/><br/>Cảm ơn bạn đã sử dụng dịch vụ.";
-                                await _emailService.SendEmailAsync(to, subject, body, true);
-                                _logger.LogInformation("Sent confirmation email to {email} for booking {id}", to, booking.IddatPhong);
-                            }
-                            else if (booking.TrangThai == 0)
+                            // NOTE: confirmation email on booking status change is intentionally disabled.
+                            // We still send a cancellation email when the booking is cancelled.
+                            if (booking.TrangThai == 0)
                             {
                                 var subject = "Hủy đặt phòng - " + booking.IddatPhong;
-                                var body = $"Xin chào {booking.IdkhachHangNavigation?.HoTen},<br/><br/>Đặt phòng <strong>{booking.IddatPhong}</strong> đã được hủy. Nếu bạn đã thanh toán, bộ phận kế toán sẽ liên hệ để hoàn tiền (nếu có).<br/><br/>Nếu có thắc mắc, vui lòng liên hệ lại khách sạn.";
-                                await _emailService.SendEmailAsync(to, subject, body, true);
-                                _logger.LogInformation("Sent cancellation email to {email} for booking {id}", to, booking.IddatPhong);
+                                var placeholders = new Dictionary<string, string>
+                                {
+                                    ["CustomerName"] = booking.IdkhachHangNavigation?.HoTen ?? string.Empty,
+                                    ["BookingId"] = booking.IddatPhong
+                                };
+                                var html = _templateRenderer.Render("cancellation.html", placeholders);
+                                if (!string.IsNullOrWhiteSpace(html))
+                                {
+                                    await _emailService.SendEmailAsync(to, subject, html, true);
+                                    _logger.LogInformation("Sent cancellation email to {email} for booking {id}", to, booking.IddatPhong);
+                                }
                             }
                         }
                         catch (Exception ex)
