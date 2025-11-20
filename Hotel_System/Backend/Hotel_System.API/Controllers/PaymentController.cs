@@ -142,19 +142,26 @@ namespace Hotel_System.API.Controllers
                 var tienPhongTinh = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m;
                 int tienPhong = request.TienPhong ?? (int)Math.Round(tienPhongTinh);
 
-                // Tổng cuối cùng do FE tính (đã gồm phòng sau KM + dịch vụ + VAT)
-                decimal tongTien = request.TongTien;
-                if (tongTien <= 0m)
+                // Compute totals on server-side to avoid client-side mismatch.
+                // Room total (after promotions) — we've already updated datPhong.TongTien above to sum of ThanhTien
+                decimal roomTotal = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m;
+
+                // Services total from request (if any). Prefer TienDichVu or DonGia*SoLuong
+                decimal servicesTotal = 0m;
+                if (request.Services != null && request.Services.Any())
                 {
-                    // fallback: DatPhong.TongTien -> sum ChiTiet (ThanhTien)
-                    tongTien = datPhong.TongTien;
-                    if (tongTien <= 0m)
+                    foreach (var svc in request.Services)
                     {
-                        try { tongTien = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m; }
-                        catch { tongTien = 0m; }
+                        var line = svc.TienDichVu != 0m ? svc.TienDichVu : svc.DonGia * Math.Max(1, svc.SoLuong);
+                        servicesTotal += Math.Round(line);
                     }
-_logger.LogInformation("PaymentController: request.TongTien missing/zero, fallback tongTien={TongTien}", tongTien);
                 }
+
+                // Total before VAT
+                decimal totalBeforeVat = roomTotal + servicesTotal;
+                // Apply VAT 10% and round to nearest integer
+                decimal tongTien = Math.Round(totalBeforeVat * 1.1m, 0, MidpointRounding.AwayFromZero);
+                _logger.LogInformation("PaymentController: computed tongTien server-side room={Room} services={Services} tongTien={TongTien}", roomTotal, servicesTotal, tongTien);
 
                 // Lấy tiền cọc hiện có trên DatPhong làm nguồn dữ liệu mặc định
                 decimal tienCoc = datPhong.TienCoc ?? 0m;

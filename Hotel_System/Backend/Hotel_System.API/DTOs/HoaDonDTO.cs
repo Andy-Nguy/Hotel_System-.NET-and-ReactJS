@@ -97,6 +97,12 @@ public class HoaDonPaymentRequest
     public decimal? TienCoc { get; set; }
 
     /// <summary>
+    /// Tiền thanh toán trước check-in (nếu khách đã thanh toán từng phần trước).
+    /// Server sẽ cộng TienCoc + PreviousPayment để tính "Đã thanh toán"
+    /// </summary>
+    public decimal? PreviousPayment { get; set; }
+
+    /// <summary>
     /// Tùy chọn: cho phép client gửi rõ trạng thái thanh toán mong muốn.
     /// - 0 = Đã cọc
     /// - 1 = Chưa thanh toán

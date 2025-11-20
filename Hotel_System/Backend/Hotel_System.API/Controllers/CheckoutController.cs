@@ -410,18 +410,14 @@ namespace Hotel_System.API.Controllers
                 // - Other methods -> unpaid (0)
                 int trangThaiThanhToan = request.TrangThaiThanhToan ?? (request.PhuongThucThanhToan == 2 ? 1 : 0);
 
-                decimal tienThanhToan = 0m;
+                // Calculate TienThanhToan = Tiền đã thanh toán trước (Tiền cọc + Tiền thanh toán trước check-in)
+                decimal previousPayment = request.PreviousPayment ?? 0m;
+                decimal tienThanhToan = tienCoc + previousPayment;
+
+                // If fully paid via this invoice, TienThanhToan = TongTien
                 if (trangThaiThanhToan == 2)
                 {
-                    // Fully paid: record the invoice-level paid amount as the full invoice total.
-                    // NOTE: TienCoc is a separate historical field and should not be subtracted here;
-                    // TienThanhToan is the canonical total paid value and may include earlier deposits.
                     tienThanhToan = tongTien;
-                }
-                else
-                {
-                    // For unpaid or pending, record 0 as paid for this invoice initially.
-                    tienThanhToan = 0m;
                 }
 
                 var idHoaDon = $"HD{DateTime.Now:yyyyMMddHHmmssfff}";
