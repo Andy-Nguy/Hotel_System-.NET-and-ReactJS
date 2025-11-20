@@ -18,16 +18,19 @@ namespace Hotel_System.API.Controllers
         private readonly HotelSystemContext _context;
         private readonly ILogger<PaymentController> _logger;
         private readonly IEmailService _emailService;
+        private readonly Hotel_System.API.Services.EmailTemplateRenderer _templateRenderer;
 
         public PaymentController(
             HotelSystemContext context,
             ILogger<PaymentController> logger,
-            IEmailService emailService
+            IEmailService emailService,
+            Hotel_System.API.Services.EmailTemplateRenderer templateRenderer
         )
         {
             _context = context;
             _logger = logger;
             _emailService = emailService;
+            _templateRenderer = templateRenderer;
         }
 
         // ===========================
@@ -458,44 +461,29 @@ var gw = string.IsNullOrWhiteSpace(req.PaymentGateway) ? "" : $" | Gateway: {req
                     _ => "Không xác định"
                 };
 
-                var emailBody = $@"
-xacnhandatphong HÓA ĐƠN - XÁC NHẬN GIAO DỊCH - Mã hóa đơn #{hoaDon.IdhoaDon}
+                // Render HTML template for invoice; fallback to plain text if template missing
+                var placeholders = new Dictionary<string, string>
+                {
+                    ["CustomerName"] = hoTen,
+                    ["InvoiceId"] = hoaDon.IdhoaDon,
+                    ["BookingId"] = hoaDon.IddatPhong ?? string.Empty,
+                    ["InvoiceDate"] = hoaDon.NgayLap.HasValue ? hoaDon.NgayLap.Value.ToString("dd/MM/yyyy HH:mm:ss") : string.Empty,
+                    ["TotalAmount"] = (hoaDon.TongTien).ToString("N0"),
+                    ["PaidAmount"] = (hoaDon.TienThanhToan ?? 0m).ToString("N0"),
+                    ["ReviewUrl"] = $"{Request.Scheme}://{Request.Host}/review/{hoaDon.IddatPhong}"
+                };
 
-Kính gửi Quý khách {hoTen},
-
-Cảm ơn Quý khách đã đặt phòng tại Khách Sạn Robins Villa. Thông tin đặt phòng và hóa đơn đã được lưu lại trong hệ thống.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 THÔNG TIN HÓA ĐƠN & ĐẶT PHÒNG
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🧾 Mã hóa đơn:        {hoaDon.IdhoaDon}
-📋 Mã đặt phòng:      {hoaDon.IddatPhong}
-📅 Ngày lập:          {hoaDon.NgayLap:dd/MM/yyyy HH:mm:ss}
-📌 Trạng thái thanh toán: {paymentStatusText}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 CHI TIẾT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-• Tiền phòng:        {hoaDon.TienPhong:N0} VNĐ
-• Số ngày:           {hoaDon.Slngay}
-• Tổng tiền:         {hoaDon.TongTien:N0} VNĐ
-• Tiền cọc đã trả:   {hoaDon.TienCoc:N0} VNĐ
-• Số tiền đã thanh toán: {hoaDon.TienThanhToan:N0} VNĐ
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{(string.IsNullOrEmpty(hoaDon.GhiChu) ? "" : $"📝 GHI CHÚ: {hoaDon.GhiChu}\n\n")}
-
-Vui lòng mang theo email này khi làm thủ tục nhận phòng. Nếu Quý khách cần hỗ trợ thêm, vui lòng liên hệ hotline hoặc trả lời email này.
-
-Trân trọng,
-Khách Sạn Robins Villa
-📧 Email: nguyenduonglechi.1922@gmail.com
-📞 Hotline: 1900-xxxx (24/7)
-";
-
-                await SafeSendEmailAsync(email, hoTen, emailSubject, emailBody);
+                var html = _templateRenderer.Render("invoice.html", placeholders);
+                if (!string.IsNullOrWhiteSpace(html))
+                {
+                    await _emailService.SendEmailAsync(email, emailSubject, html, true);
+                }
+                else
+                {
+                    // fallback to plain text
+                    var text = _templateRenderer.Render("invoice.txt", placeholders);
+                    await _emailService.SendEmailAsync(email, emailSubject, text, false);
+                }
             }
             catch (Exception ex)
             {

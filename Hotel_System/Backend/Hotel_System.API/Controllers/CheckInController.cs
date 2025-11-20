@@ -15,12 +15,14 @@ namespace Hotel_System.API.Controllers
         private readonly HotelSystemContext _context;
         private readonly ILogger<CheckInController> _logger;
         private readonly Hotel_System.API.Services.IEmailService _emailService;
+        private readonly Hotel_System.API.Services.EmailTemplateRenderer _templateRenderer;
 
-        public CheckInController(HotelSystemContext context, ILogger<CheckInController> logger, Hotel_System.API.Services.IEmailService emailService)
+        public CheckInController(HotelSystemContext context, ILogger<CheckInController> logger, Hotel_System.API.Services.IEmailService emailService, Hotel_System.API.Services.EmailTemplateRenderer templateRenderer)
         {
             _context = context;
             _logger = logger;
             _emailService = emailService;
+            _templateRenderer = templateRenderer;
         }
 
         private async Task<bool> TrySendEmailAsync(string to, string subject, string body)
@@ -254,24 +256,21 @@ namespace Hotel_System.API.Controllers
                         var soKhach = booking.SoNguoi ?? 1;
                         var soTreEm = 0; // field for children not present in model; default to 0
 
-                        var body = $"<p>Xin chào <strong>{customerName}</strong>,</p>" +
-           $"<p>Chúng tôi rất vui mừng thông báo: Đơn đặt phòng <strong>{booking.IddatPhong}</strong> của Quý khách đã được xác nhận và <strong>NHẬN PHÒNG THÀNH CÔNG</strong>!</p>" +
-           $"<p><strong>≡ THÔNG TIN LƯU TRÚ ≡</strong><br/>" +
-           $"• Họ & tên: {customerName}<br/>" +
-           $"• Loại phòng: <strong>{roomName}</strong><br/>" +
-           $"• Số phòng: <strong>{booking.Idphong}</strong><br/>" +
-           $"• Ngày nhận phòng: {checkinStr}<br/>" +
-           $"• Ngày trả phòng: {checkoutStr}<br/>" +
-           $"• Số đêm nghỉ: <strong>{nights} đêm</strong><br/>" +
-           $"• Số lượng khách: {soKhach} người lớn{(soTreEm > 0 ? $", {soTreEm} trẻ em" : "")} </p>" +
-           $"• Dịch vụ phòng 24/7: Bấm số 034444444 từ điện thoại trong phòng<br/>" +
-           $"• Yêu cầu trả phòng muộn: Liên hệ lễ tân trước 10:00</p>" +
-           $"<p>Nếu cần hỗ trợ bất kỳ lúc nào, Quý khách vui lòng liên hệ lễ tân qua số máy lẻ <strong>0</strong> hoặc hotline <strong>0909 888 999</strong>.</p>" +
-           $"<p>Chúc Quý khách có kỳ nghỉ thật tuyệt vời và đáng nhớ tại Robins Villa!</p>" +
-           $"<p>Trân trọng,</p>" +
-           $"<p>Khách sạn Robins Villa</p>";
+                        var placeholders = new Dictionary<string, string>
+                        {
+                            ["CustomerName"] = customerName,
+                            ["BookingId"] = booking.IddatPhong,
+                            ["RoomName"] = roomName,
+                            ["RoomNumber"] = booking.Idphong ?? string.Empty,
+                            ["Checkin"] = checkinStr,
+                            ["Checkout"] = checkoutStr,
+                            ["Nights"] = nights.ToString(),
+                            ["Guests"] = soKhach.ToString(),
+                            ["HotelPhone"] = "0909 888 999"
+                        };
 
-                        emailSent = await TrySendEmailAsync(email, subject, body);
+                        var html = _templateRenderer.Render("checkin.html", placeholders);
+                        emailSent = await TrySendEmailAsync(email, subject, html);
                     }
                 }
                 catch (Exception ex2)

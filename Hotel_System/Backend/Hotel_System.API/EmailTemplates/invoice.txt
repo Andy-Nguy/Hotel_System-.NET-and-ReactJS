@@ -1,0 +1,14 @@
+Kính gửi Quý khách {{CustomerName}},
+
+THÔNG TIN HÓA ĐƠN
+
+Mã hóa đơn: {{InvoiceId}}
+Mã đặt phòng: {{BookingId}}
+Ngày lập: {{InvoiceDate}}
+Tổng tiền: {{TotalAmount}}
+Tiền đã thanh toán: {{PaidAmount}}
+
+Vui lòng lưu lại email này như biên lai thanh toán điện tử.
+
+Trân trọng,
+Khách Sạn Robins Villa

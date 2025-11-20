@@ -57,6 +57,9 @@ builder.Services.AddScoped<RoomService>();
 // Email service
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+// Template renderer for email HTML/text templates
+builder.Services.AddSingleton<Hotel_System.API.Services.EmailTemplateRenderer>();
+
 // Background service: expire holds (ThoiHan)
 builder.Services.AddHostedService<HoldExpiryBackgroundService>();
 
