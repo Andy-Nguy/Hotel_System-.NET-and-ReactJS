@@ -53,7 +53,7 @@ const CheckinTable: React.FC<Props> = ({
         const isPaid = (r.TrangThaiThanhToan ?? 0) === 2;
         const isCompleted = (r.TrangThai ?? 0) === 4;
 
-        // Both 'using' and 'checkin' should display the same two primary actions.
+       
         return (
           <Space>
             <Button onClick={() => onAddService?.(r)}>Thêm dịch vụ</Button>
