@@ -11,6 +11,8 @@ public partial class DanhGium
 
     public string Idphong { get; set; } = null!;
 
+    public string? IddatPhong { get; set; } // Booking ID reference
+
     public byte SoSao { get; set; }
 
     public string? TieuDe { get; set; }
