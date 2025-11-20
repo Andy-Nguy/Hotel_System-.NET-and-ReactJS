@@ -236,6 +236,12 @@ namespace Hotel_System.API.Controllers
                 if (booking.NgayNhanPhong == default)
                     booking.NgayNhanPhong = DateOnly.FromDateTime(DateTime.Now);
 
+                // Cập nhật trạng thái phòng thành "Đang sử dụng"
+                if (booking.IdphongNavigation != null)
+                {
+                    booking.IdphongNavigation.TrangThai = "Đang sử dụng";
+                }
+
                 await _context.SaveChangesAsync();
                 // send notification email if we have customer's email
                 bool emailSent = false;
@@ -296,6 +302,8 @@ namespace Hotel_System.API.Controllers
 
             var booking = await _context.DatPhongs
                 .Include(dp => dp.IdphongNavigation)
+                .Include(dp => dp.ChiTietDatPhongs)
+                    .ThenInclude(ct => ct.Phong)
                 .FirstOrDefaultAsync(dp => dp.IddatPhong == id);
 
             if (booking == null) return NotFound(new { message = "Không tìm thấy đặt phòng." });
@@ -309,6 +317,18 @@ namespace Hotel_System.API.Controllers
                 if (booking.IdphongNavigation != null)
                 {
                     booking.IdphongNavigation.TrangThai = "Trống";
+                }
+
+                // Also sync all rooms in ChiTietDatPhongs (for multi-room bookings)
+                if (booking.ChiTietDatPhongs != null)
+                {
+                    foreach (var chiTiet in booking.ChiTietDatPhongs)
+                    {
+                        if (chiTiet.Phong != null)
+                        {
+                            chiTiet.Phong.TrangThai = "Trống";
+                        }
+                    }
                 }
 
                 await _context.SaveChangesAsync();

@@ -113,8 +113,54 @@ const RoomManager: React.FC = () => {
     });
   }, [rooms, statusFilter, query]);
 
-  const quickToggleStatus = (roomId: string) => {
-    setRooms(prev => prev.map(r => r.idphong === roomId ? ({ ...r, trangThai: (r.trangThai === 'Bảo trì' ? 'Trống' : 'Bảo trì') }) : r));
+  const quickToggleStatus = async (roomId: string) => {
+    const room = rooms.find(r => r.idphong === roomId);
+    if (!room) return;
+
+    // Quy tắc: Chỉ cho phép đổi Trống ↔ Bảo trì; không được đổi "Đã đặt" hoặc "Đang sử dụng"
+    const current = room.trangThai || '';
+    if (current === 'Đã đặt' || current === 'Đang sử dụng') {
+      alert(`Không thể thay đổi. Phòng đang ở trạng thái "${current}" - được quản lý tự động bởi hệ thống.`);
+      return;
+    }
+
+    const target = current === 'Bảo trì' ? 'Trống' : 'Bảo trì';
+
+    setRoomLoading(prev => ({ ...prev, [roomId]: true }));
+
+    try {
+      const resp = await fetch(`/api/Phong/${roomId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ TrangThai: target })
+      });
+
+      if (resp.ok) {
+        setRooms(prev => prev.map(r => r.idphong === roomId ? ({ ...r, trangThai: target }) : r));
+      } else {
+        let msg = 'Không thể thay đổi trạng thái.';
+        try {
+          const json = await resp.json();
+          if (json?.error) msg = json.error;
+          else if (json?.message) msg = json.message;
+        } catch { /* ignore */ }
+        alert(msg);
+        // Refresh rooms from server
+        try {
+          const fresh = await getRooms();
+          setRooms(fresh);
+        } catch { /* ignore */ }
+      }
+    } catch (ex) {
+      console.error('Failed to update room status', ex);
+      alert('Lỗi khi cập nhật trạng thái phòng. Vui lòng thử lại.');
+      try {
+        const fresh = await getRooms();
+        setRooms(fresh);
+      } catch { /* ignore */ }
+    } finally {
+      setRoomLoading(prev => ({ ...prev, [roomId]: false }));
+    }
   };
 
   const removeRoom = (roomId: string) => {
@@ -163,9 +209,28 @@ const RoomManager: React.FC = () => {
                       <div key={r.idphong} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 12, borderBottom: '1px solid #f3f4f6' }}>
                         <div style={{ width: 120, height: 80, backgroundImage: `url(${resolveImage(r.urlAnhPhong)})`, backgroundSize: 'cover', backgroundPosition: 'center', borderRadius: 8 }} />
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ fontWeight: 700 }}>{r.tenPhong}</div>
-                            <div><Badge status={r.trangThai} /></div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <Badge status={r.trangThai} />
+                              {/* Chỉ cho phép toggle Trống ↔ Bảo trì; khóa Đã đặt và Đang sử dụng */}
+                              {(r.trangThai === 'Trống' || r.trangThai === 'Bảo trì') && (
+                                <button
+                                  onClick={() => quickToggleStatus(r.idphong)}
+                                  disabled={!!roomLoading[r.idphong]}
+                                  style={{
+                                    padding: '6px 10px',
+                                    borderRadius: 8,
+                                    border: '1px solid #e5e7eb',
+                                    background: '#fff',
+                                    cursor: roomLoading[r.idphong] ? 'not-allowed' : 'pointer',
+                                    opacity: roomLoading[r.idphong] ? 0.6 : 1
+                                  }}
+                                >
+                                  {roomLoading[r.idphong] ? 'Đang...' : (r.trangThai === 'Bảo trì' ? 'Đặt sẵn' : 'Bảo trì')}
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div style={{ color: '#6b7280' }}>{r.moTa}</div>
                         </div>

@@ -57,7 +57,7 @@ const CheckinTable: React.FC<Props> = ({
         return (
           <Space>
             <Button onClick={() => onAddService?.(r)}>Thêm dịch vụ</Button>
-            { (typeof (onViewInvoice) === 'function') && (Array.isArray(viewInvoiceIds) && viewInvoiceIds.includes(r.IddatPhong)) && (
+            { (typeof (onViewInvoice) === 'function') &&  (
               <Button type="default" onClick={() => onViewInvoice?.(r)}>Xem chi tiết</Button>
             ) }
           </Space>

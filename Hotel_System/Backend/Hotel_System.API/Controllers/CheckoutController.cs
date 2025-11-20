@@ -625,6 +625,7 @@ namespace Hotel_System.API.Controllers
         {
             var booking = await _context.DatPhongs
                 .Include(dp => dp.IdkhachHangNavigation)
+                .Include(dp => dp.IdphongNavigation)
                 .Include(dp => dp.HoaDons)
                     .ThenInclude(h => h.Cthddvs)
                 .FirstOrDefaultAsync(dp => dp.IddatPhong == idDatPhong);
@@ -632,6 +633,13 @@ namespace Hotel_System.API.Controllers
             if (booking == null) return NotFound();
 
             booking.TrangThai = 4;
+            
+            // Cập nhật trạng thái phòng thành "Trống" khi check-out hoàn thành
+            if (booking.IdphongNavigation != null)
+            {
+                booking.IdphongNavigation.TrangThai = "Trống";
+            }
+            
             await _context.SaveChangesAsync();
 
             // After marking checkout complete, send invoice email if the latest invoice is paid

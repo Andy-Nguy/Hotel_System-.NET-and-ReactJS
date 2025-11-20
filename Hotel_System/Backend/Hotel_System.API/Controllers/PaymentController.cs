@@ -56,6 +56,7 @@ namespace Hotel_System.API.Controllers
             {
                 var datPhong = await _context.DatPhongs
                     .Include(dp => dp.ChiTietDatPhongs)
+                        .ThenInclude(ct => ct.Phong)
                     .Include(dp => dp.IdkhachHangNavigation)
                     .FirstOrDefaultAsync(dp => dp.IddatPhong == request.IDDatPhong);
 
@@ -272,11 +273,26 @@ _context.Cthddvs.Add(cthd);
                 datPhong.TongTien = tongTien;
                 datPhong.TrangThaiThanhToan = trangThaiThanhToan;
 
-                // Với mọi kết quả thanh toán (đã thanh toán, đã đặt cọc, chưa thanh toán, thanh toán tại khách sạn):
-                // - Đánh dấu đặt phòng là 'xác nhận' (1)
-                // - Xoá hạn chờ (ThoiHan) để tránh auto-cancel
-                datPhong.TrangThai = 1; // 1 = Xác nhận/đã giữ chấp nhận
-                datPhong.ThoiHan = null;
+                // Nếu TrangThai chưa được set (vẫn là 0 = chờ xác nhận), thì chỉ set lên 1 (payment created)
+                // Nếu TrangThai đã là 2 (admin xác nhận), thì giữ nguyên
+                if (datPhong.TrangThai == 0)
+                {
+                    datPhong.TrangThai = 1; // 1 = Hóa đơn được tạo (chưa admin xác nhận)
+                }
+                datPhong.ThoiHan = null; // Xóa hạn chờ
+
+                // Sync room status ONLY if payment is confirmed AND admin already confirmed (TrangThai=2)
+                // TrangThaiThanhToan: 0=đặt cọc, 1=chưa thanh toán, 2=đã thanh toán
+                if (datPhong.TrangThai == 2 && (trangThaiThanhToan == 0 || trangThaiThanhToan == 2) && datPhong.ChiTietDatPhongs != null)
+                {
+                    foreach (var chiTiet in datPhong.ChiTietDatPhongs)
+                    {
+                        if (chiTiet.Phong != null)
+                        {
+                            chiTiet.Phong.TrangThai = "Đã đặt";
+                        }
+                    }
+                }
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
