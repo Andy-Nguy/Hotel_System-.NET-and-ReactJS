@@ -4,6 +4,7 @@ import HeaderSection from '../components/HeaderSection';
 import { Button, Card, Input, message, Space, Modal, DatePicker, Form } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import checkoutApi from '../../api/checkout.Api';
+import reviewApi from '../../api/review.Api';
 
 import CheckoutTable from '../components/checkout/CheckoutTable';
 import PaymentModal from '../components/checkout/PaymentModal';
@@ -784,6 +785,19 @@ const [summaryMap, setSummaryMap] = useState<Record<string, any>>({});
                   }
 
                   await checkoutApi.completeCheckout(id);
+                  
+                  // Trigger review email send (async, non-blocking)
+                  // Extract booking ID and send review reminder email
+                  if (paymentRow && paymentRow.EmailKhachHang) {
+                    try {
+                      await reviewApi.sendReviewEmail(paymentRow.IddatPhong, paymentRow.EmailKhachHang);
+                      message.info('Email cảm ơn kèm liên kết đánh giá đã được gửi tới khách hàng');
+                    } catch (emailErr: any) {
+                      console.warn('Failed to send review email:', emailErr);
+                      // Don't fail checkout if email fails — it's non-critical
+                    }
+                  }
+
                   msg.success('Hoàn tất trả phòng');
                   setInvoiceModalVisible(false);
                   await load();

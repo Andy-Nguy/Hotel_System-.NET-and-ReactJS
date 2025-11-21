@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
 using Hotel_System.API.Services;
@@ -252,6 +253,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetAll()
         {
             try
@@ -391,6 +393,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Update(string id, [FromBody] UpdateBookingRequest request)
         {
             if (request == null)
@@ -514,6 +517,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Delete(string id)
         {
             try
@@ -540,6 +544,7 @@ namespace Hotel_System.API.Controllers
         /// Thay đổi thời gian đặt phòng
         /// </summary>
         [HttpPut("{id}/reschedule")]
+        [Authorize]
         public async Task<IActionResult> Reschedule(string id, [FromBody] RescheduleRequest request)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -552,6 +557,17 @@ namespace Hotel_System.API.Controllers
                 if (datPhong == null)
                 {
                     return NotFound(new { message = "Không tìm thấy đơn đặt phòng" });
+                }
+
+                // Ownership / staff check: only staff or the booking owner may reschedule
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                {
+                    return Unauthorized(new { message = "Token không hợp lệ hoặc không có thông tin người dùng." });
+                }
+                if (!User.IsInRole("nhanvien") && datPhong.IdkhachHang != userId)
+                {
+                    return Forbid();
                 }
 
                 // Kiểm tra trạng thái: chỉ cho phép thay đổi nếu chưa hủy
@@ -630,6 +646,7 @@ namespace Hotel_System.API.Controllers
         /// Hủy đặt phòng
         /// </summary>
         [HttpDelete("{id}/cancel")]
+        [Authorize]
         public async Task<IActionResult> Cancel(string id)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -639,6 +656,17 @@ namespace Hotel_System.API.Controllers
                 if (datPhong == null)
                 {
                     return NotFound(new { message = "Không tìm thấy đơn đặt phòng" });
+                }
+
+                // Ownership / staff check: only staff or the booking owner may cancel
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                {
+                    return Unauthorized(new { message = "Token không hợp lệ hoặc không có thông tin người dùng." });
+                }
+                if (!User.IsInRole("nhanvien") && datPhong.IdkhachHang != userId)
+                {
+                    return Forbid();
                 }
 
                 // Kiểm tra đã thanh toán chưa (1 = đã thanh toán trong code cũ, adapt if different)

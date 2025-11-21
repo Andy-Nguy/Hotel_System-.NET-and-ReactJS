@@ -1,4 +1,5 @@
 using Hotel_System.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -47,6 +48,7 @@ namespace Hotel_System.API.Controllers
 
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "nhanvien")]
     public class CheckoutController : ControllerBase
     {
         private readonly HotelSystemContext _context;
@@ -834,22 +836,42 @@ namespace Hotel_System.API.Controllers
             }
             await _context.SaveChangesAsync();
 
+            // After marking checkout complete, send emails
             try
             {
                 var latest = booking.HoaDons?.OrderByDescending(h => h.NgayLap).FirstOrDefault();
-                if (latest != null && latest.TrangThaiThanhToan == 2)
+                var email = booking.IdkhachHangNavigation?.Email;
+                var hoTen = booking.IdkhachHangNavigation?.HoTen ?? "Quý khách";
+
+                // 1. Send invoice email if the latest invoice is paid
+                if (latest != null && latest.TrangThaiThanhToan == 2 && !string.IsNullOrWhiteSpace(email))
                 {
-                    var email = booking.IdkhachHangNavigation?.Email;
-                    var hoTen = booking.IdkhachHangNavigation?.HoTen ?? "Quý khách";
-                    if (!string.IsNullOrWhiteSpace(email))
+                    try
                     {
                         await SendInvoiceEmail(email, hoTen, latest);
+                    }
+                    catch (Exception invoiceEx)
+                    {
+                        _logger.LogError(invoiceEx, "Lỗi khi gửi email hóa đơn");
+                    }
+                }
+
+                // 2. Send review reminder email
+                if (!string.IsNullOrWhiteSpace(email))
+                {
+                    try
+                    {
+                        await SendReviewReminderEmail(idDatPhong, email, hoTen);
+                    }
+                    catch (Exception reviewEx)
+                    {
+                        _logger.LogError(reviewEx, "Lỗi khi gửi email đánh giá");
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Lỗi khi gửi email hóa đơn sau khi hoàn tất trả phòng");
+                _logger.LogError(ex, "Lỗi khi gửi email sau khi hoàn tất trả phòng");
             }
 
             return Ok(new { message = "Hoàn tất trả phòng thành công" });
@@ -1007,6 +1029,81 @@ namespace Hotel_System.API.Controllers
             else booking.TrangThaiThanhToan = 1;
 
             await _context.SaveChangesAsync();
+        }
+
+        // Gửi email nhắc nhở đánh giá sau khi check-out
+        private async Task SendReviewReminderEmail(string idDatPhong, string email, string hoTen)
+        {
+            try
+            {
+                var booking = await _context.DatPhongs
+                    .Include(dp => dp.IdkhachHangNavigation)
+                    .Include(dp => dp.IdphongNavigation)
+                    .FirstOrDefaultAsync(dp => dp.IddatPhong == idDatPhong);
+
+                if (booking == null)
+                {
+                    _logger.LogWarning($"Booking {idDatPhong} not found for review email");
+                    return;
+                }
+
+                // Load template
+                string templatePath = Path.Combine(Directory.GetCurrentDirectory(), "EmailTemplates", "thankyou-review.html");
+                if (!System.IO.File.Exists(templatePath))
+                {
+                    _logger.LogWarning($"Email template not found at {templatePath}");
+                    return;
+                }
+
+                string emailBody = System.IO.File.ReadAllText(templatePath);
+                var frontendUrl = "http://localhost:5173"; // Default for dev; update as needed in prod
+
+                // CRITICAL: Get room name from DatPhong table's Idphong column, then lookup in Phong table
+                // DatPhong.Idphong (FK) -> Phong.Idphong (PK) -> get Phong.TenPhong
+                string roomName = "Phòng";
+                if (booking.IdphongNavigation != null && !string.IsNullOrWhiteSpace(booking.IdphongNavigation.TenPhong))
+                {
+                    roomName = booking.IdphongNavigation.TenPhong;
+                }
+                else if (!string.IsNullOrWhiteSpace(booking.Idphong))
+                {
+                    // Fallback: try to load room directly by ID if navigation didn't work
+                    var phong = await _context.Phongs.FirstOrDefaultAsync(p => p.Idphong == booking.Idphong);
+                    if (phong != null && !string.IsNullOrWhiteSpace(phong.TenPhong))
+                    {
+                        roomName = phong.TenPhong;
+                    }
+                }
+                
+                _logger.LogInformation($"Room name resolved for booking {idDatPhong}: {roomName}");
+
+                // Replace placeholders
+                var reviewLink = $"{frontendUrl}/review/{idDatPhong}";
+                emailBody = emailBody
+                    .Replace("{{CustomerName}}", hoTen)
+                    .Replace("{{BookingId}}", idDatPhong)
+                    .Replace("{{RoomName}}", roomName)
+                    .Replace("{{CheckInDate}}", booking.NgayNhanPhong.ToString("dd/MM/yyyy"))
+                    .Replace("{{CheckOutDate}}", booking.NgayTraPhong.ToString("dd/MM/yyyy"))
+                    .Replace("{{TotalAmount}}", booking.TongTien.ToString("N0"))
+                    .Replace("{{ReviewLink}}", reviewLink)
+                    .Replace("{{HotelAddress}}", "Robins Villa")
+                    .Replace("{{HotelPhone}}", "+84 xxx xxx xxx")
+                    .Replace("{{HotelEmail}}", email)
+                    .Replace("{{HotelName}}", "Robins Villa")
+                    .Replace("{{CurrentYear}}", DateTime.Now.Year.ToString());
+
+                // Send via email service
+                var subject = $"✅ Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi - Vui lòng đánh giá";
+                await _emailService.SendEmailAsync(email, subject, emailBody, true);
+
+                _logger.LogInformation($"Review reminder email sent to {email} for booking {idDatPhong}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to send review email to {email}");
+                throw;
+            }
         }
     }
 }

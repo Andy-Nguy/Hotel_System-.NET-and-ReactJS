@@ -60,6 +60,27 @@ const getStatusBadge = (trangThai: number, trangThaiThanhToan: number) => {
   return { statusColor, paymentColor };
 };
 
+// Simple JWT parsing helper (no external lib)
+function parseJwt(token: string | null) {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const payload = parts[1];
+    // atob works in browser (Vite/React)
+    const json = decodeURIComponent(
+      Array.prototype.map
+        .call(atob(payload), (c: string) => {
+          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join("")
+    );
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
 const { Title, Text } = Typography;
 
 const MyBookingsPage: React.FC = () => {
@@ -75,6 +96,18 @@ const MyBookingsPage: React.FC = () => {
 
   // Use JWT token to fetch booking history (backend reads NameIdentifier claim)
   const token = localStorage.getItem("hs_token");
+
+  // Determine if current user is staff (nhanvien)
+  const isNhanVien = useMemo(() => {
+    if (!token) return false;
+    const payload = parseJwt(token);
+    if (!payload) return false;
+    const roleClaim =
+      payload.role || payload.roles || payload.roleName || payload.VaiTro;
+    if (!roleClaim) return false;
+    if (Array.isArray(roleClaim)) return roleClaim.includes("nhanvien");
+    return String(roleClaim).toLowerCase() === "nhanvien";
+  }, [token]);
 
   const loadData = async () => {
     setLoading(true);
@@ -540,6 +573,16 @@ const MyBookingsPage: React.FC = () => {
           <div className="section-title" style={{ marginBottom: 16 }}>
             <h2>Đơn đặt phòng của tôi</h2>
             <p>Xem và quản lý các đơn đặt phòng gần đây</p>
+            {isNhanVien && (
+              <div style={{ marginTop: 8 }}>
+                <Button
+                  type="primary"
+                  onClick={() => (window.location.href = "/admin/dashboard")}
+                >
+                  Truy cập trang Quản trị
+                </Button>
+              </div>
+            )}
           </div>
           {content}
 

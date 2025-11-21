@@ -21,12 +21,27 @@ export type LoginRequest = {
 
 async function handleRes(res: Response) {
   const text = await res.text().catch(() => "");
-  const content = text ? JSON.parse(text) : null;
-  if (!res.ok) {
-    const err =
-      (content && (content.error || content.message)) || `HTTP ${res.status}`;
-    throw new Error(err);
+  let content: any = null;
+  if (text) {
+    try {
+      content = JSON.parse(text);
+    } catch (e) {
+      // Not JSON — keep raw text so caller can inspect it
+      content = text;
+    }
   }
+
+  if (!res.ok) {
+    // Prefer structured error message when available
+    let errMsg = `HTTP ${res.status}`;
+    if (content) {
+      if (typeof content === "string") errMsg = content;
+      else if (content.error) errMsg = content.error;
+      else if (content.message) errMsg = content.message;
+    }
+    throw new Error(errMsg);
+  }
+
   return content;
 }
 

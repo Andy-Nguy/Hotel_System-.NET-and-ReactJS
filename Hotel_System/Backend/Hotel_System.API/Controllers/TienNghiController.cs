@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ namespace Hotel_System.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "nhanvien")]
     public class TienNghiController : ControllerBase
     {
         private readonly HotelSystemContext _context;

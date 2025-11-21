@@ -85,9 +85,11 @@ if (!string.IsNullOrEmpty(jwtKey))
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection.GetValue<string>("Issuer"),
-            ValidAudience = jwtSection.GetValue<string>("Audience"),
-            IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
+                // Map the role claim from the token (we issue claim with type "role")
+                RoleClaimType = "role",
+                ValidIssuer = jwtSection.GetValue<string>("Issuer"),
+                ValidAudience = jwtSection.GetValue<string>("Audience"),
+                IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
         };
     });
 }
