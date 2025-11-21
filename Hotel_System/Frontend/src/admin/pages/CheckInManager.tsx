@@ -324,7 +324,12 @@ setData(mappedWithTotals);
       // ... keep implementation small here; in practice reuse earlier logic
       if (existingInvoiceId) {
         if (method === 2) {
-          const needToPay = Number(summary?.money?.remaining ?? 0);
+          const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+          const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+          const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+          const deposit = Number(summary?.money?.deposit ?? 0);
+          const paidExcl = Math.max(0, daTra - deposit);
+          const needToPay = serverRemaining > 0 ? serverRemaining : Math.max(0, tongTien - deposit - paidExcl);
           try {
             const resp: any = await checkoutApi.payQr({ IDDatPhong: paymentRow.IddatPhong, HoaDonId: existingInvoiceId, Amount: needToPay });
             setQrUrl(resp?.paymentUrl ?? null);
@@ -335,8 +340,16 @@ setData(mappedWithTotals);
             message.error(err?.message || 'Không thể tạo liên kết QR');
           }
         } else {
-          if (Number(summary?.money?.remaining ?? 0) > 0) {
-            await checkoutApi.confirmPaid(paymentRow.IddatPhong, { Amount: Number(summary?.money?.remaining ?? 0), HoaDonId: existingInvoiceId });
+          const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+          if (serverRemaining > 0) {
+            await checkoutApi.confirmPaid(paymentRow.IddatPhong, { Amount: serverRemaining, HoaDonId: existingInvoiceId });
+          } else {
+            const tongTien = Number(summary?.money?.tongTien ?? 0);
+            const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+            const deposit = Number(summary?.money?.deposit ?? 0);
+            const daTraExcl = Math.max(0, daTra - deposit);
+            const remaining = Math.max(0, tongTien - daTraExcl);
+            if (remaining > 0) await checkoutApi.confirmPaid(paymentRow.IddatPhong, { Amount: remaining, HoaDonId: existingInvoiceId });
           }
           msg.success('Cập nhật hóa đơn thành công');
           try {
@@ -847,7 +860,12 @@ setData(mappedWithTotals);
               message.loading({ content: 'Đang xác nhận thanh toán...', key, duration: 0 });
               try {
                 if (paymentRow) {
-                  const amount = Number(summary?.money?.remaining ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+                  const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+                  const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+                  const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+                  const deposit = Number(summary?.money?.deposit ?? 0);
+                  const paidExcl = Math.max(0, daTra - deposit);
+                  const amount = serverRemaining > 0 ? serverRemaining : Math.max(0, tongTien - deposit - paidExcl);
                   const payload: any = { Amount: amount };
                   if (paymentInvoiceId) payload.HoaDonId = paymentInvoiceId;
                   const resp = await checkoutApi.confirmPaid(paymentRow.IddatPhong, payload);

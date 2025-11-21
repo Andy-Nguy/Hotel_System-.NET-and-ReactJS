@@ -309,8 +309,13 @@ const [summaryMap, setSummaryMap] = useState<Record<string, any>>({});
       if (existingInvoiceId) {
         // NẾU ĐÃ CÓ HÓA ĐƠN
         if (method === 2) {
-          // --- QR (Giữ nguyên) ---
-          const needToPay = Number(summary?.money?.remaining ?? 0);
+          // --- QR (use server remaining or compute remaining excluding deposit) ---
+          const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+          const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+          const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+          const deposit = Number(summary?.money?.deposit ?? 0);
+          const paidExcl = Math.max(0, daTra - deposit);
+          const needToPay = serverRemaining > 0 ? serverRemaining : Math.max(0, tongTien - deposit - paidExcl);
           try {
             const resp: any = await checkoutApi.payQr({ IDDatPhong: paymentRow.IddatPhong, HoaDonId: existingInvoiceId, Amount: needToPay });
             setQrUrl(resp?.paymentUrl ?? null);
@@ -325,7 +330,9 @@ const [summaryMap, setSummaryMap] = useState<Record<string, any>>({});
           // Tính số tiền còn thiếu để trả nốt
           const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? 0);
           const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
-          const remaining = Math.max(0, tongTien - daTra);
+          const deposit = Number(summary?.money?.deposit ?? 0);
+          const daTraExcl = Math.max(0, daTra - deposit);
+          const remaining = Math.max(0, tongTien - daTraExcl);
 
           // Gọi confirmPaid thay vì createInvoice
           // Gửi remaining lên để server chốt đơn (Status=2, TienThanhToan=TongTien)
@@ -702,7 +709,12 @@ const [summaryMap, setSummaryMap] = useState<Record<string, any>>({});
               message.loading({ content: 'Đang xác nhận thanh toán...', key, duration: 0 });
               try {
                 if (paymentRow) {
-                  const amount = Number(summary?.money?.remaining ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+                  const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+                  const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+                  const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+                  const deposit = Number(summary?.money?.deposit ?? 0);
+                  const paidExcl = Math.max(0, daTra - deposit);
+                  const amount = serverRemaining > 0 ? serverRemaining : Math.max(0, tongTien - deposit - paidExcl);
                   const payload: any = { Amount: amount };
                   if (paymentInvoiceId) payload.HoaDonId = paymentInvoiceId;
                   const resp = await checkoutApi.confirmPaid(paymentRow.IddatPhong, payload);

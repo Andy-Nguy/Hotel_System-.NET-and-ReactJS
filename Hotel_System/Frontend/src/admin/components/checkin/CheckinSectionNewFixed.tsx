@@ -212,9 +212,9 @@ const CheckinSectionNewFixed: React.FC = () => {
   const getPaymentStatusLabel = (s: any) => {
     switch (s) {
       case 0:
-        return "Chưa thanh toán";
-      case 1:
         return "Đã đặt cọc";
+      case 1:
+        return "Chưa thanh toán";
       case 2:
         return "Đã thanh toán";
       default:

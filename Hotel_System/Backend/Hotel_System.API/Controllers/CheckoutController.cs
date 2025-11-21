@@ -388,10 +388,13 @@ namespace Hotel_System.API.Controllers
                 // Logic kiểm tra: Nếu (Tiền cũ + Tiền mới đóng)òm xèm bằng Tổng tiền -> CHỐT LUÔN
                 if (amountReq <= 0 || (currentPaid + amountReq) >= (finalTotal - 5000m))
                 {
-                    // ===> ĐÂY LÀ DÒNG FIX LỖI CỦA BẠN <===
-                    // Bất chấp quá khứ lưu bao nhiêu, bây giờ chốt sổ: Đã trả = Tổng tiền
+                    // Khi chốt là "đã thanh toán hết", lưu số thực tế đã thu.
+                    // Nếu khách đã đặt cọc, coi cọc là đã thu trước đó => số tiền cần thu thực tế = Tổng - TienCoc
+                    decimal deposit = targetInvoice.TienCoc ?? booking.TienCoc ?? 0m;
+                    var paidWhenClosing = Math.Max(0m, finalTotal - deposit);
+
                     targetInvoice.TrangThaiThanhToan = 2;
-                    targetInvoice.TienThanhToan = finalTotal; // Gán cứng 9,262,000 vào đây
+                    targetInvoice.TienThanhToan = paidWhenClosing;
 
                     booking.TrangThaiThanhToan = 2;
                 }
@@ -546,6 +549,29 @@ namespace Hotel_System.API.Controllers
                     await _context.SaveChangesAsync();
                     await tx.CommitAsync();
 
+                    // Compute paid amount: prefer TienThanhToan; if zero but TienCoc exists,
+                    // treat TienCoc as deposit that reduces remaining amount.
+                    decimal paidExisting = existingInvoice.TienThanhToan ?? 0m;
+                    if (paidExisting == 0m)
+                    {
+                        paidExisting += existingInvoice.TienCoc ?? booking.TienCoc ?? 0m;
+                    }
+
+                    decimal soTienConLaiExisting = Math.Max(0m, existingInvoice.TongTien - paidExisting);
+
+                    // Build payment URL only for online payments (PhuongThucThanhToan == 2)
+                    string? paymentUrlExisting = null;
+                    if (request.PhuongThucThanhToan == 2)
+                    {
+                        try
+                        {
+                            var amtInt = (long)Math.Round(soTienConLaiExisting);
+                            var addInfo = System.Net.WebUtility.UrlEncode($"Thanh toan {booking.IddatPhong}");
+                            paymentUrlExisting = $"https://img.vietqr.io/image/bidv-8639699999-print.png?amount={amtInt}&addInfo={addInfo}";
+                        }
+                        catch { paymentUrlExisting = null; }
+                    }
+
                     return Ok(new
                     {
                         idHoaDon = existingInvoice.IdhoaDon,
@@ -554,7 +580,8 @@ namespace Hotel_System.API.Controllers
                         tienCoc = existingInvoice.TienCoc,
                         tienThanhToan = existingInvoice.TienThanhToan,
                         trangThaiThanhToan = existingInvoice.TrangThaiThanhToan,
-                        paymentUrl = (string?)null
+                        paymentUrl = paymentUrlExisting,
+                        soTienConLai = soTienConLaiExisting
                     });
                 }
 
@@ -732,18 +759,19 @@ namespace Hotel_System.API.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                decimal amount;
-                var hasPaidBeforeForOtherInvoices = booking.HoaDons?.Where(h => h.IdhoaDon != hoaDon.IdhoaDon && h.TrangThaiThanhToan == 2).Any() ?? false;
-                if ((hoaDon.TienThanhToan ?? 0m) > 0m)
+                // Compute how much remains to pay for this invoice, taking deposit into account
+                decimal paid = hoaDon.TienThanhToan ?? 0m;
+                // If nothing recorded as paid, treat any deposit (hoaDon.TienCoc or booking.TienCoc) as already paid
+                if (paid == 0m)
                 {
-                    amount = hoaDon.TienThanhToan ?? 0m;
+                    paid += hoaDon.TienCoc ?? booking.TienCoc ?? 0m;
                 }
-                else
-                {
-                    // separately; TienThanhToan is the authoritative paid amount (may include deposit).
-                    amount = Math.Max(0m, (hoaDon.TongTien - (hoaDon.TienThanhToan ?? 0m)));
-                }
-                if (req.Amount.HasValue && req.Amount.Value > 0m) amount = req.Amount.Value;
+
+                // Remaining amount = total - paid
+                decimal soTienConLai = Math.Max(0m, (hoaDon.TongTien - paid));
+
+                // Allow explicit override from request
+                decimal amount = req.Amount.HasValue && req.Amount.Value > 0m ? req.Amount.Value : soTienConLai;
 
                 string? paymentUrl = null;
                 try
@@ -756,7 +784,7 @@ namespace Hotel_System.API.Controllers
 
                 await tx.CommitAsync();
 
-                return Ok(new { idHoaDon = hoaDon.IdhoaDon, idDatPhong = booking.IddatPhong, amount = amount, paymentUrl });
+                return Ok(new { idHoaDon = hoaDon.IdhoaDon, idDatPhong = booking.IddatPhong, amount = amount, soTienConLai = soTienConLai, paymentUrl });
             }
             catch (Exception ex)
             {
@@ -903,12 +931,12 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        // HÀM TÍNH LẠI TỔNG TIỀN HÓA ĐƠN + ĐỒNG BỘ VỚI DatPhong.TongTien
+               // HÀM TÍNH LẠI TỔNG TIỀN HÓA ĐƠN + ĐỒNG BỘ VỚI DatPhong.TongTien
         private async Task RecomputeInvoiceAndBookingTotal(HoaDon hoaDon)
         {
             if (hoaDon == null) return;
 
-            // QUAN TRỌNG: Load lại toàn bộ dịch vụ (cũ + mới) từ DB
+            // Load dữ liệu
             await _context.Entry(hoaDon).Collection(h => h.Cthddvs).LoadAsync();
 
             var booking = await _context.DatPhongs
@@ -918,47 +946,51 @@ namespace Hotel_System.API.Controllers
 
             if (booking == null) return;
 
-            // Tiền phòng
+            // 1. TÍNH TỔNG TIỀN
             decimal roomVal = (decimal)(hoaDon.TienPhong ?? 0);
-
             decimal serviceVal = hoaDon.Cthddvs?
-        .Where(c =>
-            string.IsNullOrEmpty(c.TrangThai) || 
-            c.TrangThai == "Hoạt động" ||
-            c.TrangThai == "new") 
-        .Sum(c => c.TienDichVu ?? 0m) ?? 0m;
+                .Where(c => string.IsNullOrEmpty(c.TrangThai) || c.TrangThai == "Hoạt động" || c.TrangThai == "new")
+                .Sum(c => c.TienDichVu ?? 0m) ?? 0m;
 
-            // Tổng tiền chuẩn (Có VAT)
             decimal tongTienChuan = Math.Round((roomVal + serviceVal) * 1.1m, 0, MidpointRounding.AwayFromZero);
-
             hoaDon.TongTien = tongTienChuan;
 
-            decimal daTra = hoaDon.TienThanhToan ?? 0m;
+            // 2. XỬ LÝ CỌC (Chỉ gán khi chưa đủ cọc)
+            decimal daTraHienTai = hoaDon.TienThanhToan ?? 0m;
+            decimal tienCoc = booking.TienCoc ?? 0m;
 
-            if (tongTienChuan > daTra + 1000m)
+            if (tienCoc > 0 && daTraHienTai < tienCoc)
             {
-                // Nếu Tổng > Đã trả => Chưa thanh toán xong
+                daTraHienTai = tienCoc;
+                hoaDon.TienThanhToan = daTraHienTai;
+            }
+
+            // 3. QUYẾT ĐỊNH TRẠNG THÁI
+            decimal conThieu = tongTienChuan - daTraHienTai;
+
+            if (conThieu > 1000m)
+            {
+                // Thiếu tiền -> Trạng thái 1
                 hoaDon.TrangThaiThanhToan = 1;
             }
             else
             {
-                // Nếu Đã trả >= Tổng => Đã thanh toán xong
+                // Đủ tiền -> Trạng thái 2
                 if (tongTienChuan > 0)
                 {
                     hoaDon.TrangThaiThanhToan = 2;
-                    // Đồng bộ luôn cho đẹp số liệu
-                    hoaDon.TienThanhToan = tongTienChuan;
+                    
+                    // ===> ĐÃ BỎ DÒNG GÁN LẠI TIỀN THANH TOÁN <===
+                    // Giữ nguyên daTraHienTai (khách trả bao nhiêu lưu bấy nhiêu)
                 }
             }
 
-            // 3. Đồng bộ Booking
+            // 4. Đồng bộ Booking
             decimal bookingTotal = 0;
-            // Tính lại tổng booking từ các hóa đơn (đề phòng trường hợp tách hóa đơn)
             if (booking.HoaDons != null)
             {
                 foreach (var h in booking.HoaDons)
                 {
-                    // Nếu là hóa đơn đang xét thì lấy số mới, ko thì lấy số cũ
                     if (h.IdhoaDon == hoaDon.IdhoaDon) bookingTotal += tongTienChuan;
                     else bookingTotal += h.TongTien;
                 }

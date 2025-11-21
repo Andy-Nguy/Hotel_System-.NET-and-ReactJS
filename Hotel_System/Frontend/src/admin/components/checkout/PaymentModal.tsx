@@ -220,14 +220,18 @@ const invoicePaid = Array.isArray(summary?.invoices) && summary.invoices.length 
 const paidFromBooking = Number(summary?.money?.paidAmount ?? 0);
 const paidRaw = invoicePaid > 0 ? invoicePaid : paidFromBooking;
 
+// Trừ tiền cọc khỏi số đã thanh toán để hiển thị (không bao gồm tiền cọc)
+const paidExcludingDepositRaw = Math.max(0, paidRaw - deposit);
+
 // Không cho "đã thanh toán" > "tổng cộng" khi hiển thị
-const paid = Math.min(paidRaw, total);
+const paid = Math.min(paidExcludingDepositRaw, total);
 
 // Nếu khách trả thừa (không bắt buộc hiển thị)
-const overPaid = Math.max(0, paidRaw - total);
+const overPaid = Math.max(0, paidExcludingDepositRaw - total);
 
-// Khách cần thanh toán
-const needToPay = Math.max(0, total - paid);
+// Khách cần thanh toán: ưu tiên server-provided remaining (soTienConLai)
+const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+const needToPay = (serverRemaining > 0) ? serverRemaining : Math.max(0, total - deposit - paidExcludingDepositRaw);
 
   useEffect(() => {
     if (visible) {
@@ -338,7 +342,7 @@ const needToPay = Math.max(0, total - paid);
             <strong>{deposit.toLocaleString()} đ</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Đã thanh toán (bao gồm tiền cọc):</span>
+            <span>Đã thanh toán (không bao gồm tiền cọc):</span>
             <strong>- {paid.toLocaleString()} đ</strong>
           </div>
           <Divider />
