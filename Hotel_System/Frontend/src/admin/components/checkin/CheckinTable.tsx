@@ -11,6 +11,7 @@ export interface BookingRow {
   TongTien: number;
   TrangThai: number;
   TrangThaiThanhToan: number;
+  summaryMap?: Record<string, any>;
 }
 
 interface Props {
@@ -24,6 +25,7 @@ interface Props {
   viewInvoiceIds?: string[];
   viewMode?: 'using' | 'checkin';
   onViewChange?: (mode: 'using' | 'checkin') => void;
+  summaryMap?: Record<string, any>;
 }
 
 const CheckinTable: React.FC<Props> = ({
@@ -36,7 +38,8 @@ const CheckinTable: React.FC<Props> = ({
   onViewInvoice,
   viewInvoiceIds,
   viewMode = 'using',
-  onViewChange
+  onViewChange,
+  summaryMap = {}
 }) => {
   const columns: ColumnsType<BookingRow> = [
     { title: 'Mã đặt phòng', dataIndex: 'IddatPhong', key: 'IddatPhong', width: 160 },
@@ -44,7 +47,7 @@ const CheckinTable: React.FC<Props> = ({
     { title: 'Nhận', dataIndex: 'NgayNhanPhong', key: 'NgayNhanPhong', width: 120 },
     { title: 'Trả', dataIndex: 'NgayTraPhong', key: 'NgayTraPhong', width: 120 },
     { title: 'Tổng tiền', dataIndex: 'TongTien', key: 'TongTien', align: 'right', render: (v: any) => Number(v).toLocaleString() + ' đ' },
-    { title: 'Trạng thái TT', dataIndex: 'TrangThaiThanhToan', key: 'tt', render: (s: any) => <Tag color={s===2?'green':'orange'}>{s===2? 'Đã thanh toán' : 'Chưa/Chờ'}</Tag> },
+    { title: 'Trạng thái TT', dataIndex: 'TrangThaiThanhToan', key: 'tt', render: (s: any) => <Tag color={s===2?'green':'orange'}>{s===2? 'Đã thanh toán' : 'Chưa thanh toán'}</Tag> },
     {
       title: 'Hành động',
       key: 'actions',
@@ -53,7 +56,7 @@ const CheckinTable: React.FC<Props> = ({
         const isPaid = (r.TrangThaiThanhToan ?? 0) === 2;
         const isCompleted = (r.TrangThai ?? 0) === 4;
 
-        // Both 'using' and 'checkin' should display the same two primary actions.
+       
         return (
           <Space>
             <Button onClick={() => onAddService?.(r)}>Thêm dịch vụ</Button>

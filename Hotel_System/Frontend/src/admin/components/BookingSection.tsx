@@ -166,9 +166,9 @@ const BookingSection: React.FC = () => {
   const getPaymentStatusLabel = (status: number) => {
     switch (status) {
       case 0:
-        return "Chưa thanh toán";
-      case 1:
         return "Đã đặt cọc";
+      case 1:
+        return "Chưa thanh toán";
       case 2:
         return "Đã thanh toán";
       default:

@@ -1,5 +1,7 @@
 using Hotel_System.API.Models;
 using Hotel_System.API.Services;
+using QuestPDF;
+using QuestPDF.Infrastructure;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -10,7 +12,7 @@ using System.IO;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
-
+QuestPDF.Settings.License = LicenseType.Community;
 // ==========================================
 // 1️⃣ Add services to the container
 // ==========================================

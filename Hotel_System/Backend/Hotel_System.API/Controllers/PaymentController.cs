@@ -9,7 +9,10 @@ using Microsoft.Extensions.Logging;
 using Hotel_System.API.Models;
 using Hotel_System.API.DTOs;
 using Hotel_System.API.Services;
-
+using QuestPDF.Fluent;
+using QuestPDF.Infrastructure;
+using QuestPDF.Helpers;
+using QuestPDF.Drawing;
 namespace Hotel_System.API.Controllers
 {
     [ApiController]
@@ -557,5 +560,194 @@ var type = _emailService.GetType();
                 }
             }
         }
+         // GET: api/Payment/invoice/{id}/pdf
+        // Generates a simple PDF invoice and returns it as attachment.
+        // PaymentController.cs hoặc CheckoutController.cs
+[HttpGet("invoice/{id}/pdf")]
+public async Task<IActionResult> GetInvoicePdf(string id)
+{
+    var hoaDon = await _context.HoaDons
+        .Include(h => h.Cthddvs).ThenInclude(c => c.IddichVuNavigation)
+        .Include(h => h.IddatPhongNavigation)
+        .FirstOrDefaultAsync(h => h.IdhoaDon == id);
+
+    if (hoaDon == null)
+        return NotFound(new { message = "Không tìm thấy hóa đơn" });
+
+    try
+    {
+        // Generate a simple PDF using QuestPDF
+        byte[] pdfBytes;
+        var hd = hoaDon; // local alias
+        var booking = await _context.DatPhongs
+            .Include(d => d.ChiTietDatPhongs).ThenInclude(ct => ct.Phong)
+            .Include(d => d.IdkhachHangNavigation)
+            .FirstOrDefaultAsync(d => d.IddatPhong == hd.IddatPhong);
+
+                var doc = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(24);
+                    page.DefaultTextStyle(x => x.FontSize(11));
+
+                    // Header: hotel info + invoice metadata
+                    page.Header().Row(headerRow =>
+                    {
+                        headerRow.RelativeItem().Column(col =>
+                        {
+                            col.Item().Text("Khách sạn Robins Villa").FontSize(20).SemiBold();
+                            col.Item().Text("Địa chỉ: 123 Đường Ví Dụ, Quận 1, TP. HCM").FontSize(10);
+                            col.Item().Text("Hotline: 1900-xxxx").FontSize(10);
+                        });
+
+                        headerRow.ConstantItem(220).Column(col =>
+                        {
+                            col.Item().AlignRight().Text("HÓA ĐƠN THANH TOÁN").FontSize(14).SemiBold();
+                            col.Item().AlignRight().Text($"Mã hóa đơn: {hd.IdhoaDon}");
+                            col.Item().AlignRight().Text($"Mã đặt phòng: {hd.IddatPhong}");
+                            col.Item().AlignRight().Text($"Ngày: {(hd.NgayLap.HasValue ? hd.NgayLap.Value.ToString("dd/MM/yyyy HH:mm") : string.Empty)}");
+                        });
+                    });
+
+                    page.Content().PaddingVertical(8).Column(col =>
+                    {
+                        // Customer / booking info
+                        col.Item().Row(row =>
+                        {
+                            row.RelativeItem().Column(c =>
+                            {
+                                c.Item().Text("Thông tin khách hàng").SemiBold();
+                                c.Item().Text($"Họ tên: {booking?.IdkhachHangNavigation?.HoTen ?? "-"}");
+                                c.Item().Text($"Email: {booking?.IdkhachHangNavigation?.Email ?? "-"}");
+                                c.Item().Text($"SĐT: {booking?.IdkhachHangNavigation?.SoDienThoai ?? "-"}");
+                            });
+
+                            row.ConstantItem(220).Column(c =>
+                            {
+                                c.Item().AlignRight().Text("Chi tiết thanh toán").SemiBold();
+                                c.Item().AlignRight().Text($"Tiền phòng: {(hd.TienPhong ?? 0):N0} đ");
+                                c.Item().AlignRight().Text($"Tiền cọc: {(hd.TienCoc ?? 0m):N0} đ");
+                                c.Item().AlignRight().Text($"Tổng phải trả: {hd.TongTien:N0} đ");
+                            });
+                        });
+
+                        // Rooms table
+                        col.Item().PaddingTop(6).Text("Chi tiết phòng").SemiBold();
+                        col.Item().Table(table =>
+                        {
+                            table.ColumnsDefinition(columns =>
+                            {
+                                columns.RelativeColumn(3);
+                                columns.RelativeColumn(1);
+                                columns.RelativeColumn(1);
+                                columns.RelativeColumn(1);
+                            });
+
+                            table.Header(header =>
+                            {
+                                header.Cell().Element(CellStyle).Text("Phòng");
+                                header.Cell().Element(CellStyle).Text("Số đêm");
+                                header.Cell().Element(CellStyle).AlignRight().Text("Đơn giá");
+                                header.Cell().Element(CellStyle).AlignRight().Text("Thành tiền");
+                            });
+
+                            foreach (var r in booking?.ChiTietDatPhongs ?? new System.Collections.Generic.List<Models.ChiTietDatPhong>())
+                            {
+                                var roomName = r.Phong?.TenPhong ?? r.IDPhong ?? "-";
+                                table.Cell().Element(CellStyle).Text(roomName);
+                                table.Cell().Element(CellStyle).Text(r.SoDem.ToString());
+                                table.Cell().Element(CellStyle).AlignRight().Text((r.GiaPhong).ToString("N0"));
+                                table.Cell().Element(CellStyle).AlignRight().Text((r.ThanhTien).ToString("N0"));
+                            }
+                        });
+
+                        // Services table
+                        col.Item().PaddingTop(8).Text("Dịch vụ").SemiBold();
+                        col.Item().Table(table =>
+                        {
+                            table.ColumnsDefinition(columns =>
+                            {
+                                columns.RelativeColumn(3);
+                                columns.RelativeColumn(1);
+                            });
+
+                            table.Header(header =>
+                            {
+                                header.Cell().Element(CellStyle).Text("Dịch vụ sử dụng");
+                                header.Cell().Element(CellStyle).AlignRight().Text("Tiền");
+                            });
+
+                            foreach (var s in hd.Cthddvs ?? new System.Collections.Generic.List<Models.Cthddv>())
+                            {
+                                var svcName = s.IddichVuNavigation?.TenDichVu ?? s.IddichVu ?? "-";
+                                table.Cell().Element(CellStyle).Text(svcName);
+                                table.Cell().Element(CellStyle).AlignRight().Text(((decimal?)s.TienDichVu ?? 0m).ToString("N0"));
+                            }
+                        });
+
+                        // Totals and notes
+                        col.Item().PaddingTop(10).AlignRight().Column(totalCol =>
+                        {
+                            var total = hd.TongTien;
+                            totalCol.Item().Text($"Tổng: {total:N0} đ").SemiBold();
+                            var paid = hd.TienThanhToan ?? 0m;
+                            totalCol.Item().Text($"Đã thanh toán: {paid:N0} đ");
+                            var due = Math.Max(0m, total - paid);
+                            totalCol.Item().Text($"Còn nợ: {due:N0} đ");
+                            if (!string.IsNullOrWhiteSpace(hd.GhiChu)) totalCol.Item().PaddingTop(6).Text($"Ghi chú: {hd.GhiChu}");
+                        });
+                    });
+
+                    page.Footer().AlignCenter().Text(x => x.Span("Khách sạn Robins Villa - Hóa đơn tự động | Hotline: 1900-xxxx"));
+                });
+            });
+
+        static IContainer CellStyle(IContainer container)
+        {
+            return container.Padding(4).BorderBottom(1).BorderColor(Colors.Grey.Lighten2);
+        }
+
+        pdfBytes = doc.GeneratePdf();
+
+        return File(pdfBytes, "application/pdf", $"HoaDon_{id}.pdf");
+    }
+    catch (Exception ex)
+    {
+        // Log original error
+        _logger.LogError(ex, "Lỗi sinh PDF cho hóa đơn {Id}", id);
+
+        try
+        {
+            // Create a minimal fallback PDF programmatically so the client can still download a file.
+            byte[] fallbackBytes;
+            var fallbackDoc = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(40);
+                    page.DefaultTextStyle(x => x.FontSize(12));
+                    page.Content().Column(col =>
+                    {
+                        col.Item().AlignCenter().Text("HÓA ĐƠN (TẠM THỜI)").FontSize(16).SemiBold();
+                        col.Item().AlignCenter().Text($"Mã hóa đơn: {id}");
+                        col.Item().AlignCenter().Text($"Mã đặt phòng: {hoaDon?.IddatPhong ?? string.Empty}");
+                        col.Item().PaddingTop(8).Text("Hệ thống không thể sinh hóa đơn chi tiết do lỗi nội bộ. Vui lòng liên hệ quản trị viên.");
+                    });
+                });
+            });
+
+            fallbackBytes = fallbackDoc.GeneratePdf();
+            return File(fallbackBytes, "application/pdf", $"HoaDon_{id}_tamthoi.pdf");
+        }
+        catch (Exception fbEx)
+        {
+            _logger.LogError(fbEx, "Lỗi khi sinh PDF thay thế cho hóa đơn {Id}", id);
+            return StatusCode(500, new { message = "Không thể sinh PDF", error = ex.Message, fallbackError = fbEx.Message });
+        }
+    }
+}
     }
 }
