@@ -34,21 +34,28 @@ const deriveServerRowsFromSummary = (s: any) => {
   }
   if (!Array.isArray(raw)) return [];
   return raw.map((r: any) => {
-    const serviceName = r.tenDichVu ?? r.TenDichVu ?? r.serviceName ?? r.Ten ?? r.ten ?? r.TenDichVu ?? '';
+    const id = r.IddichVu ?? r.iddichVu ?? r.IdDichVu ?? r.Id ?? r.id ?? null;
+    const serviceName = r.TenDichVu ?? r.tenDichVu ?? r.serviceName ?? r.Ten ?? r.name ?? r.ten ?? '';
     const qty = Number(r.soLuong ?? r.SoLuong ?? r.quantity ?? r.Quantity ?? 1) || 1;
-    const price = Number(r.donGia ?? r.DonGia ?? r.price ?? r.gia ?? r.Gia ?? r.DonGia ?? 0) || 0;
+    const price = Number(r.donGia ?? r.DonGia ?? r.price ?? r.gia ?? r.Gia ?? 0) || 0;
     const amount = Number(r.TienDichVu ?? r.tienDichVu ?? r.ThanhTien ?? r.thanhTien ?? r.amount ?? price * qty) || price * qty;
-    return { serviceName, price, amount, qty, raw: r };
+    return { serviceName: serviceName || (id ? `Dịch vụ ${id}` : ''), price, amount, qty, raw: r };
   });
 };
 
-const [dbServices, setDbServices] = useState<any[]>(() => deriveServerRowsFromSummary(summary));
+const [dbServices, setDbServices] = useState<any[]>(() => deriveServerRowsFromSummary(summary) || []);
   // cache for service names to avoid repeated fetches
   const serviceNameCache = useRef<Record<string, string>>({});
 
 // Keep dbServices in sync when summary changes (quick replace from summary if present)
 useEffect(() => {
-  setDbServices(deriveServerRowsFromSummary(summary));
+  const derived = deriveServerRowsFromSummary(summary) || [];
+  // If the server provides service lines, replace the cached list.
+  // If not, keep the existing `dbServices` to avoid losing resolved names
+  // (prevents UI losing service names on subsequent opens when summary is sparse).
+  if (Array.isArray(derived) && derived.length > 0) {
+    setDbServices(derived);
+  }
 }, [summary]);
 
 // When dbServices are present, ensure we resolve service names from service API
