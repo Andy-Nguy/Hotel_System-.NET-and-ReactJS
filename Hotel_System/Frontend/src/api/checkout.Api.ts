@@ -47,7 +47,7 @@ export const checkoutApi = {
   }),
 
   // 3. Xác nhận đã thanh toán (tiền mặt / QR)
-  confirmPaid: (id: string | number, payload?: { Amount?: number; HoaDonId?: string }) =>
+  confirmPaid: (id: string | number, payload?: { Amount?: number; HoaDonId?: string; Note?: string }) =>
     fetchJson(`/api/Checkout/confirm-paid/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

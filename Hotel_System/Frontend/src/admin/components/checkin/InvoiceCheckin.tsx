@@ -145,13 +145,6 @@ const InvoiceModal: React.FC<Props> = ({
             <Descriptions.Item label="Trả phòng">
               {paymentRow?.NgayTraPhong?.slice(0, 10) ?? '-'}
             </Descriptions.Item>
-              <Descriptions.Item label="Phòng" span={2}>
-                {normalized.map((r: any) => (
-                  <div key={r.ID}>
-                    <strong>{r.TenPhong}</strong> {r.SoPhong && `(Phòng ${r.SoPhong})`}
-                  </div>
-                ))}
-              </Descriptions.Item>
           </Descriptions>
 
           {/* Bảng phòng */}
@@ -256,7 +249,7 @@ const InvoiceModal: React.FC<Props> = ({
               )}
               {needToPay > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700, color: '#d4380d', marginTop: 8 }}>
-                  <span>KHÁCH CẦN THANH TOÁN:</span>
+                  <span>ĐÃ THANH TOÁN:</span>
                   <strong>{needToPay.toLocaleString()} đ</strong>
                 </div>
               )}

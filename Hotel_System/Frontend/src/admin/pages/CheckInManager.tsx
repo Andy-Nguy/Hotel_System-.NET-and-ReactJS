@@ -5,6 +5,7 @@ import { Button, Card, Input, message, Space, Modal, DatePicker, Form } from 'an
 import dayjs, { Dayjs } from 'dayjs';
 import checkoutApi from '../../api/checkout.Api';
 import checkinApi from '../../api/checkinApi';
+import invoiceApi from '../../api/invoiceApi';
 
 import CheckinTable from '../components/checkin/CheckinTable';
 import PaymentModal from '../components/checkout/PaymentModal';
@@ -68,56 +69,81 @@ const CheckInManager: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('');
 
   const [viewMode, setViewMode] = useState<'using' | 'checkin'>('using');
-
+const [summaryMap, setSummaryMap] = useState<Record<string, any>>({});
   const [msg, contextHolder] = message.useMessage();
 
   useEffect(() => { load(); }, []);
 
   const load = async () => {
-    setLoading(true);
+  setLoading(true);
+  try {
+    const list = await fetchJson('/api/DatPhong');
+    const normalizeBooking = (item: any) => {
+      const chiTiet = (item.ChiTietDatPhongs ?? item.chiTietDatPhongs ?? []).map((ct: any) => ({
+        ...ct,
+        TenPhong: ct.TenPhong ?? ct.tenPhong ?? ct?.Phong?.TenPhong ?? ct?.Phong?.tenPhong ?? ct?.SoPhong ?? ct?.soPhong,
+        SoPhong: ct.SoPhong ?? ct.soPhong ?? ct?.Phong?.SoPhong ?? ct?.Phong?.soPhong,
+        GiaPhong: ct.GiaPhong ?? ct.giaPhong,
+        SoDem: ct.SoDem ?? ct.soDem,
+        ThanhTien: ct.ThanhTien ?? ct.thanhTien
+      }));
+
+      const topTen = item.TenPhong ?? item.tenPhong ?? (chiTiet && chiTiet.length === 1 ? (chiTiet[0].TenPhong ?? chiTiet[0].tenPhong) : null);
+      const topSo = item.SoPhong ?? item.soPhong ?? (chiTiet && chiTiet.length === 1 ? (chiTiet[0].SoPhong ?? chiTiet[0].soPhong) : null);
+
+      return {
+        IddatPhong: item.IddatPhong ?? item.iddatPhong,
+        IdkhachHang: item.IdkhachHang ?? item.idkhachHang,
+        TenKhachHang: item.TenKhachHang ?? item.tenKhachHang,
+        EmailKhachHang: item.EmailKhachHang ?? item.emailKhachHang,
+        Idphong: item.Idphong ?? item.idphong,
+        TenPhong: topTen,
+        SoPhong: topSo,
+        NgayDatPhong: item.NgayDatPhong ?? item.ngayDatPhong,
+        NgayNhanPhong: item.NgayNhanPhong ?? item.ngayNhanPhong,
+        NgayTraPhong: item.NgayTraPhong ?? item.ngayTraPhong,
+        SoDem: item.SoDem ?? item.soDem,
+        TongTien: item.TongTien ?? item.tongTien ?? 0,
+        TienCoc: item.TienCoc ?? item.tienCoc,
+        TrangThai: item.TrangThai ?? item.trangThai,
+        TrangThaiThanhToan: item.TrangThaiThanhToan ?? item.trangThaiThanhToan,
+        ChiTietDatPhongs: chiTiet
+      } as BookingRow;
+    };
+
+    const mapped = (list || []).map((i: any) => normalizeBooking(i));
+
+// BỔ SUNG: lấy tổng tiền chuẩn từ API summary (tổng sau VAT)
+const mappedWithTotals: BookingRow[] = await Promise.all(
+  (mapped || []).map(async (row: BookingRow) => {
     try {
-      const list = await fetchJson('/api/DatPhong');
-      const normalizeBooking = (item: any) => {
-        const chiTiet = (item.ChiTietDatPhongs ?? item.chiTietDatPhongs ?? []).map((ct: any) => ({
-          ...ct,
-          TenPhong: ct.TenPhong ?? ct.tenPhong ?? ct?.Phong?.TenPhong ?? ct?.Phong?.tenPhong ?? ct?.SoPhong ?? ct?.soPhong,
-          SoPhong: ct.SoPhong ?? ct.soPhong ?? ct?.Phong?.SoPhong ?? ct?.Phong?.soPhong,
-          GiaPhong: ct.GiaPhong ?? ct.giaPhong,
-          SoDem: ct.SoDem ?? ct.soDem,
-          ThanhTien: ct.ThanhTien ?? ct.thanhTien
-        }));
+      // Có thể giới hạn chỉ cho booking đang sử dụng (TrangThai === 3)
+      if ((row.TrangThai ?? 0) !== 3) return row;
 
-        const topTen = item.TenPhong ?? item.tenPhong ?? (chiTiet && chiTiet.length === 1 ? (chiTiet[0].TenPhong ?? chiTiet[0].tenPhong) : null);
-        const topSo = item.SoPhong ?? item.soPhong ?? (chiTiet && chiTiet.length === 1 ? (chiTiet[0].SoPhong ?? chiTiet[0].soPhong) : null);
+      const sum: any = await checkoutApi.getSummary(row.IddatPhong);
+      const apiTotal = Number(sum?.money?.tongTien ?? 0);
+      const roomTotal = Number(sum?.money?.roomTotal ?? 0);
+      const serviceTotal = Number(sum?.money?.serviceTotal ?? 0);
+      const fallbackTotal = roomTotal + serviceTotal;
 
-        return {
-          IddatPhong: item.IddatPhong ?? item.iddatPhong,
-          IdkhachHang: item.IdkhachHang ?? item.idkhachHang,
-          TenKhachHang: item.TenKhachHang ?? item.tenKhachHang,
-          EmailKhachHang: item.EmailKhachHang ?? item.emailKhachHang,
-          Idphong: item.Idphong ?? item.idphong,
-          TenPhong: topTen,
-          SoPhong: topSo,
-          NgayDatPhong: item.NgayDatPhong ?? item.ngayDatPhong,
-          NgayNhanPhong: item.NgayNhanPhong ?? item.ngayNhanPhong,
-          NgayTraPhong: item.NgayTraPhong ?? item.ngayTraPhong,
-          SoDem: item.SoDem ?? item.soDem,
-          TongTien: item.TongTien ?? item.tongTien ?? 0,
-          TienCoc: item.TienCoc ?? item.tienCoc,
-          TrangThai: item.TrangThai ?? item.trangThai,
-          TrangThaiThanhToan: item.TrangThaiThanhToan ?? item.trangThaiThanhToan,
-          ChiTietDatPhongs: chiTiet
-        } as BookingRow;
+      return {
+        ...row,
+        TongTien: apiTotal > 0 ? apiTotal : fallbackTotal
       };
-
-      const mapped = (list || []).map((i: any) => normalizeBooking(i));
-      setData(mapped);
-    } catch (e: any) {
-      message.error(e.message || 'Không thể tải danh sách đặt phòng');
-    } finally {
-      setLoading(false);
+    } catch {
+      // Nếu summary lỗi, giữ nguyên TongTien gốc
+      return row;
     }
-  };
+  })
+);
+
+setData(mappedWithTotals);
+  } catch (e: any) {
+    message.error(e.message || 'Không thể tải danh sách đặt phòng');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Payment/modal state
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
@@ -133,6 +159,23 @@ const CheckInManager: React.FC = () => {
     setSummaryLoading(true);
     try {
       const sum = await checkoutApi.getSummary(row.IddatPhong);
+      // If summary doesn't include service lines but has an invoice id, try fetching invoice detail
+      if (sum && (!Array.isArray(sum.services) || sum.services.length === 0) && Array.isArray(sum?.invoices) && sum.invoices.length > 0) {
+        try {
+          const firstInv = sum.invoices[0];
+          const invId = firstInv?.id ?? firstInv?.IDHoaDon ?? firstInv?.ID ?? null;
+          if (invId) {
+            const invDetail = await invoiceApi.getInvoiceDetail(invId);
+            if (invDetail && invDetail.data) {
+              // normalize services from invoice detail if present
+              const svc = invDetail.data.services ?? invDetail.data?.services ?? null;
+              if (Array.isArray(svc) && svc.length > 0) {
+                sum.services = svc;
+              }
+            }
+          }
+        } catch (e) { /* ignore fallback */ }
+      }
       console.debug('[openPaymentModal] summary for', row.IddatPhong, sum);
       // merge any booking-level services or client-selected services so older services show up
       const serverServices = Array.isArray(sum?.services) ? sum.services : [];

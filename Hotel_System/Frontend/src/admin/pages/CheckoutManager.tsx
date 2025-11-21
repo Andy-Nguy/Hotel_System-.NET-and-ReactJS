@@ -64,7 +64,7 @@ const CheckoutManager: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
 
   const [viewMode, setViewMode] = useState<'using' | 'checkout'>('checkout');
-
+const [summaryMap, setSummaryMap] = useState<Record<string, any>>({});
   const [msg, contextHolder] = message.useMessage();
 
   useEffect(() => { load(); }, []);
@@ -106,14 +106,48 @@ const CheckoutManager: React.FC = () => {
         } as BookingRow;
       };
 
-      const mapped = (list || []).map((i: any) => normalizeBooking(i));
-      setData(mapped);
-    } catch (e: any) {
-      message.error(e.message || 'Không thể tải danh sách đặt phòng');
-    } finally {
-      setLoading(false);
-    }
-  };
+     const mapped = (list || []).map((i: any) => normalizeBooking(i));
+
+    // 2. Xác định những booking nào cần lấy summary (chỉ lấy những cái đang hiển thị)
+    const todayStr = dayjs().format('YYYY-MM-DD');
+    const relevantBookings = mapped.filter((b: BookingRow) => {
+      if (viewMode === 'using' || viewMode === 'checkout') {
+        return b.TrangThai === 3; // Đang sử dụng
+      } else {
+        // Checkout mode: trả phòng hôm nay
+        return b.NgayTraPhong?.startsWith(todayStr) && [3, 4].includes(b.TrangThai ?? 0);
+      }
+    });
+
+    // 3. Gọi summary song song cho tất cả booking cần thiết
+    const summaryResults = await Promise.all(
+      relevantBookings.map(async (booking: BookingRow) => {
+        try {
+          const sum = await checkoutApi.getSummary(booking.IddatPhong);
+          return { id: booking.IddatPhong, summary: sum };
+        } catch (err) {
+          console.warn(`Không lấy được summary cho ${booking.IddatPhong}`, err);
+          return { id: booking.IddatPhong, summary: null };
+        }
+      })
+    );
+
+    // 4. Cập nhật summaryMap
+    const newSummaryMap: Record<string, any> = {};
+    summaryResults.forEach(({ id, summary }) => {
+      if (summary) newSummaryMap[id] = summary;
+    });
+    setSummaryMap(newSummaryMap);
+
+    // 5. Cập nhật data
+    setData(mapped);
+
+  } catch (e: any) {
+    message.error(e.message || 'Không thể tải danh sách đặt phòng');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Payment/modal state
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
@@ -269,15 +303,13 @@ const CheckoutManager: React.FC = () => {
       const key = `pay_${paymentRow.IddatPhong}`;
       message.loading({ content: 'Đang xử lý thanh toán...', key, duration: 0 });
 
-      // simplified: reuse previous logic when viewMode === 'checkout'
-      // For brevity this demo delegates to existing checkoutApi methods
-      const method = vals.PhuongThucThanhToan;
+      const method = vals.PhuongThucThanhToan; // 1=Cash, 2=QR
       const existingInvoiceId = summary?.invoices?.[0]?.IDHoaDon ?? summary?.invoices?.[0]?.id ?? null;
 
-      // ... keep implementation small here; in practice reuse earlier logic
       if (existingInvoiceId) {
+        // NẾU ĐÃ CÓ HÓA ĐƠN
         if (method === 2) {
-          // Use backend pay-qr endpoint to get payment URL for an existing invoice
+          // --- QR (Giữ nguyên) ---
           const needToPay = Number(summary?.money?.remaining ?? 0);
           try {
             const resp: any = await checkoutApi.payQr({ IDDatPhong: paymentRow.IddatPhong, HoaDonId: existingInvoiceId, Amount: needToPay });
@@ -289,23 +321,33 @@ const CheckoutManager: React.FC = () => {
             message.error(err?.message || 'Không thể tạo liên kết QR');
           }
         } else {
-          // confirm paid for checkout mode
-          if (Number(summary?.money?.remaining ?? 0) > 0) {
-            await checkoutApi.confirmPaid(paymentRow.IddatPhong, { Amount: Number(summary?.money?.remaining ?? 0), HoaDonId: existingInvoiceId });
-          }
-          msg.success('Cập nhật hóa đơn thành công');
+          // --- TIỀN MẶT (SỬA) ---
+          // Tính số tiền còn thiếu để trả nốt
+          const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? 0);
+          const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+          const remaining = Math.max(0, tongTien - daTra);
+
+          // Gọi confirmPaid thay vì createInvoice
+          // Gửi remaining lên để server chốt đơn (Status=2, TienThanhToan=TongTien)
+          await checkoutApi.confirmPaid(paymentRow.IddatPhong, {
+            Amount: remaining,
+            HoaDonId: existingInvoiceId,
+            Note: vals.GhiChu
+          });
+
+          msg.success('Cập nhật hóa đơn & thanh toán thành công');
           try {
             const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
             setInvoiceData(fresh);
             setSummary(fresh);
           } catch (e) {
-            console.warn('[submitPayment] failed to reload summary after confirmPaid', e);
+            console.warn('Failed to reload summary', e);
           }
           setInvoiceModalVisible(true);
         }
       } else {
-        // create invoice for checkout mode
-        // Ensure we send a valid TongTien (>0). Prefer form value, then server summary, then compute from room+services.
+        // NẾU CHƯA CÓ HÓA ĐƠN -> TẠO MỚI (Giữ nguyên)
+        // Backend CreateInvoice mới đã sửa để nếu Status=2 thì TienThanhToan=TongTien
         const formTienPhong = Number(vals.TienPhong ?? 0);
         const formTongTien = Number(vals.TongTien ?? 0);
         const summaryRoom = Number(summary?.money?.roomTotal ?? 0);
@@ -320,7 +362,7 @@ const CheckoutManager: React.FC = () => {
         const res = await checkoutApi.createInvoice({
           IDDatPhong: paymentRow.IddatPhong,
           PhuongThucThanhToan: method,
-          // Explicitly request invoice be marked paid immediately for cash/check-out flows
+          // Tiền mặt (1) -> Gửi trạng thái 2 (Đã thanh toán). QR (2) -> Gửi 1 (Chờ)
           TrangThaiThanhToan: method === 2 ? 1 : 2,
           GhiChu: vals.GhiChu ?? '',
           TongTien: safeTongTien,
@@ -328,21 +370,19 @@ const CheckoutManager: React.FC = () => {
           SoLuongNgay: vals.SoLuongNgay ?? 1,
           Services: []
         });
+
         if (method === 2) {
           setQrUrl(res?.paymentUrl || null);
           setPaymentInvoiceId(res?.idHoaDon ?? res?.id ?? null);
           setQrModalVisible(true);
         } else {
-          msg.success('Tạo hóa đơn & thanh toán thành công');
+          msg.success('Thanh toán thành công');
           try {
             const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
             setInvoiceData(fresh);
             setSummary(fresh);
-            // notify other components that services/invoice changed for this booking
             try { window.dispatchEvent(new CustomEvent('booking:services-updated', { detail: { id: paymentRow.IddatPhong } })); } catch {}
-          } catch (e) {
-            console.warn('[submitPayment] failed to load invoice summary after createInvoice', e);
-          }
+          } catch (e) { }
           setInvoiceModalVisible(true);
         }
       }
@@ -717,6 +757,20 @@ const CheckoutManager: React.FC = () => {
             onComplete={async (id) => {
               try {
                 if (typeof id !== 'undefined' && id !== null) {
+                  // Ensure invoice is marked as fully paid before completing checkout
+                  try {
+                    const hoaDonId = invoiceData?.IDHoaDon ?? invoiceData?.idHoaDon ?? invoiceData?.IDHoaDon ?? null;
+                    if (hoaDonId) {
+                      // call confirmPaid with no amount (backend will treat as full payment)
+                      await checkoutApi.confirmPaid(id, { HoaDonId: hoaDonId });
+                    } else {
+                      await checkoutApi.confirmPaid(id);
+                    }
+                  } catch (e) {
+                    // Log but continue to complete checkout — operator may still want to finish
+                    console.warn('[onComplete] confirmPaid failed', e);
+                  }
+
                   await checkoutApi.completeCheckout(id);
                   msg.success('Hoàn tất trả phòng');
                   setInvoiceModalVisible(false);

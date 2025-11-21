@@ -69,16 +69,18 @@ const CheckinSection: React.FC = () => {
   const pageSize = 8;
 
   const openModal = (b: UsingBooking) => {
-    // load detailed booking from checkin API for modal
+    // show modal immediately with basic booking, then load details in background
+    try {
+      console.log("openModal clicked", b?.iddatPhong);
+    } catch {}
+    setSelectedBooking(b);
+    setShowModal(true);
     (async () => {
       try {
         const detail = await getCheckinById(b.iddatPhong);
-        setSelectedBooking(detail || b);
-        setShowModal(true);
+        if (detail) setSelectedBooking(detail);
       } catch (err) {
         console.error("Failed to load booking detail", err);
-        setSelectedBooking(b);
-        setShowModal(true);
       }
     })();
   };
@@ -143,9 +145,9 @@ const CheckinSection: React.FC = () => {
   const getPaymentStatusLabel = (status: number) => {
     switch (status) {
       case 0:
-        return "Chưa thanh toán";
-      case 1:
         return "Đã đặt cọc";
+      case 1:
+        return "Chưa thanh toán";
       case 2:
         return "Đã thanh toán";
       default:
@@ -272,7 +274,7 @@ const CheckinSection: React.FC = () => {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 60,
+            zIndex: 12000,
           }}
           onClick={closeModal}
         >
@@ -537,16 +539,17 @@ const CheckinSection: React.FC = () => {
             {pagedBookings.map((b) => (
               <tr
                 key={b.iddatPhong}
+                role="button"
+                tabIndex={0}
+                onClick={() => openModal(b)}
+                onKeyDown={(e) => { if (e.key === 'Enter') openModal(b); }}
                 style={{
+                  cursor: "pointer",
                   borderBottom: "1px solid #f3f4f6",
                   transition: "background 150ms ease",
                 }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "#f8fafc")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <td style={{ padding: 12, fontWeight: 700, color: "#0f172a" }}>
                   {b.iddatPhong}
@@ -623,7 +626,7 @@ const CheckinSection: React.FC = () => {
                   >
                     { (b.trangThai === 2) && (
                       <button
-                        onClick={() => handleConfirmBooking(b.iddatPhong)}
+                        onClick={(e) => { e.stopPropagation(); handleConfirmBooking(b.iddatPhong); }}
                         style={{
                           padding: "6px 10px",
                           borderRadius: 8,
@@ -640,7 +643,7 @@ const CheckinSection: React.FC = () => {
                     )}
                     {b.trangThai !== 0 && b.trangThai !== 3 && (
                       <button
-                        onClick={() => handleCancelBooking(b.iddatPhong)}
+                        onClick={(e) => { e.stopPropagation(); handleCancelBooking(b.iddatPhong); }}
                         style={{
                           padding: "6px 10px",
                           borderRadius: 8,
@@ -655,7 +658,7 @@ const CheckinSection: React.FC = () => {
                       </button>
                     )}
                     <button
-                      onClick={() => openModal(b)}
+                      onClick={(e) => { e.stopPropagation(); openModal(b); }}
                       style={{
                         padding: "6px 10px",
                         borderRadius: 8,
