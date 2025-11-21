@@ -28,6 +28,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll(string? loaiPhongId = null)
         {
             try
@@ -189,6 +190,7 @@ namespace Hotel_System.API.Controllers
         }
         // POST: api/Phong/check-available-rooms-duyanh
         [HttpPost("check-available-rooms")]
+        [AllowAnonymous]
         public async Task<IActionResult> CheckAvailableRooms([FromBody] CheckAvailableRoomsRequest req)
         {
             if (req.CheckIn >= req.CheckOut)
@@ -213,6 +215,7 @@ namespace Hotel_System.API.Controllers
 
         // GET: api/Phong/kiem-tra-trong?loaiPhongId={id}&checkin={date}&checkout={date}
         [HttpGet("kiem-tra-trong-theo-loai-phong")]
+        [AllowAnonymous]
         public async Task<IActionResult> CheckAvailability(string loaiPhongId, string checkin, string checkout, int numberOfGuests = 1)
         {
             try
@@ -364,6 +367,7 @@ namespace Hotel_System.API.Controllers
 
         // GET: api/Phong/top-rooms-2025?top=5
         [HttpGet("top-rooms-2025")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetTopRooms2025([FromQuery] int top = 5)
         {
             try

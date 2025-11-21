@@ -28,6 +28,7 @@ public class KhuyenMaiController : ControllerBase
     // GET: api/KhuyenMai
     // Lấy danh sách tất cả khuyến mãi với filter
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<List<KhuyenMaiDto>>> GetAll(
         [FromQuery] string? status = null,
         [FromQuery] string? discountType = null,

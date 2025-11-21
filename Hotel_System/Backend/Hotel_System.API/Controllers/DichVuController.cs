@@ -51,6 +51,7 @@ namespace Hotel_System.API.Controllers
 
         // [GET] api/dich-vu/lay-danh-sach
         [HttpGet("lay-danh-sach")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll()
         {
             var services = await _context.DichVus
@@ -62,6 +63,7 @@ namespace Hotel_System.API.Controllers
 
         // [GET] api/dich-vu/lay-chi-tiet/{id}
         [HttpGet("lay-chi-tiet/{id}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetById(string id)
         {
             var dv = await _context.DichVus

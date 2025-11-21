@@ -22,6 +22,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll()
         {
             var roomTypes = await _context.LoaiPhongs.ToListAsync();
