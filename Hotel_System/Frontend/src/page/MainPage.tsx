@@ -26,6 +26,7 @@ import InvoicesManager from "../admin/pages/InvoicesManager";
 import CheckoutManager from "../admin/pages/CheckoutManager";
 import CheckInManager from "../admin/pages/CheckInManager";
 import LoyaltyManager from "../admin/pages/LoyaltyManager";
+import NoAccessPage from "./NoAccessPage";
 import BookingSuccessPage from "./BookingSuccessPage";
 import AboutUsSection from "../components/AboutUsSection";
 import AboutUsPage from "./AboutUsPage";
@@ -35,6 +36,47 @@ import BlogDetail from "./BlogDetail";
 import ReviewPage from "./ReviewPage";
 
 const MainPage: React.FC = () => {
+  const parseJwt = (): any | null => {
+    const token = localStorage.getItem("hs_token");
+    if (!token) return null;
+    try {
+      const base64Payload = token.split(".")[1];
+      const decodedPayload = decodeURIComponent(
+        atob(base64Payload)
+          .split("")
+          .map(function (c) {
+            return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+          })
+          .join("")
+      );
+      return JSON.parse(decodedPayload);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const isNhanVien = (): boolean => {
+    const payload = parseJwt();
+    if (!payload) return false;
+    const role =
+      payload.role ||
+      payload.roles ||
+      payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ||
+      payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ||
+      payload.VaiTro;
+    if (!role) return false;
+    if (Array.isArray(role)) return role.includes("nhanvien");
+    return String(role).toLowerCase() === "nhanvien" || String(role) === "1";
+  };
+
+  const redirectToNoAccess = () => {
+    try {
+      window.history.replaceState(null, "", "/no-access");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    } catch {
+      window.location.href = "/no-access";
+    }
+  };
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
   const resolveRoute = () => {
     // Prefer pathname when present (clean URLs like /admin/rooms). Fall back to hash.
@@ -325,6 +367,10 @@ const MainPage: React.FC = () => {
     route === "/admin/dashboard" ||
     route === "#/admin/dashboard"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <AdminDashboard />;
   }
 
@@ -334,6 +380,10 @@ const MainPage: React.FC = () => {
     route === "/admin/rooms" ||
     route === "#/admin/rooms"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <RoomManager />;
   }
 
@@ -343,6 +393,10 @@ const MainPage: React.FC = () => {
     route === "/admin/amenities" ||
     route === "#/admin/amenities"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <AmenticsManager />;
   }
 
@@ -352,6 +406,10 @@ const MainPage: React.FC = () => {
     route === "/admin/services" ||
     route === "#/admin/services"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <ServiceManager />;
   }
 
@@ -361,6 +419,10 @@ const MainPage: React.FC = () => {
     route === "/admin/promotions" ||
     route === "#/admin/promotions"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <PromotionManager />;
   }
 
@@ -370,6 +432,10 @@ const MainPage: React.FC = () => {
     route === "/admin/bookings" ||
     route === "#/admin/bookings"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <BookingManager />;
   }
 
@@ -379,6 +445,10 @@ const MainPage: React.FC = () => {
     route === "/admin/invoices" ||
     route === "#/admin/invoices"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <InvoicesManager />;
   }
 
@@ -388,6 +458,10 @@ const MainPage: React.FC = () => {
     route === "/admin/checkout" ||
     route === "#/admin/checkout"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <CheckoutManager />;
   }
 
@@ -397,6 +471,10 @@ const MainPage: React.FC = () => {
     route === "/admin/checkin" ||
     route === "#/admin/checkin"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <CheckInManager />;
   }
 
@@ -430,7 +508,16 @@ const MainPage: React.FC = () => {
     route === "/admin/loyalty" ||
     route === "#/admin/loyalty"
   ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
     return <LoyaltyManager />;
+  }
+
+  // No-access page
+  if (route === "#no-access" || route === "/no-access") {
+    return <NoAccessPage />;
   }
 
   return (

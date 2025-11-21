@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -358,6 +359,7 @@ _context.Cthddvs.Add(cthd);
         // - Gửi email hóa đơn nếu chuyển sang đã thanh toán — VỚI BODY
         // ===========================
         [HttpPost("update-status")]
+        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> UpdatePaymentStatus([FromBody] PaymentStatusUpdateRequest request)
         {
             try

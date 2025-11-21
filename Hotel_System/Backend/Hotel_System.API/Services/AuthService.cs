@@ -142,12 +142,18 @@ namespace Hotel_System.API.Services
                     return Guid.NewGuid().ToString();
                 }
 
+                // Convert numeric VaiTro (tinyint) to meaningful role strings
+                // 0 => khachhang, 1 => nhanvien
+                var roleStr = acc.VaiTro == 1 ? "nhanvien" : "khachhang";
+
                 var claims = new[]
                 {
                     new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, kh.IdkhachHang.ToString()),
                     new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Email, kh.Email ?? string.Empty),
                     new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, kh.HoTen ?? string.Empty),
-                    new System.Security.Claims.Claim("role", acc.VaiTro.ToString()),
+                    // Include both a "role" claim and the standard role claim type for compatibility
+                    new System.Security.Claims.Claim("role", roleStr),
+                    new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, roleStr),
                     new System.Security.Claims.Claim("phone", kh.SoDienThoai ?? string.Empty)
                 };
 
