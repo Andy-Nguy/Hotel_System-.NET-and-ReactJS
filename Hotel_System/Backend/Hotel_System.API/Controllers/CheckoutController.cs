@@ -1,4 +1,5 @@
 using Hotel_System.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -47,6 +48,7 @@ namespace Hotel_System.API.Controllers
 
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "nhanvien")]
     public class CheckoutController : ControllerBase
     {
         private readonly HotelSystemContext _context;

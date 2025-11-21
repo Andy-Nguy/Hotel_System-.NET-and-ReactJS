@@ -4,12 +4,14 @@ using Hotel_System.API.Models;
 using Hotel_System.API.Services;
 using Hotel_System.API.DTOs;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authorization;
 using System.IO;
 
 namespace Hotel_System.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "nhanvien")]
     public class PhongController : ControllerBase
     {
         private readonly HotelSystemContext _context;

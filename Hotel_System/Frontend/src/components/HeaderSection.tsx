@@ -38,6 +38,22 @@ const HeaderSection: React.FC = () => {
     }
   };
 
+  // helper to check staff role
+  const isNhanVien = () => {
+    if (!userInfo) return false;
+    const role =
+      userInfo.role ||
+      userInfo.roles ||
+      userInfo[
+        "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
+      ] ||
+      userInfo["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ||
+      userInfo.VaiTro;
+    if (!role) return false;
+    if (Array.isArray(role)) return role.includes("nhanvien");
+    return String(role).toLowerCase() === "nhanvien" || String(role) === "1";
+  };
+
   const headerRef = useRef<HTMLElement | null>(null);
   const [spacerHeight, setSpacerHeight] = useState<number>(0);
 
@@ -101,154 +117,173 @@ const HeaderSection: React.FC = () => {
       <header
         ref={headerRef}
         className="header-section"
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: '#fff', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+          background: "#fff",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+        }}
       >
-      <div className="top-nav">
-        <div className="container">
-          <div className="row">
-            <div className="col-lg-6">
-              <ul className="tn-left">
-                <li>
-                  <i className="fa fa-phone"></i> (12) 345 67890
-                </li>
-                <li>
-                  <i className="fa fa-envelope"></i> info.colorlib@gmail.com
-                </li>
-              </ul>
-            </div>
-            <div className="col-lg-6">
-              <div className="tn-right">
-                <div className="top-social">
-                  <a href="#">
-                    <i className="fa fa-facebook"></i>
+        <div className="top-nav">
+          <div className="container">
+            <div className="row">
+              <div className="col-lg-6">
+                <ul className="tn-left">
+                  <li>
+                    <i className="fa fa-phone"></i> (12) 345 67890
+                  </li>
+                  <li>
+                    <i className="fa fa-envelope"></i> info.colorlib@gmail.com
+                  </li>
+                </ul>
+              </div>
+              <div className="col-lg-6">
+                <div className="tn-right">
+                  <div className="top-social">
+                    <a href="#">
+                      <i className="fa fa-facebook"></i>
+                    </a>
+                    <a href="#">
+                      <i className="fa fa-twitter"></i>
+                    </a>
+                    <a href="#">
+                      <i className="fa fa-tripadvisor"></i>
+                    </a>
+                    <a href="#">
+                      <i className="fa fa-instagram"></i>
+                    </a>
+                  </div>
+                  <a href="/rooms" className="bk-btn">
+                    Booking Now
                   </a>
-                  <a href="#">
-                    <i className="fa fa-twitter"></i>
-                  </a>
-                  <a href="#">
-                    <i className="fa fa-tripadvisor"></i>
-                  </a>
-                  <a href="#">
-                    <i className="fa fa-instagram"></i>
-                  </a>
-                </div>
-                <a href="/rooms" className="bk-btn">
-                  Booking Now
-                </a>
-                <div className="language-option">
-                  <img src="/img/flag.jpg" alt="" />
-                  <span>
-                    EN <i className="fa fa-angle-down"></i>
-                  </span>
-                  <div className="flag-dropdown">
-                    <ul>
-                      <li>
-                        <a href="#">Zi</a>
-                      </li>
-                      <li>
-                        <a href="#">Fr</a>
-                      </li>
-                    </ul>
+                  <div className="language-option">
+                    <img src="/img/flag.jpg" alt="" />
+                    <span>
+                      EN <i className="fa fa-angle-down"></i>
+                    </span>
+                    <div className="flag-dropdown">
+                      <ul>
+                        <li>
+                          <a href="#">Zi</a>
+                        </li>
+                        <li>
+                          <a href="#">Fr</a>
+                        </li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="menu-item">
-        <div className="container">
-          <div className="row">
-            <div className="col-lg-2">
-              <div className="logo">
-                <a
-                  href="/"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    try {
-                      window.history.pushState(null, "", "/");
-                      window.dispatchEvent(new PopStateEvent("popstate"));
-                    } catch {
-                      window.location.href = "/";
-                    }
-                  }}
-                >
-                  <img src="/img/logo.webp" alt="" />
-                </a>
+        <div className="menu-item">
+          <div className="container">
+            <div className="row">
+              <div className="col-lg-2">
+                <div className="logo">
+                  <a
+                    href="/"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      try {
+                        window.history.pushState(null, "", "/");
+                        window.dispatchEvent(new PopStateEvent("popstate"));
+                      } catch {
+                        window.location.href = "/";
+                      }
+                    }}
+                  >
+                    <img src="/img/logo.webp" alt="" />
+                  </a>
+                </div>
               </div>
-            </div>
-            <div className="col-lg-10">
-              <div className="nav-menu">
-                <nav className="mainmenu">
-                  <ul>
-                    <li
-                      className={
-                        currentRoute === "/" || currentRoute === "#"
-                          ? "active"
-                          : ""
-                      }
-                    >
-                      <a
-                        href="/"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          try {
-                            window.history.pushState(null, "", "/");
-                            window.dispatchEvent(new PopStateEvent("popstate"));
-                          } catch {
-                            window.location.href = "/";
-                          }
-                        }}
+              <div className="col-lg-10">
+                <div className="nav-menu">
+                  <nav className="mainmenu">
+                    <ul>
+                      <li
+                        className={
+                          currentRoute === "/" || currentRoute === "#"
+                            ? "active"
+                            : ""
+                        }
                       >
-                        Home
-                      </a>
-                    </li>
-                    <li
-                      className={
-                        currentRoute === "/rooms" || currentRoute === "#rooms"
-                          ? "active"
-                          : ""
-                      }
-                    >
-                      <a
-                        href="/rooms"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          try {
-                            window.history.pushState(null, "", "/rooms");
-                            window.dispatchEvent(new PopStateEvent("popstate"));
-                          } catch {
-                            window.location.href = "/rooms";
-                          }
-                        }}
+                        <a
+                          href="/"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            try {
+                              window.history.pushState(null, "", "/");
+                              window.dispatchEvent(
+                                new PopStateEvent("popstate")
+                              );
+                            } catch {
+                              window.location.href = "/";
+                            }
+                          }}
+                        >
+                          Home
+                        </a>
+                      </li>
+                      <li
+                        className={
+                          currentRoute === "/rooms" || currentRoute === "#rooms"
+                            ? "active"
+                            : ""
+                        }
                       >
-                        Rooms
-                      </a>
-                    </li>
-                    <li
-                      className={
-                        currentRoute === "/AboutUsPage" || currentRoute === "#AboutUsPage"
-                          ? "active"
-                          : ""
-                      }
-                    >
-                      <a
-                        href="/AboutUsPage"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          try {
-                            window.history.pushState(null, "", "/AboutUsPage");
-                            window.dispatchEvent(new PopStateEvent("popstate"));
-                          } catch {
-                            window.location.href = "/AboutUsPage";
-                          }
-                        }}
+                        <a
+                          href="/rooms"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            try {
+                              window.history.pushState(null, "", "/rooms");
+                              window.dispatchEvent(
+                                new PopStateEvent("popstate")
+                              );
+                            } catch {
+                              window.location.href = "/rooms";
+                            }
+                          }}
+                        >
+                          Rooms
+                        </a>
+                      </li>
+                      <li
+                        className={
+                          currentRoute === "/AboutUsPage" ||
+                          currentRoute === "#AboutUsPage"
+                            ? "active"
+                            : ""
+                        }
                       >
-                        About Us
-                      </a>
-                    </li>
-                    {/* <li>
+                        <a
+                          href="/AboutUsPage"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            try {
+                              window.history.pushState(
+                                null,
+                                "",
+                                "/AboutUsPage"
+                              );
+                              window.dispatchEvent(
+                                new PopStateEvent("popstate")
+                              );
+                            } catch {
+                              window.location.href = "/AboutUsPage";
+                            }
+                          }}
+                        >
+                          About Us
+                        </a>
+                      </li>
+                      {/* <li>
                       <a href="#">Pages</a>
                       <ul className="dropdown">
                         <li>
@@ -265,175 +300,203 @@ const HeaderSection: React.FC = () => {
                         </li>
                       </ul>
                     </li> */}
-                    {/* <li>
+                      {/* <li>
                       <a href="#">News</a>
                     </li> */}
-                    <li
-                      className={
-                        currentRoute === "/contact" || currentRoute === "#contact"
-                          ? "active"
-                          : ""
-                      }
-                    >
-                      <a
-                        href="/contact"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          try {
-                            window.history.pushState(null, "", "/contact");
-                            window.dispatchEvent(new PopStateEvent("popstate"));
-                          } catch {
-                            window.location.href = "/contact";
-                          }
-                        }}
+                      <li
+                        className={
+                          currentRoute === "/contact" ||
+                          currentRoute === "#contact"
+                            ? "active"
+                            : ""
+                        }
                       >
-                        Contact
-                      </a>
-                    </li>
-                    <li>
-                      <a href="#">
-                        {isLoggedIn
-                          ? (() => {
-                              try {
-                                const fullName =
-                                  userInfo?.[
-                                    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
-                                  ] ||
-                                  userInfo?.name ||
-                                  "User";
-                                const firstName =
-                                  String(fullName).trim().split(" ")[0] ||
-                                  "User";
-                                return `Xin chào ${firstName}`;
-                              } catch (e) {
-                                return "Tài khoản";
-                              }
-                            })()
-                          : "Tài khoản"}
-                      </a>
-                      <ul className="dropdown">
-                        {isLoggedIn ? (
-                          <>
-                            <li>
-                              <a
-                                href="/profile"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  try {
-                                    window.history.pushState(
-                                      null,
-                                      "",
-                                      "/profile"
-                                    );
-                                    window.dispatchEvent(
-                                      new PopStateEvent("popstate")
-                                    );
-                                  } catch {
-                                    window.location.href = "/profile";
-                                  }
-                                }}
-                              >
-                                Thông tin cá nhân
-                              </a>
-                            </li>
-                            <li>
-                              <a
-                                href="/bookings"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  try {
-                                    window.history.pushState(
-                                      null,
-                                      "",
-                                      "/bookings"
-                                    );
-                                    window.dispatchEvent(
-                                      new PopStateEvent("popstate")
-                                    );
-                                  } catch {
-                                    window.location.href = "/bookings";
-                                  }
-                                }}
-                              >
-                                Lịch sử đặt phòng
-                              </a>
-                            </li>
-                            <li>
-                              <a
-                                href="#"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  handleLogout();
-                                }}
-                              >
-                                Đăng xuất
-                              </a>
-                            </li>
-                          </>
-                        ) : (
-                          <>
-                            <li>
-                              <a
-                                href="/login"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  try {
-                                    window.history.pushState(
-                                      null,
-                                      "",
-                                      "/login"
-                                    );
-                                    window.dispatchEvent(
-                                      new PopStateEvent("popstate")
-                                    );
-                                  } catch {
-                                    window.location.href = "/login";
-                                  }
-                                }}
-                              >
-                                Đăng nhập
-                              </a>
-                            </li>
-                            <li>
-                              <a
-                                href="/register"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  try {
-                                    window.history.pushState(
-                                      null,
-                                      "",
-                                      "/register"
-                                    );
-                                    window.dispatchEvent(
-                                      new PopStateEvent("popstate")
-                                    );
-                                  } catch {
-                                    window.location.href = "/register";
-                                  }
-                                }}
-                              >
-                                Đăng ký
-                              </a>
-                            </li>
-                          </>
-                        )}
-                      </ul>
-                    </li>
-                  </ul>
-                </nav>
-                <div className="nav-right search-switch">
-                  <i className="icon_search"></i>
+                        <a
+                          href="/contact"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            try {
+                              window.history.pushState(null, "", "/contact");
+                              window.dispatchEvent(
+                                new PopStateEvent("popstate")
+                              );
+                            } catch {
+                              window.location.href = "/contact";
+                            }
+                          }}
+                        >
+                          Contact
+                        </a>
+                      </li>
+                      <li>
+                        <a href="#">
+                          {isLoggedIn
+                            ? (() => {
+                                try {
+                                  const fullName =
+                                    userInfo?.[
+                                      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+                                    ] ||
+                                    userInfo?.name ||
+                                    "User";
+                                  const firstName =
+                                    String(fullName).trim().split(" ")[0] ||
+                                    "User";
+                                  return `Xin chào ${firstName}`;
+                                } catch (e) {
+                                  return "Tài khoản";
+                                }
+                              })()
+                            : "Tài khoản"}
+                        </a>
+                        <ul className="dropdown">
+                          {isLoggedIn ? (
+                            <>
+                              <li>
+                                <a
+                                  href="/profile"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    try {
+                                      window.history.pushState(
+                                        null,
+                                        "",
+                                        "/profile"
+                                      );
+                                      window.dispatchEvent(
+                                        new PopStateEvent("popstate")
+                                      );
+                                    } catch {
+                                      window.location.href = "/profile";
+                                    }
+                                  }}
+                                >
+                                  Thông tin cá nhân
+                                </a>
+                              </li>
+                              <li>
+                                <a
+                                  href="/bookings"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    try {
+                                      window.history.pushState(
+                                        null,
+                                        "",
+                                        "/bookings"
+                                      );
+                                      window.dispatchEvent(
+                                        new PopStateEvent("popstate")
+                                      );
+                                    } catch {
+                                      window.location.href = "/bookings";
+                                    }
+                                  }}
+                                >
+                                  Lịch sử đặt phòng
+                                </a>
+                              </li>
+                              {isNhanVien() && (
+                                <li>
+                                  <a
+                                    href="/admin/dashboard"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      try {
+                                        window.history.pushState(
+                                          null,
+                                          "",
+                                          "/admin/dashboard"
+                                        );
+                                        window.dispatchEvent(
+                                          new PopStateEvent("popstate")
+                                        );
+                                      } catch {
+                                        window.location.href =
+                                          "/admin/dashboard";
+                                      }
+                                    }}
+                                  >
+                                    Quản trị
+                                  </a>
+                                </li>
+                              )}
+                              <li>
+                                <a
+                                  href="#"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    handleLogout();
+                                  }}
+                                >
+                                  Đăng xuất
+                                </a>
+                              </li>
+                            </>
+                          ) : (
+                            <>
+                              <li>
+                                <a
+                                  href="/login"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    try {
+                                      window.history.pushState(
+                                        null,
+                                        "",
+                                        "/login"
+                                      );
+                                      window.dispatchEvent(
+                                        new PopStateEvent("popstate")
+                                      );
+                                    } catch {
+                                      window.location.href = "/login";
+                                    }
+                                  }}
+                                >
+                                  Đăng nhập
+                                </a>
+                              </li>
+                              <li>
+                                <a
+                                  href="/register"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    try {
+                                      window.history.pushState(
+                                        null,
+                                        "",
+                                        "/register"
+                                      );
+                                      window.dispatchEvent(
+                                        new PopStateEvent("popstate")
+                                      );
+                                    } catch {
+                                      window.location.href = "/register";
+                                    }
+                                  }}
+                                >
+                                  Đăng ký
+                                </a>
+                              </li>
+                            </>
+                          )}
+                        </ul>
+                      </li>
+                    </ul>
+                  </nav>
+                  <div className="nav-right search-switch">
+                    <i className="icon_search"></i>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
       </header>
 
       {/* spacer to avoid content being covered by fixed header */}
-      <div style={{ height: spacerHeight, width: '100%' }} aria-hidden />
+      <div style={{ height: spacerHeight, width: "100%" }} aria-hidden />
     </>
   );
 };
