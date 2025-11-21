@@ -50,16 +50,28 @@ namespace Hotel_System.API.Controllers
                 // Get current date for status check
                 var currentDate = DateOnly.FromDateTime(DateTime.Now);
 
-                // Get list of occupied room IDs based on active bookings
+                // Get list of occupied room IDs based on active bookings (only checked-in guests)
+                // Only TrangThai == 3 (checked in) means the guest is actually occupying the room
                 var occupiedRoomIds = await _context.DatPhongs
-                    .Where(dp => dp.TrangThai == 1 && // Assuming 1 means active/confirmed booking
+                    .Where(dp => dp.TrangThai == 3 && // 3 = Checked in (Đang sử dụng)
                                  dp.NgayNhanPhong <= currentDate && 
                                  dp.NgayTraPhong > currentDate)
                     .Select(dp => dp.Idphong)
                     .Distinct()
                     .ToListAsync();
 
-                Console.WriteLine($"🏨 Found {occupiedRoomIds.Count} occupied rooms");
+                // Get list of booked room IDs (admin confirmed booking)
+                // Only show as "Đã đặt" if TrangThai=2 (admin confirmed)
+                // Admin confirm means booking is locked in, room is reserved
+                var bookedRoomIds = await _context.DatPhongs
+                    .Where(dp => dp.TrangThai == 2 && // 2 = Admin confirmed (Xác nhận từ admin)
+                                 dp.NgayNhanPhong <= currentDate && 
+                                 dp.NgayTraPhong > currentDate)
+                    .Select(dp => dp.Idphong)
+                    .Distinct()
+                    .ToListAsync();
+
+                Console.WriteLine($"🏨 Found {occupiedRoomIds.Count} occupied rooms, {bookedRoomIds.Count} booked rooms");
 
                 // Normalize UrlAnhPhong to relative paths (prefer /img/room/) so frontend can request them
                 // Define allowed / normalized display statuses:
@@ -78,9 +90,11 @@ namespace Hotel_System.API.Controllers
                     r.GiaCoBanMotDem,
                     r.XepHangSao,
                     // Normalize status for frontend (Vietnamese labels). Users may only change "Trống" or "Bảo trì".
+                    // Priority: Maintenance > Occupied > Booked > Empty
                     TrangThai = (r.TrangThai != null && r.TrangThai.Equals("Bảo trì", System.StringComparison.OrdinalIgnoreCase))
                                 ? "Bảo trì"
-                                : (occupiedRoomIds.Contains(r.Idphong) ? "Đang sử dụng" : "Trống"),
+                                : (occupiedRoomIds.Contains(r.Idphong) ? "Đang sử dụng" 
+                                   : (bookedRoomIds.Contains(r.Idphong) ? "Đã đặt" : "Trống")),
                     UrlAnhPhong = ResolveImageUrl(r.UrlAnhPhong),
                     // Add amenities
                     amenities = r.TienNghiPhongs
@@ -302,14 +316,26 @@ namespace Hotel_System.API.Controllers
             if (payload.GiaCoBanMotDem.HasValue) existing.GiaCoBanMotDem = payload.GiaCoBanMotDem;
             if (payload.XepHangSao.HasValue) existing.XepHangSao = payload.XepHangSao;
 
-            // Only allow user-updatable statuses (Trống, Bảo trì). Others (e.g., Đang sử dụng) are calculated by system.
+            // Only allow user-updatable statuses (Trống, Bảo trì). System-managed statuses cannot be manually changed.
             if (!string.IsNullOrWhiteSpace(payload.TrangThai))
             {
                 var trimmed = payload.TrangThai.Trim();
+                
+                // Quy tắc 1: Staff chỉ được đổi sang Trống hoặc Bảo trì
                 if (!UserEditableStatuses.Contains(trimmed))
                 {
-                    return BadRequest(new { error = "Invalid status. Allowed values: 'Trống' or 'Bảo trì'." });
+                    return BadRequest(new { error = "Invalid status. Staff only allowed: 'Trống' or 'Bảo trì'." });
                 }
+
+                // Quy tắc 2: Nếu phòng hiện tại ở trạng thái "Đã đặt" hoặc "Đang sử dụng", staff KHÔNG được đổi
+                var currentStatus = existing.TrangThai ?? "Trống";
+                if (currentStatus.Equals("Đã đặt", StringComparison.OrdinalIgnoreCase) || 
+                    currentStatus.Equals("Đang sử dụng", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { error = $"Cannot change status. Room is currently '{currentStatus}'. This status is managed by booking/check-in/check-out processes." });
+                }
+
+                // Quy tắc 3: Cho phép Trống ↔ Bảo trì
                 existing.TrangThai = trimmed;
             }
 
@@ -370,7 +396,7 @@ namespace Hotel_System.API.Controllers
 
                     while (await reader.ReadAsync())
                     {
-                        string GetStringOrNull(string[] possibleNames)
+                        string? GetStringOrNull(string[] possibleNames)
                         {
                             foreach (var n in possibleNames)
                             {

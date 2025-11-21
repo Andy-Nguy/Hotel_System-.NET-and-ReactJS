@@ -328,6 +328,8 @@ const CheckInManager: React.FC = () => {
           TongTien: safeTongTien,
           TienPhong: Math.round(roomTotalForCalc),
           SoLuongNgay: vals.SoLuongNgay ?? 1,
+          TienCoc: Number(paymentRow?.TienCoc ?? 0),
+          PreviousPayment: Number(paymentRow?.TienThanhToan ?? 0),
           Services: []
         });
         if (method === 2) {

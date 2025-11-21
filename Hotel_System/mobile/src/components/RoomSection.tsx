@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
+import { MaterialIcons } from '@expo/vector-icons';
+import reviewApi from "../api/reviewApi";
+import StarRating from './StarRating';
 import { COLORS, SIZES, SHADOWS } from "../constants/theme";
 import { Room } from "../api/roomsApi";
 
@@ -40,6 +43,40 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
   };
   const displayPrice = getPromoPrice();
   const hasPromotion = !!promotion && displayPrice !== basePrice;
+
+  // use shared StarRating component (imports above)
+
+  // Simple in-memory cache to avoid refetching stats for the same room repeatedly
+  const statsCache = (global as any).__roomStatsCache ||= new Map<string, any>();
+  const [stats, setStats] = useState<any | null>(() => statsCache.get(String(room.idphong)) ?? null);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const key = String(room.idphong);
+      const cached = statsCache.get(key);
+      if (cached) {
+        setStats(cached);
+        return;
+      }
+      setLoadingStats(true);
+      try {
+        const s = await reviewApi.getRoomStats(key);
+        if (cancelled) return;
+        if (s) {
+          statsCache.set(key, s);
+          setStats(s);
+        }
+      } catch (err) {
+        console.debug('RoomSection: failed to load stats', err);
+      } finally {
+        if (!cancelled) setLoadingStats(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [room.idphong]);
 
   return (
     <TouchableOpacity
@@ -97,8 +134,19 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
         </Text>
         
         <View style={styles.ratingRow}>
-          <Text style={styles.stars}>⭐⭐⭐⭐⭐</Text>
-          <Text style={styles.ratingCount}>(124 đánh giá)</Text>
+          {(() => {
+            const avg = (stats && typeof stats.averageRating === 'number') ? stats.averageRating : (room.xepHangSao ?? 0);
+            return (
+              <>
+                <StarRating avg={avg} size={14} />
+                <Text style={styles.ratingCount}>
+                  {stats?.totalReviews != null
+                    ? `${avg.toFixed(1)}/5 · ${stats.totalReviews} đánh giá`
+                    : (room.xepHangSao != null ? `${(room.xepHangSao).toFixed(1)}/5` : '(chưa có đánh giá)')}
+                </Text>
+              </>
+            );
+          })()}
         </View>
 
         <Text style={styles.roomDescription} numberOfLines={2}>

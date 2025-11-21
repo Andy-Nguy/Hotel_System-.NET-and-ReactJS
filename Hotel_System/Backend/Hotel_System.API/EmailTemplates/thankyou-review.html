@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cảm ơn bạn đã ở lại với chúng tôi</title>
+    <style>
+        /* Tông màu chính */
+        /* :root block removed as variables are inlined */
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f9f9f9; /* var(--secondary-bg) */
+            line-height: 1.6;
+            color: #333333; /* var(--text-dark) */
+            -webkit-text-size-adjust: 100%; /* Fix zoom trên iOS/Android */
+            word-break: break-word; /* Tương thích tốt hơn */
+        }
+        .wrapper {
+            /* Tăng khoảng cách margin tổng thể cho email client */
+            padding: 20px 0;
+            background-color: #f9f9f9; /* var(--secondary-bg) */
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fdfdfd; /* var(--light-bg) */
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.05);
+        }
+        .header {
+            background: #fdfdfd; /* var(--light-bg) */
+            padding: 30px 20px 20px;
+            text-align: center;
+            border-bottom: 1px solid #eeeeee; /* Đường kẻ mỏng, tinh tế */
+            color: #333333; /* var(--text-dark) */
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 4px;
+            font-weight: 300; /* Font mỏng */
+            letter-spacing: 1px;
+        }
+        .header p {
+            font-size: 13px;
+            opacity: 0.7;
+            color: #666666; /* var(--text-medium) */
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .greeting {
+            margin-bottom: 24px;
+            font-size: 16px;
+        }
+        .greeting strong {
+            color: #C9A043; /* var(--primary-color) */
+            font-weight: 600;
+        }
+        .thank-you-section {
+            background: #fefcf5; /* var(--accent-light) */
+            border-left: 3px solid #C9A043; /* var(--primary-color) */
+            padding: 16px;
+            margin-bottom: 30px; 
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333333; /* var(--text-dark) */
+        }
+        .thank-you-section p {
+             margin: 6px 0;
+        }
+        .booking-details {
+            background: #f9f9f9; /* var(--secondary-bg) */
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+            border: 1px solid #eeeeee; /* Thêm lại viền mỏng, đồng nhất */
+        }
+        .booking-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px; 
+            font-size: 14px;
+        }
+        .booking-row label {
+            font-weight: 400;
+            color: #666666; /* var(--text-medium) */
+        }
+        .booking-row span {
+            font-weight: 500;
+            color: #333333; /* var(--text-dark) */
+        }
+        /* Style cho phần Review CTA */
+        .review-section {
+            background: #fefcf5; /* var(--accent-light) */
+            border: 1px solid #C9A043; /* var(--primary-color) */
+            border-radius: 8px;
+            padding: 30px 24px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .review-section h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #C9A043; /* var(--primary-color) */
+            font-weight: 500;
+        }
+        .review-section p {
+            font-size: 14px;
+            color: #666666; /* var(--text-medium) */
+            margin-bottom: 20px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: #C9A043; /* var(--primary-color) */
+            color: white;
+            padding: 12px 32px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(201, 160, 67, 0.4);
+        }
+        .cta-button:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+        }
+        /* Loại bỏ Inline Form thừa thãi */
+        .inline-form {
+            display: none; 
+        }
+        .extra-info {
+            background: #f9f9f9; /* var(--secondary-bg) */
+            padding: 20px;
+            border-radius: 6px;
+            margin-top: 24px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #666666; /* var(--text-medium) */
+            border: 1px solid #eeeeee;
+        }
+        .extra-info strong {
+            color: #C9A043; /* var(--primary-color) */
+        }
+        .footer {
+            background: #fdfdfd; /* var(--light-bg) */
+            padding: 30px; 
+            text-align: center;
+            border-top: 1px solid #eee;
+            font-size: 12px;
+            color: #666666; /* var(--text-medium) */
+        }
+        .footer a {
+            color: #C9A043; /* var(--primary-color) */
+            text-decoration: none;
+        }
+        .icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            color: #C9A043; /* var(--primary-color) */
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 0 auto;
+                border-radius: 0;
+            }
+            .content {
+                padding: 24px 16px;
+            }
+            .cta-button {
+                display: block;
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <div class="container">
+            <!-- Header -->
+            <div class="header">
+                <div class="icon">✨</div>
+                <h1>Lời tri ân chân thành</h1>
+                <p>Từ Khách sạn Robins Villa</p>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+                <!-- Greeting -->
+                <div class="greeting">
+                    Xin chào <strong>{{CustomerName}}</strong>,
+                </div>
+
+                <!-- Thank you message (Highlight box) -->
+                <div class="thank-you-section">
+                    <p>Chúng tôi hy vọng kỳ nghỉ tại Robins Villa đã mang lại cho bạn những kỷ niệm đẹp và thư giãn tuyệt đối.</p>
+                    <p>Sự hài lòng của quý khách là niềm vinh dự lớn nhất của chúng tôi!</p>
+                </div>
+
+                <!-- Review CTA Section -->
+                <div class="review-section">
+                    <h2>✍️ Chia sẻ trải nghiệm tinh tế của bạn</h2>
+                    <p>Đánh giá của bạn sẽ giúp chúng tôi hoàn thiện dịch vụ đạt chuẩn 5 sao. Vui lòng dành 2 phút để chia sẻ ý kiến chân thật của mình.</p>
+                    <a href="{{ReviewLink}}" class="cta-button" style="color: #f9f9f9;">
+                        Đánh giá ngay →
+                    </a>
+                </div>
+
+                <!-- Booking Details -->
+                <div class="booking-details">
+                    <h3 style="font-size: 16px; margin-bottom: 15px; font-weight: 600; color: #333333;">Thông tin đặt phòng</h3>
+                    <div class="booking-row">
+                        <label>Mã đặt phòng:</label>
+                        <span>{{BookingId}}</span>
+                    </div>
+                    <div class="booking-row">
+                        <label>Phòng/Villa:</label>
+                        <span>{{RoomName}}</span>
+                    </div>
+                    <div class="booking-row">
+                        <label>Check-in:</label>
+                        <span>{{CheckInDate}}</span>
+                    </div>
+                    <div class="booking-row">
+                        <label>Check-out:</label>
+                        <span>{{CheckOutDate}}</span>
+                    </div>
+                    <div class="booking-row" style="border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px;">
+                        <label>Tổng thanh toán:</label>
+                        <span style="color: #C9A043; font-weight: 700;">{{TotalAmount}}</span>
+                    </div>
+                </div>
+
+                <!-- Extra info -->
+                <div class="extra-info">
+                    <p><strong>💡 Ưu đãi cho lần lưu trú tiếp theo:</strong></p>
+                    <ul style="margin-left: 18px; margin-top: 8px;">
+                        <li>Giảm giá 15% cho lần đặt phòng tiếp theo trong vòng 6 tháng.</li>
+                        <li>Theo dõi trang của chúng tôi để cập nhật các sự kiện Fine Dining sắp tới.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <p style="margin-bottom: 8px;">© {{CurrentYear}} Robins Villa | {{HotelAddress}}</p>
+                <p style="margin-bottom: 8px;">📞 {{HotelPhone}} | 📧 <a href="mailto:{{HotelEmail}}" style="color: #C9A043;">{{HotelEmail}}</a></p>
+                <p style="color: #999; margin-top: 12px;">
+                    <a href="#" style="color: #C9A043;">Hủy đăng ký</a> | <a href="#" style="color: #C9A043;">Chính sách bảo mật</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -403,6 +403,8 @@ namespace Hotel_System.API.Controllers
                 var booking = await _context.DatPhongs
                     .Include(dp => dp.IdkhachHangNavigation)
                     .Include(dp => dp.IdphongNavigation)
+                    .Include(dp => dp.ChiTietDatPhongs)
+                        .ThenInclude(ct => ct.Phong)
                     .FirstOrDefaultAsync(dp => dp.IddatPhong == id);
                 if (booking == null)
                 {
@@ -420,6 +422,48 @@ namespace Hotel_System.API.Controllers
                 if (request.TrangThaiThanhToan.HasValue)
                 {
                     booking.TrangThaiThanhToan = request.TrangThaiThanhToan.Value;
+                }
+
+                // Sync room status when admin confirms booking (TrangThai = 2)
+                if (booking.TrangThai == 2 && oldStatus != 2)
+                {
+                    // Admin confirmed booking -> mark room as "Đã đặt"
+                    if (booking.IdphongNavigation != null)
+                    {
+                        booking.IdphongNavigation.TrangThai = "Đã đặt";
+                    }
+                    // Also sync all rooms in ChiTietDatPhongs (for multi-room bookings)
+                    if (booking.ChiTietDatPhongs != null)
+                    {
+                        foreach (var chiTiet in booking.ChiTietDatPhongs)
+                        {
+                            if (chiTiet.Phong != null)
+                            {
+                                chiTiet.Phong.TrangThai = "Đã đặt";
+                            }
+                        }
+                    }
+                }
+
+                // Sync room status when admin cancels booking (TrangThai = 0)
+                if (booking.TrangThai == 0 && oldStatus != 0)
+                {
+                    // Admin cancelled booking -> mark room as "Trống"
+                    if (booking.IdphongNavigation != null)
+                    {
+                        booking.IdphongNavigation.TrangThai = "Trống";
+                    }
+                    // Also sync all rooms in ChiTietDatPhongs (for multi-room bookings)
+                    if (booking.ChiTietDatPhongs != null)
+                    {
+                        foreach (var chiTiet in booking.ChiTietDatPhongs)
+                        {
+                            if (chiTiet.Phong != null)
+                            {
+                                chiTiet.Phong.TrangThai = "Trống";
+                            }
+                        }
+                    }
                 }
 
                 await _context.SaveChangesAsync();

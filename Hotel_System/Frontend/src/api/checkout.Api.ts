@@ -36,6 +36,8 @@ export const checkoutApi = {
     TongTien?: number;
     TienPhong?: number;
     SoLuongNgay?: number;
+    TienCoc?: number;
+    PreviousPayment?: number;
     Services?: Array<{ IddichVu: string | number; SoLuong?: number; DonGia?: number; TienDichVu?: number }>;
     ServicesTotal?: number;
   }) => fetchJson(`/api/Checkout/hoa-don`, {

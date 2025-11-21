@@ -121,6 +121,8 @@ public partial class HotelSystemContext : DbContext
         {
             entity.HasKey(e => e.IddanhGia).HasName("PK__DanhGia__C216E48D8ACD96EC");
 
+            entity.ToTable("DanhGia");
+
             entity.Property(e => e.IddanhGia).HasColumnName("IDDanhGia");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
@@ -129,7 +131,12 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.Idphong)
                 .HasMaxLength(50)
                 .HasColumnName("IDPhong");
+            entity.Property(e => e.IddatPhong)
+                .HasMaxLength(50)
+                .HasColumnName("IDDatPhong");
             entity.Property(e => e.IsAnonym).HasDefaultValue(false);
+            entity.Property(e => e.NoiDung).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.SoSao).HasColumnName("SoSao");
             entity.Property(e => e.TieuDe).HasMaxLength(200);
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("(getdate())")

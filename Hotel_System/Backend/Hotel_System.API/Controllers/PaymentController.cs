@@ -56,6 +56,7 @@ namespace Hotel_System.API.Controllers
             {
                 var datPhong = await _context.DatPhongs
                     .Include(dp => dp.ChiTietDatPhongs)
+                        .ThenInclude(ct => ct.Phong)
                     .Include(dp => dp.IdkhachHangNavigation)
                     .FirstOrDefaultAsync(dp => dp.IddatPhong == request.IDDatPhong);
 
@@ -141,19 +142,26 @@ namespace Hotel_System.API.Controllers
                 var tienPhongTinh = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m;
                 int tienPhong = request.TienPhong ?? (int)Math.Round(tienPhongTinh);
 
-                // Tổng cuối cùng do FE tính (đã gồm phòng sau KM + dịch vụ + VAT)
-                decimal tongTien = request.TongTien;
-                if (tongTien <= 0m)
+                // Compute totals on server-side to avoid client-side mismatch.
+                // Room total (after promotions) — we've already updated datPhong.TongTien above to sum of ThanhTien
+                decimal roomTotal = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m;
+
+                // Services total from request (if any). Prefer TienDichVu or DonGia*SoLuong
+                decimal servicesTotal = 0m;
+                if (request.Services != null && request.Services.Any())
                 {
-                    // fallback: DatPhong.TongTien -> sum ChiTiet (ThanhTien)
-                    tongTien = datPhong.TongTien;
-                    if (tongTien <= 0m)
+                    foreach (var svc in request.Services)
                     {
-                        try { tongTien = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m; }
-                        catch { tongTien = 0m; }
+                        var line = svc.TienDichVu != 0m ? svc.TienDichVu : svc.DonGia * Math.Max(1, svc.SoLuong);
+                        servicesTotal += Math.Round(line);
                     }
-_logger.LogInformation("PaymentController: request.TongTien missing/zero, fallback tongTien={TongTien}", tongTien);
                 }
+
+                // Total before VAT
+                decimal totalBeforeVat = roomTotal + servicesTotal;
+                // Apply VAT 10% and round to nearest integer
+                decimal tongTien = Math.Round(totalBeforeVat * 1.1m, 0, MidpointRounding.AwayFromZero);
+                _logger.LogInformation("PaymentController: computed tongTien server-side room={Room} services={Services} tongTien={TongTien}", roomTotal, servicesTotal, tongTien);
 
                 // Lấy tiền cọc hiện có trên DatPhong làm nguồn dữ liệu mặc định
                 decimal tienCoc = datPhong.TienCoc ?? 0m;
@@ -272,11 +280,26 @@ _context.Cthddvs.Add(cthd);
                 datPhong.TongTien = tongTien;
                 datPhong.TrangThaiThanhToan = trangThaiThanhToan;
 
-                // Với mọi kết quả thanh toán (đã thanh toán, đã đặt cọc, chưa thanh toán, thanh toán tại khách sạn):
-                // - Đánh dấu đặt phòng là 'xác nhận' (1)
-                // - Xoá hạn chờ (ThoiHan) để tránh auto-cancel
-                datPhong.TrangThai = 1; // 1 = Xác nhận/đã giữ chấp nhận
-                datPhong.ThoiHan = null;
+                // Nếu TrangThai chưa được set (vẫn là 0 = chờ xác nhận), thì chỉ set lên 1 (payment created)
+                // Nếu TrangThai đã là 2 (admin xác nhận), thì giữ nguyên
+                if (datPhong.TrangThai == 0)
+                {
+                    datPhong.TrangThai = 1; // 1 = Hóa đơn được tạo (chưa admin xác nhận)
+                }
+                datPhong.ThoiHan = null; // Xóa hạn chờ
+
+                // Sync room status ONLY if payment is confirmed AND admin already confirmed (TrangThai=2)
+                // TrangThaiThanhToan: 0=đặt cọc, 1=chưa thanh toán, 2=đã thanh toán
+                if (datPhong.TrangThai == 2 && (trangThaiThanhToan == 0 || trangThaiThanhToan == 2) && datPhong.ChiTietDatPhongs != null)
+                {
+                    foreach (var chiTiet in datPhong.ChiTietDatPhongs)
+                    {
+                        if (chiTiet.Phong != null)
+                        {
+                            chiTiet.Phong.TrangThai = "Đã đặt";
+                        }
+                    }
+                }
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();

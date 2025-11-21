@@ -31,6 +31,8 @@ import AboutUsSection from "../components/AboutUsSection";
 import AboutUsPage from "./AboutUsPage";
 import ContactPage from "./ContactPage";
 import MyBookingsPage from "./MyBookingsPage";
+import BlogDetail from "./BlogDetail";
+import ReviewPage from "./ReviewPage";
 
 const MainPage: React.FC = () => {
   // route can be either a pathname (e.g. '/rooms') or a hash (e.g. '#rooms')
@@ -396,6 +398,30 @@ const MainPage: React.FC = () => {
     route === "#/admin/checkin"
   ) {
     return <CheckInManager />;
+  }
+
+  // Blog detail route (internal blog pages)
+  if (route.startsWith("/blog/") || route.startsWith("#/blog/") || route.startsWith("#blog/")) {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <BlogDetail />
+        <FooterSection />
+      </>
+    );
+  }
+
+  // Review page route (for customers to submit reviews after checkout)
+  if (route.startsWith("/review/") || route.startsWith("#/review/") || route.startsWith("#review/")) {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <ReviewPage />
+        <FooterSection />
+      </>
+    );
   }
 
   // Admin loyalty / points management route (accessible at /admin/loyalty or #admin/loyalty)
