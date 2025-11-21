@@ -235,8 +235,6 @@ const RoomReviews: React.FC<Props> = ({ roomId, visible, onClose }) => {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* detail modal removed — use inline expand/collapse 'Xem thêm' instead */}
       </SafeAreaView>
     </Modal>
   );
