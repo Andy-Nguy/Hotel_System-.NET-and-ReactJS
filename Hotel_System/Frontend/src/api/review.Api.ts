@@ -26,25 +26,33 @@ export interface ReviewStatus {
   lastSentAt?: string;
 }
 
-const baseUrl = '/api/Review';
+const baseUrl = "/api/Review";
 
 const reviewApi = {
   /**
    * Submit a review for a booking
    */
-  submitReview: async (payload: ReviewSubmitPayload): Promise<ReviewResponse> => {
-    console.log('[reviewApi] Submitting review to backend:', payload);
+  submitReview: async (
+    payload: ReviewSubmitPayload
+  ): Promise<ReviewResponse> => {
+    console.log("[reviewApi] Submitting review to backend:", payload);
     const res = await fetch(`${baseUrl}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) {
-      console.error('[reviewApi] Review submission failed with status', res.status, data);
-      throw new Error(data?.message || data?.error || `Failed to submit review: ${res.status}`);
+      console.error(
+        "[reviewApi] Review submission failed with status",
+        res.status,
+        data
+      );
+      throw new Error(
+        data?.message || data?.error || `Failed to submit review: ${res.status}`
+      );
     }
-    console.log('[reviewApi] Review submitted successfully:', data);
+    console.log("[reviewApi] Review submitted successfully:", data);
     return data;
   },
 
@@ -55,7 +63,7 @@ const reviewApi = {
     const res = await fetch(`${baseUrl}/status/${IddatPhong}`);
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.message || 'Failed to fetch review status');
+      throw new Error(data?.message || "Failed to fetch review status");
     }
     return data;
   },
@@ -67,7 +75,7 @@ const reviewApi = {
     const res = await fetch(`${baseUrl}/booking/${IddatPhong}`);
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.message || 'Failed to fetch reviews');
+      throw new Error(data?.message || "Failed to fetch reviews");
     }
     return Array.isArray(data) ? data : [];
   },
@@ -79,7 +87,7 @@ const reviewApi = {
     const res = await fetch(`${baseUrl}/stats`);
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.message || 'Failed to fetch rating stats');
+      throw new Error(data?.message || "Failed to fetch rating stats");
     }
     return data;
   },
@@ -89,14 +97,17 @@ const reviewApi = {
    * (Normally called automatically after checkout, but exposed for admin override)
    */
   sendReviewEmail: async (IddatPhong: string, email: string): Promise<any> => {
+    const token = localStorage.getItem("hs_token");
+    const headers: any = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(`${baseUrl}/send-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers,
       body: JSON.stringify({ IddatPhong, Email: email }),
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.message || 'Failed to send review email');
+      throw new Error(data?.message || "Failed to send review email");
     }
     return data;
   },

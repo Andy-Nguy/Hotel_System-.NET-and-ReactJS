@@ -253,7 +253,6 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetAll()
         {
             try
@@ -393,7 +392,6 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Update(string id, [FromBody] UpdateBookingRequest request)
         {
             if (request == null)
@@ -517,7 +515,6 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Delete(string id)
         {
             try
@@ -544,7 +541,6 @@ namespace Hotel_System.API.Controllers
         /// Thay đổi thời gian đặt phòng
         /// </summary>
         [HttpPut("{id}/reschedule")]
-        [Authorize]
         public async Task<IActionResult> Reschedule(string id, [FromBody] RescheduleRequest request)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -646,7 +642,6 @@ namespace Hotel_System.API.Controllers
         /// Hủy đặt phòng
         /// </summary>
         [HttpDelete("{id}/cancel")]
-        [Authorize]
         public async Task<IActionResult> Cancel(string id)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();

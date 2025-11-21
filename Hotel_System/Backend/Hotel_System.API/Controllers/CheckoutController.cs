@@ -48,7 +48,6 @@ namespace Hotel_System.API.Controllers
 
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "nhanvien")]
     public class CheckoutController : ControllerBase
     {
         private readonly HotelSystemContext _context;

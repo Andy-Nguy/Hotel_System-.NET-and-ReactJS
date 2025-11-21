@@ -11,7 +11,6 @@ namespace Hotel_System.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "nhanvien")]
 public class KhuyenMaiController : ControllerBase
 {
     private readonly HotelSystemContext _context;

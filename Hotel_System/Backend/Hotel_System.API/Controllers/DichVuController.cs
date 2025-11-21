@@ -13,7 +13,6 @@ namespace Hotel_System.API.Controllers
     // 1. Đổi route sang tiếng Việt (kebab-case)
     [Route("api/dich-vu")]
     [ApiController]
-    [Authorize(Roles = "nhanvien")]
     public class DichVuController : ControllerBase
     {
         private readonly HotelSystemContext _context;

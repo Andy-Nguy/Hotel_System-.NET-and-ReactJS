@@ -77,9 +77,12 @@ export const getPromotionById = async (id: string): Promise<Promotion> => {
 export const createPromotion = async (
   data: CreatePromotionRequest
 ): Promise<Promotion> => {
+  const token = localStorage.getItem("hs_token");
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(API_BASE, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(data),
   });
   if (!response.ok) {
@@ -94,9 +97,12 @@ export const updatePromotion = async (
   id: string,
   data: UpdatePromotionRequest
 ): Promise<Promotion> => {
+  const token = localStorage.getItem("hs_token");
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(data),
   });
   if (!response.ok) {
@@ -108,9 +114,12 @@ export const updatePromotion = async (
 
 // Toggle promotion status (active/inactive)
 export const togglePromotion = async (id: string): Promise<Promotion> => {
+  const token = localStorage.getItem("hs_token");
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}/${id}/toggle`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers,
   });
   if (!response.ok) {
     const error = await response.json();
@@ -121,9 +130,12 @@ export const togglePromotion = async (id: string): Promise<Promotion> => {
 
 // Delete promotion
 export const deletePromotion = async (id: string): Promise<void> => {
+  const token = localStorage.getItem("hs_token");
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}/${id}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers,
   });
   if (!response.ok) {
     const error = await response.json();
@@ -132,10 +144,16 @@ export const deletePromotion = async (id: string): Promise<void> => {
 };
 
 // Update expired status for all promotions
-export const updateExpiredStatus = async (): Promise<{ message: string; count: number }> => {
+export const updateExpiredStatus = async (): Promise<{
+  message: string;
+  count: number;
+}> => {
+  const token = localStorage.getItem("hs_token");
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}/update-expired-status`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
   });
   if (!response.ok) {
     const error = await response.json();
@@ -165,11 +183,15 @@ export interface ApplyPromotionResponse {
 
 // Upload banner image
 export const uploadBanner = async (file: File): Promise<UploadResult> => {
+  const token = localStorage.getItem("hs_token");
+  const headers: any = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append("file", file);
 
   const response = await fetch(`${API_BASE}/upload-banner`, {
     method: "POST",
+    headers,
     body: formData,
   });
 
