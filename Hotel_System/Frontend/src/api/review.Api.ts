@@ -33,6 +33,7 @@ const reviewApi = {
    * Submit a review for a booking
    */
   submitReview: async (payload: ReviewSubmitPayload): Promise<ReviewResponse> => {
+    console.log('[reviewApi] Submitting review to backend:', payload);
     const res = await fetch(`${baseUrl}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -40,8 +41,10 @@ const reviewApi = {
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.message || data?.error || 'Failed to submit review');
+      console.error('[reviewApi] Review submission failed with status', res.status, data);
+      throw new Error(data?.message || data?.error || `Failed to submit review: ${res.status}`);
     }
+    console.log('[reviewApi] Review submitted successfully:', data);
     return data;
   },
 

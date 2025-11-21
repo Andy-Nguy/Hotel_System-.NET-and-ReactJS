@@ -13,12 +13,104 @@ namespace Hotel_System.API.Controllers
         private readonly HotelSystemContext _context;
         private readonly ILogger<ReviewController> _logger;
         private readonly IConfiguration _configuration;
+        // Simple in-memory guard to avoid sending duplicate review reminder emails
+        // keyed by booking id. Entry persists for 5 minutes to catch rapid duplicate requests
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _sentReviewEmailCache = new System.Collections.Concurrent.ConcurrentDictionary<string, DateTime>();
+        private static readonly TimeSpan EmailDedupWindow = TimeSpan.FromMinutes(5);
 
         public ReviewController(HotelSystemContext context, ILogger<ReviewController> logger, IConfiguration configuration)
         {
             _context = context;
             _logger = logger;
             _configuration = configuration;
+        }
+
+        /// <summary>
+        /// GET /api/Review/room/{idphong}/reviews - Get reviews for a room (paginated)
+        /// </summary>
+        [HttpGet("room/{idphong}/reviews")]
+        public async Task<IActionResult> GetRoomReviews(string idphong, int page = 1, int pageSize = 5)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(idphong)) return BadRequest(new { error = "Idphong is required" });
+
+                var query = _context.DanhGia
+                    .Where(r => r.Idphong == idphong)
+                    .Include(r => r.IdkhachHangNavigation)
+                    .OrderByDescending(r => r.CreatedAt);
+
+                var total = await query.CountAsync();
+
+                var reviews = await query
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(r => new
+                    {
+                        id = r.IddanhGia,
+                        roomId = r.Idphong,
+                        bookingId = r.IddatPhong,
+                        rating = r.SoSao,
+                        title = r.TieuDe,
+                        content = r.NoiDung,
+                        isAnonym = r.IsAnonym,
+                        customerName = r.IsAnonym == true ? "Ẩn danh" : (r.IdkhachHangNavigation != null ? r.IdkhachHangNavigation.HoTen : "Ẩn danh"),
+                        createdAt = r.CreatedAt
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    total,
+                    page,
+                    pageSize,
+                    reviews
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching room reviews");
+                return StatusCode(500, new { error = "Lỗi khi lấy đánh giá cho phòng" });
+            }
+        }
+
+        /// <summary>
+        /// GET /api/Review/room/{idphong}/stats - Get rating statistics for a room
+        /// </summary>
+        [HttpGet("room/{idphong}/stats")]
+        public async Task<IActionResult> GetRoomRatingStats(string idphong)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(idphong)) return BadRequest(new { error = "Idphong is required" });
+
+                var totalReviews = await _context.DanhGia.Where(r => r.Idphong == idphong).CountAsync();
+                var avgRating = totalReviews > 0
+                    ? await _context.DanhGia.Where(r => r.Idphong == idphong).AverageAsync(r => r.SoSao)
+                    : 0;
+
+                var ratingDistribution = await _context.DanhGia
+                    .Where(r => r.Idphong == idphong)
+                    .GroupBy(r => r.SoSao)
+                    .Select(g => new
+                    {
+                        stars = g.Key,
+                        count = g.Count()
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    totalReviews = totalReviews,
+                    averageRating = Math.Round(avgRating, 2),
+                    ratingDistribution = ratingDistribution
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching room rating stats");
+                return StatusCode(500, new { error = "Lỗi khi lấy thống kê đánh giá cho phòng" });
+            }
         }
 
         /// <summary>
@@ -61,11 +153,17 @@ namespace Hotel_System.API.Controllers
                     return StatusCode(500, new { error = "Booking does not contain room information" });
                 }
 
+                if (booking.IdkhachHang == null)
+                {
+                    // Must have a customer associated with the booking to submit a review
+                    return BadRequest(new { error = "Booking does not have an associated customer" });
+                }
+
                 // Create new review
                 var review = new DanhGium
                 {
                     IddatPhong = request.IddatPhong,
-                    IdkhachHang = booking.IdkhachHang ?? 0,
+                    IdkhachHang = booking.IdkhachHang.Value,
                     Idphong = booking.Idphong, // use the booked room id
                     SoSao = (byte)request.Rating,
                     TieuDe = request.Title,
@@ -76,7 +174,15 @@ namespace Hotel_System.API.Controllers
                 };
 
                 _context.DanhGia.Add(review);
-                await _context.SaveChangesAsync();
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateException dbex)
+                {
+                    _logger.LogError(dbex, "DB error saving review for booking {BookingId}", request.IddatPhong);
+                    return StatusCode(500, new { error = "Lỗi khi lưu đánh giá vào cơ sở dữ liệu", detail = dbex.Message });
+                }
 
                 return Ok(new
                 {
@@ -220,6 +326,25 @@ namespace Hotel_System.API.Controllers
                     return Ok(new { message = "Khách hàng đã đánh giá rồi" });
                 }
 
+                // Prevent duplicate reminder emails for the same booking within a short window
+                if (!string.IsNullOrEmpty(request.IddatPhong))
+                {
+                    if (_sentReviewEmailCache.TryGetValue(request.IddatPhong, out var sentAt))
+                    {
+                        // if sent within last 5 minutes, skip
+                        if (DateTime.UtcNow - sentAt < EmailDedupWindow)
+                        {
+                            _logger.LogInformation("Skipping duplicate review email for booking {BookingId} (sent {Minutes} minutes ago)", request.IddatPhong, (DateTime.UtcNow - sentAt).TotalMinutes);
+                            return Ok(new { message = "Email đã được gửi trước đó" });
+                        }
+                        else
+                        {
+                            // remove old entry so new send can be recorded
+                            _sentReviewEmailCache.TryRemove(request.IddatPhong, out _);
+                        }
+                    }
+                }
+
                 // Load email template
                 string templatePath = Path.Combine(Directory.GetCurrentDirectory(), "EmailTemplates", "thankyou-review.html");
                 if (!System.IO.File.Exists(templatePath))
@@ -250,7 +375,22 @@ namespace Hotel_System.API.Controllers
                     .Replace("{{HotelName}}", _configuration["Hotel:Name"] ?? "Khách sạn");
 
                 // Send email via SMTP
-                await SendEmailAsync(request.Email, "Cảm ơn bạn - Vui lòng đánh giá phòng của chúng tôi", emailBody);
+                try
+                {
+                    await SendEmailAsync(request.Email, "Cảm ơn bạn - Vui lòng đánh giá phòng của chúng tôi", emailBody);
+                    
+                    // Only record as sent if email was successfully sent (after await completes without exception)
+                    if (!string.IsNullOrEmpty(request.IddatPhong))
+                    {
+                        _sentReviewEmailCache[request.IddatPhong] = DateTime.UtcNow;
+                        _logger.LogInformation("Review reminder email sent and recorded for booking {BookingId}", request.IddatPhong);
+                    }
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogError(emailEx, "Failed to send review reminder email for booking {BookingId}", request.IddatPhong);
+                    throw; // re-throw so outer catch handles it
+                }
 
                 return Ok(new { message = "Email đã được gửi thành công" });
             }

@@ -1,31 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Input, message, Spin, Card, Rate, Checkbox, Progress } from 'antd';
 import { SendOutlined, CheckCircleOutlined } from '@ant-design/icons';
-// Giả định reviewApi và ReviewSubmitPayload đã được định nghĩa
-// import reviewApi, { ReviewSubmitPayload } from '../api/review.Api';
-
-// Giả định các kiểu dữ liệu cho môi trường này
-interface ReviewSubmitPayload {
-  IddatPhong: string;
-  Rating: number;
-  Title: string;
-  Content: string;
-  IsAnonym: 1 | 0;
-}
-
-// Giả lập API submission
-const reviewApi = {
-    submitReview: (payload: ReviewSubmitPayload) => new Promise((resolve, reject) => {
-        // Giả lập độ trễ API 1.5s
-        setTimeout(() => {
-            if (Math.random() < 0.95) { // 95% thành công
-                resolve({ success: true, payload });
-            } else {
-                reject(new Error('Lỗi kết nối hoặc dữ liệu không hợp lệ.'));
-            }
-        }, 1500);
-    })
-};
+import reviewApi, { ReviewSubmitPayload } from '../api/review.Api';
 
 
 const ReviewPage: React.FC = () => {
@@ -83,13 +59,16 @@ const ReviewPage: React.FC = () => {
         IsAnonym: isAnonym ? 1 : 0,
       };
 
-      // Giả lập gửi API
-      await reviewApi.submitReview(payload);
+      console.log('[ReviewPage] Submitting review payload:', payload);
       
+      const response = await reviewApi.submitReview(payload);
+      
+      console.log('[ReviewPage] Review submitted successfully:', response);
       message.success('Cảm ơn bạn đã đánh giá! Ý kiến của bạn rất quý giá với chúng tôi.');
       setSubmitted(true);
       
     } catch (e: any) {
+      console.error('[ReviewPage] Error submitting review:', e);
       message.error(e?.message || 'Gửi đánh giá thất bại. Vui lòng thử lại.');
     } finally {
       setLoading(false);

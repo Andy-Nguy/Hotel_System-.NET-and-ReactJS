@@ -12,6 +12,10 @@ import {
 import { Image } from "expo-image";
 import { Room } from "../api/roomsApi";
 import { COLORS, SIZES } from "../constants/theme";
+import reviewApi from "../api/reviewApi";
+import { useEffect, useState } from "react";
+import StarRating from './StarRating';
+import RoomReviews from './RoomReviews';
 
 interface Props {
   selectedRoom: Room | null;
@@ -47,6 +51,28 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
     return stars.join("");
   };
 
+  // Use shared StarRating component imported above
+
+  // Mobile review stats
+  const [stats, setStats] = useState<any | null>(null);
+  const [showReviews, setShowReviews] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!selectedRoom?.idphong) return;
+      try {
+        const s = await reviewApi.getRoomStats(String(selectedRoom.idphong));
+        if (cancelled) return;
+        setStats(s);
+      } catch (err) {
+        console.debug('RoomDetail: failed to load review stats', err);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [selectedRoom?.idphong]);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalContainer}>
@@ -70,9 +96,26 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
             <Text style={styles.detailSubtitle}>Phòng {selectedRoom.soPhong}</Text>
 
             <View style={styles.ratingRow}>
-              <Text style={styles.stars}>{renderStars(selectedRoom.xepHangSao || 0)}</Text>
-              <Text style={styles.ratingText}>{(selectedRoom.xepHangSao || 0).toFixed(1)}/5</Text>
+              {/* Use backend stats.averageRating when available, otherwise fallback to room.xepHangSao */}
+              {(() => {
+                const avg = (stats && typeof stats.averageRating === 'number') ? stats.averageRating : (selectedRoom.xepHangSao || 0);
+                return (
+                  <>
+                        <TouchableOpacity onPress={() => setShowReviews(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <StarRating avg={avg} size={18} />
+                          <Text style={styles.ratingText}>
+                            {avg.toFixed(1)}/5{stats?.totalReviews != null ? ` · ${stats.totalReviews} đánh giá` : ''}
+                          </Text>
+                        </TouchableOpacity>
+                  </>
+                );
+              })()}
             </View>
+
+            {/* Room reviews modal (opens when tapping rating text) */}
+            {showReviews && (
+              <RoomReviews roomId={String(selectedRoom.idphong)} visible={showReviews} onClose={() => setShowReviews(false)} />
+            )}
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Loại phòng:</Text>
@@ -84,17 +127,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
               <Text style={styles.detailValue}>{selectedRoom.soNguoiToiDa} người</Text>
             </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Trạng thái:</Text>
-              <Text
-                style={[
-                  styles.detailValue,
-                  selectedRoom.trangThai === "Available" ? { color: "#4CAF50" } : { color: "#FF9800" },
-                ]}
-              >
-                {selectedRoom.trangThai === "Available" ? "Trống" : "Đã đặt"}
-              </Text>
-            </View>
+
 
             <View style={styles.descriptionSection}>
               <Text style={styles.sectionLabel}>Mô tả</Text>

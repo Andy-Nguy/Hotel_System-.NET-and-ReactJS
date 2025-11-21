@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { getAmenitiesForRoom } from "../../api/amenticsApi";
+import ReviewPreview from "./ReviewPreview";
+import ReviewPanel from "./ReviewPanel";
+import ReviewDetailPanel from "./ReviewDetailPanel";
 const BACKEND_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string) ||
   "https://localhost:5001";
@@ -69,6 +72,106 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       cancelled = true;
     };
   }, [room?.idphong]);
+
+  // Reviews & stats state
+  const [stats, setStats] = useState<any | null>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [selectedReview, setSelectedReview] = useState<any | null>(null);
+  // Panel states
+  const [showReviewPanel, setShowReviewPanel] = useState(false);
+  const [showReviewDetailPanel, setShowReviewDetailPanel] = useState(false);
+  const [totalReviews, setTotalReviews] = useState(0);
+  const [reviewPanelReviews, setReviewPanelReviews] = useState<any[]>([]);
+  const [loadingReviewPanel, setLoadingReviewPanel] = useState(false);
+  const [reviewPanelPage, setReviewPanelPage] = useState(1);
+  const [reviewPanelPageSize] = useState(10);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchStats = async () => {
+      if (!room?.idphong) return;
+      setLoadingStats(true);
+      try {
+        setStatsError(null);
+        const res = await fetch(`${BACKEND_BASE}/api/Review/room/${room.idphong}/stats`);
+        if (!res.ok) {
+          const txt = await res.text().catch(() => null);
+          console.error("Failed to fetch stats", res.status, txt);
+          if (!cancelled) setStatsError(txt || `HTTP ${res.status}`);
+          return;
+        }
+        const data = await res.json();
+        if (cancelled) return;
+        setStats(data);
+        setTotalReviews(data.totalReviews ?? 0);
+      } catch (err) {
+        console.debug("Failed to load room stats", err);
+        if (!cancelled) setStatsError(String(err));
+      } finally {
+        if (!cancelled) setLoadingStats(false);
+      }
+    };
+
+    const fetchReviews = async (page = 1, pageSize = 3) => {
+      if (!room?.idphong) return;
+      setLoadingReviews(true);
+      try {
+        setReviewError(null);
+        const res = await fetch(`${BACKEND_BASE}/api/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${pageSize}`);
+        if (!res.ok) {
+          const txt = await res.text().catch(() => null);
+          console.error("Failed to fetch reviews", res.status, txt);
+          if (!cancelled) setReviewError(txt || `HTTP ${res.status}`);
+          return;
+        }
+        const data = await res.json();
+        if (cancelled) return;
+        setReviews(data.reviews ?? []);
+        setTotalReviews(data.total ?? 0);
+      } catch (err) {
+        console.debug("Failed to load room reviews", err);
+        if (!cancelled) setReviewError(String(err));
+      } finally {
+        if (!cancelled) setLoadingReviews(false);
+      }
+    };
+
+    fetchStats();
+    fetchReviews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [room?.idphong]);
+
+  // load all reviews when user opens the 'all reviews' modal
+  // load reviews for the ReviewPanel when opened or page changes
+  useEffect(() => {
+    if (!showReviewPanel) return;
+    let cancelled = false;
+    const loadPage = async (page = reviewPanelPage) => {
+      if (!room?.idphong) return;
+      setLoadingReviewPanel(true);
+      try {
+        const res = await fetch(`${BACKEND_BASE}/api/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${reviewPanelPageSize}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setReviewPanelReviews(data.reviews ?? []);
+        setTotalReviews(data.total ?? 0);
+      } catch (err) {
+        console.debug("Failed to load review panel page", err);
+      } finally {
+        if (!cancelled) setLoadingReviewPanel(false);
+      }
+    };
+    loadPage(reviewPanelPage);
+    return () => { cancelled = true; };
+  }, [showReviewPanel, reviewPanelPage, room?.idphong]);
 
   return (
     <Modal
@@ -277,77 +380,53 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
             </div>
           </div>
 
-          {/* Beds and features */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 32,
-              marginBottom: 24,
+          {/* === Reviews Overview & List === */}
+          <ReviewPreview
+            stats={stats}
+            reviews={reviews}
+            totalReviews={totalReviews}
+            loadingReviews={loadingReviews}
+            reviewError={reviewError}
+            statsError={statsError}
+            onViewAll={() => setShowReviewPanel(true)}
+            onSelectReview={(review) => {
+              setSelectedReview(review);
+              setShowReviewDetailPanel(true);
             }}
-          >
-            <div>
-              <h5
-                style={{
-                  marginTop: 0,
-                  marginBottom: 8,
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                Beds and Bedding
-              </h5>
-              <ul style={{ color: "#666", paddingLeft: 16, margin: 0 }}>
-                <li style={{ marginBottom: 4 }}>
-                  Maximum occupancy: {room.soNguoiToiDa ?? 2}
-                </li>
-                <li>
-                  {room.soNguoiToiDa && room.soNguoiToiDa >= 1
-                    ? "1 King bed"
-                    : "Standard bedding"}
-                </li>
-              </ul>
-            </div>
-
-            <div>
-                <h5
-                  style={{
-                    marginTop: 0,
-                    marginBottom: 8,
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}
-                >
-                  {promotion ? "Khuyến mãi" : "Room Features"}
-                </h5>
-                {promotion ? (
-                  <div style={{ color: "#666" }}>
-                    <div style={{ marginBottom: 6, fontWeight: 600 }}>
-                      {promotion.tenKhuyenMai}
-                    </div>
-                    {/* <div style={{ marginBottom: 6 }}>
-                      {promotion.loaiGiamGia === "percent"
-                        ? `Giảm ${promotion.giaTriGiam}% cho mỗi đêm` 
-                        : promotion.giaTriGiam != null
-                        ? `Giảm ${promotion.giaTriGiam.toLocaleString("vi-VN")} đ mỗi đêm`
-                        : "Ưu đãi đặc biệt"}
-                    </div> */}
-                    {promotion.moTa && (
-                      <div style={{ color: "#555" }}>{promotion.moTa}</div>
-                    )}
-                  </div>
-                ) : (
-                  <ul style={{ color: "#666", paddingLeft: 16, margin: 0 }}>
-                    <li style={{ marginBottom: 4 }}>
-                      {room.moTa?.split(",")[0]?.trim() ?? "Premium amenities"}
-                    </li>
-                    <li>Air-conditioned</li>
-                  </ul>
-                )}
-            </div>
-          </div>
+          />
         </div>
       </div>
+      {/* Review Panel (full-screen overlay) */}
+      <ReviewPanel
+        visible={showReviewPanel}
+        room={room}
+        stats={stats}
+        totalReviews={totalReviews}
+        reviewPanelReviews={reviewPanelReviews}
+        reviewPanelPage={reviewPanelPage}
+        reviewPanelPageSize={reviewPanelPageSize}
+        loadingReviewPanel={loadingReviewPanel}
+        onClose={() => {
+          setShowReviewPanel(false);
+          setShowReviewDetailPanel(false);
+        }}
+        onSelectReview={(review) => {
+          setSelectedReview(review);
+          setShowReviewDetailPanel(true);
+        }}
+        onPageChange={setReviewPanelPage}
+      />
+
+      {/* Review Detail Panel (layer above ReviewPanel) */}
+      <ReviewDetailPanel
+        visible={showReviewDetailPanel}
+        selectedReview={selectedReview}
+        onClose={() => {
+          setShowReviewDetailPanel(false);
+          setShowReviewPanel(false);
+        }}
+        onBackToList={() => setShowReviewDetailPanel(false)}
+      />
     </Modal>
   );
 };
