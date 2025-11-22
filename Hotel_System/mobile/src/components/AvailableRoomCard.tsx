@@ -63,83 +63,104 @@ const AvailableRoomCard: React.FC<Props> = ({
       discountedPrice < (room.basePricePerNight || 0)
     ) {
       return (
-        <>
-          <Text style={styles.originalPrice}>
-            {(room.basePricePerNight || 0).toLocaleString()}đ
-          </Text>
-          <View style={styles.promoRow}>
-            <Text style={styles.promoPrice}>
-              {discountedPrice.toLocaleString()}đ
+        <View style={styles.priceContainer}>
+          <View style={styles.discountTag}>
+            <Text style={styles.discountText}>
+              -{Math.round((1 - discountedPrice / (room.basePricePerNight || 1)) * 100)}%
             </Text>
-            <Text style={styles.priceUnit}> / đêm</Text>
           </View>
-        </>
+          <View>
+            <Text style={styles.originalPrice}>
+              {(room.basePricePerNight || 0).toLocaleString()}đ
+            </Text>
+            <View style={styles.priceRow}>
+              <Text style={styles.finalPrice}>
+                {discountedPrice.toLocaleString()}đ
+              </Text>
+              <Text style={styles.perNight}>/đêm</Text>
+            </View>
+          </View>
+        </View>
       );
     }
 
     return (
-      <View style={styles.priceInfoRow}>
-        <Text style={styles.price}>
+      <View style={styles.priceRow}>
+        <Text style={styles.finalPrice}>
           {(room.basePricePerNight || 0).toLocaleString()}đ
         </Text>
-        <Text style={styles.priceUnit}> / đêm</Text>
+        <Text style={styles.perNight}>/đêm</Text>
       </View>
     );
   };
 
   return (
     <View style={styles.card}>
-      <View style={styles.imageContainer}>
+      <TouchableOpacity 
+        activeOpacity={0.9} 
+        onPress={() => onOpenDetail?.(room)}
+        style={styles.imageContainer}
+      >
         {room.roomImageUrl ? (
           <Image
             source={{ uri: room.roomImageUrl }}
             style={styles.image}
             contentFit="cover"
+            transition={200}
           />
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Text>🏨</Text>
+            <AppIcon name="image" size={40} color={COLORS.gray} />
           </View>
         )}
 
         {promotion && (
-          <View style={styles.promotionBadge}>
-            <Text style={styles.promoText}>
-              {promotion.tenKhuyenMai || "KM"}
-            </Text>
+          <View style={styles.badgeContainer}>
+            <View style={styles.promoBadge}>
+              <AppIcon name="tag" size={12} color={COLORS.white} />
+              <Text style={styles.promoText}>
+                {promotion.tenKhuyenMai || "Ưu đãi"}
+              </Text>
+            </View>
           </View>
         )}
-      </View>
+        
+        <View style={styles.imageOverlay} />
+      </TouchableOpacity>
 
       <View style={styles.content}>
-        <Text style={styles.title} numberOfLines={2}>
-          {room.roomTypeName || "Phòng"}
-        </Text>
-        <Text style={styles.roomNumber}>Phòng {room.roomNumber}</Text>
-
-        <Text style={styles.description} numberOfLines={2}>
-          {room.description || ""}
-        </Text>
-
-        <View style={styles.priceSection}>
-          <Text style={styles.priceLabel}>Giá/đêm</Text>
-          {priceText()}
+        <View style={styles.headerRow}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.roomType} numberOfLines={1}>
+              {room.roomTypeName || "Phòng tiêu chuẩn"}
+            </Text>
+            <Text style={styles.roomNumber}>Phòng {room.roomNumber}</Text>
+          </View>
+          <View style={styles.ratingContainer}>
+            <AppIcon name="star" size={14} color="#FFD700" />
+            <Text style={styles.ratingText}>4.5</Text>
+          </View>
         </View>
 
-        <View style={styles.ctaRow}>
-          <TouchableOpacity
-            style={styles.primaryCta}
-            onPress={() => onSelect?.(room)}
-          >
-            <AppIcon name="check" size={14} color={COLORS.white} />
-            <Text style={styles.primaryCtaText}>Chọn phòng</Text>
-          </TouchableOpacity>
+        {room.description ? (
+          <Text style={styles.description} numberOfLines={2}>
+            {room.description}
+          </Text>
+        ) : null}
+
+        <View style={styles.divider} />
+
+        <View style={styles.footer}>
+          <View style={styles.priceWrapper}>
+            {priceText()}
+          </View>
 
           <TouchableOpacity
-            style={styles.secondaryCta}
-            onPress={() => onOpenDetail?.(room)}
+            style={styles.selectButton}
+            onPress={() => onSelect?.(room)}
           >
-            <Text style={styles.secondaryCtaText}>Xem chi tiết</Text>
+            <Text style={styles.selectButtonText}>Chọn</Text>
+            <AppIcon name="arrow-right" size={16} color={COLORS.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -150,78 +171,173 @@ const AvailableRoomCard: React.FC<Props> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    overflow: "hidden",
-    marginBottom: SIZES.padding,
+    borderRadius: 20,
+    marginBottom: 20,
     ...SHADOWS.medium,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    overflow: 'visible', // Allow shadows to show
   },
   imageContainer: {
-    position: "relative",
+    height: 220,
     width: "100%",
-    height: 200,
-    backgroundColor: "#eee",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#F0F0F0",
   },
-  image: { width: "100%", height: "100%" },
+  image: {
+    width: "100%",
+    height: "100%",
+  },
   imagePlaceholder: {
     width: "100%",
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#E0E0E0",
   },
-  promotionBadge: {
+  imageOverlay: {
     position: "absolute",
-    top: 10,
-    left: 10,
-    backgroundColor: "#FF6B6B",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+    // gradient effect simulated with background color opacity if needed, 
+    // but react-native doesn't support linear-gradient without a library.
+    // We'll just leave it transparent or use a slight dark tint if needed.
+    backgroundColor: 'transparent', 
+  },
+  badgeContainer: {
+    position: "absolute",
+    top: 16,
+    left: 16,
+    flexDirection: "row",
+    gap: 8,
+  },
+  promoBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FF4757",
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 8,
+    gap: 4,
   },
-  promoText: { color: COLORS.white, fontWeight: "700" },
-  content: { padding: SIZES.padding },
-  title: {
+  promoText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  content: {
+    padding: 20,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  titleContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  roomType: {
     fontSize: 18,
     fontWeight: "700",
     color: COLORS.secondary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  roomNumber: { fontSize: 12, color: COLORS.gray },
-  description: {
-    fontSize: 12,
+  roomNumber: {
+    fontSize: 13,
     color: COLORS.gray,
-    marginTop: 6,
-    marginBottom: 6,
+    fontWeight: "500",
   },
-  priceSection: { marginTop: 8, marginBottom: 12 },
-  priceLabel: { fontSize: 11, color: "#999", marginBottom: 2 },
-  originalPrice: {
-    fontSize: 12,
-    color: "#999",
-    textDecorationLine: "line-through",
-  },
-  promoRow: { flexDirection: "row", alignItems: "baseline", gap: 6 },
-  promoPrice: { fontSize: 18, fontWeight: "800", color: "#E53935" },
-  priceInfoRow: { flexDirection: "row", alignItems: "baseline" },
-  price: { fontSize: 18, fontWeight: "700", color: COLORS.primary },
-  priceUnit: { fontSize: 12, color: "#999", marginLeft: 6 },
-  ctaRow: { flexDirection: "row", gap: 8 },
-  primaryCta: {
+  ratingContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
+    backgroundColor: "#FFF9F2",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
   },
-  primaryCtaText: { color: COLORS.white, fontWeight: "700", marginLeft: 8 },
-  secondaryCta: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
+  ratingText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.secondary,
   },
-  secondaryCtaText: { color: COLORS.secondary, fontWeight: "700" },
+  description: {
+    fontSize: 14,
+    color: COLORS.gray,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#F1F3F5",
+    marginBottom: 16,
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  priceWrapper: {
+    flex: 1,
+  },
+  priceContainer: {
+    alignItems: "flex-start",
+  },
+  discountTag: {
+    backgroundColor: "#FFE3E3",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  discountText: {
+    color: "#FF4757",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  originalPrice: {
+    fontSize: 13,
+    color: COLORS.gray,
+    textDecorationLine: "line-through",
+    marginBottom: 2,
+  },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  finalPrice: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  perNight: {
+    fontSize: 13,
+    color: COLORS.gray,
+    marginLeft: 4,
+  },
+  selectButton: {
+    backgroundColor: COLORS.secondary,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    gap: 8,
+  },
+  selectButtonText: {
+    color: COLORS.white,
+    fontWeight: "700",
+    fontSize: 14,
+  },
 });
 
 export default AvailableRoomCard;

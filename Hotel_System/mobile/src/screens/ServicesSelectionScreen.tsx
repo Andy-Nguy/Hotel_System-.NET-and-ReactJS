@@ -7,12 +7,13 @@ import {
   SafeAreaView,
   StyleSheet,
   Alert,
-  Image,
   Modal,
+  ScrollView,
 } from "react-native";
+import { Image } from "expo-image";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import AppIcon from "../components/AppIcon";
-import { COLORS, SIZES, FONTS } from "../constants/theme";
+import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import { DEFAULT_BASE_URL } from "../config/apiConfig";
 import BookingProgress from "../components/BookingProgress";
 
@@ -59,7 +60,6 @@ const ServicesSelectionScreen: React.FC = () => {
   const loadServices = async () => {
     setLoading(true);
     try {
-      // TODO: Replace with actual API call
       const response = await fetch(
         `${DEFAULT_BASE_URL}/api/dich-vu/lay-danh-sach`
       );
@@ -99,188 +99,156 @@ const ServicesSelectionScreen: React.FC = () => {
             tenDichVu: "Ăn sáng",
             tienDichVu: 100000,
             trangThai: "Đang hoạt động",
-            thongTinDv: "Bữa sáng buffet với đa dạng món ăn Á - Âu.",
-            ghiChu: "06:30 - 10:00",
+            thongTinDv: "Buffet sáng đa dạng các món Á - Âu.",
+            ghiChu: "6:00 - 10:00",
           },
         ];
         setServices(mockServices);
       }
     } catch (error) {
       console.error("Error loading services:", error);
-      Alert.alert("Lỗi", "Không thể tải danh sách dịch vụ");
     } finally {
       setLoading(false);
     }
   };
 
-  const isAvailable = (status?: string) => {
-    if (!status) return true;
-    const s = status.toLowerCase();
-    return (
-      !s.includes("ngưng") && !s.includes("inactive") && !s.includes("không")
+  const handleQuantityChange = (
+    service: Service,
+    change: number
+  ) => {
+    const existing = selectedServices.find(
+      (s) => s.serviceId === service.iddichVu
     );
-  };
+    const currentQty = existing ? existing.quantity : 0;
+    const newQty = Math.max(0, currentQty + change);
 
-  const toggleSelect = (svc: Service) => {
-    const idx = selectedServices.findIndex((s) => s.serviceId === svc.iddichVu);
-    if (idx >= 0) {
+    if (newQty === 0) {
       setSelectedServices(
-        selectedServices.map((s) =>
-          s.serviceId === svc.iddichVu ? { ...s, quantity: s.quantity + 1 } : s
-        )
+        selectedServices.filter((s) => s.serviceId !== service.iddichVu)
       );
     } else {
-      setSelectedServices([
-        ...selectedServices,
-        {
-          serviceId: svc.iddichVu,
-          serviceName: svc.tenDichVu,
-          price: svc.tienDichVu,
-          quantity: 1,
-        },
-      ]);
+      if (existing) {
+        setSelectedServices(
+          selectedServices.map((s) =>
+            s.serviceId === service.iddichVu ? { ...s, quantity: newQty } : s
+          )
+        );
+      } else {
+        setSelectedServices([
+          ...selectedServices,
+          {
+            serviceId: service.iddichVu,
+            serviceName: service.tenDichVu,
+            price: service.tienDichVu,
+            quantity: newQty,
+          },
+        ]);
+      }
     }
   };
 
-  const removeService = (serviceId: string) => {
-    setSelectedServices(
-      selectedServices.filter((s) => s.serviceId !== serviceId)
+  const calculateTotal = () => {
+    return selectedServices.reduce(
+      (sum, s) => sum + s.price * s.quantity,
+      0
     );
   };
 
-  const setQuantity = (serviceId: string, qty: number) => {
-    if (qty <= 0) {
-      removeService(serviceId);
-      return;
-    }
-    setSelectedServices(
-      selectedServices.map((s) =>
-        s.serviceId === serviceId ? { ...s, quantity: qty } : s
-      )
-    );
-  };
-
-  const openDetail = (svc: Service) => {
-    setSelectedServiceDetail(svc);
-    setDetailModalVisible(true);
-  };
-
-  const calculateTotalServices = () => {
-    return selectedServices.reduce((total, service) => {
-      const price = typeof service.price === "number" ? service.price : 0;
-      const quantity =
-        typeof service.quantity === "number" ? service.quantity : 1;
-      return total + price * quantity;
-    }, 0);
-  };
-
-  const calculateTotalRooms = () => {
-    return selectedRooms.reduce((total: number, room: any) => {
-      const nights = Math.ceil(
-        (new Date(checkOut).getTime() - new Date(checkIn).getTime()) /
-          (1000 * 60 * 60 * 24)
-      );
-      const price = room.discountedPrice || room.basePricePerNight || 0;
-      return total + (typeof price === "number" ? price : 0) * nights;
-    }, 0);
-  };
-
-  const handleContinueToCheckout = () => {
+  const handleProceed = () => {
     (navigation as any).navigate("Checkout", {
+      selectedRooms,
       selectedServices,
+      checkIn,
+      checkOut,
+      guests,
+      rooms,
     });
   };
 
+  const openServiceDetail = (service: Service) => {
+    setSelectedServiceDetail(service);
+    setDetailModalVisible(true);
+  };
+
+  const closeServiceDetail = () => {
+    setDetailModalVisible(false);
+    setSelectedServiceDetail(null);
+  };
+
   const renderServiceItem = ({ item }: { item: Service }) => {
-    const isSelected = selectedServices.some(
-      (s) => s.serviceId === item.iddichVu
-    );
-    const selectedService = selectedServices.find(
-      (s) => s.serviceId === item.iddichVu
-    );
+    const selected = selectedServices.find((s) => s.serviceId === item.iddichVu);
+    const quantity = selected ? selected.quantity : 0;
 
     return (
-      <View style={styles.serviceCard}>
+      <TouchableOpacity
+        style={styles.serviceCard}
+        onPress={() => openServiceDetail(item)}
+        activeOpacity={0.9}
+      >
         <View style={styles.serviceImageContainer}>
-          <Image
-            source={{
-              uri:
-                item.hinhDichVu ||
-                "https://via.placeholder.com/100x100?text=Service",
-            }}
-            style={styles.serviceImage}
-          />
+          {item.hinhDichVu ? (
+            <Image
+              source={{ uri: item.hinhDichVu }}
+              style={styles.serviceImage}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={styles.serviceImagePlaceholder}>
+              <AppIcon name="star" size={24} color={COLORS.gray} />
+            </View>
+          )}
         </View>
 
         <View style={styles.serviceContent}>
-          <Text style={styles.serviceName}>
-            {String(item.tenDichVu || "Dịch vụ")}
-          </Text>
+          <Text style={styles.serviceName}>{item.tenDichVu}</Text>
           <Text style={styles.servicePrice}>
-            $
-            {typeof item.tienDichVu === "number"
-              ? item.tienDichVu.toLocaleString()
-              : "0"}
-            /lần
+            {item.tienDichVu.toLocaleString()}đ
           </Text>
-
-          {item.thongTinDv && (
-            <Text style={styles.serviceDescription} numberOfLines={2}>
-              {String(item.thongTinDv)}
+          {item.ghiChu && (
+            <Text style={styles.serviceNote} numberOfLines={1}>
+              {item.ghiChu}
             </Text>
           )}
-
-          <View style={styles.serviceActions}>
-            <TouchableOpacity
-              style={styles.detailButton}
-              onPress={() => openDetail(item)}
-            >
-              <Text style={styles.detailButtonText}>Chi tiết</Text>
-            </TouchableOpacity>
-
-            {!isSelected ? (
-              <TouchableOpacity
-                style={styles.selectButton}
-                onPress={() => toggleSelect(item)}
-              >
-                <Text style={styles.selectButtonText}>Chọn</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.quantityControls}>
-                <TouchableOpacity
-                  style={styles.qtyButton}
-                  onPress={() =>
-                    setQuantity(
-                      item.iddichVu,
-                      (selectedService?.quantity || 1) - 1
-                    )
-                  }
-                >
-                  <Text style={styles.qtyButtonText}>-</Text>
-                </TouchableOpacity>
-                <Text style={styles.quantityText}>
-                  {selectedService?.quantity || 1}
-                </Text>
-                <TouchableOpacity
-                  style={styles.qtyButton}
-                  onPress={() =>
-                    setQuantity(
-                      item.iddichVu,
-                      (selectedService?.quantity || 1) + 1
-                    )
-                  }
-                >
-                  <Text style={styles.qtyButtonText}>+</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
         </View>
-      </View>
+
+        <View style={styles.quantityControl}>
+          {quantity > 0 ? (
+            <>
+              <TouchableOpacity
+                style={styles.qtyBtn}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleQuantityChange(item, -1);
+                }}
+              >
+                <AppIcon name="minus" size={12} color={COLORS.secondary} />
+              </TouchableOpacity>
+              <Text style={styles.qtyText}>{quantity}</Text>
+              <TouchableOpacity
+                style={styles.qtyBtn}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleQuantityChange(item, 1);
+                }}
+              >
+                <AppIcon name="plus" size={12} color={COLORS.secondary} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={styles.addBtn}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleQuantityChange(item, 1);
+              }}
+            >
+              <AppIcon name="plus" size={16} color={COLORS.white} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
     );
   };
-
-  const availableServices = services.filter((s) => isAvailable(s.trangThai));
 
   return (
     <SafeAreaView style={styles.container}>
@@ -289,112 +257,50 @@ const ServicesSelectionScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
+          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chọn dịch vụ</Text>
-        <View style={{ width: 20 }} />
+        <Text style={styles.headerTitle}>Dịch vụ thêm</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <BookingProgress currentStage="services" />
+      <BookingProgress
+        currentStage="services"
+        totalRooms={rooms}
+        currentRoom={rooms} // Finished room selection
+        selectedRoomNumbers={selectedRooms.map((sr: any) => sr.roomNumber)}
+      />
 
-      <View style={styles.summarySection}>
-        <Text style={styles.summaryTitle}>Tóm tắt đặt phòng</Text>
-        <Text style={styles.summaryText}>
-          Nhận phòng: {new Date(checkIn).toLocaleDateString("vi-VN")} - Trả
-          phòng: {new Date(checkOut).toLocaleDateString("vi-VN")}
-        </Text>
-        <Text style={styles.summaryText}>
-          {selectedRooms.length} phòng, {guests} khách
-        </Text>
-      </View>
-
-      <View style={styles.servicesSection}>
-        <Text style={styles.sectionTitle}>
-          Dịch vụ có sẵn ({availableServices.length})
-        </Text>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Đang tải dịch vụ...</Text>
-          </View>
-        ) : availableServices.length > 0 ? (
-          <FlatList
-            data={availableServices}
-            renderItem={renderServiceItem}
-            keyExtractor={(item) => item.iddichVu}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.servicesList}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Không có dịch vụ nào</Text>
-              </View>
-            }
-          />
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Không có dịch vụ nào</Text>
-          </View>
-        )}
-      </View>
-
-      {selectedServices.length > 0 && (
-        <View style={styles.selectedServicesSection}>
-          <Text style={styles.selectedTitle}>Dịch vụ đã chọn</Text>
-          {selectedServices.map((service) => (
-            <View key={service.serviceId} style={styles.selectedServiceItem}>
-              <View style={styles.selectedServiceInfo}>
-                <Text style={styles.selectedServiceName}>
-                  {String(service.serviceName || "Dịch vụ")}
-                </Text>
-                <Text style={styles.selectedServicePrice}>
-                  $
-                  {typeof service.price === "number"
-                    ? service.price.toLocaleString()
-                    : "0"}{" "}
-                  x {service.quantity || 1}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => removeService(service.serviceId)}
-                style={styles.removeButton}
-              >
-                <AppIcon name="trash" size={16} color={COLORS.error} />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <View style={styles.totalSection}>
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Tổng tiền phòng:</Text>
-          <Text style={styles.totalAmount}>
-            ${calculateTotalRooms().toLocaleString()}
-          </Text>
-        </View>
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Tổng tiền dịch vụ:</Text>
-          <Text style={styles.totalAmount}>
-            ${calculateTotalServices().toLocaleString()}
-          </Text>
-        </View>
-        <View style={[styles.totalRow, styles.grandTotal]}>
-          <Text style={styles.grandTotalLabel}>Tổng cộng:</Text>
-          <Text style={styles.grandTotalAmount}>
-            $
-            {(
-              calculateTotalRooms() + calculateTotalServices()
-            ).toLocaleString()}
+      <ScrollView 
+        style={styles.scrollContent} 
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.introSection}>
+          <Text style={styles.introTitle}>Trải nghiệm trọn vẹn</Text>
+          <Text style={styles.introText}>
+            Chọn thêm các dịch vụ tiện ích để kỳ nghỉ của bạn thêm phần hoàn hảo.
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.continueButton}
-          onPress={handleContinueToCheckout}
-        >
-          <Text style={styles.continueButtonText}>
-            Tiếp tục ({selectedServices.length} dịch vụ)
+        <FlatList
+          data={services}
+          renderItem={renderServiceItem}
+          keyExtractor={(item) => item.iddichVu}
+          scrollEnabled={false}
+          contentContainerStyle={{ paddingHorizontal: SIZES.padding }}
+        />
+      </ScrollView>
+
+      <View style={styles.bottomBar}>
+        <View style={styles.totalContainer}>
+          <Text style={styles.totalLabel}>Tổng dịch vụ</Text>
+          <Text style={styles.totalPrice}>
+            {calculateTotal().toLocaleString()}đ
           </Text>
+        </View>
+        <TouchableOpacity style={styles.proceedButton} onPress={handleProceed}>
+          <Text style={styles.proceedButtonText}>Tiếp tục</Text>
+          <AppIcon name="arrow-right" size={20} color={COLORS.white} />
         </TouchableOpacity>
       </View>
 
@@ -403,14 +309,14 @@ const ServicesSelectionScreen: React.FC = () => {
         visible={detailModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setDetailModalVisible(false)}
+        onRequestClose={closeServiceDetail}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Chi tiết dịch vụ</Text>
               <TouchableOpacity
-                onPress={() => setDetailModalVisible(false)}
+                onPress={closeServiceDetail}
                 style={styles.closeButton}
               >
                 <AppIcon name="close" size={24} color={COLORS.secondary} />
@@ -418,65 +324,55 @@ const ServicesSelectionScreen: React.FC = () => {
             </View>
 
             {selectedServiceDetail && (
-              <View style={styles.modalBody}>
-                <Image
-                  source={{
-                    uri:
-                      selectedServiceDetail.hinhDichVu ||
-                      "https://via.placeholder.com/200x150?text=Service",
-                  }}
-                  style={styles.modalImage}
-                />
+              <ScrollView style={styles.modalBody}>
+                <View style={styles.modalImageContainer}>
+                  {selectedServiceDetail.hinhDichVu ? (
+                    <Image
+                      source={{ uri: selectedServiceDetail.hinhDichVu }}
+                      style={styles.modalImage}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={styles.modalImagePlaceholder}>
+                      <Text style={styles.modalImagePlaceholderText}>✨</Text>
+                    </View>
+                  )}
+                </View>
 
-                <Text style={styles.modalServiceName}>
-                  {String(selectedServiceDetail.tenDichVu || "Dịch vụ")}
-                </Text>
-                <Text style={styles.modalServicePrice}>
-                  $
-                  {typeof selectedServiceDetail.tienDichVu === "number"
-                    ? selectedServiceDetail.tienDichVu.toLocaleString()
-                    : "0"}
-                  /lần
-                </Text>
+                <View style={styles.modalInfo}>
+                  <Text style={styles.modalServiceName}>
+                    {selectedServiceDetail.tenDichVu}
+                  </Text>
+                  <Text style={styles.modalServicePrice}>
+                    {selectedServiceDetail.tienDichVu.toLocaleString()}đ
+                  </Text>
 
-                {selectedServiceDetail.thongTinDv && (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>Mô tả:</Text>
-                    <Text style={styles.modalSectionText}>
-                      {String(selectedServiceDetail.thongTinDv)}
-                    </Text>
-                  </View>
-                )}
+                  <View style={styles.divider} />
 
-                {selectedServiceDetail.ghiChu && (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>Ghi chú:</Text>
-                    <Text style={styles.modalSectionText}>
-                      {String(selectedServiceDetail.ghiChu)}
-                    </Text>
-                  </View>
-                )}
-              </View>
+                  <Text style={styles.modalSectionTitle}>Mô tả</Text>
+                  <Text style={styles.modalDescription}>
+                    {selectedServiceDetail.thongTinDv || "Chưa có mô tả chi tiết."}
+                  </Text>
+
+                  {selectedServiceDetail.ghiChu && (
+                    <View style={styles.noteContainer}>
+                      <AppIcon name="info" size={16} color={COLORS.primary} />
+                      <Text style={styles.noteText}>
+                        {selectedServiceDetail.ghiChu}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
             )}
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setDetailModalVisible(false)}
+                style={styles.modalCloseButton}
+                onPress={closeServiceDetail}
               >
-                <Text style={styles.modalCancelText}>Đóng</Text>
+                <Text style={styles.modalCloseText}>Đóng</Text>
               </TouchableOpacity>
-              {selectedServiceDetail && (
-                <TouchableOpacity
-                  style={styles.modalSelectButton}
-                  onPress={() => {
-                    toggleSelect(selectedServiceDetail);
-                    setDetailModalVisible(false);
-                  }}
-                >
-                  <Text style={styles.modalSelectText}>Chọn dịch vụ</Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
         </View>
@@ -488,7 +384,7 @@ const ServicesSelectionScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F8F9FA",
   },
   header: {
     flexDirection: "row",
@@ -497,344 +393,267 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding,
     backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
   },
   backButton: {
     padding: 8,
+    borderRadius: 20,
+    backgroundColor: "#F5F5F5",
   },
   headerTitle: {
-    ...FONTS.h2,
+    ...FONTS.h3,
     fontWeight: "700",
     color: COLORS.secondary,
   },
-  summarySection: {
-    backgroundColor: COLORS.white,
-    margin: SIZES.padding,
-    padding: SIZES.padding,
-    borderRadius: 12,
+  scrollContent: {
+    flex: 1,
   },
-  summaryTitle: {
-    ...FONTS.h3,
-    fontWeight: "600",
+  introSection: {
+    padding: SIZES.padding,
+    marginBottom: 8,
+  },
+  introTitle: {
+    fontSize: 20,
+    fontWeight: "700",
     color: COLORS.secondary,
     marginBottom: 8,
   },
-  summaryText: {
-    ...FONTS.body4,
+  introText: {
+    fontSize: 14,
     color: COLORS.gray,
-    marginBottom: 4,
-  },
-  servicesSection: {
-    flex: 1,
-    paddingHorizontal: SIZES.padding,
-  },
-  sectionTitle: {
-    ...FONTS.h3,
-    fontWeight: "600",
-    color: COLORS.secondary,
-    marginBottom: SIZES.padding,
-  },
-  servicesList: {
-    paddingBottom: SIZES.padding,
+    lineHeight: 20,
   },
   serviceCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: SIZES.padding,
-    marginBottom: 12,
     flexDirection: "row",
-    ...{
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+    ...SHADOWS.light,
   },
   serviceImageContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: "#F8F9FA",
     overflow: "hidden",
-    marginRight: SIZES.padding,
+    marginRight: 16,
   },
   serviceImage: {
     width: "100%",
     height: "100%",
   },
+  serviceImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   serviceContent: {
     flex: 1,
   },
   serviceName: {
-    ...FONTS.body3,
+    fontSize: 16,
     fontWeight: "600",
     color: COLORS.secondary,
     marginBottom: 4,
   },
   servicePrice: {
-    ...FONTS.body4,
-    color: COLORS.primary,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  serviceDescription: {
-    ...FONTS.body4,
-    color: COLORS.gray,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  serviceActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  detailButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    borderRadius: 6,
-  },
-  detailButtonText: {
-    ...FONTS.body4,
-    color: COLORS.primary,
-    fontWeight: "600",
-  },
-  selectButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  selectButtonText: {
-    ...FONTS.body4,
-    color: COLORS.white,
-    fontWeight: "600",
-  },
-  quantityControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  qtyButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.lightGray,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  qtyButtonText: {
-    ...FONTS.body3,
-    color: COLORS.secondary,
-    fontWeight: "600",
-  },
-  quantityText: {
-    ...FONTS.body3,
-    color: COLORS.secondary,
-    minWidth: 20,
-    textAlign: "center",
-  },
-  loadingContainer: {
-    alignItems: "center",
-    paddingVertical: SIZES.padding * 3,
-  },
-  loadingText: {
-    ...FONTS.body3,
-    color: COLORS.gray,
-  },
-  emptyContainer: {
-    alignItems: "center",
-    paddingVertical: SIZES.padding * 3,
-  },
-  emptyText: {
-    ...FONTS.h4,
-    color: COLORS.gray,
-  },
-  selectedServicesSection: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: SIZES.padding,
-    marginBottom: SIZES.padding,
-    padding: SIZES.padding,
-    borderRadius: 12,
-  },
-  selectedTitle: {
-    ...FONTS.h4,
-    fontWeight: "600",
-    color: COLORS.secondary,
-    marginBottom: 12,
-  },
-  selectedServiceItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
-  },
-  selectedServiceInfo: {
-    flex: 1,
-  },
-  selectedServiceName: {
-    ...FONTS.body4,
-    color: COLORS.secondary,
-    marginBottom: 2,
-  },
-  selectedServicePrice: {
-    ...FONTS.body4,
-    color: COLORS.gray,
-  },
-  removeButton: {
-    padding: 8,
-  },
-  totalSection: {
-    backgroundColor: COLORS.white,
-    margin: SIZES.padding,
-    padding: SIZES.padding,
-    borderRadius: 12,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  totalLabel: {
-    ...FONTS.body4,
-    color: COLORS.secondary,
-  },
-  totalAmount: {
-    ...FONTS.body4,
-    color: COLORS.primary,
-    fontWeight: "600",
-  },
-  grandTotal: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-    paddingTop: 12,
-    marginTop: 8,
-  },
-  grandTotalLabel: {
-    ...FONTS.body3,
-    fontWeight: "600",
-    color: COLORS.secondary,
-  },
-  grandTotalAmount: {
-    ...FONTS.h3,
+    fontSize: 15,
     fontWeight: "700",
     color: COLORS.primary,
   },
-  continueButton: {
-    backgroundColor: "#d47153ff",
-    paddingVertical: SIZES.padding,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 16,
+  serviceNote: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginTop: 2,
   },
-  continueButtonText: {
-    ...FONTS.h4,
-    color: COLORS.white,
+  quantityControl: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  qtyBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F8F9FA",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E9ECEF",
+  },
+  qtyText: {
+    fontSize: 14,
     fontWeight: "600",
+    color: COLORS.secondary,
+    minWidth: 16,
+    textAlign: "center",
+  },
+  addBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.white,
+    padding: 20,
+    paddingBottom: 34,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    ...SHADOWS.dark,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  totalContainer: {
+    flex: 1,
+  },
+  totalLabel: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginBottom: 2,
+  },
+  totalPrice: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  proceedButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  proceedButtonText: {
+    fontSize: 16,
+    color: COLORS.white,
+    fontWeight: "700",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    width: "90%",
-    maxHeight: "80%",
-    ...{
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      elevation: 5,
-    },
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    height: "80%",
+    ...SHADOWS.dark,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: SIZES.padding,
+    padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
+    borderBottomColor: "#F1F3F5",
   },
   modalTitle: {
-    ...FONTS.h2,
-    fontWeight: "700",
+    ...FONTS.h3,
     color: COLORS.secondary,
   },
   closeButton: {
-    padding: 8,
+    padding: 4,
   },
   modalBody: {
-    padding: SIZES.padding,
+    flex: 1,
+  },
+  modalImageContainer: {
+    width: "100%",
+    height: 250,
+    backgroundColor: "#F8F9FA",
   },
   modalImage: {
     width: "100%",
-    height: 150,
-    borderRadius: 8,
-    marginBottom: SIZES.padding,
+    height: "100%",
+  },
+  modalImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalImagePlaceholderText: {
+    fontSize: 64,
+  },
+  modalInfo: {
+    padding: 24,
   },
   modalServiceName: {
-    ...FONTS.h3,
+    fontSize: 24,
     fontWeight: "700",
     color: COLORS.secondary,
     marginBottom: 8,
   },
   modalServicePrice: {
-    ...FONTS.h4,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "700",
     color: COLORS.primary,
-    marginBottom: SIZES.padding,
+    marginBottom: 24,
   },
-  modalSection: {
-    marginBottom: SIZES.padding,
+  divider: {
+    height: 1,
+    backgroundColor: "#F1F3F5",
+    marginBottom: 24,
   },
   modalSectionTitle: {
-    ...FONTS.body3,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
     color: COLORS.secondary,
-    marginBottom: 4,
+    marginBottom: 12,
   },
-  modalSectionText: {
-    ...FONTS.body4,
+  modalDescription: {
+    fontSize: 15,
     color: COLORS.gray,
-    lineHeight: 20,
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  noteContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF9F2",
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  noteText: {
+    fontSize: 13,
+    color: COLORS.secondary,
+    flex: 1,
   },
   modalFooter: {
-    flexDirection: "row",
+    padding: 24,
     borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
+    borderTopColor: "#F1F3F5",
+    backgroundColor: COLORS.white,
   },
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: SIZES.padding,
+  modalCloseButton: {
+    backgroundColor: "#F1F3F5",
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: "center",
-    borderRightWidth: 1,
-    borderRightColor: COLORS.lightGray,
   },
-  modalCancelText: {
-    ...FONTS.h4,
-    color: COLORS.gray,
-    fontWeight: "600",
-  },
-  modalSelectButton: {
-    flex: 1,
-    paddingVertical: SIZES.padding,
-    alignItems: "center",
-    backgroundColor: COLORS.primary,
-    borderBottomRightRadius: 12,
-  },
-  modalSelectText: {
-    ...FONTS.h4,
-    color: COLORS.white,
-    fontWeight: "600",
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.secondary,
   },
 });
 
