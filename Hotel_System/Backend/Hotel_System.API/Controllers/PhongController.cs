@@ -272,6 +272,7 @@ namespace Hotel_System.API.Controllers
        
         // POST: api/Phong
         [HttpPost]
+        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Create([FromBody] Phong payload)
         {
             if (payload == null) return BadRequest("Invalid payload");
@@ -305,6 +306,7 @@ namespace Hotel_System.API.Controllers
 
         // PUT: api/Phong/{id}
         [HttpPut("{id}")]
+        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Update(string id, [FromBody] Phong payload)
         {
             if (payload == null) return BadRequest("Invalid payload");
@@ -353,6 +355,7 @@ namespace Hotel_System.API.Controllers
 
         // DELETE: api/Phong/{id}
         [HttpDelete("{id}")]
+        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Delete(string id)
         {
             var existing = await _context.Phongs.FindAsync(id);

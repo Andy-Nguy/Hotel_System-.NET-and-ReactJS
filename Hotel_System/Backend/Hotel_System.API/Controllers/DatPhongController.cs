@@ -253,6 +253,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetAll()
         {
             try
@@ -515,6 +516,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Delete(string id)
         {
             try
