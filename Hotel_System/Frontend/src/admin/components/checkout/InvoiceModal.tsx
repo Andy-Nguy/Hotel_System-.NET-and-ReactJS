@@ -73,7 +73,7 @@ const InvoiceModal: React.FC<Props> = ({
   const [submitting, setSubmitting] = useState(false);
 
   const handleCompleteClick = async () => {
-    const id = (mergedInvoice ?? invoiceData ?? paymentRow)?.IDDatPhong ?? (mergedInvoice ?? invoiceData ?? paymentRow)?.idDatPhong ?? paymentRow?.IddatPhong;
+    const id = invoiceData?.IDDatPhong ?? invoiceData?.idDatPhong ?? paymentRow?.IddatPhong;
     if (!id) return message.error('Không xác định được mã đặt phòng');
     try {
       setSubmitting(true);
