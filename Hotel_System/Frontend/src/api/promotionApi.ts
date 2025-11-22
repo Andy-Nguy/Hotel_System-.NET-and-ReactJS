@@ -12,6 +12,7 @@ export interface PromotionRoom {
 export interface Promotion {
   idkhuyenMai: string;
   tenKhuyenMai: string;
+  loaiKhuyenMai?: string; // 'room' | 'service' | 'customer'
   moTa?: string;
   loaiGiamGia: string; // "percent" | "amount"
   giaTriGiam?: number;
@@ -22,28 +23,41 @@ export interface Promotion {
   createdAt?: string;
   updatedAt?: string;
   khuyenMaiPhongs: PromotionRoom[];
+  khuyenMaiDichVus?: Array<{
+    id: number;
+    idkhuyenMai: string;
+    iddichVu: string;
+    isActive: boolean;
+    ngayApDung?: string;
+    ngayKetThuc?: string;
+    tenDichVu?: string;
+  }>;
 }
 
 export interface CreatePromotionRequest {
   tenKhuyenMai: string;
+  loaiKhuyenMai?: string;
   moTa?: string;
   loaiGiamGia: string;
   giaTriGiam: number;
   ngayBatDau: string;
   ngayKetThuc: string;
-  phongIds: string[];
+  phongIds?: string[];
+  dichVuIds?: string[];
   hinhAnhBanner?: string;
 }
 
 export interface UpdatePromotionRequest {
   tenKhuyenMai: string;
+  loaiKhuyenMai?: string;
   moTa?: string;
   loaiGiamGia: string;
   giaTriGiam: number;
   ngayBatDau: string;
   ngayKetThuc: string;
   trangThai: string;
-  phongIds: string[];
+  phongIds?: string[];
+  dichVuIds?: string[];
   hinhAnhBanner?: string;
 }
 
@@ -108,6 +122,23 @@ export const updatePromotion = async (
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.message || "Failed to update promotion");
+  }
+  return response.json();
+};
+
+// Assign a service to a promotion (backend endpoint)
+export const assignServiceToPromotion = async (
+  promotionId: string,
+  payload: { iddichVu: string; isActive?: boolean; ngayApDung?: string; ngayKetThuc?: string }
+): Promise<any> => {
+  const response = await fetch(`${API_BASE}/${promotionId}/assign-service`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to assign service to promotion");
   }
   return response.json();
 };

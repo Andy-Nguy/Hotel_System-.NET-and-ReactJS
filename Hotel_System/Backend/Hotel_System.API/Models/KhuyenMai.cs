@@ -13,6 +13,9 @@ public partial class KhuyenMai
 
     public string LoaiGiamGia { get; set; } = null!;
 
+    // Loại khuyến mãi: 'room', 'service', 'customer'
+    public string LoaiKhuyenMai { get; set; } = "room";
+
     public decimal? GiaTriGiam { get; set; }
 
     public DateOnly NgayBatDau { get; set; }
@@ -28,4 +31,5 @@ public partial class KhuyenMai
     public string? HinhAnhBanner { get; set; }
 
     public virtual ICollection<KhuyenMaiPhong> KhuyenMaiPhongs { get; set; } = new List<KhuyenMaiPhong>();
+    public virtual ICollection<KhuyenMaiDichVu> KhuyenMaiDichVus { get; set; } = new List<KhuyenMaiDichVu>();
 }
