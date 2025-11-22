@@ -10,6 +10,7 @@ namespace Hotel_System.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "nhanvien")]
     public class DashboardController : ControllerBase
     {
         private readonly HotelSystemContext _context;
