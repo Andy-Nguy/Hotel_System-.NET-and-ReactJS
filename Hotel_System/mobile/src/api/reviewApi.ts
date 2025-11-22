@@ -40,4 +40,21 @@ export async function getRoomReviews(roomId: string, page = 1, pageSize = 10) {
   }
 }
 
-export default { getRoomStats, getRoomReviews };
+export async function submitReview(payload: any) {
+  try {
+    const res = await fetch(`${DEFAULT_BASE_URL}/api/Review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* ignore */ }
+    return { ok: res.ok, status: res.status, data, message: data?.message || (res.ok ? 'OK' : `HTTP ${res.status}`) };
+  } catch (err: any) {
+    console.debug('[reviewApi] submitReview error', err);
+    return { ok: false, status: 0, data: null, message: err?.message || 'Network error' };
+  }
+}
+
+export default { getRoomStats, getRoomReviews, submitReview };

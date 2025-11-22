@@ -291,7 +291,68 @@ namespace Hotel_System.API.Controllers
                 return StatusCode(500, new { error = "Lỗi khi lấy thống kê đánh giá" });
             }
         }
+        /// <summary>
+/// GET /api/Review/open/{IddatPhong}
+/// Trả về HTML:
+///   - Mobile → cố mở Expo Go (exp://192.168.2.62:8081/--/review/{IddatPhong}), nếu fail thì về web.
+///   - PC     → về thẳng web http://localhost:5173/review/{IddatPhong}.
+/// </summary>
+[HttpGet("open/{IddatPhong}")]
+public IActionResult OpenReview(string IddatPhong)
+{
+    if (string.IsNullOrWhiteSpace(IddatPhong))
+        return BadRequest("IddatPhong là bắt buộc");
 
+    // URL web cho PC
+    var frontendBaseUrl = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
+    var desktopUrl = $"{frontendBaseUrl}/review/{IddatPhong}";
+
+    // Expo Go DEV URL – PHẢI ĐÚNG VỚI Metro: "exp://192.168.2.62:8081"
+    var expoBase = _configuration["Mobile:ExpoDeepLink"] ?? "exp://192.168.2.62:8081";
+
+    // Deep link chuẩn của Expo dev: exp://ip:port/--/review/{bookingId}
+    var mobileAppUrl = $"{expoBase}/--/review/{Uri.EscapeDataString(IddatPhong)}";
+
+    var html = $@"<!DOCTYPE html>
+<html lang=""vi"">
+<head>
+  <meta charset=""utf-8"" />
+  <title>Đang mở trang đánh giá...</title>
+  <meta name=""viewport"" content=""width=device-width, initial-scale=1"" />
+  <script>
+    window.onload = function () {{
+      var ua = navigator.userAgent.toLowerCase();
+      var isMobile = /android|iphone|ipad|ipod/.test(ua);
+
+      var appUrl = '{mobileAppUrl}';
+      var webUrl = '{desktopUrl}';
+
+      if (isMobile) {{
+        // Thử mở app Expo Go
+        window.location = appUrl;
+
+        // Sau 2 giây nếu không mở được → fallback sang web
+        setTimeout(function () {{
+          window.location = webUrl;
+        }}, 2000);
+      }} else {{
+        // PC → đi thẳng web
+        window.location = webUrl;
+      }}
+    }};
+  </script>
+</head>
+<body>
+  <p>Đang chuyển đến trang đánh giá...</p>
+</body>
+</html>";
+
+    return new ContentResult
+    {
+        Content = html,
+        ContentType = "text/html; charset=utf-8"
+    };
+}
         /// <summary>
         /// POST /api/Review/send-email - Send review reminder email
         /// </summary>
@@ -356,11 +417,15 @@ namespace Hotel_System.API.Controllers
                 string emailBody = System.IO.File.ReadAllText(templatePath);
 
                 // Replace placeholders
-                var reviewLink = $"{_configuration["Frontend:BaseUrl"] ?? "http://localhost:5173"}/review/{request.IddatPhong}";
-                var roomName = booking.IdphongNavigation?.IdloaiPhongNavigation?.TenLoaiPhong 
-                               ?? booking.IdphongNavigation?.TenPhong 
+                var apiBaseUrl = _configuration["Api:PublicBaseUrl"]
+                 ?? $"{Request.Scheme}://{Request.Host}";
+
+                var reviewLink = $"{apiBaseUrl}/api/Review/open/{request.IddatPhong}";
+
+                var roomName = booking.IdphongNavigation?.IdloaiPhongNavigation?.TenLoaiPhong
+                               ?? booking.IdphongNavigation?.TenPhong
                                ?? "Phòng";
-                
+
                 emailBody = emailBody
                     .Replace("{{CustomerName}}", booking.IdkhachHangNavigation?.HoTen ?? "Khách hàng")
                     .Replace("{{BookingId}}", booking.IddatPhong)
@@ -373,12 +438,11 @@ namespace Hotel_System.API.Controllers
                     .Replace("{{HotelPhone}}", _configuration["Hotel:Phone"] ?? "1900 xxxx")
                     .Replace("{{HotelEmail}}", _configuration["Hotel:Email"] ?? _configuration["Smtp:From"] ?? "")
                     .Replace("{{HotelName}}", _configuration["Hotel:Name"] ?? "Khách sạn");
-
                 // Send email via SMTP
                 try
                 {
                     await SendEmailAsync(request.Email, "Cảm ơn bạn - Vui lòng đánh giá phòng của chúng tôi", emailBody);
-                    
+
                     // Only record as sent if email was successfully sent (after await completes without exception)
                     if (!string.IsNullOrEmpty(request.IddatPhong))
                     {

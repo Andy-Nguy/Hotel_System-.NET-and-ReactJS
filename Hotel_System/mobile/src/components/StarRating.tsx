@@ -1,13 +1,14 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
 interface Props {
   avg: number;
   size?: number;
+  onSelect?: (v: number) => void;
 }
 
-const StarRating: React.FC<Props> = ({ avg, size = 18 }) => {
+const StarRating: React.FC<Props> = ({ avg, size = 18, onSelect }) => {
   const stars = [0, 1, 2, 3, 4];
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -17,13 +18,14 @@ const StarRating: React.FC<Props> = ({ avg, size = 18 }) => {
         if (avg >= threshold) name = 'star';
         else if (avg > i && avg < threshold) name = 'star-half';
         return (
-          <MaterialIcons
-            key={i}
-            name={name}
-            size={size}
-            color={name === 'star-border' ? '#ddd' : '#C9A043'}
-            style={{ marginRight: 4 }}
-          />
+          <TouchableOpacity key={i} onPress={() => onSelect && onSelect(i + 1)} accessibilityRole="button">
+            <MaterialIcons
+              name={name}
+              size={size}
+              color={name === 'star-border' ? '#ddd' : '#C9A043'}
+              style={{ marginRight: 4 }}
+            />
+          </TouchableOpacity>
         );
       })}
     </View>
