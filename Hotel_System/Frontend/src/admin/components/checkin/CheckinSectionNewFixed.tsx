@@ -15,6 +15,8 @@ const CheckinSectionNewFixed: React.FC = () => {
   // modal / selected booking (detailed object fetched when opening)
   const [showModal, setShowModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any | null>(null);
+  // track confirm buttons disabled after click (persist until error or page reload)
+  const [disabledConfirmIds, setDisabledConfirmIds] = useState<Set<string>>(new Set());
 
   const loadToday = async () => {
     setLoading(true);
@@ -40,6 +42,8 @@ const CheckinSectionNewFixed: React.FC = () => {
 
   const handleConfirm = async (id: string) => {
     if (!confirm("Xác nhận nhận khách?")) return;
+    // mark this id as disabled so the button cannot be pressed again
+    setDisabledConfirmIds((s) => new Set(s).add(id));
     try {
       const result = await checkinApi.confirmCheckIn(id);
       // Instead of reloading from the server (which would exclude this
@@ -49,17 +53,15 @@ const CheckinSectionNewFixed: React.FC = () => {
       if (selectedBooking && selectedBooking.iddatPhong === id) {
         setSelectedBooking({ ...selectedBooking, trangThai: 3 });
       }
-
-      // user feedback based on server response
-      const emailSent = result?.emailSent;
-      if (emailSent === true) {
-        alert("Xác nhận thành công. Email xác nhận đã được gửi đến khách.");
-      } else if (emailSent === false) {
-        alert("Xác nhận thành công. Không thể gửi email (kiểm tra cấu hình SMTP).\nEmail vẫn có thể được gửi thủ công later.");
-      } else {
-        alert("Xác nhận thành công.");
-      }
+      // user feedback: always show simple success message
+      alert("Xác nhận thành công.");
     } catch (err: any) {
+      // If confirmation failed, allow retry by removing disabled state
+      setDisabledConfirmIds((s) => {
+        const copy = new Set(s);
+        copy.delete(id);
+        return copy;
+      });
       alert(err?.message || "Xác nhận thất bại");
     }
   };
@@ -437,7 +439,7 @@ const CheckinSectionNewFixed: React.FC = () => {
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     {/* Show Confirm only for status 2 */}
                     {b.trangThai === 2 && (
-                      <button onClick={() => handleConfirm(b.iddatPhong)}>Xác nhận</button>
+                      <button disabled={disabledConfirmIds.has(b.iddatPhong)} onClick={() => handleConfirm(b.iddatPhong)}>Xác nhận</button>
                     )}
 
                     {/* Show a single Cancel button for any non-cancelled booking so it stays visible after confirm */}

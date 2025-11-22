@@ -291,7 +291,6 @@ namespace Hotel_System.API.Controllers
                 return StatusCode(500, new { error = "Lỗi khi lấy thống kê đánh giá" });
             }
         }
-
         /// <summary>
         /// POST /api/Review/send-email - Send review reminder email
         /// </summary>

@@ -40,6 +40,8 @@ const CheckoutTable: React.FC<Props> = ({
   viewMode = "using",
   onViewChange,
 }) => {
+  // track disabled state per booking id to prevent repeated clicks
+  const [disabledMap, setDisabledMap] = React.useState<Record<string, boolean>>({});
   const columns: ColumnsType<BookingRow> = [
     {
       title: "Mã đặt phòng",
@@ -97,8 +99,8 @@ const CheckoutTable: React.FC<Props> = ({
         const isCompleted = (r.TrangThai ?? 0) === 4;
 
         // Chế độ trả phòng hôm nay: chỉ cho "Xác nhận trả phòng"
-        if (viewMode === "checkout") {
-          return (
+        if (viewMode === 'checkout') {
+                return (
             <Space>
               {isCompleted ? (
                 <Button disabled>Đã hoàn tất</Button>
@@ -106,29 +108,12 @@ const CheckoutTable: React.FC<Props> = ({
                 <>
                   {/* Show 'Xác nhận trả phòng' only when booking is already paid */}
                   {isPaid && (
-                    <Button
-                      type="primary"
-                      onClick={() =>
-                        onViewInvoice ? onViewInvoice(r) : onComplete(r)
-                      }
-                    >
-                      Xác nhận trả phòng
-                    </Button>
+                    <Button type="primary" disabled={!!disabledMap[r.IddatPhong]} onClick={() => { setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true })); (onViewInvoice ? onViewInvoice(r) : onComplete(r)); }}>Xác nhận trả phòng</Button>
                   )}
 
                   {/* Show 'Xác nhận thanh toán' only when booking is NOT paid */}
                   {!isPaid && (
-                    <Button
-                      type="primary"
-                      danger={false}
-                      onClick={() =>
-                        typeof (
-                          /* istanbul ignore next */ onOpenPaymentForm
-                        ) === "function"
-                          ? onOpenPaymentForm!(r)
-                          : onPay?.(r)
-                      }
-                    >
+                    <Button type="primary" danger={false} disabled={!!disabledMap[r.IddatPhong]} onClick={() => { setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true })); (typeof (onOpenPaymentForm) === 'function' ? onOpenPaymentForm!(r) : onPay?.(r)); }}>
                       Xác nhận thanh toán
                     </Button>
                   )}
