@@ -292,67 +292,67 @@ namespace Hotel_System.API.Controllers
             }
         }
         /// <summary>
-/// GET /api/Review/open/{IddatPhong}
-/// Trả về HTML:
-///   - Mobile → cố mở Expo Go (exp://192.168.2.62:8081/--/review/{IddatPhong}), nếu fail thì về web.
-///   - PC     → về thẳng web http://localhost:5173/review/{IddatPhong}.
-/// </summary>
-[HttpGet("open/{IddatPhong}")]
-public IActionResult OpenReview(string IddatPhong)
-{
-    if (string.IsNullOrWhiteSpace(IddatPhong))
-        return BadRequest("IddatPhong là bắt buộc");
+        /// GET /api/Review/open/{IddatPhong}
+        /// Trả về HTML:
+        ///   - Mobile → cố mở Expo Go (exp://192.168.2.62:8081/--/review/{IddatPhong}), nếu fail thì về web.
+        ///   - PC     → về thẳng web http://localhost:5173/review/{IddatPhong}.
+        /// </summary>
+        [HttpGet("open/{IddatPhong}")]
+        public IActionResult OpenReview(string IddatPhong)
+        {
+            if (string.IsNullOrWhiteSpace(IddatPhong))
+                return BadRequest("IddatPhong là bắt buộc");
 
-    // URL web cho PC
-    var frontendBaseUrl = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
-    var desktopUrl = $"{frontendBaseUrl}/review/{IddatPhong}";
+            // URL web cho PC
+            var frontendBaseUrl = _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
+            var desktopUrl = $"{frontendBaseUrl}/review/{IddatPhong}";
 
-    // Expo Go DEV URL – PHẢI ĐÚNG VỚI Metro: "exp://192.168.2.62:8081"
-    var expoBase = _configuration["Mobile:ExpoDeepLink"] ?? "exp://192.168.2.62:8081";
+            // Expo Go DEV URL – PHẢI ĐÚNG VỚI Metro: "exp://192.168.2.62:8081"
+            var expoBase = _configuration["Mobile:ExpoDeepLink"] ?? "exp://192.168.2.62:8081";
 
-    // Deep link chuẩn của Expo dev: exp://ip:port/--/review/{bookingId}
-    var mobileAppUrl = $"{expoBase}/--/review/{Uri.EscapeDataString(IddatPhong)}";
+            // Deep link chuẩn của Expo dev: exp://ip:port/--/review/{bookingId}
+            var mobileAppUrl = $"{expoBase}/--/review/{Uri.EscapeDataString(IddatPhong)}";
 
-    var html = $@"<!DOCTYPE html>
-<html lang=""vi"">
-<head>
-  <meta charset=""utf-8"" />
-  <title>Đang mở trang đánh giá...</title>
-  <meta name=""viewport"" content=""width=device-width, initial-scale=1"" />
-  <script>
-    window.onload = function () {{
-      var ua = navigator.userAgent.toLowerCase();
-      var isMobile = /android|iphone|ipad|ipod/.test(ua);
+                            var html = $@"<!DOCTYPE html>
+                <html lang=""vi"">
+                <head>
+                <meta charset=""utf-8"" />
+                <title>Đang mở trang đánh giá...</title>
+                <meta name=""viewport"" content=""width=device-width, initial-scale=1"" />
+                <script>
+                    window.onload = function () {{
+                    var ua = navigator.userAgent.toLowerCase();
+                    var isMobile = /android|iphone|ipad|ipod/.test(ua);
 
-      var appUrl = '{mobileAppUrl}';
-      var webUrl = '{desktopUrl}';
+                    var appUrl = '{mobileAppUrl}';
+                    var webUrl = '{desktopUrl}';
 
-      if (isMobile) {{
-        // Thử mở app Expo Go
-        window.location = appUrl;
+                    if (isMobile) {{
+                        // Thử mở app Expo Go
+                        window.location = appUrl;
 
-        // Sau 2 giây nếu không mở được → fallback sang web
-        setTimeout(function () {{
-          window.location = webUrl;
-        }}, 2000);
-      }} else {{
-        // PC → đi thẳng web
-        window.location = webUrl;
-      }}
-    }};
-  </script>
-</head>
-<body>
-  <p>Đang chuyển đến trang đánh giá...</p>
-</body>
-</html>";
+                        // Sau 2 giây nếu không mở được → fallback sang web
+                        setTimeout(function () {{
+                        window.location = webUrl;
+                        }}, 2000);
+                    }} else {{
+                        // PC → đi thẳng web
+                        window.location = webUrl;
+                    }}
+                    }};
+                </script>
+                </head>
+                <body>
+                <p>Đang chuyển đến trang đánh giá...</p>
+                </body>
+                </html>";
 
-    return new ContentResult
-    {
-        Content = html,
-        ContentType = "text/html; charset=utf-8"
-    };
-}
+            return new ContentResult
+            {
+                Content = html,
+                ContentType = "text/html; charset=utf-8"
+            };
+        }
         /// <summary>
         /// POST /api/Review/send-email - Send review reminder email
         /// </summary>

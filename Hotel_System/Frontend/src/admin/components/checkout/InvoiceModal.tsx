@@ -1,6 +1,7 @@
 // src/components/checkout/InvoiceModal.tsx
 import React from 'react';
 import { Modal, Button, Descriptions, Table, Tag, message } from 'antd';
+import { useState } from 'react';
 
 interface Props {
   visible: boolean;
@@ -24,6 +25,21 @@ const InvoiceModal: React.FC<Props> = ({
     const id = invoiceData?.IDDatPhong ?? invoiceData?.idDatPhong ?? paymentRow?.IddatPhong;
     if (!id) return message.error('Không xác định được mã đặt phòng');
     await onComplete(String(id));
+  };
+
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCompleteClick = async () => {
+    const id = invoiceData?.IDDatPhong ?? invoiceData?.idDatPhong ?? paymentRow?.IddatPhong;
+    if (!id) return message.error('Không xác định được mã đặt phòng');
+    try {
+      setSubmitting(true);
+      await onComplete(String(id));
+    } catch (err: any) {
+      message.error(err?.message || 'Hoàn tất thất bại');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // === CHỈ THAY ĐOẠN NÀY – TÍNH ĐÚNG, KHÔNG VAT ===
@@ -95,7 +111,7 @@ const InvoiceModal: React.FC<Props> = ({
       centered
       footer={[
         <Button key="close" onClick={onClose}>Đóng</Button>,
-        <Button key="complete" type="primary" onClick={handleComplete}>
+        <Button key="complete" type="primary" onClick={handleCompleteClick} loading={submitting} disabled={submitting}>
           Hoàn tất trả phòng
         </Button>,
       ]}
