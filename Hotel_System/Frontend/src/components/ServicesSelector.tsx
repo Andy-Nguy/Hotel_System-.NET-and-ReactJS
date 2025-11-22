@@ -193,7 +193,6 @@ const ServicesSelector: React.FC<ServicesSelectorProps> = ({ onServicesChange })
 					{showDetail && (
 						<div className="service-detail-modal" onClick={() => setShowDetail(false)}>
 							<div className="service-detail-content" onClick={e => e.stopPropagation()}>
-								<button className="close-btn" onClick={() => setShowDetail(false)}>×</button>
 								<div className="modal-body">
 									  <img src={services.find(s => s.id === detail?.iddichVu)?.HinhDichVu || placeholderImg} alt={services.find(s => s.id === detail?.iddichVu)?.TenDichVu || ''} className="modal-image" />
 									<div className="modal-info">
