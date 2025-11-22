@@ -243,48 +243,9 @@ namespace Hotel_System.API.Controllers
                 }
 
                 await _context.SaveChangesAsync();
-                // send notification email if we have customer's email
-                bool emailSent = false;
-                try
-                {
-                    var email = booking.IdkhachHangNavigation?.Email;
-                    var customerName = booking.IdkhachHangNavigation?.HoTen ?? "Khách hàng";
-                    if (!string.IsNullOrWhiteSpace(email))
-                    {
-                        var subject = $"Xác nhận nhận phòng - {booking.IddatPhong}";
-                        var roomName = booking.IdphongNavigation?.TenPhong ?? booking.Idphong;
-                        // Prepare date/time and guest info safely
-                        var checkinDt = booking.NgayNhanPhong.ToDateTime(new TimeOnly(14, 0));
-                        var checkoutDt = booking.NgayTraPhong.ToDateTime(new TimeOnly(12, 0));
-                        var checkinStr = checkinDt.ToString("dddd, dd/MM/yyyy 'lúc' HH:mm");
-                        var checkoutStr = checkoutDt.ToString("dddd, dd/MM/yyyy 'lúc' HH:mm");
-                        var nights = (booking.NgayTraPhong.ToDateTime(new TimeOnly(0, 0)) - booking.NgayNhanPhong.ToDateTime(new TimeOnly(0, 0))).Days;
-                        var soKhach = booking.SoNguoi ?? 1;
-                        
 
-                        var placeholders = new Dictionary<string, string>
-                        {
-                            ["CustomerName"] = customerName,
-                            ["BookingId"] = booking.IddatPhong,
-                            ["RoomName"] = roomName,
-                            ["RoomNumber"] = booking.Idphong ?? string.Empty,
-                            ["Checkin"] = checkinStr,
-                            ["Checkout"] = checkoutStr,
-                            ["Nights"] = nights.ToString(),
-                            ["Guests"] = soKhach.ToString(),
-                            ["HotelPhone"] = "0909 888 999"
-                        };
-
-                        var html = _templateRenderer.Render("checkin.html", placeholders);
-                        emailSent = await TrySendEmailAsync(email, subject, html);
-                    }
-                }
-                catch (Exception ex2)
-                {
-                    _logger.LogError(ex2, "Lỗi gửi email xác nhận cho đặt phòng {Id}", id);
-                }
-
-                return Ok(new { message = "Xác nhận nhận phòng thành công.", bookingId = booking.IddatPhong, trangThai = booking.TrangThai, emailSent });
+                // Do not send emails here; simply acknowledge success to the operator
+                return Ok(new { message = "Xác nhận nhận phòng thành công.", bookingId = booking.IddatPhong, trangThai = booking.TrangThai });
             }
             catch (Exception ex)
             {
