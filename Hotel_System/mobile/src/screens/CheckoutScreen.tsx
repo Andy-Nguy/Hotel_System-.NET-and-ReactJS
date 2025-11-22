@@ -244,6 +244,7 @@ const CheckoutScreen: React.FC = () => {
         grandTotal: calculateGrandTotal(),
         holdExpiresAt: result.data.holdExpiresAt,
         customer: customerInfo,
+        selectedServices: bookingInfo.selectedServices,
       };
 
       await AsyncStorage.setItem("customerInfo", JSON.stringify(customerInfo));
