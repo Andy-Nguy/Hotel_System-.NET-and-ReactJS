@@ -264,11 +264,14 @@ namespace Hotel_System.API.Controllers
                 foreach (var item in req.DichVu)
                 {
                     var lineTotal = item.TongTien ?? item.TienDichVu ?? item.DonGia ?? 0m;
+                    // Use computed line total as the stored price for the service line.
+                    // applied promotion id is not provided in the request here, so leave it null.
                     _context.Cthddvs.Add(new Cthddv
                     {
                         IdhoaDon = hoaDon.IdhoaDon,
                         IddichVu = item.IddichVu,
                         TienDichVu = Math.Round(lineTotal),
+                        IdkhuyenMai = null,
                         ThoiGianThucHien = DateTime.Now,
                         TrangThai = "Hoạt động"
                     });

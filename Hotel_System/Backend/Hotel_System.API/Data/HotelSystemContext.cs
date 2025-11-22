@@ -32,6 +32,7 @@ public partial class HotelSystemContext : DbContext
     public virtual DbSet<KhuyenMai> KhuyenMais { get; set; }
 
     public virtual DbSet<KhuyenMaiPhong> KhuyenMaiPhongs { get; set; }
+    public virtual DbSet<KhuyenMaiDichVu> KhuyenMaiDichVus { get; set; }
 
     public virtual DbSet<LichSuDatPhong> LichSuDatPhongs { get; set; }
 
@@ -73,6 +74,10 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.TienDichVu)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
+            // The database schema for CTHDDV does not include an IDKhuyenMai column.
+            // Keep the model property for application-side use but prevent EF Core
+            // from mapping it (and therefore querying a non-existent column).
+            entity.Ignore(e => e.IdkhuyenMai);
 
             entity.HasOne(d => d.IddichVuNavigation).WithMany(p => p.Cthddvs)
                 .HasForeignKey(d => d.IddichVu)
@@ -209,6 +214,38 @@ public partial class HotelSystemContext : DbContext
                 .HasColumnName("TrangThai");
         });
 
+        modelBuilder.Entity<KhuyenMaiDichVu>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_KhuyenMaiDichVu");
+            entity.ToTable("KhuyenMaiDichVu");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.IdkhuyenMai)
+                .HasMaxLength(50)
+                .HasColumnName("IDKhuyenMai");
+            entity.Property(e => e.IddichVu)
+                .HasMaxLength(50)
+                .HasColumnName("IDDichVu");
+            entity.Property(e => e.IsActive)
+                .HasColumnName("IsActive")
+                .HasDefaultValue(true);
+            entity.Property(e => e.NgayApDung).HasColumnName("NgayApDung");
+            entity.Property(e => e.NgayKetThuc).HasColumnName("NgayKetThuc");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnName("updated_at");
+
+            entity.HasOne(d => d.IdkhuyenMaiNavigation).WithMany(p => p.KhuyenMaiDichVus)
+                .HasForeignKey(d => d.IdkhuyenMai)
+                .HasConstraintName("FK_KhuyenMaiDichVu_KhuyenMai");
+            entity.HasOne(d => d.IddichVuNavigation).WithMany(p => p.KhuyenMaiDichVus)
+                .HasForeignKey(d => d.IddichVu)
+                .HasConstraintName("FK_KhuyenMaiDichVu_DichVu");
+        });
+
         modelBuilder.Entity<HoaDon>(entity =>
         {
             entity.HasKey(e => e.IdhoaDon).HasName("PK__HoaDon__5B896F4932F43493");
@@ -269,6 +306,10 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.LoaiGiamGia)
                 .HasMaxLength(10)
                 .IsUnicode(false);
+            entity.Property(e => e.LoaiKhuyenMai)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("room");
             entity.Property(e => e.TenKhuyenMai).HasMaxLength(200);
             entity.Property(e => e.TrangThai)
                 .HasMaxLength(10)

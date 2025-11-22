@@ -14,7 +14,7 @@ import {
   Tooltip,
   Image,
 } from "antd";
-import { EyeOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined } from "@ant-design/icons";
+import { EditOutlined, DeleteOutlined, PoweroffOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { Promotion, deletePromotion, togglePromotion } from "../../api/promotionApi";
 import PromotionModal from "./PromotionModal";
@@ -159,16 +159,6 @@ const PromotionList: React.FC<PromotionListProps> = ({
       width: 200,
       render: (_: any, record: Promotion) => (
         <Space>
-          <Tooltip title="Xem Chi Tiết">
-            <Button
-              type="text"
-              icon={<EyeOutlined />}
-              onClick={() => {
-                setSelectedPromotion(record);
-                setShowDetail(true);
-              }}
-            />
-          </Tooltip>
           <Tooltip title="Chỉnh Sửa">
             <Button
               type="text"
@@ -236,6 +226,9 @@ const PromotionList: React.FC<PromotionListProps> = ({
         </Col>
       </Row>
 
+      {/* Small inline style to indicate rows are clickable */}
+      <style>{`.row-clickable { cursor: pointer; }`}</style>
+
       <Table
         columns={columns}
         dataSource={promotions.map((p) => ({
@@ -245,6 +238,15 @@ const PromotionList: React.FC<PromotionListProps> = ({
         loading={loading}
         pagination={{ pageSize: 10, showSizeChanger: true }}
         scroll={{ x: 1200 }}
+        rowClassName={() => "row-clickable"}
+        onRow={(record: Promotion) => ({
+          onClick: (event) => {
+            // Prevent opening detail when clicking action buttons inside the row
+            if ((event.target as HTMLElement).closest('.ant-btn')) return;
+            setSelectedPromotion(record);
+            setShowDetail(true);
+          },
+        })}
       />
 
       {selectedPromotion && (

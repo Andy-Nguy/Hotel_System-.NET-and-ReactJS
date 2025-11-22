@@ -24,4 +24,5 @@ public partial class DichVu
     public virtual ICollection<Cthddv> Cthddvs { get; set; } = new List<Cthddv>();
 
     public virtual ICollection<TtdichVu> TtdichVus { get; set; } = new List<TtdichVu>();
+    public virtual ICollection<KhuyenMaiDichVu> KhuyenMaiDichVus { get; set; } = new List<KhuyenMaiDichVu>();
 }

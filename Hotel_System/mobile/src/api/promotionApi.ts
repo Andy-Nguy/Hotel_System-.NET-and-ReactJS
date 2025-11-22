@@ -18,6 +18,7 @@ export interface PromotionRoom {
 export interface Promotion {
   idkhuyenMai: string;
   tenKhuyenMai: string;
+  loaiKhuyenMai?: string; // 'room' | 'service' | 'customer'
   moTa?: string;
   loaiGiamGia: string;
   giaTriGiam?: number;
@@ -70,6 +71,7 @@ export const getPromotions = async (): Promise<Promotion[]> => {
     const normalizedData = Array.isArray(data)
       ? data.map((promo: any) => ({
           ...promo,
+          loaiKhuyenMai: promo.loaiKhuyenMai || promo.LoaiKhuyenMai || "room",
           hinhAnhBanner: normalizeImagePath(
             promo.hinhAnhBanner || promo.HinhAnhBanner
           ),

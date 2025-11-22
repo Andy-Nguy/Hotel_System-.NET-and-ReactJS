@@ -19,5 +19,10 @@ namespace Hotel_System.API.Models
         public string? ThongTinDv { get; set; }
         public int? ThoiLuongUocTinh { get; set; }
         public string? GhiChu { get; set; }
+
+        // Thông tin khuyến mãi (nếu có)
+        public decimal? GiaKhuyenMai { get; set; }
+        public string? TenKhuyenMai { get; set; }
+        public double? PhanTramGiam { get; set; }
     }
 }

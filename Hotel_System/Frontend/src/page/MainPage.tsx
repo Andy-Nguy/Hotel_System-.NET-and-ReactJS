@@ -26,6 +26,7 @@ import InvoicesManager from "../admin/pages/InvoicesManager";
 import CheckoutManager from "../admin/pages/CheckoutManager";
 import CheckInManager from "../admin/pages/CheckInManager";
 import LoyaltyManager from "../admin/pages/LoyaltyManager";
+import ReviewManager from "../admin/pages/ReviewManager";
 import NoAccessPage from "./NoAccessPage";
 import BookingSuccessPage from "./BookingSuccessPage";
 import AboutUsSection from "../components/AboutUsSection";
@@ -476,6 +477,18 @@ const MainPage: React.FC = () => {
       return null;
     }
     return <CheckInManager />;
+  }
+
+  if (
+    route === "#admin/review" ||
+    route === "/admin/review" ||
+    route === "#/admin/review"
+  ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
+    return <ReviewManager />;
   }
 
   // Blog detail route (internal blog pages)

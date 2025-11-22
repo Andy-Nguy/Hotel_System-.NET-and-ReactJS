@@ -12,6 +12,7 @@ export interface PromotionRoom {
 export interface Promotion {
   idkhuyenMai: string;
   tenKhuyenMai: string;
+  loaiKhuyenMai?: string; // 'room' | 'service' | 'customer'
   moTa?: string;
   loaiGiamGia: string; // "percent" | "amount"
   giaTriGiam?: number;
@@ -22,28 +23,41 @@ export interface Promotion {
   createdAt?: string;
   updatedAt?: string;
   khuyenMaiPhongs: PromotionRoom[];
+  khuyenMaiDichVus?: Array<{
+    id: number;
+    idkhuyenMai: string;
+    iddichVu: string;
+    isActive: boolean;
+    ngayApDung?: string;
+    ngayKetThuc?: string;
+    tenDichVu?: string;
+  }>;
 }
 
 export interface CreatePromotionRequest {
   tenKhuyenMai: string;
+  loaiKhuyenMai?: string;
   moTa?: string;
   loaiGiamGia: string;
   giaTriGiam: number;
   ngayBatDau: string;
   ngayKetThuc: string;
-  phongIds: string[];
+  phongIds?: string[];
+  dichVuIds?: string[];
   hinhAnhBanner?: string;
 }
 
 export interface UpdatePromotionRequest {
   tenKhuyenMai: string;
+  loaiKhuyenMai?: string;
   moTa?: string;
   loaiGiamGia: string;
   giaTriGiam: number;
   ngayBatDau: string;
   ngayKetThuc: string;
   trangThai: string;
-  phongIds: string[];
+  phongIds?: string[];
+  dichVuIds?: string[];
   hinhAnhBanner?: string;
 }
 
@@ -108,6 +122,23 @@ export const updatePromotion = async (
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.message || "Failed to update promotion");
+  }
+  return response.json();
+};
+
+// Assign a service to a promotion (backend endpoint)
+export const assignServiceToPromotion = async (
+  promotionId: string,
+  payload: { iddichVu: string; isActive?: boolean; ngayApDung?: string; ngayKetThuc?: string }
+): Promise<any> => {
+  const response = await fetch(`${API_BASE}/${promotionId}/assign-service`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to assign service to promotion");
   }
   return response.json();
 };
@@ -209,4 +240,71 @@ export const uploadBanner = async (file: File): Promise<UploadResult> => {
     size: data.size || data.Size,
     contentType: data.contentType || data.ContentType,
   } as UploadResult;
+};
+
+// Get promotions applicable to a specific service by id.
+// Strategy: fetch active promotions (server supports filters), then for each
+// promotion of type 'service' request its service mappings and return those
+// promotions that include the given service and have an active mapping.
+export const getPromotionsForService = async (
+  serviceId: string
+): Promise<{
+  promotionId: string;
+  promotionName: string;
+  loaiGiamGia: string;
+  giaTriGiam?: number | null;
+  moTa?: string | null;
+  ngayBatDau?: string | null;
+  ngayKetThuc?: string | null;
+  hinhAnhBanner?: string | null;
+  mapping?: { id: number; isActive: boolean; ngayApDung?: string | null; ngayKetThuc?: string | null };
+}[]> => {
+  try {
+    // Fetch only active promotions to reduce calls
+    const promotions = await getAllPromotions("active");
+    if (!promotions || promotions.length === 0) return [];
+
+    const today = new Date();
+    const candidates = promotions.filter((p) => (p.loaiKhuyenMai || p.LoaiKhuyenMai) === "service");
+
+    const results: any[] = [];
+    // For each candidate promotion, fetch mapping list
+    await Promise.all(
+      candidates.map(async (p) => {
+        try {
+          const resp = await fetch(`${API_BASE}/${p.idkhuyenMai || p.IdkhuyenMai}/services`);
+          if (!resp.ok) return;
+          const mappingList = await resp.json();
+          if (!Array.isArray(mappingList)) return;
+          const found = mappingList.find((m: any) => (m.iddichVu ?? m.IddichVu ?? m.iddichVu) === serviceId && m.isActive !== false && m.IsActive !== false);
+          if (!found) return;
+
+          // Basic date checks (if mapping has dates)
+          const startsOk = !found.ngayApDung || new Date(found.ngayApDung) <= today;
+          const endsOk = !found.ngayKetThuc || new Date(found.ngayKetThuc) >= today;
+          if (!startsOk || !endsOk) return;
+
+          results.push({
+            promotionId: p.idkhuyenMai || p.IdkhuyenMai,
+            promotionName: p.tenKhuyenMai || p.TenKhuyenMai || p.tenKhuyenMai,
+            loaiGiamGia: p.loaiGiamGia || p.LoaiGiamGia || p.loaiGiamGia,
+            giaTriGiam: p.giaTriGiam ?? p.GiaTriGiam ?? null,
+            moTa: p.moTa || p.MoTa || null,
+            ngayBatDau: p.ngayBatDau || p.NgayBatDau || null,
+            ngayKetThuc: p.ngayKetThuc || p.NgayKetThuc || null,
+            hinhAnhBanner: p.hinhAnhBanner || p.HinhAnhBanner || null,
+            mapping: found,
+          });
+        } catch (err) {
+          // ignore per-promotion fetch errors
+          console.warn("promotionApi.getPromotionsForService: failed for", p, err);
+        }
+      })
+    );
+
+    return results;
+  } catch (err) {
+    console.error("getPromotionsForService error:", err);
+    return [];
+  }
 };

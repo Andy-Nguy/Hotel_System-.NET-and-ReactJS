@@ -26,6 +26,9 @@ const RoomManager: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // per-room loading state for quick toggle actions
+  const [roomLoading, setRoomLoading] = useState<Record<string, boolean>>({});
+
   // UI state
   const [selectedType, setSelectedType] = useState<RoomType | null>(null);
   const [showTypeModal, setShowTypeModal] = useState(false);
@@ -126,7 +129,7 @@ const RoomManager: React.FC = () => {
 
     const target = current === 'Bảo trì' ? 'Trống' : 'Bảo trì';
 
-    setRoomLoading(prev => ({ ...prev, [roomId]: true }));
+    setRoomLoading((prev: Record<string, boolean>) => ({ ...prev, [roomId]: true }));
 
     try {
       const resp = await fetch(`/api/Phong/${roomId}`, {
@@ -159,7 +162,7 @@ const RoomManager: React.FC = () => {
         setRooms(fresh);
       } catch { /* ignore */ }
     } finally {
-      setRoomLoading(prev => ({ ...prev, [roomId]: false }));
+      setRoomLoading((prev: Record<string, boolean>) => ({ ...prev, [roomId]: false }));
     }
   };
 

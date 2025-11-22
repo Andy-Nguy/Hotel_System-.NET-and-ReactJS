@@ -234,6 +234,12 @@ const Slidebar: React.FC = () => {
           label="Điểm tích lũy & Cấp bậc"
         />
 
+        <NavItem
+          key="review"
+          routeFragment="admin/review"
+          label="Quản lý đánh giá"
+        />
+
       </nav>
       
     </aside>
