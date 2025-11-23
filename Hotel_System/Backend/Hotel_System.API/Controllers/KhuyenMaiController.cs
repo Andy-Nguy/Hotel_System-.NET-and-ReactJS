@@ -99,6 +99,7 @@ public class KhuyenMaiController : ControllerBase
     // POST: api/KhuyenMai/upload-banner
     // Upload hình ảnh banner cho khuyến mãi
     [HttpPost("upload-banner")]
+    // [Authorize(Roles = "nhanvien")]
     public async Task<ActionResult<UploadResultDto>> UploadBanner(IFormFile file)
     {
         try
@@ -155,6 +156,7 @@ public class KhuyenMaiController : ControllerBase
     // POST: api/KhuyenMai
     // Tạo khuyến mãi mới
     [HttpPost]
+    // [Authorize(Roles = "nhanvien")]
     public async Task<ActionResult<KhuyenMaiDto>> Create([FromBody] CreateKhuyenMaiDto dto)
     {
         try
@@ -265,6 +267,7 @@ public class KhuyenMaiController : ControllerBase
     // PUT: api/KhuyenMai/{id}
     // Cập nhật khuyến mãi
     [HttpPut("{id}")]
+    // [Authorize(Roles = "nhanvien")]
     public async Task<ActionResult<KhuyenMaiDto>> Update(string id, [FromBody] UpdateKhuyenMaiDto dto)
     {
         try
@@ -375,6 +378,7 @@ public class KhuyenMaiController : ControllerBase
     // PATCH: api/KhuyenMai/{id}/toggle
     // Bật/tắt khuyến mãi
     [HttpPatch("{id}/toggle")]
+    // [Authorize(Roles = "nhanvien")]
     public async Task<ActionResult<KhuyenMaiDto>> Toggle(string id)
     {
         try
@@ -429,6 +433,7 @@ public class KhuyenMaiController : ControllerBase
     // DELETE: api/KhuyenMai/{id}
     // Xóa khuyến mãi
     [HttpDelete("{id}")]
+    // [Authorize(Roles = "nhanvien")]
     public async Task<IActionResult> Delete(string id)
     {
         try
@@ -603,6 +608,7 @@ public class KhuyenMaiController : ControllerBase
     // POST: api/KhuyenMai/update-expired-status
     // Cập nhật trạng thái expired cho các khuyến mãi hết hạn
     [HttpPost("update-expired-status")]
+    // [Authorize(Roles = "nhanvien")]
     public async Task<IActionResult> UpdateExpiredStatus()
     {
         try

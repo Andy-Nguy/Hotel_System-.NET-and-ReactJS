@@ -41,7 +41,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
         Alert.alert("Thành công", "Đăng nhập thành công!", [
           {
             text: "OK",
-            onPress: () => navigation.replace("Home"),
+            onPress: () => navigation.replace("MainApp"),
           },
         ]);
       } else {
