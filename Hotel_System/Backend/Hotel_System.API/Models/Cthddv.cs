@@ -13,6 +13,9 @@ public partial class Cthddv
 
     public decimal? TienDichVu { get; set; }
 
+    // Applied promotion id (optional) for audit/tracking
+    public string? IdkhuyenMai { get; set; }
+
     public DateTime? ThoiGianThucHien { get; set; }
 
     // New columns from updated schema

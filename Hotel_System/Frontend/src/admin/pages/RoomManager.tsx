@@ -39,6 +39,9 @@ const RoomManager: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // per-room loading state for quick toggle actions
+  const [roomLoading, setRoomLoading] = useState<Record<string, boolean>>({});
+
   // UI state
   const [selectedType, setSelectedType] = useState<RoomType | null>(null);
   const [showTypeModal, setShowTypeModal] = useState(false);
@@ -201,7 +204,7 @@ const RoomManager: React.FC = () => {
         /* ignore */
       }
     } finally {
-      setRoomLoading((prev) => ({ ...prev, [roomId]: false }));
+      setRoomLoading((prev: Record<string, boolean>) => ({ ...prev, [roomId]: false }));
     }
   };
 

@@ -355,7 +355,23 @@ namespace Hotel_System.API.Controllers
         // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetAllUsage()
         {
-            var usages = await _context.Cthddvs.OrderByDescending(x => x.ThoiGianThucHien).Take(200).ToListAsync();
+            // Project to a lightweight shape to avoid JSON cycles from navigation properties
+            var usages = await _context.Cthddvs
+                .OrderByDescending(x => x.ThoiGianThucHien)
+                .Take(200)
+                .Select(c => new {
+                    c.Idcthddv,
+                    c.IdhoaDon,
+                    c.IddichVu,
+                    TenDichVu = c.IddichVuNavigation != null ? c.IddichVuNavigation.TenDichVu : null,
+                    c.TienDichVu,
+                    c.ThoiGianThucHien,
+                    c.ThoiGianBatDau,
+                    c.ThoiGianKetThuc,
+                    c.TrangThai
+                })
+                .ToListAsync();
+
             return Ok(usages);
         }
 
@@ -366,7 +382,22 @@ namespace Hotel_System.API.Controllers
         {
             var svc = await _context.DichVus.FindAsync(id);
             if (svc == null) return NotFound(new { message = "Dịch vụ không tồn tại" });
-            var usages = await _context.Cthddvs.Where(c => c.IddichVu == id).OrderByDescending(x => x.ThoiGianThucHien).ToListAsync();
+            var usages = await _context.Cthddvs
+                .Where(c => c.IddichVu == id)
+                .OrderByDescending(x => x.ThoiGianThucHien)
+                .Select(c => new {
+                    c.Idcthddv,
+                    c.IdhoaDon,
+                    c.IddichVu,
+                    TenDichVu = svc.TenDichVu,
+                    c.TienDichVu,
+                    c.ThoiGianThucHien,
+                    c.ThoiGianBatDau,
+                    c.ThoiGianKetThuc,
+                    c.TrangThai
+                })
+                .ToListAsync();
+
             return Ok(usages);
         }
 

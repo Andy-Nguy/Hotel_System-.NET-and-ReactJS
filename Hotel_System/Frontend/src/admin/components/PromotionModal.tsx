@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Modal, Descriptions, Tag, Table, Empty, Divider, Row, Col } from "antd";
 import dayjs from "dayjs";
 import { Promotion } from "../../api/promotionApi";
@@ -7,6 +7,15 @@ interface PromotionModalProps {
   promotion: Promotion;
   visible: boolean;
   onClose: () => void;
+}
+
+interface PromotionService {
+  id: number;
+  iddichVu: string;
+  tenDichVu: string;
+  isActive: boolean;
+  ngayApDung?: string;
+  ngayKetThuc?: string;
 }
 
 const PromotionModal: React.FC<PromotionModalProps> = ({
@@ -53,6 +62,61 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
     },
   ];
 
+  const [serviceList, setServiceList] = useState<PromotionService[]>([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+
+  const serviceColumns = [
+    {
+      title: "Mã Dịch Vụ",
+      dataIndex: "iddichVu",
+      key: "iddichVu",
+      width: "30%",
+    },
+    {
+      title: "Tên Dịch Vụ",
+      dataIndex: "tenDichVu",
+      key: "tenDichVu",
+      width: "40%",
+    },
+    {
+      title: "Trạng Thái Áp Dụng",
+      key: "isActive",
+      width: "30%",
+      render: (_: any, record: any) =>
+        record.isActive ? (
+          <Tag color="blue">Đang Áp Dụng</Tag>
+        ) : (
+          <Tag>Không Áp Dụng</Tag>
+        ),
+    },
+  ];
+
+  useEffect(() => {
+    // load service mappings when modal is visible and promotion is service-type
+    const loadServices = async () => {
+      if (!visible || !promotion) return;
+      if ((promotion as any).loaiKhuyenMai !== "service") return;
+      try {
+        setLoadingServices(true);
+        const resp = await fetch(`/api/KhuyenMai/${promotion.idkhuyenMai}/services`);
+        if (!resp.ok) {
+          setServiceList([]);
+          return;
+        }
+        const data = await resp.json();
+        // Expecting array of mapping objects with iddichVu and tenDichVu
+        setServiceList(data || []);
+      } catch (err) {
+        console.error("Failed to load promotion services", err);
+        setServiceList([]);
+      } finally {
+        setLoadingServices(false);
+      }
+    };
+
+    loadServices();
+  }, [visible, promotion]);
+
   return (
     <Modal
       title={`Chi Tiết Khuyến Mãi: ${promotion.tenKhuyenMai}`}
@@ -95,20 +159,39 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       )}
 
       <Divider />
-      <h3>Danh Sách Phòng Áp Dụng ({promotion.khuyenMaiPhongs.length} phòng)</h3>
-
-      {promotion.khuyenMaiPhongs.length > 0 ? (
-        <Table
-          columns={roomColumns}
-          dataSource={promotion.khuyenMaiPhongs.map((room, index) => ({
-            ...room,
-            key: `${room.idphong}_${index}`,
-          }))}
-          pagination={false}
-          size="small"
-        />
+      {((promotion as any).loaiKhuyenMai === "service") ? (
+        <>
+          <h3>Danh Sách Dịch Vụ Áp Dụng ({serviceList.length} dịch vụ)</h3>
+          {serviceList.length > 0 ? (
+            <Table
+              columns={serviceColumns}
+              dataSource={serviceList.map((s, index) => ({ ...s, key: `${s.id}_${index}` }))}
+              pagination={false}
+              size="small"
+              loading={loadingServices}
+            />
+          ) : (
+            <Empty description="Không có dịch vụ nào áp dụng khuyến mãi này" />
+          )}
+        </>
       ) : (
-        <Empty description="Không có phòng nào áp dụng khuyến mãi này" />
+        <>
+          <h3>Danh Sách Phòng Áp Dụng ({promotion.khuyenMaiPhongs?.length ?? 0} phòng)</h3>
+
+          {promotion.khuyenMaiPhongs && promotion.khuyenMaiPhongs.length > 0 ? (
+            <Table
+              columns={roomColumns}
+              dataSource={promotion.khuyenMaiPhongs.map((room, index) => ({
+                ...room,
+                key: `${room.idphong}_${index}`,
+              }))}
+              pagination={false}
+              size="small"
+            />
+          ) : (
+            <Empty description="Không có phòng nào áp dụng khuyến mãi này" />
+          )}
+        </>
       )}
 
       {promotion.createdAt && promotion.updatedAt && (

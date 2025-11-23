@@ -483,4 +483,5 @@ namespace Hotel_System.API.Controllers
         public string? IddatPhong { get; set; }
         public string? Email { get; set; }
     }
+    
 }

@@ -261,7 +261,7 @@ namespace Hotel_System.API.Controllers
                         var checkoutStr = checkoutDt.ToString("dddd, dd/MM/yyyy 'lúc' HH:mm");
                         var nights = (booking.NgayTraPhong.ToDateTime(new TimeOnly(0, 0)) - booking.NgayNhanPhong.ToDateTime(new TimeOnly(0, 0))).Days;
                         var soKhach = booking.SoNguoi ?? 1;
-                        var soTreEm = 0; // field for children not present in model; default to 0
+                        
 
                         var placeholders = new Dictionary<string, string>
                         {

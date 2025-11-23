@@ -4,6 +4,7 @@ public class KhuyenMaiDto
 {
     public string IdkhuyenMai { get; set; } = null!;
     public string TenKhuyenMai { get; set; } = null!;
+    public string LoaiKhuyenMai { get; set; } = "room"; // 'room' | 'service' | 'customer'
     public string? MoTa { get; set; }
     public string LoaiGiamGia { get; set; } = null!; // "percent" hoặc "amount"
     public decimal? GiaTriGiam { get; set; }
@@ -14,6 +15,7 @@ public class KhuyenMaiDto
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public List<KhuyenMaiPhongDto> KhuyenMaiPhongs { get; set; } = new();
+    public List<KhuyenMaiDichVuDto> KhuyenMaiDichVus { get; set; } = new();
 }
 
 public class KhuyenMaiPhongDto
