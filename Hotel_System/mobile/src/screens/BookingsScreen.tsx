@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   LayoutAnimation,
   UIManager,
   Platform,
+  Modal,
 } from "react-native";
 import {
   SafeAreaView,
@@ -18,9 +19,11 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import authApi from "../api/authApi";
+import reviewApi from "../api/reviewApi";
 import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS as AppColors, SIZES, FONTS, SHADOWS } from "../constants/theme";
+import ReviewScreen from "./ReviewScreen";
 
 const COLORS = { ...AppColors, primary: "#dfa974" };
 
@@ -176,6 +179,10 @@ const BookingsScreen: React.FC = () => {
   const { token, loading: authLoading } = useAuth();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const [activeReviewBookingId, setActiveReviewBookingId] = useState<string | null>(null);
+  const [activeReviewBookingCode, setActiveReviewBookingCode] = useState<string | null>(null);
+  const refreshTimers = useRef<Array<any>>([]);
+  const [completingId, setCompletingId] = useState<string | null>(null);
 
   useEffect(() => {
     // Enable LayoutAnimation for Android
@@ -219,6 +226,7 @@ const BookingsScreen: React.FC = () => {
           )
         : [];
       setBookings(sortedData);
+      console.debug('Loaded bookings', { count: sortedData.length, sample: sortedData[0] });
     } catch (e: any) {
       // If server returns 401, navigate to login so user can reauthenticate
       const errMsg = e?.message || "Failed to load bookings";
@@ -244,6 +252,59 @@ const BookingsScreen: React.FC = () => {
     }
   };
 
+  // When bookings change, schedule refreshes for bookings whose checkout
+  // time is in the future and whose status is not yet 'Completed' (4).
+  // If a booking's checkout time already passed but the server hasn't
+  // updated status to 4, trigger an immediate refresh so the review button
+  // can become enabled.
+  useEffect(() => {
+    // Clear existing timers
+    try {
+      refreshTimers.current.forEach((t) => clearTimeout(t));
+    } catch (e) {}
+    refreshTimers.current = [];
+
+    const now = new Date();
+    let shouldRefreshImmediately = false;
+
+    bookings.forEach((item) => {
+      const checkout = item?.ngayTraPhong ? new Date(item.ngayTraPhong) : null;
+      const rawStatus = getProp(item, "trangThai", "TrangThai");
+      const statusCode = rawStatus !== undefined ? Number(rawStatus) : undefined;
+
+      if (!checkout) return;
+
+      const msUntil = checkout.getTime() - now.getTime();
+
+      // If checkout already passed but server hasn't marked completed, refresh now
+      if (msUntil <= 0 && statusCode !== 4) {
+        shouldRefreshImmediately = true;
+        return;
+      }
+
+      // Otherwise schedule a refresh right after checkout time to get latest status
+      if (msUntil > 0 && statusCode !== 4) {
+        const t = setTimeout(() => {
+          loadBookings();
+        }, msUntil + 1000); // +1s buffer
+        refreshTimers.current.push(t as any);
+      }
+    });
+
+    if (shouldRefreshImmediately) {
+      // debounce a short bit to avoid spamming
+      const t = setTimeout(() => loadBookings(), 500);
+      refreshTimers.current.push(t as any);
+    }
+
+    return () => {
+      try {
+        refreshTimers.current.forEach((t) => clearTimeout(t));
+      } catch (e) {}
+      refreshTimers.current = [];
+    };
+  }, [bookings]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadBookings();
@@ -266,6 +327,8 @@ const BookingsScreen: React.FC = () => {
         "chiTietDatPhongs",
         "ChiTiet"
       ) || [];
+    
+
     return (
       <View style={styles.detailsContainer}>
         {/* Customer Info */}
@@ -386,9 +449,29 @@ const BookingsScreen: React.FC = () => {
   };
 
   const renderBooking = ({ item, index }: { item: any; index: number }) => {
-    const bookingId =
-      getProp(item, "idDatPhong", "IddatPhong", "bookingId", "id") ||
-      String(index);
+    // Preserve numeric IDs (0) by checking null/undefined explicitly
+    // Lấy ID đặt phòng từ JSON: IddatPhong (hoặc iddatPhong nếu camelCase)
+const rawBookingId = getProp(
+  item,
+  "IddatPhong",   // property C# => JSON mặc định
+  "iddatPhong",   // nếu bạn bật camelCase
+  "IDDatPhong"    // phòng khi bạn map đúng tên cột SQL
+);
+const bookingId =
+  rawBookingId !== undefined && rawBookingId !== null
+    ? String(rawBookingId)
+    : ""; // nếu không có thì để rỗng, KHÔNG dùng index để tránh "0"
+
+// Mã đặt phòng hiển thị: hiện tại bảng chỉ có IDDatPhong, nên dùng luôn bookingId
+const rawBookingCode = getProp(
+  item,
+  "IddatPhong",
+  "iddatPhong",
+  "IDDatPhong"
+);
+const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
+    ? String(rawBookingCode)
+    : bookingId;
     const rawStatus = getProp(item, "trangThai", "TrangThai");
     const rawPayment = getProp(
       item,
@@ -398,6 +481,11 @@ const BookingsScreen: React.FC = () => {
     const statusCode = rawStatus !== undefined ? Number(rawStatus) : undefined;
     const paymentCode =
       rawPayment !== undefined ? Number(rawPayment) : undefined;
+
+    const checkoutRaw = getProp(item, "ngayTraPhong", "NgayTraPhong");
+    const checkoutDate = checkoutRaw ? new Date(checkoutRaw) : null;
+    const now = new Date();
+    const canOpenReview = statusCode === 4 || (!!checkoutDate && now >= checkoutDate);
 
     const bookingStatusStyle = getStatusBadgeStyle("booking", statusCode);
     const paymentStatusStyle = getStatusBadgeStyle("payment", paymentCode);
@@ -429,9 +517,7 @@ const BookingsScreen: React.FC = () => {
             },
           ]}
         >
-          <Text style={styles.bookingCode}>
-            {getProp(item, "bookingCode", "BookingCode", "idDatPhong")}
-          </Text>
+          <Text style={styles.bookingCode}>{bookingCode}</Text>
           <View style={styles.statusTags}>
             <View
               style={[
@@ -520,16 +606,88 @@ const BookingsScreen: React.FC = () => {
           </>
         )}
 
-        {/* Footer with expand icon */}
-        <View style={styles.cardFooter}>
-          <Text style={styles.footerText}>
-            {isExpanded ? "Thu gọn" : "Xem chi tiết"}
-          </Text>
-          <Ionicons
-            name={isExpanded ? "chevron-up-outline" : "chevron-down-outline"}
-            size={20}
-            color={COLORS.primary}
-          />
+        {/* Footer with expand icon and optional review button */}
+        <View style={[styles.cardFooter, { justifyContent: 'space-between', paddingHorizontal: SIZES.padding }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.footerText}>{isExpanded ? "Thu gọn" : "Xem chi tiết"}</Text>
+            <Ionicons
+              name={isExpanded ? "chevron-up-outline" : "chevron-down-outline"}
+              size={20}
+              color={COLORS.primary}
+            />
+          </View>
+
+          {canOpenReview && (
+            <TouchableOpacity
+              onPress={async () => {
+                // Debug: log which ids/codes we will use when opening review
+                console.debug('Opening review (button press)', { bookingId, bookingCode, item });
+
+                // Use bookingId (DB id) for API calls; bookingCode is for display
+                const bId = String(bookingId);
+
+                // If status isn't marked completed, try completing checkout
+                if (statusCode !== 4) {
+                  try {
+                    setCompletingId(bId);
+                    const r = await reviewApi.completeCheckout(bId);
+                    setCompletingId(null);
+
+                    if (!r.ok) {
+                      Alert.alert('Không thể hoàn tất', r?.message || 'Vui lòng thử lại sau.');
+                      return;
+                    }
+
+                    // Refresh to sync status
+                    loadBookings();
+                  } catch (e: any) {
+                    setCompletingId(null);
+                    Alert.alert('Không thể hoàn tất', e?.message || 'Vui lòng thử lại sau.');
+                    return;
+                  }
+                }
+
+                // Check review status; if none, open inline review and pass code
+                try {
+                  const res = await reviewApi.getReviewStatus(bId);
+                  const openInlineReview = (id: string, code?: string) => {
+                    setActiveReviewBookingId(id);
+                    setActiveReviewBookingCode(code ?? id);
+                  };
+
+                  if (res && res.ok && res.data) {
+                    if (res.data.hasReview) {
+                      Alert.alert('Đã đánh giá', 'Bạn đã gửi đánh giá cho đặt phòng này rồi.');
+                    } else {
+                      openInlineReview(bId, bookingCode);
+                    }
+                  } else if (res && res.ok === false && res.status === 404) {
+                    openInlineReview(bId, bookingCode);
+                  } else {
+                    openInlineReview(bId, bookingCode);
+                  }
+                } catch (e: any) {
+                  console.debug('Review button error', e);
+                  setActiveReviewBookingId(bId);
+                  setActiveReviewBookingCode(bookingCode);
+                }
+              }}
+              disabled={completingId === String(bookingId)}
+              style={{
+                backgroundColor: COLORS.primary,
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 6,
+                opacity: completingId === String(bookingId) ? 0.7 : 1,
+              }}
+            >
+              {completingId === String(bookingId) ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Đánh giá</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -578,10 +736,10 @@ const BookingsScreen: React.FC = () => {
       <FlatList
         data={bookings}
         renderItem={renderBooking}
-        keyExtractor={(item, idx) =>
-          String(
-            getProp(item, "idDatPhong", "IddatPhong", "bookingId", "id") || idx
-          )
+       keyExtractor={(item, index) => {
+      const id = getProp(item, "IddatPhong", "iddatPhong", "IDDatPhong");
+      return id != null ? String(id) : `booking-${index}`;
+}
         }
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
@@ -603,6 +761,63 @@ const BookingsScreen: React.FC = () => {
           </View>
         }
       />
+      {/* Inline modal for the Review form. Render ReviewScreen and provide a
+          small navigation stub so the screen's close actions work as expected. */}
+      <Modal
+        visible={!!activeReviewBookingId}
+        animationType="slide"
+        onRequestClose={() => {
+          setActiveReviewBookingId(null);
+          setActiveReviewBookingCode(null);
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          {activeReviewBookingId ? (
+            <ReviewScreen
+              route={{ params: { bookingId: activeReviewBookingId, bookingCode: activeReviewBookingCode } }}
+              navigation={{
+                goBack: () => {
+                  setActiveReviewBookingId(null);
+                  setActiveReviewBookingCode(null);
+                },
+                popToTop: () => {
+                  setActiveReviewBookingId(null);
+                  setActiveReviewBookingCode(null);
+                },
+                navigate: (name: string, params?: any) => {
+                  // Close the inline modal first
+                  setActiveReviewBookingId(null);
+                  setActiveReviewBookingCode(null);
+
+                  try {
+                    // Prefer using the current screen's navigation to switch tabs
+                    if (navigation && typeof navigation.getParent === 'function') {
+                      const parent = navigation.getParent();
+                      if (parent && typeof parent.navigate === 'function') {
+                        // If caller asked to navigate to MainApp/HomeTab, translate accordingly
+                        if (name === 'MainApp' || name === 'HomeTab' || name === 'Home') {
+                          parent.navigate('HomeTab', { screen: 'Home' });
+                          return;
+                        }
+                        parent.navigate(name as any, params);
+                        return;
+                      }
+                    }
+
+                    // Fallback: try global rootNavigation if present
+                    const rootNav = (global as any).rootNavigation;
+                    if (rootNav && typeof rootNav.navigate === 'function') {
+                      rootNav.navigate(name as any, params);
+                    }
+                  } catch (e) {
+                    // swallow; modal already closed
+                  }
+                },
+              } as any}
+            />
+          ) : null}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };

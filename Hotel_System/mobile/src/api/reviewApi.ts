@@ -57,4 +57,46 @@ export async function submitReview(payload: any) {
   }
 }
 
-export default { getRoomStats, getRoomReviews, submitReview };
+export async function completeCheckout(bookingId: string) {
+  try {
+    const res = await fetch(
+      `${DEFAULT_BASE_URL}/api/Checkout/complete/${encodeURIComponent(bookingId)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+    let data: any = null;
+    try { data = await res.json(); } catch (_) {}
+
+    return {
+      ok: res.ok,
+      status: res.status,
+      data,
+      message: data?.message || (res.ok ? 'OK' : `HTTP ${res.status}`),
+    };
+  } catch (err: any) {
+    console.debug('[reviewApi] completeCheckout error', err);
+    return { ok: false, status: 0, data: null, message: err?.message || 'Network error' };
+  }
+}
+
+export async function getReviewStatus(bookingId: string) {
+  try {
+    const res = await fetch(`${DEFAULT_BASE_URL}/api/Review/status/${encodeURIComponent(bookingId)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    let data: any = null;
+    try { data = await res.json(); } catch (_) {}
+
+    return { ok: res.ok, status: res.status, data, message: data?.message || (res.ok ? 'OK' : `HTTP ${res.status}`) };
+  } catch (err: any) {
+    console.debug('[reviewApi] getReviewStatus error', err);
+    return { ok: false, status: 0, data: null, message: err?.message || 'Network error' };
+  }
+}
+
+export default { getRoomStats, getRoomReviews, submitReview, completeCheckout, getReviewStatus};

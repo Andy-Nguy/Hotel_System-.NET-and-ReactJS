@@ -12,6 +12,9 @@ interface Props {
 
 const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
   const bookingId = route?.params?.bookingId ?? '';
+  const bookingCode = route?.params?.bookingCode ?? '';
+  const displayBookingCode = bookingCode ?? bookingId ?? 'N/A';
+
 
   const [rating, setRating] = useState<number>(0);
   const [title, setTitle] = useState('');
@@ -20,7 +23,7 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  // Reset form when bookingId changes so each deep-link shows the form fresh
+  // Reset form when bookingId or bookingCode changes so each open shows fresh state
   useEffect(() => {
     setRating(0);
     setTitle('');
@@ -28,7 +31,14 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
     setIsAnonym(false);
     setLoading(false);
     setSubmitted(false);
-  }, [bookingId]);
+  }, [bookingId, bookingCode]);
+
+  // Debug: log incoming params so we can verify the id/code passed from BookingsScreen
+  useEffect(() => {
+    try {
+      console.debug('ReviewScreen opened with params', { bookingId, bookingCode, routeParams: route?.params });
+    } catch (e) {}
+  }, []);
 
   const contentMax = 500;
   const titleMax = 100;
@@ -37,7 +47,7 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
   const isValid = rating > 0 && title.trim().length > 0 && contentLength > 0 && contentLength <= contentMax;
 
   const submit = async () => {
-    if (!bookingId) {
+    if (!bookingId && !bookingCode) {
       Alert.alert('Lỗi', 'Không tìm thấy mã đặt phòng.');
       return;
     }
@@ -48,7 +58,8 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
     setLoading(true);
     try {
       const payload: any = {
-        IddatPhong: bookingId,
+        // Prefer numeric DB id when available; otherwise send bookingCode as fallback
+        IddatPhong: bookingId || bookingCode,
         Rating: rating,
         Title: title.trim(),
         Content: content.trim(),
@@ -68,130 +79,133 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   };
 
+  const goHome = () => {
+  try {
+    // Ưu tiên dùng NavigationContainer gốc nếu có
+    const rootNav = (global as any).rootNavigation;
+    if (rootNav && typeof rootNav.navigate === 'function') {
+      // Nếu MainApp là stack chính chứa BottomTabNavigator,
+      // navigate('MainApp') sẽ đưa bạn về trang chính (tab đầu tiên).
+      rootNav.navigate('MainApp');
+      return;
+    }
+
+    // Fallback: dùng navigation local
+    if (navigation && typeof navigation.navigate === 'function') {
+      navigation.navigate('MainApp');
+      return;
+    }
+  } catch (e) {
+    console.debug('goHome navigation error', e);
+    const nav = (global as any).rootNavigation;
+    if (nav && typeof nav.navigate === 'function') {
+      nav.navigate('MainApp');
+    }
+  }
+};
+
+  const closeOrGoBack = () => {
+    try {
+      // If the caller provided a goBack (e.g., inline modal in BookingsScreen), prefer it
+      if (navigation && typeof navigation.goBack === 'function') {
+        navigation.goBack();
+        return;
+      }
+
+      const parent = navigation && typeof navigation.getParent === 'function' ? navigation.getParent() : null;
+      if (parent && typeof parent.navigate === 'function') {
+        parent.navigate('HomeTab', { screen: 'Home' });
+        return;
+      }
+
+      goHome();
+    } catch (e) {
+      goHome();
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-      {submitted ? (
-        <View style={{ alignItems: 'center', marginTop: 8 }}>
-          <MaterialIcons name="check-circle" size={72} color={COLORS.primary} />
-          <Text style={{ fontSize: 22, fontWeight: '700', color: COLORS.primary, marginTop: 12 }}>Đánh giá thành công!</Text>
-          <Text style={{ color: COLORS.black, marginTop: 8 }}>Cảm ơn bạn đã dành thời gian chia sẻ trải nghiệm.</Text>
+        {submitted ? (
+          <View style={{ alignItems: 'center', marginTop: 8 }}>
+            <MaterialIcons name="check-circle" size={72} color={COLORS.primary} />
+            <Text style={{ fontSize: 22, fontWeight: '700', color: COLORS.primary, marginTop: 12 }}>Đánh giá thành công!</Text>
+            <Text style={{ color: COLORS.black, marginTop: 8 }}>Cảm ơn bạn đã dành thời gian chia sẻ trải nghiệm.</Text>
 
-          <View style={styles.infoBox}>
-            <Text style={{ fontWeight: '600', marginBottom: 6 }}>Thông tin đặt phòng</Text>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Mã đặt phòng:</Text><Text style={styles.infoValue}>{bookingId}</Text></View>
-            <View style={styles.infoRow}><Text style={styles.infoLabel}>Trạng thái:</Text><Text style={[styles.infoValue, { color: COLORS.primary }]}>Đã gửi đánh giá</Text></View>
-          </View>
+            <View style={styles.infoBox}>
+              <Text style={{ fontWeight: '600', marginBottom: 6 }}>Thông tin đặt phòng</Text>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Mã đặt phòng:</Text><Text style={styles.infoValue}>{displayBookingCode}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Trạng thái:</Text><Text style={[styles.infoValue, { color: COLORS.primary }]}>Đã gửi đánh giá</Text></View>
+            </View>
 
-          <TouchableOpacity
-            style={[styles.submit, styles.outlinedSubmit]}
-            onPress={() => {
-              try {
-                if (navigation && typeof navigation.popToTop === 'function' && navigation.canGoBack && navigation.canGoBack()) {
-                  navigation.popToTop();
-                } else if (navigation && typeof navigation.navigate === 'function') {
-                  navigation.navigate('MainApp');
-                } else {
-                  const nav = (global as any).rootNavigation;
-                  if (nav && typeof nav.navigate === 'function') nav.navigate('MainApp');
-                }
-              } catch (e) {
-                const nav = (global as any).rootNavigation;
-                if (nav && typeof nav.navigate === 'function') nav.navigate('MainApp');
-              }
-            }}
-          >
-            <Text style={[styles.submitText, styles.outlinedSubmitText]}>Quay về trang chủ</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View>
-          <View style={styles.headerRow}>
-            <Text style={styles.header}>Chia sẻ ý kiến của bạn</Text>
-            <TouchableOpacity
-              onPress={() => {
-                try {
-                  // If there's a back history, go back; otherwise reset to MainApp
-                  if (navigation && typeof navigation.canGoBack === 'function' && navigation.canGoBack()) {
-                    navigation.goBack();
-                  } else if (navigation && typeof navigation.reset === 'function') {
-                    navigation.reset({ index: 0, routes: [{ name: 'MainApp' }] });
-                  } else if (navigation && typeof navigation.navigate === 'function') {
-                    navigation.navigate('MainApp');
-                  } else {
-                    const nav = (global as any).rootNavigation;
-                    if (nav && typeof nav.reset === 'function') {
-                      nav.reset({ index: 0, routes: [{ name: 'MainApp' }] });
-                    } else if (nav && typeof nav.navigate === 'function') {
-                      nav.navigate('MainApp');
-                    }
-                  }
-                } catch (e) {
-                  const nav = (global as any).rootNavigation;
-                  if (nav && typeof nav.reset === 'function') nav.reset({ index: 0, routes: [{ name: 'MainApp' }] });
-                  else if (nav && typeof nav.navigate === 'function') nav.navigate('MainApp');
-                }
-              }}
-              style={styles.closeBtn}
-              accessibilityLabel="Đóng"
-            >
-              <MaterialIcons name="close" size={24} color={COLORS.black} />
+            <TouchableOpacity style={[styles.submit, styles.outlinedSubmit]} onPress={goHome}>
+              <Text style={[styles.submitText, styles.outlinedSubmitText]}>Quay về trang chủ</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.bookingId}>Mã đặt phòng: <Text style={{ color: COLORS.black, fontWeight: '700' }}>{bookingId}</Text></Text>
-
-          <View style={{ marginVertical: 12 }}>
-            <Text style={styles.label}>Đánh giá tổng thể trải nghiệm <Text style={styles.labelStar}>⭐</Text></Text>
-            <StarRating avg={rating} size={36} onSelect={(v: number) => setRating(v)} />
-          </View>
-
-          <View style={{ marginBottom: 12 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={[styles.label, { marginBottom: 6 }]}>Tiêu đề đánh giá <Text style={styles.required}>*</Text></Text>
-              <Text style={{ color: COLORS.black, fontSize: 12 }}>{title.trim().length}/{titleMax}</Text>
+        ) : (
+          <>
+            <View style={styles.headerRow}>
+              <Text style={styles.header}>Chia sẻ ý kiến của bạn</Text>
+              <TouchableOpacity onPress={closeOrGoBack} style={styles.closeBtn} accessibilityLabel="Đóng">
+                <MaterialIcons name="close" size={24} color={COLORS.black} />
+              </TouchableOpacity>
             </View>
-            <TextInput
-              value={title}
-              onChangeText={(t) => setTitle(t)}
-              style={styles.input}
-              placeholder="Ấn tượng chính của bạn là gì?"
-              placeholderTextColor="#999"
-              maxLength={titleMax}
-            />
-          </View>
 
-          <View style={{ marginBottom: 12 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={[styles.label, { marginBottom: 6 }]}>Nội dung chi tiết <Text style={styles.required}>*</Text></Text>
-              <Text style={{ color: COLORS.black, fontSize: 12 }}>{contentLength}/{contentMax}</Text>
+            <Text style={styles.bookingId}>Mã đặt phòng: <Text style={{ color: COLORS.black, fontWeight: '700' }}>{displayBookingCode}</Text></Text>
+
+            <View style={{ marginVertical: 12 }}>
+              <Text style={styles.label}>Đánh giá tổng thể trải nghiệm <Text style={styles.labelStar}>⭐</Text></Text>
+              <StarRating avg={rating} size={36} onSelect={(v: number) => setRating(v)} />
             </View>
-            <TextInput
-              value={content}
-              onChangeText={(t) => setContent(t)}
-              style={[styles.input, { height: 120, textAlignVertical: 'top' }]}
-              placeholder="Chia sẻ trải nghiệm chi tiết về phòng, dịch vụ,..."
-              placeholderTextColor="#9aa0a6"
-              multiline
-              maxLength={contentMax}
-            />
 
-            <View style={styles.progressBackground}>
-              <View style={[styles.progressBar, { width: `${Math.min(100, (contentLength / contentMax) * 100)}%`, backgroundColor: contentLength > contentMax ? '#ff4d4f' : COLORS.primary }]} />
+            <View style={{ marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.label, { marginBottom: 6 }]}>Tiêu đề đánh giá <Text style={styles.required}>*</Text></Text>
+                <Text style={{ color: COLORS.black, fontSize: 12 }}>{title.trim().length}/{titleMax}</Text>
+              </View>
+              <TextInput
+                value={title}
+                onChangeText={(t) => setTitle(t)}
+                style={styles.input}
+                placeholder="Ấn tượng chính của bạn là gì?"
+                placeholderTextColor="#999"
+                maxLength={titleMax}
+              />
             </View>
-          </View>
 
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }} onPress={() => setIsAnonym(!isAnonym)}>
-            <MaterialIcons name={isAnonym ? 'check-box' : 'check-box-outline-blank'} size={20} color={isAnonym ? COLORS.primary : '#999'} />
-            <Text style={{ marginLeft: 8, color: COLORS.black }}>Gửi đánh giá ẩn danh</Text>
-          </TouchableOpacity>
+            <View style={{ marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.label, { marginBottom: 6 }]}>Nội dung chi tiết <Text style={styles.required}>*</Text></Text>
+                <Text style={{ color: COLORS.black, fontSize: 12 }}>{contentLength}/{contentMax}</Text>
+              </View>
+              <TextInput
+                value={content}
+                onChangeText={(t) => setContent(t)}
+                style={[styles.input, { height: 120, textAlignVertical: 'top' }]}
+                placeholder="Chia sẻ trải nghiệm chi tiết về phòng, dịch vụ,..."
+                placeholderTextColor="#9aa0a6"
+                multiline
+                maxLength={contentMax}
+              />
 
-          <TouchableOpacity style={[styles.submit, isValid ? {} : styles.disabledSubmit]} onPress={submit} disabled={!isValid || loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>GỬI ĐÁNH GIÁ CỦA BẠN</Text>}
-          </TouchableOpacity>
+              <View style={styles.progressBackground}>
+                <View style={[styles.progressBar, { width: `${Math.min(100, (contentLength / contentMax) * 100)}%`, backgroundColor: contentLength > contentMax ? '#ff4d4f' : COLORS.primary }]} />
+              </View>
+            </View>
 
-          <Text style={{ marginTop: 12, fontSize: 12, color: COLORS.black, textAlign: 'center' }}>Đánh giá của bạn giúp Khách sạn nâng cao chất lượng dịch vụ.</Text>
-        </View>
-      )}
+            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }} onPress={() => setIsAnonym(!isAnonym)}>
+              <MaterialIcons name={isAnonym ? 'check-box' : 'check-box-outline-blank'} size={20} color={isAnonym ? COLORS.primary : '#999'} />
+              <Text style={{ marginLeft: 8, color: COLORS.black }}>Gửi đánh giá ẩn danh</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.submit, isValid ? {} : styles.disabledSubmit]} onPress={submit} disabled={!isValid || loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>GỬI ĐÁNH GIÁ CỦA BẠN</Text>}
+            </TouchableOpacity>
+
+            <Text style={{ marginTop: 12, fontSize: 12, color: COLORS.black, textAlign: 'center' }}>Đánh giá của bạn giúp Khách sạn nâng cao chất lượng dịch vụ.</Text>
+          </>
+        )}
       </View>
     </View>
   );
