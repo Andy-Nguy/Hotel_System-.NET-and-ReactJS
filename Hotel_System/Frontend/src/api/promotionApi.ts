@@ -1,4 +1,4 @@
-const API_BASE = "/api/KhuyenMai";
+const API_BASE = "/api/khuyenmai";
 
 export interface PromotionRoom {
   id: number;
@@ -11,17 +11,28 @@ export interface PromotionRoom {
 
 export interface Promotion {
   idkhuyenMai: string;
+  IdkhuyenMai?: string;
   tenKhuyenMai: string;
+  TenKhuyenMai?: string;
   loaiKhuyenMai?: string; // 'room' | 'service' | 'customer'
+  LoaiKhuyenMai?: string;
   moTa?: string;
+  MoTa?: string;
   loaiGiamGia: string; // "percent" | "amount"
+  LoaiGiamGia?: string;
   giaTriGiam?: number;
+  GiaTriGiam?: number;
   ngayBatDau: string; // DateOnly format YYYY-MM-DD
+  NgayBatDau?: string;
   ngayKetThuc: string; // DateOnly format YYYY-MM-DD
+  NgayKetThuc?: string;
   trangThai?: string; // "active", "inactive", "expired"
   hinhAnhBanner?: string;
+  HinhAnhBanner?: string;
   createdAt?: string;
+  CreatedAt?: string;
   updatedAt?: string;
+  UpdatedAt?: string;
   khuyenMaiPhongs: PromotionRoom[];
   khuyenMaiDichVus?: Array<{
     id: number;
@@ -212,7 +223,7 @@ export const assignServiceToPromotion = async (
   promotionId: string,
   payload: { iddichVu: string; isActive?: boolean; ngayApDung?: string; ngayKetThuc?: string }
 ): Promise<any> => {
-  const response = await fetch(`${API_BASE}/${promotionId}/assign-service`, {
+  const response = await fetch(`${API_BASE}/${promotionId}/gan-dich-vu`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -229,7 +240,7 @@ export const togglePromotion = async (id: string): Promise<Promotion> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/${id}/toggle`, {
+  const response = await fetch(`${API_BASE}/${id}/bat-tat`, {
     method: "PATCH",
     headers,
   });
@@ -263,7 +274,7 @@ export const updateExpiredStatus = async (): Promise<{
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/update-expired-status`, {
+  const response = await fetch(`${API_BASE}/cap-nhat-trang-thai-het-han`, {
     method: "POST",
     headers,
   });
@@ -301,7 +312,7 @@ export const uploadBanner = async (file: File): Promise<UploadResult> => {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${API_BASE}/upload-banner`, {
+  const response = await fetch(`${API_BASE}/tai-banner`, {
     method: "POST",
     headers,
     body: formData,
@@ -353,7 +364,7 @@ export const getPromotionsForService = async (
     await Promise.all(
       candidates.map(async (p) => {
         try {
-          const resp = await fetch(`${API_BASE}/${p.idkhuyenMai || p.IdkhuyenMai}/services`);
+          const resp = await fetch(`${API_BASE}/${p.idkhuyenMai || p.IdkhuyenMai}/dich-vu`);
           if (!resp.ok) return;
           const mappingList = await resp.json();
           if (!Array.isArray(mappingList)) return;

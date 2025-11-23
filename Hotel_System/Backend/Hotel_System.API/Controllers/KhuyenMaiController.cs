@@ -10,7 +10,7 @@ using System.IO;
 namespace Hotel_System.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/khuyenmai")]
 public class KhuyenMaiController : ControllerBase
 {
     private readonly HotelSystemContext _context;
@@ -112,10 +112,9 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // POST: api/KhuyenMai/upload-banner
+    // POST: api/khuyenmai/tai-banner
     // Upload hình ảnh banner cho khuyến mãi
-    [HttpPost("upload-banner")]
-    // [Authorize(Roles = "nhanvien")]
+    [HttpPost("tai-banner")]
     public async Task<ActionResult<UploadResultDto>> UploadBanner(IFormFile file)
     {
         try
@@ -594,10 +593,9 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // PATCH: api/KhuyenMai/{id}/toggle
+    // PATCH: api/khuyenmai/{id}/bat-tat
     // Bật/tắt khuyến mãi
-    [HttpPatch("{id}/toggle")]
-    // [Authorize(Roles = "nhanvien")]
+    [HttpPatch("{id}/bat-tat")]
     public async Task<ActionResult<KhuyenMaiDto>> Toggle(string id)
     {
         try
@@ -680,9 +678,9 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // POST: api/KhuyenMai/{id}/assign-service
+    // POST: api/khuyenmai/{id}/gan-dich-vu
     // Gán dịch vụ vào chương trình khuyến mãi
-    [HttpPost("{id}/assign-service")]
+    [HttpPost("{id}/gan-dich-vu")]
     public async Task<IActionResult> AssignService(string id, [FromBody] CreateKhuyenMaiDichVuDto dto)
     {
         try
@@ -732,8 +730,8 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // GET: api/KhuyenMai/{id}/services
-    [HttpGet("{id}/services")]
+    // GET: api/khuyenmai/{id}/dich-vu
+    [HttpGet("{id}/dich-vu")]
     public async Task<IActionResult> GetServicesForPromotion(string id)
     {
         try
@@ -780,8 +778,8 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // PATCH: api/KhuyenMai/service/{mappingId}/toggle
-    [HttpPatch("service/{mappingId}/toggle")]
+    // PATCH: api/khuyenmai/dich-vu/{mappingId}/bat-tat
+    [HttpPatch("dich-vu/{mappingId}/bat-tat")]
     public async Task<IActionResult> ToggleServiceMapping(int mappingId)
     {
         try
@@ -803,8 +801,8 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // DELETE: api/KhuyenMai/service/{mappingId}
-    [HttpDelete("service/{mappingId}")]
+    // DELETE: api/khuyenmai/dich-vu/{mappingId}
+    [HttpDelete("dich-vu/{mappingId}")]
     public async Task<IActionResult> DeleteServiceMapping(int mappingId)
     {
         try
@@ -824,10 +822,9 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // POST: api/KhuyenMai/update-expired-status
+    // POST: api/khuyenmai/cap-nhat-trang-thai-het-han
     // Cập nhật trạng thái expired cho các khuyến mãi hết hạn
-    [HttpPost("update-expired-status")]
-    // [Authorize(Roles = "nhanvien")]
+    [HttpPost("cap-nhat-trang-thai-het-han")]
     public async Task<IActionResult> UpdateExpiredStatus()
     {
         try
