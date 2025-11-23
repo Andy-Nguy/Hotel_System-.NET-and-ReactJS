@@ -84,6 +84,87 @@ export const getAllPromotions = async (
   return response.json();
 };
 
+// Create a combo attached to an existing promotion
+export interface CreateComboRequest {
+  idkhuyenMai: string;
+  tenCombo: string;
+  moTa?: string;
+  ngayBatDau?: string; // YYYY-MM-DD
+  ngayKetThuc?: string; // YYYY-MM-DD
+  dichVuIds: string[];
+  forceCreateIfConflict?: boolean;
+}
+
+export const createCombo = async (data: CreateComboRequest) => {
+  const token = localStorage.getItem('hs_token');
+  const headers: any = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch('/api/khuyenmai/combo', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      IdkhuyenMai: data.idkhuyenMai,
+      TenCombo: data.tenCombo,
+      MoTa: data.moTa,
+      NgayBatDau: data.ngayBatDau,
+      NgayKetThuc: data.ngayKetThuc,
+      DichVuIds: data.dichVuIds,
+      ForceCreateIfConflict: data.forceCreateIfConflict || false,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to create combo');
+  }
+  return response.json();
+};
+
+// Create a room+service promotion mapping
+export interface CreatePhongDichVuRequest {
+  idkhuyenMai: string;
+  idphong: string;
+  iddichVu: string;
+  ngayApDung?: string;
+  ngayKetThuc?: string;
+  isActive?: boolean;
+  forceCreateIfConflict?: boolean;
+}
+
+export const createPhongDichVu = async (data: CreatePhongDichVuRequest) => {
+  const token = localStorage.getItem('hs_token');
+  const headers: any = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch('/api/khuyenmai/phongdichvu', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      IdkhuyenMai: data.idkhuyenMai,
+      Idphong: data.idphong,
+      IddichVu: data.iddichVu,
+      NgayApDung: data.ngayApDung,
+      NgayKetThuc: data.ngayKetThuc,
+      IsActive: data.isActive ?? true,
+      ForceCreateIfConflict: data.forceCreateIfConflict ?? false,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to create phong-dichvu mapping');
+  }
+  return response.json();
+};
+
+// Suggest existing combos given a set of service IDs
+export const suggestCombos = async (dichvuIds: string[]) => {
+  const q = dichvuIds.map(encodeURIComponent).join(',');
+  const response = await fetch(`/api/combo/suggest?dichvuIds=${q}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to fetch combo suggestions');
+  }
+  return response.json();
+};
+
 // Get promotion by ID
 export const getPromotionById = async (id: string): Promise<Promotion> => {
   const url = `${API_BASE}/KhuyenMai/${id}`;

@@ -482,6 +482,16 @@ CREATE TABLE KhuyenMai (
     CONSTRAINT CK_KhuyenMai_Ngay CHECK (NgayBatDau <= NgayKetThuc)
 );
 
+ALTER TABLE KhuyenMai
+ADD 
+    HinhAnhBanner NVARCHAR(255) NULL;
+
+ALTER TABLE KhuyenMai
+ADD LoaiKhuyenMai VARCHAR(20) NOT NULL
+CHECK (LoaiKhuyenMai IN ('room','service','combo','room_service', 'customer'))
+DEFAULT 'room';
+
+
 CREATE TABLE KhuyenMaiPhong (
     ID INT IDENTITY(1,1) PRIMARY KEY,
     IDKhuyenMai NVARCHAR(50) NOT NULL,
@@ -501,60 +511,87 @@ CREATE TABLE KhuyenMaiPhong (
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE PROCEDURE sp_CapNhatTrangThaiKhuyenMai
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    -- Chuyển những khuyến mãi đã hết hạn sang 'expired'
-    UPDATE KhuyenMai
-    SET TrangThai = 'expired',
-        updated_at = GETDATE()
-    WHERE TrangThai = 'active'
-      AND NgayKetThuc < CONVERT(date, GETDATE());
-
-    -- (Tuỳ chọn) Cập nhật KhuyenMaiPhong tương ứng
-    UPDATE KP
-    SET KP.IsActive = 0,
-        KP.updated_at = GETDATE()
-    FROM KhuyenMaiPhong KP
-    INNER JOIN KhuyenMai K ON KP.IDKhuyenMai = K.IDKhuyenMai
-    WHERE K.TrangThai = 'expired'
-      AND KP.IsActive = 1;
-END;
+CREATE TABLE KhuyenMaiDichVu (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    IDKhuyenMai NVARCHAR(50) NOT NULL,
+    IDDichVu NVARCHAR(50) NOT NULL,
+    IsActive BIT NOT NULL DEFAULT (0),
+    NgayApDung DATE DEFAULT (CONVERT(date, GETDATE())),
+    NgayKetThuc DATE NULL,
+    created_at DATETIME2 DEFAULT (GETDATE()),
+    updated_at DATETIME2 DEFAULT (GETDATE()),
+    CONSTRAINT FK_KhuyenMaiDichVu_KhuyenMai
+        FOREIGN KEY (IDKhuyenMai) REFERENCES KhuyenMai(IDKhuyenMai)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT FK_KhuyenMaiDichVu_DichVu
+        FOREIGN KEY (IDDichVu) REFERENCES DichVu(IDDichVu)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
 GO
 
-INSERT INTO KhuyenMai
-    (IDKhuyenMai, TenKhuyenMai, MoTa, LoaiGiamGia, GiaTriGiam, NgayBatDau, NgayKetThuc, TrangThai)
-VALUES
-('KM001', N'Giảm 20% dịch vụ Spa mùa hè 2025', 
- N'Áp dụng cho khách đặt phòng Deluxe hoặc Executive từ 01/06 đến 31/08/2025.', 
- 'percent', 20.00, '2025-06-01', '2025-08-31', 'active'),
+CREATE TABLE KhuyenMaiCombo (
+IDKhuyenMaiCombo NVARCHAR(50) PRIMARY KEY,
+IDKhuyenMai NVARCHAR(50) NOT NULL,
+TenCombo NVARCHAR(200) NOT NULL,
+MoTa NVARCHAR(MAX),
+NgayBatDau DATE DEFAULT (CONVERT(date, GETDATE())),
+NgayKetThuc DATE NULL,
+TrangThai VARCHAR(10) DEFAULT 'active' CHECK (TrangThai IN ('active','inactive','expired')),
+created_at DATETIME2 DEFAULT (GETDATE()),
+updated_at DATETIME2 DEFAULT (GETDATE()),
 
-('KM002', N'Giảm 300.000đ khi thuê xe Limousine Hà Nội', 
- N'Khách đặt Tour Hà Nội 3 giờ bằng Limousine nhận giảm 300.000đ mỗi lượt.', 
- 'amount', 300000.00, '2025-07-01', '2025-09-30', 'active'),
+CONSTRAINT FK_KhuyenMaiCombo_KhuyenMai FOREIGN KEY (IDKhuyenMai)
+    REFERENCES KhuyenMai(IDKhuyenMai)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
 
-('KM003', N'Combo Buffet sáng & In-room Dining', 
- N'Giảm 15% khi kết hợp Buffet sáng tại JW Café và ăn tại phòng vào cuối tuần.', 
- 'percent', 15.00, '2025-01-01', '2025-12-31', 'active');
+);
 
-INSERT INTO KhuyenMaiPhong
-    (IDKhuyenMai, IDPhong, IsActive, NgayApDung, NgayKetThuc)
-VALUES
--- Spa mùa hè áp dụng cho Deluxe & Executive
-('KM001', 'P101', 1, '2025-06-01', '2025-08-31'),
-('KM001', 'P102', 1, '2025-06-01', '2025-08-31'),
-('KM001', 'P201', 1, '2025-06-01', '2025-08-31'),
+CREATE TABLE KhuyenMaiComboDichVu (
+ID INT IDENTITY(1,1) PRIMARY KEY,
+IDKhuyenMaiCombo NVARCHAR(50) NOT NULL,
+IDDichVu NVARCHAR(50) NOT NULL,
+IsActive BIT NOT NULL DEFAULT 0,
+created_at DATETIME2 DEFAULT (GETDATE()),
+updated_at DATETIME2 DEFAULT (GETDATE()),
 
--- Thuê xe Limousine áp dụng cho Executive Suite
-('KM002', 'P301', 1, '2025-07-01', '2025-09-30'),
+CONSTRAINT FK_KhuyenMaiComboDichVu_Combo FOREIGN KEY (IDKhuyenMaiCombo)
+    REFERENCES KhuyenMaiCombo(IDKhuyenMaiCombo)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+CONSTRAINT FK_KhuyenMaiComboDichVu_DichVu FOREIGN KEY (IDDichVu)
+    REFERENCES DichVu(IDDichVu)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
 
--- Combo Buffet sáng + In-room Dining áp dụng cho các phòng cao cấp
-('KM003', 'P401', 1, '2025-01-01', '2025-12-31'),
-('KM003', 'P501', 1, '2025-01-01', '2025-12-31'),
-('KM003', 'P601', 1, '2025-01-01', '2025-12-31');
-/* =========================================
+);
+
+CREATE TABLE KhuyenMaiPhongDichVu (
+ID INT IDENTITY(1,1) PRIMARY KEY,
+IDKhuyenMai NVARCHAR(50) NOT NULL,
+IDPhong NVARCHAR(50) NOT NULL,
+IDDichVu NVARCHAR(50) NOT NULL,
+IsActive BIT NOT NULL DEFAULT 0,
+NgayApDung DATE DEFAULT (CONVERT(date, GETDATE())),
+NgayKetThuc DATE NULL,
+created_at DATETIME2 DEFAULT (GETDATE()),
+updated_at DATETIME2 DEFAULT (GETDATE()),
+
+CONSTRAINT FK_KhuyenMaiPhongDichVu_KhuyenMai FOREIGN KEY (IDKhuyenMai)
+    REFERENCES KhuyenMai(IDKhuyenMai)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+CONSTRAINT FK_KhuyenMaiPhongDichVu_Phong FOREIGN KEY (IDPhong)
+    REFERENCES Phong(IDPhong)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+CONSTRAINT FK_KhuyenMaiPhongDichVu_DichVu FOREIGN KEY (IDDichVu)
+    REFERENCES DichVu(IDDichVu)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+
+);
+
    9) THỐNG KÊ DOANH THU KHÁCH SẠN (LIÊN KẾT TRỰC TIẾP)
 ========================================= */
 CREATE TABLE ThongKeDoanhThuKhachSan (

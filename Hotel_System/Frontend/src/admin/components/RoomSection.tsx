@@ -94,8 +94,6 @@ const RoomSection: React.FC = () => {
     }
   };
 
-  if (loading) return <div>Đang tải phòng...</div>;
-
   // status is toggled inline via quickToggleStatus; no separate save handler needed
 
   

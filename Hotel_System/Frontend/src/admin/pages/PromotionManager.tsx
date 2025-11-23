@@ -23,20 +23,17 @@ const PromotionManager: React.FC = () => {
   // Tabs: 'list' = Danh sách khuyến mãi (default), 'form' = Tạo/Chỉnh sửa
   const [activeTab, setActiveTab] = useState<"list" | "form">("list");
 
-  const loadPromotions = async () => {
-    try {
-      setLoading(true);
-      const data = await getAllPromotions(filterStatus, filterDiscountType);
-      setPromotions(data);
-      console.log("[PROMOTION_MANAGER] Loaded promotions:", data);
-    } catch (error) {
-      console.error("[PROMOTION_MANAGER] Error loading promotions:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const loadPromotions = async () => {
+      try {
+        const data = await getAllPromotions(filterStatus, filterDiscountType);
+        setPromotions(data);
+        console.log("[PROMOTION_MANAGER] Loaded promotions:", data);
+      } catch (error) {
+        console.error("[PROMOTION_MANAGER] Error loading promotions:", error);
+      }
+    };
+    
     loadPromotions();
   }, [refreshTrigger, filterStatus, filterDiscountType]);
 
