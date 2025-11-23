@@ -117,14 +117,49 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
           return;
         }
 
-        // Fallback: call API that returns service mappings for this promotion
-        const resp = await fetch(`/api/KhuyenMai/${promotion.idkhuyenMai}/services`);
+        // Fallback: fetch full promotion detail and derive service list from
+        // khuyenMaiDichVus (service), khuyenMaiCombos (combo items) or
+        // khuyenMaiPhongDichVus (room-service pairs) if present.
+        const resp = await fetch(`/api/khuyenmai/${promotion.idkhuyenMai}`);
         if (!resp.ok) {
           setServiceList([]);
           return;
         }
-        const data = await resp.json();
-        setServiceList(data || []);
+        const full = await resp.json();
+
+        // Helper to normalize a service item
+        const normalizeItem = (it: any, idx: number) => ({
+          id: it.id ?? idx,
+          iddichVu: it.iddichVu || it.IddichVu || it.iddichvu || it.idDichVu || it.id || "",
+          tenDichVu: it.tenDichVu || it.TenDichVu || it.ten || it.name || "",
+          isActive: it.isActive ?? it.IsActive ?? true,
+          ngayApDung: it.ngayApDung || it.NgayApDung,
+          ngayKetThuc: it.ngayKetThuc || it.NgayKetThuc,
+        });
+
+        let derived: any[] = [];
+
+        // If this promotion includes explicit service mappings
+        if ((full as any).khuyenMaiDichVus && Array.isArray((full as any).khuyenMaiDichVus) && (full as any).khuyenMaiDichVus.length > 0) {
+          derived = (full as any).khuyenMaiDichVus.map((m: any, i: number) => normalizeItem(m, i));
+        }
+
+        // If it's a combo promotion, collect combo items
+        if (((full as any).khuyenMaiCombos && Array.isArray((full as any).khuyenMaiCombos) && (full as any).khuyenMaiCombos.length > 0)) {
+          const combos = (full as any).khuyenMaiCombos;
+          const comboItems = combos.flatMap((c: any) => (c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || []).map((it: any) => it));
+          if (comboItems.length > 0) derived = comboItems.map((m: any, i: number) => normalizeItem(m, i));
+        }
+
+        // If it's a room_service promotion and there are explicit room-service pairs
+        if ((full as any).khuyenMaiPhongDichVus && Array.isArray((full as any).khuyenMaiPhongDichVus) && (full as any).khuyenMaiPhongDichVus.length > 0) {
+          // dedupe by iddichVu
+          const pairs = (full as any).khuyenMaiPhongDichVus;
+          const unique = Array.from(new Map(pairs.map((p: any) => [p.iddichVu || p.IddichVu || p.idDichVu || p.Iddichvu || p.id, p])).values());
+          derived = unique.map((m: any, i: number) => normalizeItem(m, i));
+        }
+
+        setServiceList(derived || []);
       } catch (err) {
         console.error("Failed to load promotion services", err);
         setServiceList([]);
