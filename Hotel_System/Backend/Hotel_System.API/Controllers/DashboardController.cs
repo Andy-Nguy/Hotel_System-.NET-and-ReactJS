@@ -10,6 +10,7 @@ namespace Hotel_System.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    // [Microsoft.AspNetCore.Authorization.Authorize(Roles = "nhanvien")]
     public class DashboardController : ControllerBase
     {
         private readonly HotelSystemContext _context;
@@ -90,18 +91,27 @@ namespace Hotel_System.API.Controllers
                 var endDate = DateTime.Now.Date;
                 var startDate = endDate.AddDays(-days + 1);
 
-                var revenueData = await _context.HoaDons
-                    .Where(h => h.NgayLap.HasValue && ((DateTime)h.NgayLap!).Date >= startDate && ((DateTime)h.NgayLap!).Date <= endDate)
-                    .GroupBy(h => ((DateTime)h.NgayLap!).Date)
+                // Fetch raw data grouped by date (server-side)
+                var rawData = await _context.HoaDons
+                    .Where(h => h.NgayLap.HasValue && h.NgayLap.Value.Date >= startDate && h.NgayLap.Value.Date <= endDate)
+                    .GroupBy(h => h.NgayLap.Value.Date)
                     .Select(g => new
                     {
-                        date = g.Key.ToString("yyyy-MM-dd"),
-                        revenue = g.Sum(h => h.TongTien),
-                        roomRevenue = g.Sum(h => h.TienPhong ?? 0),
-                        serviceRevenue = g.Sum(h => h.TongTien - (h.TienPhong ?? 0))
+                        Date = g.Key,
+                        Revenue = g.Sum(h => h.TongTien),
+                        RoomRevenue = g.Sum(h => h.TienPhong ?? 0),
+                        ServiceRevenue = g.Sum(h => h.TongTien - (h.TienPhong ?? 0))
                     })
-                    .OrderBy(x => x.date)
                     .ToListAsync();
+
+                // Format date in memory (client-side evaluation)
+                var revenueData = rawData.Select(x => new
+                {
+                    date = x.Date.ToString("yyyy-MM-dd"),
+                    revenue = x.Revenue,
+                    roomRevenue = x.RoomRevenue,
+                    serviceRevenue = x.ServiceRevenue
+                }).ToList();
 
                 var allDates = Enumerable.Range(0, days)
                     .Select(i => startDate.AddDays(i))

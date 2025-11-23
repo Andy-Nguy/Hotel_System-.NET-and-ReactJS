@@ -89,7 +89,7 @@ const RegisterScreen: React.FC<Props> = ({ navigation }) => {
         Alert.alert("Thành công", "Xác thực thành công!", [
           {
             text: "OK",
-            onPress: () => navigation.replace("Home"),
+            onPress: () => navigation.replace("MainApp"),
           },
         ]);
       } else {
