@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authorization;
 using System.IO;
 
 namespace Hotel_System.API.Controllers
@@ -20,6 +21,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll()
         {
             var roomTypes = await _context.LoaiPhongs.ToListAsync();

@@ -29,7 +29,10 @@ export interface UpdateBookingRequest {
 const API_BASE_URL = "/api";
 
 export const getBookings = async (): Promise<Booking[]> => {
-  const response = await axios.get(`${API_BASE_URL}/DatPhong`);
+  const token = localStorage.getItem("hs_token");
+  const headers: any = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await axios.get(`${API_BASE_URL}/DatPhong`, { headers });
   return response.data;
 };
 
@@ -47,11 +50,17 @@ export const updateBooking = async (
   id: string,
   data: UpdateBookingRequest
 ): Promise<void> => {
-  await axios.put(`${API_BASE_URL}/DatPhong/${id}`, data);
+  const token = localStorage.getItem("hs_token");
+  const headers: any = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  await axios.put(`${API_BASE_URL}/DatPhong/${id}`, data, { headers });
 };
 
 export const deleteBooking = async (id: string): Promise<void> => {
-  await axios.delete(`${API_BASE_URL}/DatPhong/${id}`);
+  const token = localStorage.getItem("hs_token");
+  const headers: any = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  await axios.delete(`${API_BASE_URL}/DatPhong/${id}`, { headers });
 };
 
 /**

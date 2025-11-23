@@ -118,10 +118,20 @@ const ServiceManager: React.FC = () => {
       const merged = await serviceApi.getServiceById(s.iddichVu);
       console.log("[DEBUG] ✅ Merged service response:", merged);
       
-      console.log("[DEBUG] Fetching usage from endpoint: /api/DichVu/" + s.iddichVu + "/usage");
-      const usage = await serviceApi.getServiceUsage(s.iddichVu);
-      console.log("[DEBUG] ✅ Service Usage API response:", usage);
-      
+      console.log("[DEBUG] Fetching usage from endpoint: /api/dich-vu/lich-su/" + s.iddichVu);
+      let usage = await serviceApi.getServiceUsage(s.iddichVu);
+      console.log("[DEBUG] Service Usage API response (per-service):", usage);
+
+      if (!usage || (Array.isArray(usage) && usage.length === 0)) {
+        console.log("[DEBUG] Per-service usage empty, fetching all usages as fallback");
+        const all = await serviceApi.getAllUsage();
+        usage = Array.isArray(all) ? all.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu) : [];
+        console.log("[DEBUG] Fallback filtered usages:", usage);
+      } else {
+        // Ensure returned array only contains this service's entries (defensive)
+        usage = Array.isArray(usage) ? usage.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu) : [];
+      }
+
       // Service details are now included in 'merged' (single object). For compatibility
       // keep serviceDetails as array shape expected by UI.
       setServiceDetails(merged ? [merged as any] : []);
@@ -143,12 +153,23 @@ const ServiceManager: React.FC = () => {
       const freshService = await serviceApi.getServiceById(s.iddichVu);
       setDetailService(freshService);
       
-      const [merged, usage] = await Promise.all([
+      const [merged, perServiceUsage] = await Promise.all([
         serviceApi.getServiceById(s.iddichVu),
         serviceApi.getServiceUsage(s.iddichVu),
       ]);
       console.log("Service Details fetched (merged):", merged);
-      console.log("Service Usage fetched:", usage);
+      console.log("Service Usage (per-service) fetched:", perServiceUsage);
+
+      let usage = perServiceUsage;
+      if (!usage || (Array.isArray(usage) && usage.length === 0)) {
+        console.log("Per-service usage empty, fetching all usages as fallback (edit)");
+        const all = await serviceApi.getAllUsage();
+        usage = Array.isArray(all) ? all.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu) : [];
+        console.log("Fallback filtered usages (edit):", usage);
+      } else {
+        usage = Array.isArray(usage) ? usage.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu) : [];
+      }
+
       setServiceDetails(merged ? [merged as any] : []);
       setServiceUsage(usage);
     } catch (err) {

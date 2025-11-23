@@ -18,19 +18,8 @@ import AppIcon from "../components/AppIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BookingProgress from "../components/BookingProgress";
 import ServicesSelector from "../components/ServicesSelector";
-
-interface AvailableRoom {
-  roomId: string;
-  roomNumber: string;
-  roomTypeName: string;
-  basePricePerNight: number;
-  discountedPrice?: number;
-  maxOccupancy: number;
-  description?: string;
-  roomImageUrl?: string;
-  promotionName?: string;
-  discountPercent?: number;
-}
+import AvailableRoomCard from "../components/AvailableRoomCard";
+import { AvailableRoom } from "../api/roomsApi";
 
 interface SelectedRoom {
   roomNumber: number;
@@ -73,36 +62,72 @@ const SelectRoomsScreen: React.FC = () => {
   const loadBookingData = async () => {
     try {
       const bookingData = await AsyncStorage.getItem("bookingData");
+      const params = route.params as any;
+      const initialSelectedRoom = params?.initialSelectedRoom;
+
       if (bookingData) {
         const parsed = JSON.parse(bookingData);
-        // Only load from AsyncStorage if it's the same booking session
         if (
           parsed.checkIn === checkIn &&
           parsed.checkOut === checkOut &&
           parsed.guests === guests &&
           parsed.rooms === rooms
         ) {
+          // Same session, load saved data
           setSelectedRooms(parsed.selectedRooms || []);
           setTotalRooms(parsed.totalRooms || rooms || 1);
           setCurrentRoomNumber(parsed.currentRoomNumber || 1);
           setSelectedServices(parsed.selectedServices || []);
+          
+          // If we have an initial selection but it's not in the saved list (and we have space), add it?
+          // Or maybe we should prioritize the user's explicit click over saved state if it's a "new" navigation action?
+          // For simplicity, if the user clicked "Select" on the previous screen, let's assume they want that room selected 
+          // even if they had a previous session. But we must be careful not to duplicate.
+          
+          if (initialSelectedRoom) {
+             const alreadySelected = (parsed.selectedRooms || []).some((sr: any) => sr.room.roomId === initialSelectedRoom.roomId);
+             if (!alreadySelected && (parsed.selectedRooms || []).length < (parsed.totalRooms || rooms)) {
+                 // Add it
+                 const newSelected = [...(parsed.selectedRooms || []), { roomNumber: (parsed.currentRoomNumber || 1), room: initialSelectedRoom }];
+                 setSelectedRooms(newSelected);
+                 // Update current room number
+                 let nextRoomNum = 1;
+                 const selectedNumbers = newSelected.map((r: any) => r.roomNumber);
+                 while (selectedNumbers.includes(nextRoomNum) && nextRoomNum <= (parsed.totalRooms || rooms)) {
+                    nextRoomNum++;
+                 }
+                 setCurrentRoomNumber(nextRoomNum <= (parsed.totalRooms || rooms) ? nextRoomNum : (parsed.totalRooms || rooms));
+             }
+          }
+
         } else {
           // Different booking session, start fresh
           setTotalRooms(rooms || 1);
-          setCurrentRoomNumber(1);
-          setSelectedRooms([]);
           setSelectedServices([]);
+          
+          if (initialSelectedRoom) {
+            setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
+            setCurrentRoomNumber(rooms > 1 ? 2 : 1);
+          } else {
+            setSelectedRooms([]);
+            setCurrentRoomNumber(1);
+          }
         }
       } else {
-        // No stored data, initialize with params
+        // No stored data
         setTotalRooms(rooms || 1);
-        setCurrentRoomNumber(1);
-        setSelectedRooms([]);
         setSelectedServices([]);
+
+        if (initialSelectedRoom) {
+            setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
+            setCurrentRoomNumber(rooms > 1 ? 2 : 1);
+        } else {
+            setSelectedRooms([]);
+            setCurrentRoomNumber(1);
+        }
       }
     } catch (error) {
       console.error("Error loading booking data:", error);
-      // Fallback to params
       setTotalRooms(rooms || 1);
       setCurrentRoomNumber(1);
       setSelectedRooms([]);
@@ -121,6 +146,7 @@ const SelectRoomsScreen: React.FC = () => {
         selectedRooms,
         currentRoomNumber,
         availableRooms,
+        selectedServices,
       };
       await AsyncStorage.setItem("bookingData", JSON.stringify(bookingData));
     } catch (error) {
@@ -152,10 +178,18 @@ const SelectRoomsScreen: React.FC = () => {
     ];
     setSelectedRooms(newSelectedRooms);
 
-    if (newSelectedRooms.length >= totalRooms) {
-      setCurrentRoomNumber(totalRooms);
+    // Find next available room number slot
+    const selectedNumbers = newSelectedRooms.map(r => r.roomNumber);
+    let nextRoomNum = 1;
+    while (selectedNumbers.includes(nextRoomNum) && nextRoomNum <= totalRooms) {
+      nextRoomNum++;
+    }
+    
+    if (nextRoomNum <= totalRooms) {
+      setCurrentRoomNumber(nextRoomNum);
     } else {
-      setCurrentRoomNumber(currentRoomNumber + 1);
+      // All rooms selected
+      setCurrentRoomNumber(totalRooms); 
     }
 
     saveBookingData();
@@ -209,7 +243,6 @@ const SelectRoomsScreen: React.FC = () => {
 
   const handleServicesChange = (services: any[], total: number) => {
     setSelectedServices(services);
-    // Save to AsyncStorage
     const bookingData = {
       checkIn,
       checkOut,
@@ -259,67 +292,11 @@ const SelectRoomsScreen: React.FC = () => {
   };
 
   const renderRoomItem = ({ item }: { item: AvailableRoom }) => (
-    <View style={styles.card}>
-      <View style={styles.imageContainer}>
-        {item.roomImageUrl ? (
-          <Image
-            source={{ uri: item.roomImageUrl }}
-            style={styles.roomImage}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>🏨</Text>
-          </View>
-        )}
-        <View style={[styles.statusBadge, { backgroundColor: "#4CAF50" }]}>
-          <Text style={styles.statusText}>Còn phòng</Text>
-        </View>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.titleSection}>
-          <Text style={styles.roomName} numberOfLines={2}>
-            {item.roomTypeName || "Unknown Room"}
-          </Text>
-          <Text style={styles.roomNumber}>Phòng {item.roomNumber || "-"}</Text>
-        </View>
-
-        <View style={styles.ratingSection}>
-          <Text style={styles.stars}>{renderStars(4.5)}</Text>
-          <Text style={styles.ratingText}>4.5/5</Text>
-        </View>
-
-        {item.description && (
-          <Text style={styles.description} numberOfLines={2}>
-            {item.description}
-          </Text>
-        )}
-
-        <View style={styles.priceSection}>
-          <Text style={styles.priceLabel}>Giá/đêm:</Text>
-          <Text style={styles.price}>
-            ${Number(item.basePricePerNight || 0).toLocaleString()}
-          </Text>
-        </View>
-
-        <View style={styles.buttonSection}>
-          <TouchableOpacity
-            style={styles.selectButton}
-            onPress={() => handleSelectRoom(item)}
-          >
-            <Text style={styles.selectButtonText}>Chọn phòng</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.detailButton}
-            onPress={() => openRoomDetail(item)}
-          >
-            <Text style={styles.detailButtonText}>Xem chi tiết</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
+    <AvailableRoomCard
+      room={item}
+      onOpenDetail={() => openRoomDetail(item)}
+      onSelect={() => handleSelectRoom(item)}
+    />
   );
 
   const availableForSelection = availableRooms.filter(
@@ -333,10 +310,10 @@ const SelectRoomsScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
+          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chọn phòng</Text>
-        <View style={{ width: 20 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <BookingProgress
@@ -346,17 +323,21 @@ const SelectRoomsScreen: React.FC = () => {
         selectedRoomNumbers={selectedRooms.map((sr) => sr.roomNumber)}
       />
 
-      <ScrollView style={styles.scrollContent}>
+      <ScrollView style={styles.scrollContent} contentContainerStyle={{paddingBottom: 100}}>
         <View style={styles.summarySection}>
-          <Text style={styles.sectionTitle}>
-            Chọn phòng {currentRoomNumber} / {totalRooms}
-          </Text>
+          <View style={styles.summaryHeader}>
+            <Text style={styles.sectionTitle}>
+              Phòng {selectedRooms.length < totalRooms ? currentRoomNumber : totalRooms} / {totalRooms}
+            </Text>
+            <View style={styles.dateBadge}>
+              <AppIcon name="calendar" size={12} color={COLORS.primary} />
+              <Text style={styles.dateText}>
+                {new Date(checkIn).getDate()}/{new Date(checkIn).getMonth() + 1} - {new Date(checkOut).getDate()}/{new Date(checkOut).getMonth() + 1}
+              </Text>
+            </View>
+          </View>
           <Text style={styles.summaryText}>
-            Nhận phòng: {new Date(checkIn).toLocaleDateString("vi-VN")} - Trả
-            phòng: {new Date(checkOut).toLocaleDateString("vi-VN")}
-          </Text>
-          <Text style={styles.summaryText}>
-            Số khách: {guests} | Số phòng: {rooms} | Số đêm: {calculateNights()}
+            {guests} khách | {calculateNights()} đêm
           </Text>
         </View>
 
@@ -371,30 +352,23 @@ const SelectRoomsScreen: React.FC = () => {
                     Phòng {sr.roomNumber}: {sr.room.roomTypeName}
                   </Text>
                   <Text style={styles.selectedRoomPrice}>
-                    $
                     {(
                       sr.room.discountedPrice ||
                       sr.room.basePricePerNight ||
                       0
-                    ).toLocaleString()}{" "}
-                    x {calculateNights()} đêm
+                    ).toLocaleString()}đ x {calculateNights()} đêm
                   </Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => handleRemoveRoom(sr.roomNumber)}
                   style={styles.removeButton}
                 >
-                  <AppIcon name="trash" size={16} color={COLORS.error} />
+                  <AppIcon name="trash" size={18} color={COLORS.error} />
                 </TouchableOpacity>
               </View>
             ))}
           </View>
         )}
-
-        {/* Services Selector */}
-        <View style={styles.servicesSection}>
-          <ServicesSelector onServicesChange={handleServicesChange} />
-        </View>
 
         {/* Available Rooms */}
         <View style={styles.availableRoomsSection}>
@@ -412,38 +386,39 @@ const SelectRoomsScreen: React.FC = () => {
             />
           ) : (
             <View style={styles.noRooms}>
+              <AppIcon name="bed" size={40} color={COLORS.gray} />
               <Text style={styles.noRoomsText}>
-                Không còn phòng nào để chọn
+                {selectedRooms.length >= totalRooms ? "Bạn đã chọn đủ số phòng" : "Không còn phòng nào để chọn"}
               </Text>
             </View>
           )}
         </View>
-
-        {/* Total and Proceed */}
-        {selectedRooms.length > 0 && (
-          <View style={styles.totalSection}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Tổng tiền phòng:</Text>
-              <Text style={styles.totalPrice}>
-                ${calculateTotal().toLocaleString()}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.proceedButton,
-                selectedRooms.length < totalRooms &&
-                  styles.proceedButtonDisabled,
-              ]}
-              onPress={handleProceedToCheckout}
-              disabled={selectedRooms.length < totalRooms}
-            >
-              <Text style={styles.proceedButtonText}>
-                Tiếp tục ({selectedRooms.length}/{totalRooms} phòng)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
+
+      {/* Bottom Action Bar */}
+      {selectedRooms.length > 0 && (
+        <View style={styles.bottomBar}>
+          <View style={styles.totalContainer}>
+            <Text style={styles.totalLabel}>Tổng cộng</Text>
+            <Text style={styles.totalPrice}>
+              {calculateTotal().toLocaleString()}đ
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.proceedButton,
+              selectedRooms.length < totalRooms && styles.proceedButtonDisabled,
+            ]}
+            onPress={handleProceedToCheckout}
+            disabled={selectedRooms.length < totalRooms}
+          >
+            <Text style={styles.proceedButtonText}>
+              Tiếp tục ({selectedRooms.length}/{totalRooms})
+            </Text>
+            <AppIcon name="arrow-right" size={20} color={COLORS.white} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Room Detail Modal */}
       <Modal
@@ -502,19 +477,18 @@ const SelectRoomsScreen: React.FC = () => {
                   <View style={styles.modalPriceSection}>
                     <Text style={styles.modalPriceLabel}>Giá/đêm:</Text>
                     <Text style={styles.modalPrice}>
-                      $
                       {Number(
                         selectedRoomDetail.basePricePerNight || 0
-                      ).toLocaleString()}
+                      ).toLocaleString()}đ
                     </Text>
                   </View>
 
                   <Text style={styles.modalNights}>
-                    Số đêm: {calculateNights()} | Tổng: $
+                    Số đêm: {calculateNights()} | Tổng: 
                     {(
                       Number(selectedRoomDetail.basePricePerNight || 0) *
                       calculateNights()
-                    ).toLocaleString()}
+                    ).toLocaleString()}đ
                   </Text>
                 </View>
               </ScrollView>
@@ -544,7 +518,7 @@ const SelectRoomsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F8F9FA",
   },
   header: {
     flexDirection: "row",
@@ -553,14 +527,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding,
     backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
   },
   backButton: {
     padding: 8,
+    borderRadius: 20,
+    backgroundColor: "#F5F5F5",
   },
   headerTitle: {
-    ...FONTS.h2,
+    ...FONTS.h3,
     fontWeight: "700",
     color: COLORS.secondary,
   },
@@ -570,269 +544,169 @@ const styles = StyleSheet.create({
   summarySection: {
     backgroundColor: COLORS.white,
     margin: SIZES.padding,
-    padding: SIZES.padding,
-    borderRadius: 12,
-    ...SHADOWS.medium,
+    padding: 20,
+    borderRadius: 20,
+    ...SHADOWS.light,
   },
-  sectionTitle: {
-    ...FONTS.h3,
-    fontWeight: "600",
-    color: COLORS.secondary,
+  summaryHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.secondary,
+  },
+  dateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF9F2",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  dateText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: "600",
+  },
   summaryText: {
-    ...FONTS.body3,
+    fontSize: 14,
     color: COLORS.gray,
-    marginBottom: 4,
   },
   selectedRoomsSection: {
     backgroundColor: COLORS.white,
     marginHorizontal: SIZES.padding,
     marginBottom: SIZES.padding,
-    padding: SIZES.padding,
-    borderRadius: 12,
-    ...SHADOWS.medium,
+    padding: 20,
+    borderRadius: 20,
+    ...SHADOWS.light,
   },
   selectedRoomItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
+    borderBottomColor: "#F1F3F5",
   },
   selectedRoomInfo: {
     flex: 1,
   },
   selectedRoomName: {
-    ...FONTS.body3,
+    fontSize: 15,
     fontWeight: "600",
     color: COLORS.secondary,
+    marginBottom: 4,
   },
   selectedRoomPrice: {
-    ...FONTS.body4,
+    fontSize: 13,
     color: COLORS.gray,
   },
   removeButton: {
     padding: 8,
+    backgroundColor: "#FFF5F5",
+    borderRadius: 8,
   },
   availableRoomsSection: {
     paddingHorizontal: SIZES.padding,
     paddingBottom: SIZES.padding,
   },
-  card: {
+  noRooms: {
+    alignItems: "center",
+    paddingVertical: 40,
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    overflow: "hidden",
-    marginBottom: 8,
-    ...SHADOWS.medium,
-  },
-  imageContainer: {
-    position: "relative",
-    width: "100%",
-    aspectRatio: 16 / 9,
-    backgroundColor: "#f0f0f0",
-  },
-  roomImage: {
-    width: "100%",
-    height: "100%",
-  },
-  imagePlaceholder: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  imagePlaceholderText: {
-    fontSize: 48,
-  },
-  statusBadge: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
     borderRadius: 20,
+    marginTop: 20,
   },
-  statusText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  content: {
-    padding: SIZES.padding,
-  },
-  titleSection: {
-    marginBottom: 12,
-  },
-  roomName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.secondary,
-    marginBottom: 4,
-  },
-  roomNumber: {
-    fontSize: 12,
+  noRoomsText: {
+    ...FONTS.body3,
     color: COLORS.gray,
+    marginTop: 12,
   },
-  ratingSection: {
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.white,
+    padding: 20,
+    paddingBottom: 34,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    ...SHADOWS.dark,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
-  },
-  stars: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  ratingText: {
-    fontSize: 13,
-    color: COLORS.secondary,
-    fontWeight: "600",
-  },
-  description: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginBottom: 12,
-    lineHeight: 16,
-  },
-  priceSection: {
-    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
-    marginBottom: 12,
   },
-  priceLabel: {
-    fontSize: 13,
+  totalContainer: {
+    flex: 1,
+  },
+  totalLabel: {
+    fontSize: 12,
     color: COLORS.gray,
-    fontWeight: "500",
+    marginBottom: 2,
   },
-  price: {
+  totalPrice: {
     fontSize: 20,
     fontWeight: "700",
     color: COLORS.primary,
   },
-  selectButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    alignItems: "center",
-    flex: 1,
-  },
-  selectButtonText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  buttonSection: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  detailButton: {
-    backgroundColor: COLORS.secondary,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    alignItems: "center",
-    flex: 1,
-  },
-  detailButtonText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  noRooms: {
-    alignItems: "center",
-    paddingVertical: SIZES.padding * 3,
-  },
-  noRoomsText: {
-    ...FONTS.h4,
-    color: COLORS.gray,
-  },
-  totalSection: {
-    backgroundColor: COLORS.white,
-    marginHorizontal: SIZES.padding,
-    marginBottom: SIZES.padding,
-    padding: SIZES.padding,
-    borderRadius: 12,
-    ...SHADOWS.medium,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  totalLabel: {
-    ...FONTS.body3,
-    fontWeight: "600",
-    color: COLORS.secondary,
-  },
-  totalPrice: {
-    ...FONTS.h3,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
   proceedButton: {
-    backgroundColor: "#d47153ff",
-    paddingVertical: SIZES.padding,
-    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
   proceedButtonDisabled: {
     opacity: 0.6,
+    backgroundColor: COLORS.gray,
   },
   proceedButtonText: {
-    ...FONTS.h4,
+    fontSize: 16,
     color: COLORS.white,
-    fontWeight: "600",
-  },
-  servicesSection: {
-    marginHorizontal: SIZES.padding,
-    marginBottom: SIZES.padding,
+    fontWeight: "700",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    width: "90%",
-    maxHeight: "80%",
-    ...SHADOWS.medium,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    height: "90%",
+    ...SHADOWS.dark,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: SIZES.padding,
+    padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
+    borderBottomColor: "#F1F3F5",
   },
   modalTitle: {
-    ...FONTS.h2,
-    fontWeight: "700",
+    ...FONTS.h3,
     color: COLORS.secondary,
   },
   closeButton: {
-    padding: 8,
+    padding: 4,
   },
   modalBody: {
-    padding: SIZES.padding,
+    flex: 1,
   },
   modalImageContainer: {
     width: "100%",
-    aspectRatio: 16 / 9,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
-    overflow: "hidden",
-    marginBottom: SIZES.padding,
+    height: 250,
+    backgroundColor: "#F8F9FA",
   },
   modalImage: {
     width: "100%",
@@ -845,58 +719,59 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalImagePlaceholderText: {
-    fontSize: 48,
+    fontSize: 64,
   },
   modalInfo: {
-    paddingVertical: SIZES.padding,
+    padding: 24,
   },
   modalRoomName: {
     fontSize: 24,
     fontWeight: "700",
     color: COLORS.secondary,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   modalRoomNumber: {
-    fontSize: 16,
+    fontSize: 14,
     color: COLORS.gray,
     marginBottom: 12,
   },
   modalRating: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 24,
+    backgroundColor: "#FFF9F2",
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   modalStars: {
-    fontSize: 18,
+    fontSize: 14,
     marginRight: 8,
   },
   modalRatingText: {
-    fontSize: 14,
-    color: COLORS.secondary,
+    fontSize: 13,
+    color: COLORS.primary,
     fontWeight: "600",
   },
   modalDescription: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.gray,
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 24,
+    marginBottom: 24,
   },
   modalPriceSection: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
     marginBottom: 12,
   },
   modalPriceLabel: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.gray,
-    fontWeight: "500",
   },
   modalPrice: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
     color: COLORS.primary,
   },
@@ -909,32 +784,35 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: "row",
+    padding: 24,
     borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
+    borderTopColor: "#F1F3F5",
+    backgroundColor: COLORS.white,
+    gap: 16,
   },
   modalCancelButton: {
     flex: 1,
-    paddingVertical: SIZES.padding,
+    paddingVertical: 16,
     alignItems: "center",
-    borderRightWidth: 1,
-    borderRightColor: COLORS.lightGray,
+    backgroundColor: "#F1F3F5",
+    borderRadius: 16,
   },
   modalCancelText: {
-    ...FONTS.h4,
-    color: COLORS.gray,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.secondary,
   },
   modalConfirmButton: {
     flex: 1,
-    paddingVertical: SIZES.padding,
+    paddingVertical: 16,
     alignItems: "center",
     backgroundColor: COLORS.primary,
-    borderBottomRightRadius: 12,
+    borderRadius: 16,
   },
   modalConfirmText: {
-    ...FONTS.h4,
+    fontSize: 16,
+    fontWeight: "700",
     color: COLORS.white,
-    fontWeight: "600",
   },
 });
 

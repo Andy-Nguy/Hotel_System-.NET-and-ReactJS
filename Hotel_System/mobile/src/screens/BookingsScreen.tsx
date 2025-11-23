@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -7,18 +7,25 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
-  Modal,
-  ScrollView,
   Alert,
+  LayoutAnimation,
+  UIManager,
+  Platform,
+  Modal,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import authApi from "../api/authApi";
+import reviewApi from "../api/reviewApi";
 import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
-import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
+import { COLORS as AppColors, SIZES, FONTS, SHADOWS } from "../constants/theme";
+import ReviewScreen from "./ReviewScreen";
+
+const COLORS = { ...AppColors, primary: "#dfa974" };
 
 // Helper to try multiple property names (PascalCase/camelCase) and return the first found value
 function getProp(obj: any, ...names: string[]) {
@@ -30,30 +37,69 @@ function getProp(obj: any, ...names: string[]) {
 }
 
 // Status badge helper
-const getStatusBadge = (
-  trangThai?: number | null,
-  trangThaiThanhToan?: number | null
+const getStatusBadgeStyle = (
+  type: "booking" | "payment",
+  status?: number | null
 ) => {
-  const isCancelled = trangThai === 0;
-  const isPaid = trangThaiThanhToan === 2;
-  const isConfirmed = trangThai === 2;
-  const isInUse = trangThai === 3;
-  const isCompleted = trangThai === 4;
+  let style = {
+    backgroundColor: AppColors.lightGray,
+    borderColor: AppColors.gray,
+    textColor: AppColors.secondary,
+  };
 
-  let statusColor = COLORS.gray;
-  let paymentColor = COLORS.gray;
+  if (type === "booking") {
+    switch (status) {
+      case 0: // Cancelled
+        style = {
+          backgroundColor: "#fff1f0",
+          borderColor: AppColors.error,
+          textColor: AppColors.error,
+        };
+        break;
+      case 1: // Pending
+        style = {
+          backgroundColor: "#fffbe6",
+          borderColor: AppColors.warning,
+          textColor: AppColors.warning,
+        };
+        break;
+      case 2: // Confirmed
+      case 3: // In Use
+      case 4: // Completed
+        style = {
+          backgroundColor: "#f6ffed",
+          borderColor: AppColors.success,
+          textColor: AppColors.success,
+        };
+        break;
+    }
+  } else if (type === "payment") {
+    switch (status) {
+      case 0: // Deposit
+        style = {
+          backgroundColor: "#e6f7ff",
+          borderColor: AppColors.primary,
+          textColor: AppColors.primary,
+        };
+        break;
+      case 1: // Unpaid
+        style = {
+          backgroundColor: "#fff1f0",
+          borderColor: AppColors.error,
+          textColor: AppColors.error,
+        };
+        break;
+      case 2: // Paid
+        style = {
+          backgroundColor: "#f6ffed",
+          borderColor: AppColors.success,
+          textColor: AppColors.success,
+        };
+        break;
+    }
+  }
 
-  if (isCancelled) statusColor = COLORS.error;
-  else if (isCompleted) statusColor = COLORS.success;
-  else if (isInUse) statusColor = COLORS.warning;
-  else if (isConfirmed) statusColor = COLORS.success;
-  else statusColor = COLORS.warning;
-
-  if (isPaid) paymentColor = COLORS.success;
-  else if (trangThaiThanhToan === 0) paymentColor = COLORS.primary;
-  else paymentColor = COLORS.warning;
-
-  return { statusColor, paymentColor };
+  return style;
 };
 
 // NOTE: `mapBookingStatusText`, `mapPaymentStatusText`, and `getRoomDisplayName`
@@ -106,9 +152,21 @@ const getRoomDisplayName = (room: any, soPhongFallback?: any) => {
     getProp(room, "soPhong", "SoPhong") ||
     getProp(room, "SoPhongChiTiet", "soPhongChiTiet") ||
     soPhongFallback;
+
+  // If name is just a room type, prepend it to the room number
+  if (
+    name &&
+    soPhong &&
+    (name.toLowerCase().includes("phòng") ||
+      name.toLowerCase().includes("room")) &&
+    !String(name).includes(String(soPhong))
+  ) {
+    return `${name} ${soPhong}`;
+  }
+
   // Prevent duplicate number if name already contains the room number (e.g., "Deluxe Room 101")
   if (soPhong && String(name).includes(String(soPhong))) return name;
-  return `${name || "N/A"} ${soPhong || ""}`.trim();
+  return `${name || "Phòng"} ${soPhong || ""}`.trim();
 };
 
 const BookingsScreen: React.FC = () => {
@@ -116,14 +174,22 @@ const BookingsScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
-  const [detailsData, setDetailsData] = useState<any | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { token, loading: authLoading } = useAuth();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const [activeReviewBookingId, setActiveReviewBookingId] = useState<string | null>(null);
+  const [activeReviewBookingCode, setActiveReviewBookingCode] = useState<string | null>(null);
+  const refreshTimers = useRef<Array<any>>([]);
+  const [completingId, setCompletingId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Enable LayoutAnimation for Android
+    if (Platform.OS === "android") {
+      UIManager.setLayoutAnimationEnabledExperimental &&
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
     // Wait until auth provider finishes checking token; otherwise request may be unauthenticated
     if (!authLoading) {
       loadBookings();
@@ -160,6 +226,7 @@ const BookingsScreen: React.FC = () => {
           )
         : [];
       setBookings(sortedData);
+      console.debug('Loaded bookings', { count: sortedData.length, sample: sortedData[0] });
     } catch (e: any) {
       // If server returns 401, navigate to login so user can reauthenticate
       const errMsg = e?.message || "Failed to load bookings";
@@ -185,33 +252,72 @@ const BookingsScreen: React.FC = () => {
     }
   };
 
+  // When bookings change, schedule refreshes for bookings whose checkout
+  // time is in the future and whose status is not yet 'Completed' (4).
+  // If a booking's checkout time already passed but the server hasn't
+  // updated status to 4, trigger an immediate refresh so the review button
+  // can become enabled.
+  useEffect(() => {
+    // Clear existing timers
+    try {
+      refreshTimers.current.forEach((t) => clearTimeout(t));
+    } catch (e) {}
+    refreshTimers.current = [];
+
+    const now = new Date();
+    let shouldRefreshImmediately = false;
+
+    bookings.forEach((item) => {
+      const checkout = item?.ngayTraPhong ? new Date(item.ngayTraPhong) : null;
+      const rawStatus = getProp(item, "trangThai", "TrangThai");
+      const statusCode = rawStatus !== undefined ? Number(rawStatus) : undefined;
+
+      if (!checkout) return;
+
+      const msUntil = checkout.getTime() - now.getTime();
+
+      // If checkout already passed but server hasn't marked completed, refresh now
+      if (msUntil <= 0 && statusCode !== 4) {
+        shouldRefreshImmediately = true;
+        return;
+      }
+
+      // Otherwise schedule a refresh right after checkout time to get latest status
+      if (msUntil > 0 && statusCode !== 4) {
+        const t = setTimeout(() => {
+          loadBookings();
+        }, msUntil + 1000); // +1s buffer
+        refreshTimers.current.push(t as any);
+      }
+    });
+
+    if (shouldRefreshImmediately) {
+      // debounce a short bit to avoid spamming
+      const t = setTimeout(() => loadBookings(), 500);
+      refreshTimers.current.push(t as any);
+    }
+
+    return () => {
+      try {
+        refreshTimers.current.forEach((t) => clearTimeout(t));
+      } catch (e) {}
+      refreshTimers.current = [];
+    };
+  }, [bookings]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadBookings();
     setRefreshing(false);
   };
 
-  const openDetails = (booking: any) => {
-    setDetailsModalVisible(true);
-    setDetailsData(booking);
+  const toggleExpand = (id: string) => {
+    // Animate layout change
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedId((prev) => (prev === id ? null : id));
   };
 
-  const renderBooking = ({ item, index }: { item: any; index: number }) => {
-    // Read status codes using getProp to support PascalCase from backend
-    const rawStatus = getProp(item, "trangThai", "TrangThai");
-    const rawPayment = getProp(
-      item,
-      "trangThaiThanhToan",
-      "TrangThaiThanhToan"
-    );
-    const statusCode = rawStatus !== undefined ? Number(rawStatus) : undefined;
-    const paymentCode =
-      rawPayment !== undefined ? Number(rawPayment) : undefined;
-    const { statusColor, paymentColor } = getStatusBadge(
-      statusCode,
-      paymentCode
-    );
-    // Normalize rooms array - backend returns different properties depending on endpoint
+  const renderDetails = (item: any) => {
     const roomsArray =
       getProp(
         item,
@@ -221,359 +327,369 @@ const BookingsScreen: React.FC = () => {
         "chiTietDatPhongs",
         "ChiTiet"
       ) || [];
-    const topName = getProp(item, "TenPhong", "tenPhong");
-    const topSo = getProp(item, "SoPhong", "soPhong");
-    const topRoomDisplay = topName
-      ? topSo && String(topName).includes(String(topSo))
-        ? topName
-        : `${topName} ${topSo || ""}`
-      : `Số ${topSo}`;
-    const isCancelled = item.trangThai === 0;
+    
 
     return (
-      <TouchableOpacity
-        style={[
-          styles.bookingCard,
-          {
-            borderLeftWidth: 4,
-            borderLeftColor: isCancelled
-              ? COLORS.error
-              : statusColor === COLORS.success
-              ? COLORS.success
-              : statusColor === COLORS.warning
-              ? COLORS.warning
-              : COLORS.primary,
-          },
-        ]}
-        onPress={() => openDetails(item)}
-      >
-        {/* STATUS SECTION - Most prominent */}
-        <View style={styles.statusSection}>
-          <View style={styles.statusTags}>
-            <View style={[styles.statusTag, { backgroundColor: statusColor }]}>
-              <Text style={styles.statusTagText}>
-                {item.trangThaiText ||
-                  mapBookingStatusText(
-                    Number(getProp(item, "trangThai", "TrangThai"))
-                  )}
-              </Text>
-            </View>
-            <View style={[styles.statusTag, { backgroundColor: paymentColor }]}>
-              <Text style={styles.statusTagText}>
-                {item.trangThaiThanhToanText ||
-                  mapPaymentStatusText(
-                    Number(
-                      getProp(item, "trangThaiThanhToan", "TrangThaiThanhToan")
-                    )
-                  )}
-              </Text>
-            </View>
+      <View style={styles.detailsContainer}>
+        {/* Customer Info */}
+        <View style={styles.modalSection}>
+          <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Tên khách hàng:</Text>
+            <Text style={styles.value}>
+              {getProp(
+                item,
+                "tenKhachHang",
+                "TenKhachHang",
+                "hoTen",
+                "HoTen"
+              ) || "N/A"}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Email:</Text>
+            <Text style={styles.value}>
+              {getProp(
+                item,
+                "emailKhachHang",
+                "EmailKhachHang",
+                "email",
+                "Email"
+              ) || "N/A"}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Ngày đặt:</Text>
+            <Text style={styles.value}>
+              {item.ngayDatPhong
+                ? new Date(item.ngayDatPhong).toLocaleDateString("vi-VN")
+                : "N/A"}
+            </Text>
           </View>
         </View>
 
-        {/* BOOKING INFO */}
-        <View style={styles.bookingInfo}>
-          <Text style={styles.customerName}>
-            Khách hàng:{" "}
-            {getProp(item, "tenKhachHang", "TenKhachHang", "hoTen", "HoTen") ||
-              "N/A"}
-          </Text>
-
+        {/* Payment Info */}
+        <View style={styles.modalSection}>
+          <Text style={styles.sectionTitle}>Thanh toán</Text>
           <View style={styles.infoRow}>
-            <Text style={styles.calendarIcon}>📅</Text>
-            <Text style={styles.dateText}>
-              {new Date(item.ngayNhanPhong).toLocaleDateString("vi-VN")} →{" "}
-              {new Date(item.ngayTraPhong).toLocaleDateString("vi-VN")}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.moneyIcon}>💰</Text>
-            <Text style={styles.priceText}>
+            <Text style={styles.label}>Tổng tiền:</Text>
+            <Text style={styles.priceValue}>
               {Number(
-                getProp(item, "tongTien", "TongTien") ||
-                  getProp(item, "TongTien") ||
-                  0
+                getProp(item, "tongTien", "TongTien") || 0
               ).toLocaleString()}
               đ
             </Text>
           </View>
-
-          <TouchableOpacity
-            style={styles.roomTag}
-            onPress={() => openDetails(item)}
-            accessibilityRole="button"
-          >
-            <Text style={styles.roomTagText}>
-              Phòng:{" "}
-              {roomsArray && roomsArray.length > 0
-                ? roomsArray.length === 1
-                  ? getRoomDisplayName(
-                      roomsArray[0],
-                      getProp(item, "soPhong", "SoPhong")
-                    )
-                  : `${getRoomDisplayName(
-                      roomsArray[0],
-                      getProp(item, "soPhong", "SoPhong")
-                    )} +${roomsArray.length - 1} khác`
-                : // fallback to top-level TenPhong/SoPhong
-                  topRoomDisplay}
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Tiền cọc:</Text>
+            <Text style={styles.value}>
+              {Number(
+                getProp(item, "tienCoc", "TienCoc") || 0
+              ).toLocaleString()}
+              đ
             </Text>
-            {/* Chevron removed; not needed and caused duplicate '>' */}
-          </TouchableOpacity>
-
-          {item.services && item.services.length > 0 && (
-            <View style={styles.servicesContainer}>
-              <Text style={styles.servicesLabel}>Dịch vụ kèm theo:</Text>
-              <View style={styles.servicesTags}>
-                {item.services.slice(0, 2).map((s: any, i: number) => (
-                  <View key={i} style={styles.serviceTag}>
-                    <Text style={styles.serviceTagText}>{s.tenDichVu}</Text>
-                  </View>
-                ))}
-                {item.services.length > 2 && (
-                  <View style={styles.serviceTag}>
-                    <Text style={styles.serviceTagText}>
-                      +{item.services.length - 2} khác
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
+          </View>
         </View>
-      </TouchableOpacity>
+
+        {/* Rooms */}
+        {roomsArray && roomsArray.length > 0 && (
+          <View style={styles.modalSection}>
+            <Text style={styles.sectionTitle}>Chi tiết phòng</Text>
+            {roomsArray.map((room: any, index: number) => (
+              <View key={index} style={styles.roomItem}>
+                <Text style={styles.roomName}>
+                  {getRoomDisplayName(room, room.soPhong)}
+                </Text>
+                <Text style={styles.roomPrice}>
+                  {Number(
+                    getProp(room, "giaPhong", "GiaPhong") || 0
+                  ).toLocaleString()}
+                  đ/đêm
+                </Text>
+                <Text style={styles.roomDetails}>
+                  Số đêm: {getProp(room, "soDem", "SoDem") || 0}
+                </Text>
+                <Text style={styles.roomDetails}>
+                  Thành tiền:{" "}
+                  {Number(
+                    getProp(room, "thanhTien", "ThanhTien") || 0
+                  ).toLocaleString()}
+                  đ
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Services */}
+        {item.services && item.services.length > 0 && (
+          <View style={styles.modalSection}>
+            <Text style={styles.sectionTitle}>Dịch vụ kèm theo</Text>
+            {item.services.map((service: any, index: number) => (
+              <View key={index} style={styles.serviceItem}>
+                <Text style={styles.serviceName}>{service.tenDichVu}</Text>
+                <Text style={styles.servicePrice}>
+                  {Number(
+                    getProp(
+                      service,
+                      "tienDichVu",
+                      "TienDichVu",
+                      "giaDichVu",
+                      "GiaDichVu"
+                    ) || 0
+                  ).toLocaleString()}
+                  đ
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
     );
   };
-  const renderDetailsModal = () => {
-    if (!detailsData) return null;
 
-    const rawStatus = getProp(detailsData, "trangThai", "TrangThai");
+  const renderBooking = ({ item, index }: { item: any; index: number }) => {
+    // Preserve numeric IDs (0) by checking null/undefined explicitly
+    // Lấy ID đặt phòng từ JSON: IddatPhong (hoặc iddatPhong nếu camelCase)
+const rawBookingId = getProp(
+  item,
+  "IddatPhong",   // property C# => JSON mặc định
+  "iddatPhong",   // nếu bạn bật camelCase
+  "IDDatPhong"    // phòng khi bạn map đúng tên cột SQL
+);
+const bookingId =
+  rawBookingId !== undefined && rawBookingId !== null
+    ? String(rawBookingId)
+    : ""; // nếu không có thì để rỗng, KHÔNG dùng index để tránh "0"
+
+// Mã đặt phòng hiển thị: hiện tại bảng chỉ có IDDatPhong, nên dùng luôn bookingId
+const rawBookingCode = getProp(
+  item,
+  "IddatPhong",
+  "iddatPhong",
+  "IDDatPhong"
+);
+const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
+    ? String(rawBookingCode)
+    : bookingId;
+    const rawStatus = getProp(item, "trangThai", "TrangThai");
     const rawPayment = getProp(
-      detailsData,
+      item,
       "trangThaiThanhToan",
       "TrangThaiThanhToan"
     );
     const statusCode = rawStatus !== undefined ? Number(rawStatus) : undefined;
     const paymentCode =
       rawPayment !== undefined ? Number(rawPayment) : undefined;
-    const { statusColor, paymentColor } = getStatusBadge(
-      statusCode,
-      paymentCode
-    );
+
+    const checkoutRaw = getProp(item, "ngayTraPhong", "NgayTraPhong");
+    const checkoutDate = checkoutRaw ? new Date(checkoutRaw) : null;
+    const now = new Date();
+    const canOpenReview = statusCode === 4 || (!!checkoutDate && now >= checkoutDate);
+
+    const bookingStatusStyle = getStatusBadgeStyle("booking", statusCode);
+    const paymentStatusStyle = getStatusBadgeStyle("payment", paymentCode);
+
+    const roomsArray =
+      getProp(
+        item,
+        "rooms",
+        "Rooms",
+        "ChiTietDatPhongs",
+        "chiTietDatPhongs",
+        "ChiTiet"
+      ) || [];
+
+    const isExpanded = expandedId === bookingId;
 
     return (
-      <Modal
-        visible={detailsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setDetailsModalVisible(false)}
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => toggleExpand(bookingId)}
+        style={styles.bookingCard}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chi tiết đặt phòng</Text>
-              <TouchableOpacity
-                onPress={() => setDetailsModalVisible(false)}
-                style={styles.closeButton}
+        {/* Header with Status */}
+        <View
+          style={[
+            styles.cardHeader,
+            {
+              borderTopColor: bookingStatusStyle.borderColor,
+            },
+          ]}
+        >
+          <Text style={styles.bookingCode}>{bookingCode}</Text>
+          <View style={styles.statusTags}>
+            <View
+              style={[
+                styles.statusTag,
+                {
+                  backgroundColor: bookingStatusStyle.backgroundColor,
+                  borderColor: bookingStatusStyle.borderColor,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusTagText,
+                  { color: bookingStatusStyle.textColor },
+                ]}
               >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
+                {item.trangThaiText || mapBookingStatusText(statusCode)}
+              </Text>
             </View>
-
-            <ScrollView style={styles.modalBody}>
-              {/* Status Section */}
-              <View style={styles.modalSection}>
-                <Text style={styles.sectionTitle}>Trạng thái</Text>
-                <View style={styles.statusTags}>
-                  <View
-                    style={[styles.statusTag, { backgroundColor: statusColor }]}
-                  >
-                    <Text style={styles.statusTagText}>
-                      {detailsData.trangThaiText ||
-                        mapBookingStatusText(
-                          Number(getProp(detailsData, "trangThai", "TrangThai"))
-                        )}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.statusTag,
-                      { backgroundColor: paymentColor },
-                    ]}
-                  >
-                    <Text style={styles.statusTagText}>
-                      {detailsData.trangThaiThanhToanText ||
-                        mapPaymentStatusText(
-                          Number(
-                            getProp(
-                              detailsData,
-                              "trangThaiThanhToan",
-                              "TrangThaiThanhToan"
-                            )
-                          )
-                        )}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Customer Info */}
-              <View style={styles.modalSection}>
-                <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
-                <View style={styles.infoRow}>
-                  <Text style={styles.label}>Tên khách hàng:</Text>
-                  <Text style={styles.value}>
-                    {getProp(
-                      detailsData,
-                      "tenKhachHang",
-                      "TenKhachHang",
-                      "hoTen",
-                      "HoTen"
-                    ) || "N/A"}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.label}>Email:</Text>
-                  <Text style={styles.value}>
-                    {getProp(
-                      detailsData,
-                      "emailKhachHang",
-                      "EmailKhachHang",
-                      "email",
-                      "Email"
-                    ) || "N/A"}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Booking Details */}
-              <View style={styles.modalSection}>
-                <Text style={styles.sectionTitle}>Chi tiết đặt phòng</Text>
-                <View style={styles.infoRow}>
-                  <Text style={styles.label}>Mã đặt phòng:</Text>
-                  <Text style={styles.value}>
-                    {getProp(detailsData, "id", "idDatPhong", "IDDatPhong")}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.label}>Trạng thái:</Text>
-                  <Text style={styles.value}>
-                    {detailsData.trangThaiText ||
-                      mapBookingStatusText(
-                        Number(getProp(detailsData, "trangThai", "TrangThai"))
-                      )}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.label}>Thanh toán:</Text>
-                  <Text style={styles.value}>
-                    {detailsData.trangThaiThanhToanText ||
-                      mapPaymentStatusText(
-                        Number(
-                          getProp(
-                            detailsData,
-                            "trangThaiThanhToan",
-                            "TrangThaiThanhToan"
-                          )
-                        )
-                      )}
-                  </Text>
-                </View>
-                {/* Trạng thái and Thanh toán already shown above with mapping (prevent duplicates) */}
-                <View style={styles.infoRow}>
-                  <Text style={styles.label}>Ngày nhận phòng:</Text>
-                  <Text style={styles.value}>
-                    {new Date(detailsData.ngayNhanPhong).toLocaleDateString(
-                      "vi-VN"
-                    )}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.label}>Ngày trả phòng:</Text>
-                  <Text style={styles.value}>
-                    {new Date(detailsData.ngayTraPhong).toLocaleDateString(
-                      "vi-VN"
-                    )}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.label}>Tổng tiền:</Text>
-                  <Text style={styles.priceValue}>
-                    {Number(
-                      getProp(detailsData, "tongTien", "TongTien") || 0
-                    ).toLocaleString()}
-                    đ
-                  </Text>
-                </View>
-              </View>
-
-              {/* Rooms */}
-              {detailsData.rooms && detailsData.rooms.length > 0 && (
-                <View style={styles.modalSection}>
-                  <Text style={styles.sectionTitle}>Phòng đã đặt</Text>
-                  {(
-                    getProp(
-                      detailsData,
-                      "rooms",
-                      "Rooms",
-                      "ChiTietDatPhongs",
-                      "chiTietDatPhongs",
-                      "ChiTiet"
-                    ) || []
-                  ).map((room: any, index: number) => (
-                    <View key={index} style={styles.roomItem}>
-                      <Text style={styles.roomName}>
-                        {getRoomDisplayName(room, room.soPhong)}
-                      </Text>
-                      <Text style={styles.roomPrice}>
-                        {Number(
-                          getProp(room, "giaPhong", "GiaPhong") || 0
-                        ).toLocaleString()}
-                        đ/đêm
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Services */}
-              {detailsData.services && detailsData.services.length > 0 && (
-                <View style={styles.modalSection}>
-                  <Text style={styles.sectionTitle}>Dịch vụ kèm theo</Text>
-                  {detailsData.services.map((service: any, index: number) => (
-                    <View key={index} style={styles.serviceItem}>
-                      <Text style={styles.serviceName}>
-                        {service.tenDichVu}
-                      </Text>
-                      <Text style={styles.servicePrice}>
-                        {Number(
-                          getProp(
-                            service,
-                            "tienDichVu",
-                            "TienDichVu",
-                            "giaDichVu",
-                            "GiaDichVu"
-                          ) || 0
-                        ).toLocaleString()}
-                        đ
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Notes */}
-              {detailsData.ghiChu && (
-                <View style={styles.modalSection}>
-                  <Text style={styles.sectionTitle}>Ghi chú</Text>
-                  <Text style={styles.notesText}>{detailsData.ghiChu}</Text>
-                </View>
-              )}
-            </ScrollView>
+            <View
+              style={[
+                styles.statusTag,
+                {
+                  backgroundColor: paymentStatusStyle.backgroundColor,
+                  borderColor: paymentStatusStyle.borderColor,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusTagText,
+                  { color: paymentStatusStyle.textColor },
+                ]}
+              >
+                {item.trangThaiThanhToanText ||
+                  mapPaymentStatusText(paymentCode)}
+              </Text>
+            </View>
           </View>
         </View>
-      </Modal>
+
+        {/* Main Content */}
+        <View style={styles.cardContent}>
+          <Text style={styles.roomSummaryText}>
+            {roomsArray.length > 0
+              ? roomsArray.length === 1
+                ? getRoomDisplayName(
+                    roomsArray[0],
+                    getProp(item, "soPhong", "SoPhong")
+                  )
+                : `${getRoomDisplayName(
+                    roomsArray[0],
+                    getProp(item, "soPhong", "SoPhong")
+                  )} & ${roomsArray.length - 1} phòng khác`
+              : "Chi tiết đặt phòng"}
+          </Text>
+
+          <View style={styles.infoRow}>
+            <Ionicons
+              name="calendar-outline"
+              size={20}
+              color={COLORS.secondary}
+            />
+            <Text style={styles.dateText}>
+              {new Date(item.ngayNhanPhong).toLocaleDateString("vi-VN")} -{" "}
+              {new Date(item.ngayTraPhong).toLocaleDateString("vi-VN")}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Ionicons name="cash-outline" size={20} color={COLORS.secondary} />
+            <Text style={styles.priceText}>
+              {Number(
+                getProp(item, "tongTien", "TongTien") || 0
+              ).toLocaleString()}
+              đ
+            </Text>
+          </View>
+        </View>
+
+        {/* Expanded Details */}
+        {isExpanded && (
+          <>
+            <View style={styles.divider} />
+            {renderDetails(item)}
+          </>
+        )}
+
+        {/* Footer with expand icon and optional review button */}
+        <View style={[styles.cardFooter, { justifyContent: 'space-between', paddingHorizontal: SIZES.padding }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.footerText}>{isExpanded ? "Thu gọn" : "Xem chi tiết"}</Text>
+            <Ionicons
+              name={isExpanded ? "chevron-up-outline" : "chevron-down-outline"}
+              size={20}
+              color={COLORS.primary}
+            />
+          </View>
+
+          {canOpenReview && (
+            <TouchableOpacity
+              onPress={async () => {
+                // Debug: log which ids/codes we will use when opening review
+                console.debug('Opening review (button press)', { bookingId, bookingCode, item });
+
+                // Use bookingId (DB id) for API calls; bookingCode is for display
+                const bId = String(bookingId);
+
+                // If status isn't marked completed, try completing checkout
+                if (statusCode !== 4) {
+                  try {
+                    setCompletingId(bId);
+                    const r = await reviewApi.completeCheckout(bId);
+                    setCompletingId(null);
+
+                    if (!r.ok) {
+                      Alert.alert('Không thể hoàn tất', r?.message || 'Vui lòng thử lại sau.');
+                      return;
+                    }
+
+                    // Refresh to sync status
+                    loadBookings();
+                  } catch (e: any) {
+                    setCompletingId(null);
+                    Alert.alert('Không thể hoàn tất', e?.message || 'Vui lòng thử lại sau.');
+                    return;
+                  }
+                }
+
+                // Check review status; if none, open inline review and pass code
+                try {
+                  const res = await reviewApi.getReviewStatus(bId);
+                  const openInlineReview = (id: string, code?: string) => {
+                    setActiveReviewBookingId(id);
+                    setActiveReviewBookingCode(code ?? id);
+                  };
+
+                  if (res && res.ok && res.data) {
+                    if (res.data.hasReview) {
+                      Alert.alert('Đã đánh giá', 'Bạn đã gửi đánh giá cho đặt phòng này rồi.');
+                    } else {
+                      openInlineReview(bId, bookingCode);
+                    }
+                  } else if (res && res.ok === false && res.status === 404) {
+                    openInlineReview(bId, bookingCode);
+                  } else {
+                    openInlineReview(bId, bookingCode);
+                  }
+                } catch (e: any) {
+                  console.debug('Review button error', e);
+                  setActiveReviewBookingId(bId);
+                  setActiveReviewBookingCode(bookingCode);
+                }
+              }}
+              disabled={completingId === String(bookingId)}
+              style={{
+                backgroundColor: COLORS.primary,
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 6,
+                opacity: completingId === String(bookingId) ? 0.7 : 1,
+              }}
+            >
+              {completingId === String(bookingId) ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Đánh giá</Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -620,8 +736,10 @@ const BookingsScreen: React.FC = () => {
       <FlatList
         data={bookings}
         renderItem={renderBooking}
-        keyExtractor={(item, idx) =>
-          String(item.id || item.bookingId || item.IdDatPhong || idx)
+       keyExtractor={(item, index) => {
+      const id = getProp(item, "IddatPhong", "iddatPhong", "IDDatPhong");
+      return id != null ? String(id) : `booking-${index}`;
+}
         }
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
@@ -643,7 +761,63 @@ const BookingsScreen: React.FC = () => {
           </View>
         }
       />
-      {renderDetailsModal()}
+      {/* Inline modal for the Review form. Render ReviewScreen and provide a
+          small navigation stub so the screen's close actions work as expected. */}
+      <Modal
+        visible={!!activeReviewBookingId}
+        animationType="slide"
+        onRequestClose={() => {
+          setActiveReviewBookingId(null);
+          setActiveReviewBookingCode(null);
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+          {activeReviewBookingId ? (
+            <ReviewScreen
+              route={{ params: { bookingId: activeReviewBookingId, bookingCode: activeReviewBookingCode } }}
+              navigation={{
+                goBack: () => {
+                  setActiveReviewBookingId(null);
+                  setActiveReviewBookingCode(null);
+                },
+                popToTop: () => {
+                  setActiveReviewBookingId(null);
+                  setActiveReviewBookingCode(null);
+                },
+                navigate: (name: string, params?: any) => {
+                  // Close the inline modal first
+                  setActiveReviewBookingId(null);
+                  setActiveReviewBookingCode(null);
+
+                  try {
+                    // Prefer using the current screen's navigation to switch tabs
+                    if (navigation && typeof navigation.getParent === 'function') {
+                      const parent = navigation.getParent();
+                      if (parent && typeof parent.navigate === 'function') {
+                        // If caller asked to navigate to MainApp/HomeTab, translate accordingly
+                        if (name === 'MainApp' || name === 'HomeTab' || name === 'Home') {
+                          parent.navigate('HomeTab', { screen: 'Home' });
+                          return;
+                        }
+                        parent.navigate(name as any, params);
+                        return;
+                      }
+                    }
+
+                    // Fallback: try global rootNavigation if present
+                    const rootNav = (global as any).rootNavigation;
+                    if (rootNav && typeof rootNav.navigate === 'function') {
+                      rootNav.navigate(name as any, params);
+                    }
+                  } catch (e) {
+                    // swallow; modal already closed
+                  }
+                },
+              } as any}
+            />
+          ) : null}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -654,102 +828,173 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: COLORS.white,
-    paddingVertical: SIZES.base * 0.6,
     paddingHorizontal: SIZES.padding,
+    paddingBottom: SIZES.base,
+    backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    ...SHADOWS.light,
   },
   title: {
-    ...FONTS.h3,
+    ...FONTS.h2,
     color: COLORS.secondary,
-    marginBottom: 2,
+    fontWeight: "bold",
   },
   subtitle: {
     ...FONTS.body3,
     color: COLORS.gray,
   },
   listContainer: {
-    padding: SIZES.padding,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.padding,
   },
   bookingCard: {
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radiusLarge,
+    borderRadius: SIZES.radius,
     marginBottom: SIZES.margin * 1.5,
-    overflow: "hidden",
     ...SHADOWS.medium,
+    overflow: "hidden",
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: SIZES.padding,
-    backgroundColor: COLORS.background,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.base,
+    backgroundColor: COLORS.white,
+    borderTopWidth: 4,
   },
-  badge: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  bookingCode: {
+    ...FONTS.body3,
+    color: COLORS.secondary,
+    fontWeight: "bold",
+  },
+  statusTags: {
+    flexDirection: "row",
+    gap: SIZES.base,
+  },
+  statusTag: {
+    paddingHorizontal: SIZES.base,
+    paddingVertical: 4,
     borderRadius: SIZES.radius,
+    borderWidth: 1,
   },
-  badgeText: {
-    ...FONTS.body4,
-    color: COLORS.white,
-    fontWeight: "700",
-  },
-  statusBadge: {
-    backgroundColor: COLORS.success,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: SIZES.radius,
-  },
-  statusText: {
+  statusTagText: {
     ...FONTS.body5,
-    color: COLORS.white,
-    fontWeight: "700",
-    textTransform: "uppercase",
+    fontWeight: "bold",
   },
   cardContent: {
-    padding: SIZES.padding,
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.padding,
+  },
+  roomSummaryText: {
+    ...FONTS.h4,
+    color: COLORS.secondary,
+    marginBottom: SIZES.margin,
+    fontWeight: "bold",
   },
   infoRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
+    marginBottom: SIZES.base,
   },
-  label: {
-    ...FONTS.body3,
-    color: COLORS.gray,
-  },
-  value: {
+  dateText: {
     ...FONTS.body3,
     color: COLORS.secondary,
-    fontWeight: "600",
+    marginLeft: SIZES.base,
   },
-  priceValue: {
-    ...FONTS.body2,
+  priceText: {
+    ...FONTS.body3,
     color: COLORS.primary,
-    fontWeight: "700",
+    fontWeight: "bold",
+    marginLeft: SIZES.base,
+  },
+  cardFooter: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SIZES.base,
+    backgroundColor: COLORS.lightGray,
+  },
+  footerText: {
+    ...FONTS.body4,
+    color: COLORS.primary,
+    marginRight: SIZES.base / 2,
+    fontWeight: "600",
   },
   divider: {
     height: 1,
     backgroundColor: COLORS.border,
+    marginHorizontal: SIZES.padding,
   },
-  detailButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    alignItems: "center",
+  detailsContainer: {
+    padding: SIZES.padding,
+    backgroundColor: COLORS.background, // A slightly different background for details
   },
-  detailButtonText: {
+  modalSection: {
+    marginBottom: SIZES.margin,
+  },
+  sectionTitle: {
+    ...FONTS.h4,
+    color: COLORS.secondary,
+    marginBottom: SIZES.margin,
+    paddingBottom: SIZES.base,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  label: {
+    ...FONTS.body4,
+    color: COLORS.gray,
+    flex: 1,
+  },
+  value: {
+    ...FONTS.body4,
+    color: COLORS.secondary,
+    fontWeight: "600",
+    textAlign: "right",
+  },
+  priceValue: {
     ...FONTS.body3,
-    color: COLORS.white,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    color: COLORS.primary,
+    fontWeight: "bold",
+    textAlign: "right",
+  },
+  roomItem: {
+    paddingVertical: SIZES.base,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  roomName: {
+    ...FONTS.body3,
+    color: COLORS.secondary,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  roomDetails: {
+    ...FONTS.body4,
+    color: COLORS.gray,
+  },
+  roomPrice: {
+    ...FONTS.body4,
+    color: COLORS.primary,
+    fontWeight: "bold",
+    textAlign: "right",
+  },
+  serviceItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: SIZES.base,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  serviceName: {
+    ...FONTS.body3,
+    color: COLORS.secondary,
+  },
+  servicePrice: {
+    ...FONTS.body3,
+    color: COLORS.primary,
+    fontWeight: "bold",
   },
   centerContainer: {
     flex: 1,
@@ -764,211 +1009,49 @@ const styles = StyleSheet.create({
     marginTop: SIZES.margin,
   },
   errorIcon: {
-    fontSize: 64,
+    fontSize: 48,
     marginBottom: SIZES.margin,
+    color: COLORS.error,
   },
   errorText: {
-    ...FONTS.body2,
-    color: COLORS.error,
+    ...FONTS.h4,
+    color: COLORS.secondary,
     textAlign: "center",
-    marginBottom: SIZES.margin * 1.5,
+    marginBottom: SIZES.base,
   },
   retryButton: {
     backgroundColor: COLORS.primary,
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 30,
     borderRadius: SIZES.radius,
+    marginTop: SIZES.margin,
   },
   retryButtonText: {
     ...FONTS.body3,
     color: COLORS.white,
-    fontWeight: "700",
+    fontWeight: "bold",
   },
   emptyContainer: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: SIZES.padding * 4,
+    paddingTop: "40%",
   },
   emptyIcon: {
-    fontSize: 64,
+    fontSize: 48,
     marginBottom: SIZES.margin,
+    color: COLORS.gray,
   },
   emptyText: {
-    ...FONTS.h4,
+    ...FONTS.h3,
     color: COLORS.secondary,
-    marginBottom: 8,
-    textAlign: "center",
+    marginBottom: SIZES.base,
   },
   emptySubtext: {
     ...FONTS.body3,
     color: COLORS.gray,
     textAlign: "center",
-  },
-  statusSection: {
-    padding: SIZES.padding,
-    backgroundColor: COLORS.background,
-  },
-  statusTags: {
-    flexDirection: "row",
-    gap: SIZES.base,
-  },
-  statusTag: {
-    paddingHorizontal: SIZES.base,
-    paddingVertical: 4,
-    borderRadius: SIZES.base / 2,
-  },
-  statusTagText: {
-    color: COLORS.white,
-    ...FONTS.body4,
-    fontWeight: "bold",
-  },
-  bookingInfo: {
-    padding: SIZES.padding,
-  },
-  customerName: {
-    ...FONTS.h4,
-    color: COLORS.secondary,
-    marginBottom: SIZES.base,
-  },
-  calendarIcon: {
-    fontSize: SIZES.h4,
-    marginRight: SIZES.base,
-  },
-  moneyIcon: {
-    fontSize: SIZES.h4,
-    marginRight: SIZES.base,
-  },
-  dateText: {
-    ...FONTS.body3,
-    color: COLORS.gray,
-    flex: 1,
-  },
-  priceText: {
-    ...FONTS.h3,
-    color: COLORS.primary,
-    fontWeight: "bold",
-  },
-  roomTag: {
-    backgroundColor: COLORS.lightGray,
-    paddingHorizontal: SIZES.base,
-    paddingVertical: 4,
-    borderRadius: SIZES.base / 2,
-    alignSelf: "flex-start",
-    marginTop: SIZES.base,
-  },
-  roomTagText: {
-    ...FONTS.body4,
-    color: COLORS.primary,
-    fontWeight: "bold",
-  },
-  // roomTagChevron removed to avoid extra '>' being shown in room tag
-  servicesContainer: {
-    marginTop: SIZES.base,
-  },
-  servicesLabel: {
-    ...FONTS.body4,
-    color: COLORS.gray,
-    marginBottom: SIZES.base,
-  },
-  servicesTags: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SIZES.base,
-  },
-  serviceTag: {
-    backgroundColor: COLORS.lightGray,
-    paddingHorizontal: SIZES.base,
-    paddingVertical: 2,
-    borderRadius: SIZES.base / 2,
-  },
-  serviceTagText: {
-    ...FONTS.body5,
-    color: COLORS.success,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderRadius: SIZES.radiusLarge,
-    width: "90%",
-    maxHeight: "80%",
-    ...SHADOWS.dark,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: SIZES.padding,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  modalTitle: {
-    ...FONTS.h3,
-    color: COLORS.secondary,
-  },
-  closeButton: {
-    padding: SIZES.base,
-  },
-  closeButtonText: {
-    fontSize: SIZES.h3,
-    color: COLORS.gray,
-  },
-  modalBody: {
-    padding: SIZES.padding,
-  },
-  modalSection: {
-    marginBottom: SIZES.margin,
-  },
-  sectionTitle: {
-    ...FONTS.h4,
-    color: COLORS.secondary,
-    marginBottom: SIZES.base,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingBottom: SIZES.base,
-  },
-  roomItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: SIZES.base,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  roomName: {
-    ...FONTS.body3,
-    color: COLORS.secondary,
-    flex: 1,
-  },
-  roomPrice: {
-    ...FONTS.body3,
-    color: COLORS.primary,
-  },
-  serviceItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: SIZES.base,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  serviceName: {
-    ...FONTS.body3,
-    color: COLORS.secondary,
-    flex: 1,
-  },
-  servicePrice: {
-    ...FONTS.body3,
-    color: COLORS.primary,
-  },
-  notesText: {
-    ...FONTS.body3,
-    color: COLORS.gray,
-    lineHeight: 20,
+    paddingHorizontal: SIZES.padding * 2,
   },
 });
 

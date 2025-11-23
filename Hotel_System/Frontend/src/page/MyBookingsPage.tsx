@@ -18,6 +18,7 @@ import {
   Spin,
   DatePicker,
   Form,
+  Collapse,
 } from "antd";
 import {
   CalendarOutlined,
@@ -59,14 +60,54 @@ const getStatusBadge = (trangThai: number, trangThaiThanhToan: number) => {
   return { statusColor, paymentColor };
 };
 
+// Simple JWT parsing helper (no external lib)
+function parseJwt(token: string | null) {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const payload = parts[1];
+    // atob works in browser (Vite/React)
+    const json = decodeURIComponent(
+      Array.prototype.map
+        .call(atob(payload), (c: string) => {
+          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join("")
+    );
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
 const { Title, Text } = Typography;
 
 const MyBookingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<BookingSummary[]>([]);
+  const [openPanelId, setOpenPanelId] = useState<string | null>(null);
+
+  // Reschedule state & handlers
+  const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] =
+    useState<BookingSummary | null>(null);
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
 
   // Use JWT token to fetch booking history (backend reads NameIdentifier claim)
   const token = localStorage.getItem("hs_token");
+
+  // Determine if current user is staff (nhanvien)
+  const isNhanVien = useMemo(() => {
+    if (!token) return false;
+    const payload = parseJwt(token);
+    if (!payload) return false;
+    const roleClaim =
+      payload.role || payload.roles || payload.roleName || payload.VaiTro;
+    if (!roleClaim) return false;
+    if (Array.isArray(roleClaim)) return roleClaim.includes("nhanvien");
+    return String(roleClaim).toLowerCase() === "nhanvien";
+  }, [token]);
 
   const loadData = async () => {
     setLoading(true);
@@ -96,19 +137,6 @@ const MyBookingsPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cancel button removed - no UI trigger
-
-  // Reschedule state & handlers
-  const [rescheduleModalVisible, setRescheduleModalVisible] = useState(false);
-  const [rescheduleTarget, setRescheduleTarget] =
-    useState<BookingSummary | null>(null);
-  const [rescheduleLoading, setRescheduleLoading] = useState(false);
-  // Details modal
-  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
-  const [detailsLoading, setDetailsLoading] = useState(false);
-  const [detailsData, setDetailsData] = useState<any | null>(null);
-  const [detailsError, setDetailsError] = useState<string | null>(null);
-
   const openRescheduleModal = (b: BookingSummary) => {
     const { canModify, reason } = canModifyBooking(b);
     if (!canModify) {
@@ -137,70 +165,6 @@ const MyBookingsPage: React.FC = () => {
     } finally {
       setRescheduleLoading(false);
     }
-  };
-
-  const openDetails = (idDatPhong: string) => {
-    setDetailsModalVisible(true);
-    setDetailsLoading(false);
-    setDetailsData(null);
-    setDetailsError(null);
-
-    const cached = bookings.find((b) => b.idDatPhong === idDatPhong);
-    if (!cached) {
-      setDetailsError("Không tìm thấy chi tiết đặt phòng trong bộ nhớ.");
-      return;
-    }
-
-    const d = {
-      IddatPhong:
-        cached.idDatPhong ||
-        (cached as any).IddatPhong ||
-        (cached as any).IdDatPhong ||
-        (cached as any).iddatPhong,
-      IdkhachHang:
-        (cached as any).idkhachHang || (cached as any).IdkhachHang || undefined,
-      TenKhachHang: cached.tenKhachHang || (cached as any).TenKhachHang || "",
-      EmailKhachHang:
-        cached.emailKhachHang || (cached as any).EmailKhachHang || "",
-      NgayDatPhong: cached.ngayDatPhong,
-      NgayNhanPhong: cached.ngayNhanPhong,
-      NgayTraPhong: cached.ngayTraPhong,
-      TongTien:
-        cached.tongTien || (cached as any).TongTien || (cached as any).tongTien,
-      TienCoc: (cached as any).tienCoc || (cached as any).TienCoc,
-      TrangThai: cached.trangThai,
-      TrangThaiThanhToan: cached.trangThaiThanhToan,
-      ChiTietDatPhongs: (cached.rooms || (cached as any).ChiTietDatPhongs || [])
-        .map((r: any) => ({
-          TenPhongChiTiet:
-            r.tenPhong || r.TenPhong || r.TenPhongChiTiet || r.tenPhongChiTiet,
-          tenPhong:
-            r.tenPhong || r.TenPhong || r.TenPhongChiTiet || r.tenPhongChiTiet,
-          SoPhongChiTiet:
-            r.soPhong || r.SoPhong || r.SoPhongChiTiet || r.soPhongChiTiet,
-          soPhong:
-            r.soPhong || r.SoPhong || r.SoPhongChiTiet || r.soPhongChiTiet,
-          GiaPhong: r.giaPhong || r.GiaPhong,
-          giaPhong: r.giaPhong || r.GiaPhong,
-          SoDem: r.soDem || r.SoDem,
-          soDem: r.soDem || r.SoDem,
-          ThanhTien: r.thanhTien || r.ThanhTien,
-          thanhTien: r.thanhTien || r.ThanhTien,
-        }))
-        .map((ct: any) => ({
-          ...ct,
-          moTa: ct.moTa || ct.MoTaPhongChiTiet || ct.MoTa,
-          giaCoBanMotDem: ct.giaCoBanMotDem || ct.GiaCoBanMotDem,
-          idLoaiPhong: ct.idLoaiPhong || ct.IdLoaiPhong,
-          tenLoaiPhong: ct.tenLoaiPhong || ct.TenLoaiPhong,
-          urlAnhPhong: ct.urlAnhPhong || ct.UrlAnhPhong,
-          soNguoiToiDa: ct.soNguoiToiDa || ct.SoNguoiToiDa,
-          xepHangSao: ct.xepHangSao || ct.XepHangSao,
-        })),
-      Services: cached.services || [],
-    } as any;
-
-    setDetailsData(d);
   };
 
   const content = useMemo(() => {
@@ -252,6 +216,13 @@ const MyBookingsPage: React.FC = () => {
     return (
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
         {bookings.map((b) => {
+          // Normalized id for panel key; try multiple fields returned by API
+          const panelId =
+            b.idDatPhong ||
+            (b as any).IddatPhong ||
+            b.bookingCode ||
+            (b as any).bookingId ||
+            "";
           const { statusColor, paymentColor } = getStatusBadge(
             b.trangThai,
             b.trangThaiThanhToan
@@ -262,7 +233,6 @@ const MyBookingsPage: React.FC = () => {
             <Card
               key={b.idDatPhong}
               hoverable
-              onClick={() => openDetails(b.idDatPhong)}
               style={{
                 cursor: "pointer",
                 borderLeft: `4px solid ${
@@ -310,9 +280,11 @@ const MyBookingsPage: React.FC = () => {
                     icon={<EyeOutlined />}
                     onClick={(e) => {
                       e.stopPropagation();
-                      openDetails(b.idDatPhong);
+                      setOpenPanelId((prev) =>
+                        prev === panelId ? null : panelId
+                      );
                     }}
-                    title={"Xem chi tiết"}
+                    title={openPanelId === panelId ? "Đóng" : "Xem chi tiết"}
                     size="large"
                   />
                 </div>
@@ -327,9 +299,10 @@ const MyBookingsPage: React.FC = () => {
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 260 }}>
+                    {/* Booking code and meta are presented below */}
                     <div style={{ marginBottom: 8 }}>
                       <Text strong style={{ fontSize: 15 }}>
-                        Khách hàng: {b.tenKhachHang || "N/A"}
+                        Đơn đặt phòng: {b.bookingCode}
                       </Text>
                     </div>
                     <div style={{ marginBottom: 10 }}>
@@ -373,30 +346,218 @@ const MyBookingsPage: React.FC = () => {
                       </Tag>
                     </div>
                   </div>
-
-                  {b.services && b.services.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200 }}>
-                      <Text type="secondary" style={{ fontSize: 13 }}>
-                        Dịch vụ kèm theo:
-                      </Text>
-                      <div style={{ marginTop: 6 }}>
-                        {b.services.slice(0, 2).map((s, i) => (
-                          <Tag
-                            key={i}
-                            style={{ marginBottom: 4, fontSize: 12 }}
-                          >
-                            {s.tenDichVu}
-                          </Tag>
-                        ))}
-                        {b.services.length > 2 && (
-                          <Tag style={{ fontSize: 12 }}>
-                            +{b.services.length - 2} khác
-                          </Tag>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
+                <Collapse
+                  ghost
+                  accordion
+                  activeKey={openPanelId ?? undefined}
+                  onChange={(key) =>
+                    setOpenPanelId(
+                      Array.isArray(key)
+                        ? (key[0] as string)
+                        : (key as string) || null
+                    )
+                  }
+                >
+                  <Collapse.Panel
+                    header={`Xem chi tiết — ${b.rooms?.length || 0} phòng · ${
+                      b.services?.length || 0
+                    } dịch vụ`}
+                    key={panelId}
+                    collapsible="disabled"
+                  >
+                    {/* CUSTOMER INFO */}
+                    <div style={{ marginBottom: 16 }}>
+                      <Title level={5} style={{ marginBottom: 12 }}>
+                        Thông tin khách hàng
+                      </Title>
+                      <p style={{ marginBottom: 8 }}>
+                        <strong>Khách hàng:</strong> {b.tenKhachHang || "N/A"}
+                      </p>
+                      <p style={{ marginBottom: 8 }}>
+                        <strong>Email:</strong> {b.emailKhachHang || "N/A"}
+                      </p>
+                      <p style={{ marginBottom: 8 }}>
+                        <strong>Ngày đặt:</strong>{" "}
+                        {b.ngayDatPhong
+                          ? new Date(b.ngayDatPhong).toLocaleDateString("vi-VN")
+                          : "N/A"}
+                      </p>
+                    </div>
+
+                    {/* PAYMENT INFO */}
+                    <div
+                      style={{
+                        padding: 12,
+                        background: "#f6f8fa",
+                        borderRadius: 6,
+                        marginBottom: 16,
+                      }}
+                    >
+                      <p style={{ marginBottom: 6 }}>
+                        <strong>Tổng tiền:</strong>{" "}
+                        <Text strong style={{ fontSize: 16, color: "#dfa974" }}>
+                          {b.tongTien.toLocaleString()} đ
+                        </Text>
+                      </p>
+                      <p style={{ marginBottom: 0 }}>
+                        <strong>Tiền cọc:</strong> {(b as any).tienCoc || 0} đ
+                      </p>
+                    </div>
+
+                    {/* ROOM DETAILS */}
+                    <div style={{ marginBottom: 16 }}>
+                      <Title level={5} style={{ marginBottom: 12 }}>
+                        Chi tiết phòng
+                      </Title>
+                      {b.rooms && b.rooms.length > 0 ? (
+                        <Space
+                          direction="vertical"
+                          size={12}
+                          style={{ width: "100%" }}
+                        >
+                          {b.rooms.map((r, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                padding: 12,
+                                background: "#fafafa",
+                                borderRadius: 6,
+                                border: "1px solid #f0f0f0",
+                              }}
+                            >
+                              <div style={{ marginBottom: 8 }}>
+                                <Text strong style={{ fontSize: 15 }}>
+                                  {r.tenPhong || r.tenLoaiPhong}
+                                </Text>
+                                <Tag color="blue" style={{ marginLeft: 8 }}>
+                                  {r.soPhong}
+                                </Tag>
+                              </div>
+                              <div style={{ marginBottom: 4 }}>
+                                <Text type="secondary">Loại phòng: </Text>
+                                <Text>{r.tenLoaiPhong}</Text>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 20,
+                                  marginTop: 8,
+                                }}
+                              >
+                                <div>
+                                  <Text type="secondary">Giá/đêm: </Text>
+                                  <Text strong>
+                                    {Number(r.giaPhong || 0).toLocaleString()} đ
+                                  </Text>
+                                </div>
+                                <div>
+                                  <Text type="secondary">Số đêm: </Text>
+                                  <Text>{r.soDem}</Text>
+                                </div>
+                                {r.soNguoiToiDa && (
+                                  <div>
+                                    <Text type="secondary">Sức chứa: </Text>
+                                    <Text>{r.soNguoiToiDa} khách</Text>
+                                  </div>
+                                )}
+                              </div>
+                              <div
+                                style={{
+                                  marginTop: 8,
+                                  paddingTop: 8,
+                                  borderTop: "1px solid #e8e8e8",
+                                }}
+                              >
+                                <Text type="secondary">Thành tiền: </Text>
+                                <Text
+                                  strong
+                                  style={{ color: "#dfa974", fontSize: 15 }}
+                                >
+                                  {Number(r.thanhTien || 0).toLocaleString()} đ
+                                </Text>
+                              </div>
+                              {r.moTa && (
+                                <div style={{ marginTop: 8 }}>
+                                  <Text
+                                    type="secondary"
+                                    style={{ fontSize: 12 }}
+                                  >
+                                    {r.moTa}
+                                  </Text>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </Space>
+                      ) : (
+                        <Empty description="Không có chi tiết phòng" />
+                      )}
+                    </div>
+
+                    {/* SERVICES */}
+                    <div style={{ marginTop: 16 }}>
+                      <Title level={5} style={{ marginBottom: 12 }}>
+                        Dịch vụ kèm theo
+                      </Title>
+                      {b.services && b.services.length > 0 ? (
+                        <Space
+                          direction="vertical"
+                          size={8}
+                          style={{ width: "100%" }}
+                        >
+                          {b.services.map((s, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                padding: 10,
+                                background: "#f6f8fa",
+                                borderRadius: 6,
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                                gap: 8,
+                              }}
+                            >
+                              <div style={{ flex: 1 }}>
+                                <Text strong>{s.tenDichVu}</Text>
+                                {s.thoiGianThucHien && (
+                                  <div>
+                                    <Text
+                                      type="secondary"
+                                      style={{ fontSize: 12 }}
+                                    >
+                                      {s.thoiGianThucHien}
+                                    </Text>
+                                  </div>
+                                )}
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 12,
+                                  alignItems: "center",
+                                }}
+                              >
+                                <Text strong style={{ color: "#dfa974" }}>
+                                  {Number(s.tienDichVu || 0).toLocaleString()} đ
+                                </Text>
+                                {s.trangThai && (
+                                  <Tag color="green" style={{ margin: 0 }}>
+                                    {s.trangThai}
+                                  </Tag>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </Space>
+                      ) : (
+                        <Empty description="Không có dịch vụ kèm theo" />
+                      )}
+                    </div>
+                  </Collapse.Panel>
+                </Collapse>
               </div>
             </Card>
           );
@@ -412,6 +573,16 @@ const MyBookingsPage: React.FC = () => {
           <div className="section-title" style={{ marginBottom: 16 }}>
             <h2>Đơn đặt phòng của tôi</h2>
             <p>Xem và quản lý các đơn đặt phòng gần đây</p>
+            {isNhanVien && (
+              <div style={{ marginTop: 8 }}>
+                <Button
+                  type="primary"
+                  onClick={() => (window.location.href = "/admin/dashboard")}
+                >
+                  Truy cập trang Quản trị
+                </Button>
+              </div>
+            )}
           </div>
           {content}
 
@@ -472,366 +643,6 @@ const MyBookingsPage: React.FC = () => {
                   </Space>
                 </Form.Item>
               </Form>
-            )}
-          </Modal>
-
-          {/* Details Modal */}
-          <Modal
-            title="Chi tiết đặt phòng"
-            open={detailsModalVisible}
-            onCancel={() => {
-              setDetailsModalVisible(false);
-              setDetailsData(null);
-            }}
-            footer={null}
-            width={800}
-            zIndex={10050}
-            style={{ top: 90 }}
-            bodyStyle={{ maxHeight: "60vh", overflow: "auto" }}
-            centered
-            destroyOnClose
-          >
-            {detailsLoading ? (
-              <div style={{ textAlign: "center", padding: 40 }}>
-                <Spin />
-              </div>
-            ) : detailsData ? (
-              <div>
-                {/* STATUS SECTION - Most prominent at top */}
-                <div
-                  style={{
-                    padding: 16,
-                    background: "#fafafa",
-                    borderRadius: 8,
-                    marginBottom: 20,
-                    border: "1px solid #f0f0f0",
-                  }}
-                >
-                  <div style={{ marginBottom: 8 }}>
-                    <Text type="secondary">Trạng thái đặt phòng</Text>
-                  </div>
-                  {(() => {
-                    const trangThai = getProp(
-                      detailsData,
-                      "TrangThai",
-                      "trangThai"
-                    ) as number;
-                    const trangThaiThanhToan = getProp(
-                      detailsData,
-                      "TrangThaiThanhToan",
-                      "trangThaiThanhToan"
-                    ) as number;
-                    const { statusColor, paymentColor } = getStatusBadge(
-                      trangThai,
-                      trangThaiThanhToan
-                    );
-
-                    // Map status text
-                    let statusText = "Không xác định";
-                    switch (trangThai) {
-                      case 1:
-                        statusText = "Chờ xác nhận";
-                        break;
-                      case 2:
-                        statusText = "Đã xác nhận";
-                        break;
-                      case 0:
-                        statusText = "Đã hủy";
-                        break;
-                      case 3:
-                        statusText = "Đang sử dụng";
-                        break;
-                      case 4:
-                        statusText = "Hoàn thành";
-                        break;
-                    }
-
-                    let paymentText = "Không xác định";
-                    switch (trangThaiThanhToan) {
-                      case 1:
-                        paymentText = "Chưa thanh toán";
-                        break;
-                      case 2:
-                        paymentText = "Đã thanh toán";
-                        break;
-                      case 0:
-                        paymentText = "Đã cọc";
-                        break;
-                    }
-
-                    return (
-                      <Space size={12}>
-                        <Tag
-                          color={statusColor}
-                          style={{
-                            fontSize: 16,
-                            padding: "6px 16px",
-                            margin: 0,
-                          }}
-                        >
-                          {statusText}
-                        </Tag>
-                        <Tag
-                          color={paymentColor}
-                          style={{
-                            fontSize: 16,
-                            padding: "6px 16px",
-                            margin: 0,
-                          }}
-                        >
-                          {paymentText}
-                        </Tag>
-                      </Space>
-                    );
-                  })()}
-                </div>
-
-                {/* BOOKING INFO */}
-                <div style={{ marginBottom: 16 }}>
-                  <Title level={5} style={{ marginBottom: 12 }}>
-                    Thông tin đặt phòng
-                  </Title>
-                  <p style={{ marginBottom: 8 }}>
-                    <strong>Khách hàng:</strong>{" "}
-                    {getProp(detailsData, "TenKhachHang", "tenKhachHang") ||
-                      "N/A"}
-                  </p>
-                  <p style={{ marginBottom: 8 }}>
-                    <strong>Email:</strong>{" "}
-                    {getProp(detailsData, "EmailKhachHang", "emailKhachHang") ||
-                      "N/A"}
-                  </p>
-                  <p style={{ marginBottom: 8 }}>
-                    <strong>Ngày đặt:</strong>{" "}
-                    {getProp(detailsData, "NgayDatPhong", "ngayDatPhong")
-                      ? new Date(
-                          getProp(detailsData, "NgayDatPhong", "ngayDatPhong")
-                        ).toLocaleDateString("vi-VN")
-                      : "N/A"}
-                  </p>
-                  <p style={{ marginBottom: 8 }}>
-                    <strong>Nhận phòng:</strong>{" "}
-                    {getProp(detailsData, "NgayNhanPhong", "ngayNhanPhong")
-                      ? new Date(
-                          getProp(detailsData, "NgayNhanPhong", "ngayNhanPhong")
-                        ).toLocaleDateString("vi-VN")
-                      : "N/A"}
-                  </p>
-                  <p style={{ marginBottom: 8 }}>
-                    <strong>Trả phòng:</strong>{" "}
-                    {getProp(detailsData, "NgayTraPhong", "ngayTraPhong")
-                      ? new Date(
-                          getProp(detailsData, "NgayTraPhong", "ngayTraPhong")
-                        ).toLocaleDateString("vi-VN")
-                      : "N/A"}
-                  </p>
-                </div>
-
-                {/* PAYMENT INFO */}
-                <div
-                  style={{
-                    padding: 12,
-                    background: "#f6f8fa",
-                    borderRadius: 6,
-                    marginBottom: 16,
-                  }}
-                >
-                  <p style={{ marginBottom: 6 }}>
-                    <strong>Tổng tiền:</strong>{" "}
-                    <Text strong style={{ fontSize: 16, color: "#dfa974" }}>
-                      {Number(
-                        getProp(detailsData, "TongTien", "tongTien") ?? 0
-                      ).toLocaleString()}{" "}
-                      đ
-                    </Text>
-                  </p>
-                  <p style={{ marginBottom: 0 }}>
-                    <strong>Tiền cọc:</strong>{" "}
-                    {Number(
-                      getProp(detailsData, "TienCoc", "tienCoc") ?? 0
-                    ).toLocaleString()}{" "}
-                    đ
-                  </p>
-                </div>
-
-                <div style={{ marginTop: 16 }}>
-                  <Title level={5} style={{ marginBottom: 12 }}>
-                    Chi tiết phòng
-                  </Title>
-                  {(
-                    getProp(
-                      detailsData,
-                      "ChiTietDatPhongs",
-                      "chiTietDatPhongs",
-                      "ChiTiet"
-                    ) || []
-                  ).length ? (
-                    <Space
-                      direction="vertical"
-                      size={12}
-                      style={{ width: "100%" }}
-                    >
-                      {(
-                        getProp(
-                          detailsData,
-                          "ChiTietDatPhongs",
-                          "chiTietDatPhongs",
-                          "ChiTiet"
-                        ) || []
-                      ).map((ct: any, idx: number) => (
-                        <div
-                          key={idx}
-                          style={{
-                            padding: 12,
-                            background: "#fafafa",
-                            borderRadius: 6,
-                            border: "1px solid #f0f0f0",
-                          }}
-                        >
-                          <div style={{ marginBottom: 8 }}>
-                            <Text strong style={{ fontSize: 15 }}>
-                              {ct?.tenPhong ??
-                                ct?.TenPhong ??
-                                ct?.TenPhongChiTiet ??
-                                ct?.Phong?.TenPhong ??
-                                ct?.Phong?.tenPhong}
-                            </Text>
-                            <Tag color="blue" style={{ marginLeft: 8 }}>
-                              {ct?.soPhong ??
-                                ct?.SoPhong ??
-                                ct?.SoPhongChiTiet ??
-                                ct?.Phong?.SoPhong ??
-                                ct?.Phong?.soPhong}
-                            </Tag>
-                          </div>
-                          <div style={{ marginBottom: 4 }}>
-                            <Text type="secondary">Loại phòng: </Text>
-                            <Text>{ct?.tenLoaiPhong || ct?.TenLoaiPhong}</Text>
-                          </div>
-                          <div
-                            style={{ display: "flex", gap: 20, marginTop: 8 }}
-                          >
-                            <div>
-                              <Text type="secondary">Giá/đêm: </Text>
-                              <Text strong>
-                                {(() => {
-                                  const pricePerNight =
-                                    ct?.giaPhong ??
-                                    ct?.GiaPhong ??
-                                    ct?.giaCoBanMotDem ??
-                                    ct?.GiaCoBanMotDem ??
-                                    0;
-                                  return Number(pricePerNight).toLocaleString();
-                                })()}{" "}
-                                đ
-                              </Text>
-                            </div>
-                            <div>
-                              <Text type="secondary">Số đêm: </Text>
-                              <Text>{ct?.SoDem ?? ct?.soDem}</Text>
-                            </div>
-                            {ct?.soNguoiToiDa && (
-                              <div>
-                                <Text type="secondary">Sức chứa: </Text>
-                                <Text>{ct?.soNguoiToiDa} khách</Text>
-                              </div>
-                            )}
-                          </div>
-                          <div
-                            style={{
-                              marginTop: 8,
-                              paddingTop: 8,
-                              borderTop: "1px solid #e8e8e8",
-                            }}
-                          >
-                            <Text type="secondary">Thành tiền: </Text>
-                            <Text
-                              strong
-                              style={{ color: "#dfa974", fontSize: 15 }}
-                            >
-                              {ct?.ThanhTien ?? ct?.thanhTien} đ
-                            </Text>
-                          </div>
-                          {ct?.moTa && (
-                            <div style={{ marginTop: 8 }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {ct?.moTa}
-                              </Text>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </Space>
-                  ) : (
-                    <Empty description="Không có chi tiết phòng" />
-                  )}
-                </div>
-                <div style={{ marginTop: 16 }}>
-                  <Title level={5} style={{ marginBottom: 12 }}>
-                    Dịch vụ kèm theo
-                  </Title>
-                  {detailsData?.Services && detailsData.Services.length ? (
-                    <Space
-                      direction="vertical"
-                      size={8}
-                      style={{ width: "100%" }}
-                    >
-                      {detailsData.Services.map((s: any, idx: number) => (
-                        <div
-                          key={idx}
-                          style={{
-                            padding: 10,
-                            background: "#f6f8fa",
-                            borderRadius: 6,
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            flexWrap: "wrap",
-                            gap: 8,
-                          }}
-                        >
-                          <div style={{ flex: 1 }}>
-                            <Text strong>{s.tenDichVu ?? s.TenDichVu}</Text>
-                            {s.thoiGianThucHien || s.ThoiGianThucHien ? (
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {s.thoiGianThucHien || s.ThoiGianThucHien}
-                                </Text>
-                              </div>
-                            ) : null}
-                          </div>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 12,
-                              alignItems: "center",
-                            }}
-                          >
-                            <Text strong style={{ color: "#dfa974" }}>
-                              {Number(
-                                s.tienDichVu || s.TienDichVu || 0
-                              ).toLocaleString()}{" "}
-                              đ
-                            </Text>
-                            {s.trangThai || s.TrangThai ? (
-                              <Tag color="green" style={{ margin: 0 }}>
-                                {s.trangThai || s.TrangThai}
-                              </Tag>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
-                    </Space>
-                  ) : (
-                    <Empty description="Không có dịch vụ kèm theo" />
-                  )}
-                </div>
-                {/* removed raw debug output to keep UI clean */}
-              </div>
-            ) : detailsError ? (
-              <div style={{ color: "red" }}>{detailsError}</div>
-            ) : (
-              <div>Không có dữ liệu.</div>
             )}
           </Modal>
         </div>

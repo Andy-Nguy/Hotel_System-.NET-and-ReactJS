@@ -1,5 +1,7 @@
 using Hotel_System.API.Models;
 using Hotel_System.API.Services;
+using QuestPDF;
+using QuestPDF.Infrastructure;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -10,7 +12,7 @@ using System.IO;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
-
+QuestPDF.Settings.License = LicenseType.Community;
 // ==========================================
 // 1️⃣ Add services to the container
 // ==========================================
@@ -57,6 +59,9 @@ builder.Services.AddScoped<RoomService>();
 // Email service
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+// Template renderer for email HTML/text templates
+builder.Services.AddSingleton<Hotel_System.API.Services.EmailTemplateRenderer>();
+
 // Background service: expire holds (ThoiHan)
 builder.Services.AddHostedService<HoldExpiryBackgroundService>();
 
@@ -80,9 +85,11 @@ if (!string.IsNullOrEmpty(jwtKey))
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection.GetValue<string>("Issuer"),
-            ValidAudience = jwtSection.GetValue<string>("Audience"),
-            IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
+                // Map the role claim from the token (we issue claim with type "role")
+                RoleClaimType = "role",
+                ValidIssuer = jwtSection.GetValue<string>("Issuer"),
+                ValidAudience = jwtSection.GetValue<string>("Audience"),
+                IssuerSigningKey = new SymmetricSecurityKey(keyBytes)
         };
     });
 }
@@ -95,7 +102,7 @@ builder.Services.AddCors(options =>
             "http://localhost:5173",     // Vite dev server
             "http://localhost:3000",     // React dev server
             "http://10.0.2.2:8080",      // Android emulator accessing host
-            "http://192.168.1.129:8080",   // Physical device on same network
+            "http://192.168.2.62:8080",   // Physical device on same network
             "http://localhost:19006",    // Expo dev server
             "http://localhost:19000"     // Expo dev tools
         )

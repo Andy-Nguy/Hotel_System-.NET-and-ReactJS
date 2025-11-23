@@ -36,7 +36,7 @@ const InvoiceModal: React.FC<Props> = ({
     const promo = Number(it?.GiamGia ?? it?.giamGia ?? it?.discount ?? 0) || 0;
     const discounted = Math.max(0, rawThanh - promo);
     return {
-      ID: it?.id ?? it?.IDChiTiet ?? idx,
+      IDPhong: it?.IDPhong ?? it?.idPhong ?? it?.IdPhong ?? it?.Phong?.Idphong ?? it?.SoPhong ?? it?.soPhong ?? null,
       TenPhong: it?.TenPhong ?? it?.tenPhong ?? it?.Phong?.TenPhong ?? '-',
       SoPhong: it?.SoPhong ?? it?.soPhong ?? null,
       SoDem: Number(it?.SoDem ?? it?.soDem ?? 1),
@@ -74,17 +74,28 @@ const InvoiceModal: React.FC<Props> = ({
   // TỔNG CUỐI CỦA KHÁCH (ÁP VAT 10%)
   const subTotal = roomTotal + serviceTotal; // trước VAT
   const vat = Math.round(subTotal * 0.1);
-  const finalTotal = Math.round(subTotal + vat);
+  const finalTotal = Math.round(subTotal + vat); // TỔNG CỘNG toàn bộ (gồm VAT)
 
   // Tiền cọc
   const deposit = Number(invoiceData?.money?.deposit ?? invoiceData?.TienCoc ?? 0);
 
-  // Đã thanh toán = Tổng cộng (đã gồm VAT & dịch vụ mới) - Tiền cọc
-  // (the user requested that "Đã thanh toán" always be calculated as finalTotal - deposit)
-  const paid = Math.max(0, finalTotal - deposit);
+  // Tiền thanh toán trước (nếu khách đã thanh toán từng phần trước check-in)
+  const previousPayment = Number(invoiceData?.money?.previousPayment ?? invoiceData?.TienThanhToan ?? paymentRow?.TienThanhToan ?? 0);
 
-  const needToPay = Math.max(0, finalTotal - deposit - paid);
+  // Đã thanh toán = Tiền cọc + Tiền thanh toán trước
+  const alreadyPaid = Math.max(0, deposit + previousPayment);
+
+  // Khách cần thanh toán = TỔNG CỘNG - Đã thanh toán
+  const needToPay = Math.max(0, finalTotal - alreadyPaid);
   // ========================================
+
+  // Determine if the invoice/row is already fully paid (server uses 2 = fully paid)
+  const isPaid = [
+    invoiceData?.TrangThaiThanhToan,
+    invoiceData?.trangThaiThanhToan,
+    paymentRow?.TrangThaiThanhToan,
+    paymentRow?.trangThaiThanhToan,
+  ].some((v) => Number(v) === 2);
 
   return (
     <Modal
@@ -95,9 +106,12 @@ const InvoiceModal: React.FC<Props> = ({
       centered
       footer={[
         <Button key="close" onClick={onClose}>Đóng</Button>,
-        <Button key="complete" type="primary" onClick={handleComplete}>
-          Hoàn tất thanh toán
-        </Button>,
+        // Hide the confirm button when the invoice/row is already marked as paid
+        !isPaid && (
+          <Button key="complete" type="primary" onClick={handleComplete}>
+            Hoàn tất thanh toán
+          </Button>
+        ),
       ]}
     >
       {invoiceData ? (
@@ -131,13 +145,6 @@ const InvoiceModal: React.FC<Props> = ({
             <Descriptions.Item label="Trả phòng">
               {paymentRow?.NgayTraPhong?.slice(0, 10) ?? '-'}
             </Descriptions.Item>
-              <Descriptions.Item label="Phòng" span={2}>
-                {normalized.map((r: any) => (
-                  <div key={r.ID}>
-                    <strong>{r.TenPhong}</strong> {r.SoPhong && `(Phòng ${r.SoPhong})`}
-                  </div>
-                ))}
-              </Descriptions.Item>
           </Descriptions>
 
           {/* Bảng phòng */}
@@ -224,14 +231,26 @@ const InvoiceModal: React.FC<Props> = ({
                 <span>TỔNG CỘNG:</span>
                 <span style={{ color: '#d4380d' }}>{finalTotal.toLocaleString()} đ</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
                 <span>Tiền cọc:</span>
                 <strong>- {deposit.toLocaleString()} đ</strong>
               </div>
-              {paid > 0 && (
+              {previousPayment > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Tiền thanh toán trước:</span>
+                  <strong>- {previousPayment.toLocaleString()} đ</strong>
+                </div>
+              )}
+              {alreadyPaid > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 600 }}>
                   <span>Đã thanh toán:</span>
-                  <strong>- {paid.toLocaleString()} đ</strong>
+                  <strong>- {alreadyPaid.toLocaleString()} đ</strong>
+                </div>
+              )}
+              {needToPay > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700, color: '#d4380d', marginTop: 8 }}>
+                  <span>ĐÃ THANH TOÁN:</span>
+                  <strong>{needToPay.toLocaleString()} đ</strong>
                 </div>
               )}
             </div>

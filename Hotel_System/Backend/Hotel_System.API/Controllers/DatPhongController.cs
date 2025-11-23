@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
 using Hotel_System.API.Services;
@@ -14,12 +15,14 @@ namespace Hotel_System.API.Controllers
         private readonly HotelSystemContext _context;
         private readonly IEmailService _emailService;
         private readonly ILogger<DatPhongController> _logger;
+        private readonly Hotel_System.API.Services.EmailTemplateRenderer _templateRenderer;
 
-        public DatPhongController(HotelSystemContext context, IEmailService emailService, ILogger<DatPhongController> logger)
+        public DatPhongController(HotelSystemContext context, IEmailService emailService, ILogger<DatPhongController> logger, Hotel_System.API.Services.EmailTemplateRenderer templateRenderer)
         {
             _context = context;
             _emailService = emailService;
             _logger = logger;
+            _templateRenderer = templateRenderer;
         }
 
         /// <summary>
@@ -27,7 +30,7 @@ namespace Hotel_System.API.Controllers
         /// Trả về lịch sử đặt phòng của user hiện tại (theo JWT NameIdentifier => IdkhachHang)
         /// </summary>
         [HttpGet("LichSuDatPhong")]
-        [Microsoft.AspNetCore.Authorization.Authorize]
+        // [Microsoft.AspNetCore.Authorization.Authorize]
         public async Task<IActionResult> GetBookingHistory()
         {
             try
@@ -201,6 +204,34 @@ namespace Hotel_System.API.Controllers
 
                 await transaction.CommitAsync();
 
+                // Gửi email thông báo giữ phòng (nếu có email khách)
+                try
+                {
+                    var to = khachHang?.Email;
+                    if (!string.IsNullOrWhiteSpace(to))
+                    {
+                        var placeholders = new Dictionary<string, string>
+                        {
+                            ["CustomerName"] = khachHang.HoTen ?? string.Empty,
+                            ["BookingId"] = datPhong.IddatPhong,
+                            ["Checkin"] = datPhong.NgayNhanPhong.ToString("yyyy-MM-dd"),
+                            ["Checkout"] = datPhong.NgayTraPhong.ToString("yyyy-MM-dd"),
+                            ["Nights"] = (datPhong.SoDem ?? 0).ToString(),
+                            ["HoldExpires"] = datPhong.ThoiHan?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? string.Empty
+                        };
+
+                        var html = _templateRenderer.Render("booking_hold.html", placeholders);
+                        if (!string.IsNullOrWhiteSpace(html))
+                        {
+                            await _emailService.SendEmailAsync(to, "Xác nhận giữ phòng - " + datPhong.IddatPhong, html, true);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send reservation hold email for booking {id}", datPhong.IddatPhong);
+                }
+
                 return Ok(new
                 {
                     success = true,
@@ -222,6 +253,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpGet]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetAll()
         {
             try
@@ -373,6 +405,8 @@ namespace Hotel_System.API.Controllers
                 var booking = await _context.DatPhongs
                     .Include(dp => dp.IdkhachHangNavigation)
                     .Include(dp => dp.IdphongNavigation)
+                    .Include(dp => dp.ChiTietDatPhongs)
+                        .ThenInclude(ct => ct.Phong)
                     .FirstOrDefaultAsync(dp => dp.IddatPhong == id);
                 if (booking == null)
                 {
@@ -392,6 +426,48 @@ namespace Hotel_System.API.Controllers
                     booking.TrangThaiThanhToan = request.TrangThaiThanhToan.Value;
                 }
 
+                // Sync room status when admin confirms booking (TrangThai = 2)
+                if (booking.TrangThai == 2 && oldStatus != 2)
+                {
+                    // Admin confirmed booking -> mark room as "Đã đặt"
+                    if (booking.IdphongNavigation != null)
+                    {
+                        booking.IdphongNavigation.TrangThai = "Đã đặt";
+                    }
+                    // Also sync all rooms in ChiTietDatPhongs (for multi-room bookings)
+                    if (booking.ChiTietDatPhongs != null)
+                    {
+                        foreach (var chiTiet in booking.ChiTietDatPhongs)
+                        {
+                            if (chiTiet.Phong != null)
+                            {
+                                chiTiet.Phong.TrangThai = "Đã đặt";
+                            }
+                        }
+                    }
+                }
+
+                // Sync room status when admin cancels booking (TrangThai = 0)
+                if (booking.TrangThai == 0 && oldStatus != 0)
+                {
+                    // Admin cancelled booking -> mark room as "Trống"
+                    if (booking.IdphongNavigation != null)
+                    {
+                        booking.IdphongNavigation.TrangThai = "Trống";
+                    }
+                    // Also sync all rooms in ChiTietDatPhongs (for multi-room bookings)
+                    if (booking.ChiTietDatPhongs != null)
+                    {
+                        foreach (var chiTiet in booking.ChiTietDatPhongs)
+                        {
+                            if (chiTiet.Phong != null)
+                            {
+                                chiTiet.Phong.TrangThai = "Trống";
+                            }
+                        }
+                    }
+                }
+
                 await _context.SaveChangesAsync();
 
                 // If status changed to confirmed (2) or cancelled (0) -> send email
@@ -402,19 +478,22 @@ namespace Hotel_System.API.Controllers
                     {
                         try
                         {
-                            if (booking.TrangThai == 2)
-                            {
-                                var subject = "Xác nhận đặt phòng - " + booking.IddatPhong;
-                                var body = $"Xin chào {booking.IdkhachHangNavigation?.HoTen},<br/><br/>Đặt phòng <strong>{booking.IddatPhong}</strong> của bạn đã được xác nhận.<br/>Ngày nhận: {booking.NgayNhanPhong:d}<br/>Ngày trả: {booking.NgayTraPhong:d}<br/>Tổng tiền: {booking.TongTien:C}<br/><br/>Cảm ơn bạn đã sử dụng dịch vụ.";
-                                await _emailService.SendEmailAsync(to, subject, body, true);
-                                _logger.LogInformation("Sent confirmation email to {email} for booking {id}", to, booking.IddatPhong);
-                            }
-                            else if (booking.TrangThai == 0)
+                            // NOTE: confirmation email on booking status change is intentionally disabled.
+                            // We still send a cancellation email when the booking is cancelled.
+                            if (booking.TrangThai == 0)
                             {
                                 var subject = "Hủy đặt phòng - " + booking.IddatPhong;
-                                var body = $"Xin chào {booking.IdkhachHangNavigation?.HoTen},<br/><br/>Đặt phòng <strong>{booking.IddatPhong}</strong> đã được hủy. Nếu bạn đã thanh toán, bộ phận kế toán sẽ liên hệ để hoàn tiền (nếu có).<br/><br/>Nếu có thắc mắc, vui lòng liên hệ lại khách sạn.";
-                                await _emailService.SendEmailAsync(to, subject, body, true);
-                                _logger.LogInformation("Sent cancellation email to {email} for booking {id}", to, booking.IddatPhong);
+                                var placeholders = new Dictionary<string, string>
+                                {
+                                    ["CustomerName"] = booking.IdkhachHangNavigation?.HoTen ?? string.Empty,
+                                    ["BookingId"] = booking.IddatPhong
+                                };
+                                var html = _templateRenderer.Render("cancellation.html", placeholders);
+                                if (!string.IsNullOrWhiteSpace(html))
+                                {
+                                    await _emailService.SendEmailAsync(to, subject, html, true);
+                                    _logger.LogInformation("Sent cancellation email to {email} for booking {id}", to, booking.IddatPhong);
+                                }
                             }
                         }
                         catch (Exception ex)
@@ -437,6 +516,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpDelete("{id}")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Delete(string id)
         {
             try
@@ -476,6 +556,19 @@ namespace Hotel_System.API.Controllers
                 {
                     return NotFound(new { message = "Không tìm thấy đơn đặt phòng" });
                 }
+
+                // Ownership / staff check: only staff or the booking owner may reschedule
+                /*
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                {
+                    return Unauthorized(new { message = "Token không hợp lệ hoặc không có thông tin người dùng." });
+                }
+                if (!User.IsInRole("nhanvien") && datPhong.IdkhachHang != userId)
+                {
+                    return Forbid();
+                }
+                */
 
                 // Kiểm tra trạng thái: chỉ cho phép thay đổi nếu chưa hủy
                 if (datPhong.TrangThai == 2)
@@ -563,6 +656,19 @@ namespace Hotel_System.API.Controllers
                 {
                     return NotFound(new { message = "Không tìm thấy đơn đặt phòng" });
                 }
+
+                // Ownership / staff check: only staff or the booking owner may cancel
+                /*
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                {
+                    return Unauthorized(new { message = "Token không hợp lệ hoặc không có thông tin người dùng." });
+                }
+                if (!User.IsInRole("nhanvien") && datPhong.IdkhachHang != userId)
+                {
+                    return Forbid();
+                }
+                */
 
                 // Kiểm tra đã thanh toán chưa (1 = đã thanh toán trong code cũ, adapt if different)
                 if (datPhong.TrangThaiThanhToan == 1)

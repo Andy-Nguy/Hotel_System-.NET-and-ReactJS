@@ -52,9 +52,7 @@ const CheckoutScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Auto-fill user info if logged in (highest priority)
     if (isLoggedIn && userInfo) {
-      // console.log('Auto-filling user info:', userInfo); // Debug log
       setCustomerInfo((prev) => ({
         ...prev,
         fullName:
@@ -82,10 +80,8 @@ const CheckoutScreen: React.FC = () => {
 
   const loadBookingData = async () => {
     try {
-      // Check if services were passed from ServicesSelectionScreen
       const params = route.params as any;
       if (params?.selectedServices) {
-        // Services were selected, merge with existing booking data
         const bookingData = await AsyncStorage.getItem("bookingData");
         if (bookingData) {
           const parsed = JSON.parse(bookingData);
@@ -98,59 +94,23 @@ const CheckoutScreen: React.FC = () => {
             "bookingData",
             JSON.stringify(updatedBookingData)
           );
+        } else {
+          setBookingInfo({
+            ...params,
+            totalRooms: params.rooms,
+            selectedRooms: params.selectedRooms,
+          });
         }
       } else {
-        // Load from AsyncStorage
         const bookingData = await AsyncStorage.getItem("bookingData");
         if (bookingData) {
-          const parsed = JSON.parse(bookingData);
-          setBookingInfo(parsed);
-        } else {
-          Alert.alert("Lỗi", "Không tìm thấy thông tin đặt phòng");
-          navigation.goBack();
+          setBookingInfo(JSON.parse(bookingData));
         }
-      }
-
-      // Load saved customer info (lower priority than userInfo)
-      const savedCustomerInfo = await AsyncStorage.getItem("customerInfo");
-      if (savedCustomerInfo && !isLoggedIn) {
-        const parsedCustomer = JSON.parse(savedCustomerInfo);
-        setCustomerInfo((prev) => ({ ...prev, ...parsedCustomer }));
       }
     } catch (error) {
       console.error("Error loading booking data:", error);
       Alert.alert("Lỗi", "Không thể tải thông tin đặt phòng");
-      navigation.goBack();
     }
-  };
-
-  const calculateTotal = () => {
-    if (!bookingInfo) return 0;
-
-    const checkInDate = new Date(bookingInfo.checkIn);
-    const checkOutDate = new Date(bookingInfo.checkOut);
-    const nights = Math.ceil(
-      (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    const roomPrice = bookingInfo.selectedRooms.reduce((sum, sr) => {
-      const price =
-        sr.room.discountedPrice &&
-        sr.room.discountedPrice < sr.room.basePricePerNight
-          ? sr.room.discountedPrice
-          : sr.room.basePricePerNight || 0;
-      return sum + (typeof price === "number" ? price : 0) * nights;
-    }, 0);
-
-    const servicesPrice =
-      bookingInfo.selectedServices?.reduce((sum, service) => {
-        const price = typeof service.price === "number" ? service.price : 0;
-        const quantity =
-          typeof service.quantity === "number" ? service.quantity : 1;
-        return sum + price * quantity;
-      }, 0) || 0;
-
-    return roomPrice + servicesPrice;
   };
 
   const calculateNights = () => {
@@ -162,379 +122,307 @@ const CheckoutScreen: React.FC = () => {
     );
   };
 
-  const calculateTax = () => {
-    const subtotal = calculateTotal();
-    return subtotal * 0.1;
+  const calculateRoomTotal = () => {
+    if (!bookingInfo) return 0;
+    const nights = calculateNights();
+    return bookingInfo.selectedRooms.reduce((sum, sr) => {
+      const price =
+        sr.room.discountedPrice &&
+        sr.room.discountedPrice < sr.room.basePricePerNight
+          ? sr.room.discountedPrice
+          : sr.room.basePricePerNight || 0;
+      return sum + (price || 0) * nights;
+    }, 0);
   };
 
-  const calculateGrandTotal = () => {
-    return calculateTotal() + calculateTax();
+  const calculateServiceTotal = () => {
+    if (!bookingInfo?.selectedServices) return 0;
+    return bookingInfo.selectedServices.reduce(
+      (sum, s) => sum + s.price * s.quantity,
+      0
+    );
   };
 
-  const handleSubmit = async () => {
-    if (!bookingInfo) return;
+  const calculateTax = (subtotal: number) => {
+    return Math.round(subtotal * 0.1); // 10% VAT
+  };
 
-    // Validation
-    if (!customerInfo.fullName.trim()) {
-      Alert.alert("Lỗi", "Vui lòng nhập họ và tên");
-      return;
-    }
-    if (!customerInfo.email.trim()) {
-      Alert.alert("Lỗi", "Vui lòng nhập email");
-      return;
-    }
-    if (!customerInfo.phone.trim()) {
-      Alert.alert("Lỗi", "Vui lòng nhập số điện thoại");
+  const handleProceedToPayment = async () => {
+    if (!customerInfo.fullName || !customerInfo.phone || !customerInfo.email) {
+      Alert.alert("Thông báo", "Vui lòng điền đầy đủ thông tin bắt buộc (*)");
       return;
     }
 
+    // Validate phone
+    const phoneRegex = /^[0-9]{10,11}$/;
+    if (!phoneRegex.test(customerInfo.phone)) {
+      Alert.alert("Lỗi", "Số điện thoại không hợp lệ");
+      return;
+    }
+
+    // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(customerInfo.email)) {
       Alert.alert("Lỗi", "Email không hợp lệ");
       return;
     }
 
-    setLoading(true);
     try {
-      const roomsPayload = bookingInfo.selectedRooms.map((sr) => ({
-        IdPhong: sr.room.roomId,
-        SoPhong: sr.roomNumber,
-        GiaCoBanMotDem: sr.room.basePricePerNight || 0,
-      }));
-
-      const bookingPayload = {
-        hoTen: customerInfo.fullName,
-        email: customerInfo.email,
-        soDienThoai: customerInfo.phone,
-        ngayNhanPhong: bookingInfo.checkIn,
-        ngayTraPhong: bookingInfo.checkOut,
-        soLuongKhach: bookingInfo.guests,
-        rooms: roomsPayload,
-        ghiChu: customerInfo.notes,
-      };
-
-      const response = await fetch(`${DEFAULT_BASE_URL}/api/datphong/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const finalBookingData = {
+        ...bookingInfo,
+        customerInfo,
+        pricing: {
+          roomTotal: calculateRoomTotal(),
+          serviceTotal: calculateServiceTotal(),
+          tax: calculateTax(calculateRoomTotal() + calculateServiceTotal()),
+          totalAmount:
+            calculateRoomTotal() +
+            calculateServiceTotal() +
+            calculateTax(calculateRoomTotal() + calculateServiceTotal()),
         },
-        body: JSON.stringify(bookingPayload),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Không thể tạo đặt phòng");
-      }
-
-      const result = await response.json();
-      if (!result.success || !result.data || !result.data.idDatPhong) {
-        throw new Error(result.message || "Tạo đặt phòng thất bại");
-      }
-
-      const invoiceInfo = {
-        idDatPhong: result.data.idDatPhong,
-        idKhachHang: result.data.idKhachHang,
-        rooms: bookingInfo.selectedRooms,
-        checkIn: bookingInfo.checkIn,
-        checkOut: bookingInfo.checkOut,
-        nights: calculateNights(),
-        guests: bookingInfo.guests,
-        totalPrice: calculateTotal(),
-        tax: calculateTax(),
-        grandTotal: calculateGrandTotal(),
-        holdExpiresAt: result.data.holdExpiresAt,
-        customer: customerInfo,
       };
 
-      await AsyncStorage.setItem("customerInfo", JSON.stringify(customerInfo));
-      await AsyncStorage.setItem("invoiceInfo", JSON.stringify(invoiceInfo));
-
-      setLoading(false);
-      navigation.navigate("Payment" as never);
-    } catch (error: any) {
-      console.error("Error:", error);
-      const errorMessage =
-        typeof error.message === "string"
-          ? error.message
-          : "Đặt phòng thất bại. Vui lòng thử lại.";
-      Alert.alert("Lỗi", errorMessage);
-    } finally {
-      setLoading(false);
+      await AsyncStorage.setItem(
+        "finalBookingData",
+        JSON.stringify(finalBookingData)
+      );
+      (navigation as any).navigate("Payment");
+    } catch (error) {
+      console.error("Error saving final booking data:", error);
+      Alert.alert("Lỗi", "Đã có lỗi xảy ra. Vui lòng thử lại.");
     }
   };
 
   if (!bookingInfo) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text>Đang tải...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <Text>Đang tải thông tin...</Text>
+      </View>
     );
   }
 
-  const nights = calculateNights();
-  const totalPrice = calculateTotal();
-  const tax = calculateTax();
-  const grandTotal = calculateGrandTotal();
+  const roomTotal = calculateRoomTotal();
+  const serviceTotal = calculateServiceTotal();
+  const subTotal = roomTotal + serviceTotal;
+  const tax = calculateTax(subTotal);
+  const totalAmount = subTotal + tax;
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Thông tin khách hàng</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <BookingProgress
+        currentStage="checkout"
+        totalRooms={bookingInfo.totalRooms}
+        currentRoom={bookingInfo.totalRooms}
+        selectedRoomNumbers={bookingInfo.selectedRooms.map(
+          (sr) => sr.roomNumber
+        )}
+      />
+
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Thông tin đặt phòng</Text>
-          <View style={{ width: 20 }} />
-        </View>
-
-        <BookingProgress
-          currentStage="checkout"
-          totalRooms={bookingInfo.totalRooms}
-          selectedRoomNumbers={bookingInfo.selectedRooms.map(
-            (sr) => sr.roomNumber
-          )}
-        />
-
         <ScrollView
           style={styles.scrollContent}
+          contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Booking Summary */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Tóm tắt đặt phòng</Text>
+          {/* Booking Summary Card */}
+          <View style={styles.summaryCard}>
+            <Text style={styles.cardTitle}>Tóm tắt đặt phòng</Text>
+            
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Nhận phòng</Text>
+                <Text style={styles.summaryValue}>
+                  {new Date(bookingInfo.checkIn).toLocaleDateString("vi-VN")}
+                </Text>
+              </View>
+              <View style={styles.verticalLine} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Trả phòng</Text>
+                <Text style={styles.summaryValue}>
+                  {new Date(bookingInfo.checkOut).toLocaleDateString("vi-VN")}
+                </Text>
+              </View>
+            </View>
 
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Nhận phòng:</Text>
-              <Text style={styles.summaryValue}>
-                {new Date(bookingInfo.checkIn).toLocaleDateString("vi-VN")}
+            <View style={styles.divider} />
+
+            <View style={styles.summaryDetailRow}>
+              <AppIcon name="user" size={16} color={COLORS.gray} />
+              <Text style={styles.summaryDetailText}>
+                {bookingInfo.guests} khách
               </Text>
-            </View>
-
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Trả phòng:</Text>
-              <Text style={styles.summaryValue}>
-                {new Date(bookingInfo.checkOut).toLocaleDateString("vi-VN")}
+              <View style={styles.dot} />
+              <AppIcon name="home" size={16} color={COLORS.gray} />
+              <Text style={styles.summaryDetailText}>
+                {bookingInfo.totalRooms} phòng
               </Text>
-            </View>
-
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Số đêm:</Text>
-              <Text style={styles.summaryValue}>{nights}</Text>
-            </View>
-
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Số khách:</Text>
-              <Text style={styles.summaryValue}>
-                {String(bookingInfo.guests)}
+              <View style={styles.dot} />
+              <AppIcon name="moon" size={16} color={COLORS.gray} />
+              <Text style={styles.summaryDetailText}>
+                {calculateNights()} đêm
               </Text>
-            </View>
-
-            <View style={styles.roomList}>
-              <Text style={styles.roomListTitle}>Phòng đã chọn:</Text>
-              {bookingInfo.selectedRooms.map((sr) => (
-                <View key={sr.roomNumber} style={styles.roomItem}>
-                  <Text style={styles.roomName}>
-                    Phòng {sr.roomNumber}:{" "}
-                    {String(sr.room.roomTypeName || "Unknown")}
-                  </Text>
-                  <Text style={styles.roomPrice}>
-                    $
-                    {String(
-                      (typeof sr.room.discountedPrice === "number"
-                        ? sr.room.discountedPrice
-                        : typeof sr.room.basePricePerNight === "number"
-                        ? sr.room.basePricePerNight
-                        : 0
-                      ).toLocaleString()
-                    )}{" "}
-                    x {nights} đêm
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {bookingInfo.selectedServices &&
-              bookingInfo.selectedServices.length > 0 && (
-                <View style={styles.roomList}>
-                  <Text style={styles.roomListTitle}>Dịch vụ đã chọn:</Text>
-                  {bookingInfo.selectedServices.map((service, index) => (
-                    <View key={index} style={styles.roomItem}>
-                      <Text style={styles.roomName}>
-                        {String(service.serviceName || "Dịch vụ")}
-                      </Text>
-                      <Text style={styles.roomPrice}>
-                        $
-                        {String(
-                          typeof service.price === "number"
-                            ? service.price.toLocaleString()
-                            : "0"
-                        )}{" "}
-                        x{" "}
-                        {String(
-                          typeof service.quantity === "number"
-                            ? service.quantity
-                            : 1
-                        )}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-          </View>
-
-          {/* Customer Information */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
-              {isLoggedIn && (
-                <View style={styles.loggedInBadge}>
-                  <AppIcon name="user" size={12} color={COLORS.success} />
-                  <Text style={styles.loggedInText}>Đã đăng nhập</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Họ và tên *</Text>
-              <TextInput
-                style={styles.input}
-                value={customerInfo.fullName}
-                onChangeText={(text) =>
-                  setCustomerInfo((prev) => ({ ...prev, fullName: text }))
-                }
-                placeholder="Nguyễn Văn A"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email *</Text>
-              <TextInput
-                style={styles.input}
-                value={customerInfo.email}
-                onChangeText={(text) =>
-                  setCustomerInfo((prev) => ({ ...prev, email: text }))
-                }
-                placeholder="example@email.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Số điện thoại *</Text>
-              <TextInput
-                style={styles.input}
-                value={customerInfo.phone}
-                onChangeText={(text) =>
-                  setCustomerInfo((prev) => ({ ...prev, phone: text }))
-                }
-                placeholder="0912345678"
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Địa chỉ</Text>
-              <TextInput
-                style={styles.input}
-                value={customerInfo.address}
-                onChangeText={(text) =>
-                  setCustomerInfo((prev) => ({ ...prev, address: text }))
-                }
-                placeholder="Địa chỉ của bạn"
-                multiline
-                numberOfLines={2}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Ghi chú</Text>
-              <TextInput
-                style={styles.input}
-                value={customerInfo.notes}
-                onChangeText={(text) =>
-                  setCustomerInfo((prev) => ({ ...prev, notes: text }))
-                }
-                placeholder="Yêu cầu đặc biệt (tùy chọn)"
-                multiline
-                numberOfLines={3}
-              />
             </View>
           </View>
 
-          {/* Price Summary */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Tóm tắt chi phí</Text>
+          {/* Customer Info Form */}
+          <View style={styles.formSection}>
+            <Text style={styles.sectionTitle}>Thông tin liên hệ</Text>
+            
+            <View style={styles.inputContainer}>
+              <View style={styles.inputIcon}>
+                <AppIcon name="user" size={20} color={COLORS.gray} />
+              </View>
+              <View style={styles.inputContent}>
+                <Text style={styles.inputLabel}>Họ và tên *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={customerInfo.fullName}
+                  onChangeText={(text) =>
+                    setCustomerInfo({ ...customerInfo, fullName: text })
+                  }
+                  placeholder="Nhập họ tên đầy đủ"
+                  placeholderTextColor="#ccc"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <View style={styles.inputIcon}>
+                <AppIcon name="phone" size={20} color={COLORS.gray} />
+              </View>
+              <View style={styles.inputContent}>
+                <Text style={styles.inputLabel}>Số điện thoại *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={customerInfo.phone}
+                  onChangeText={(text) =>
+                    setCustomerInfo({ ...customerInfo, phone: text })
+                  }
+                  placeholder="Nhập số điện thoại"
+                  placeholderTextColor="#ccc"
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <View style={styles.inputIcon}>
+                <AppIcon name="mail" size={20} color={COLORS.gray} />
+              </View>
+              <View style={styles.inputContent}>
+                <Text style={styles.inputLabel}>Email *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={customerInfo.email}
+                  onChangeText={(text) =>
+                    setCustomerInfo({ ...customerInfo, email: text })
+                  }
+                  placeholder="Nhập địa chỉ email"
+                  placeholderTextColor="#ccc"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <View style={styles.inputIcon}>
+                <AppIcon name="map-pin" size={20} color={COLORS.gray} />
+              </View>
+              <View style={styles.inputContent}>
+                <Text style={styles.inputLabel}>Địa chỉ</Text>
+                <TextInput
+                  style={styles.input}
+                  value={customerInfo.address}
+                  onChangeText={(text) =>
+                    setCustomerInfo({ ...customerInfo, address: text })
+                  }
+                  placeholder="Nhập địa chỉ của bạn"
+                  placeholderTextColor="#ccc"
+                />
+              </View>
+            </View>
+
+            <View style={[styles.inputContainer, { alignItems: 'flex-start', paddingVertical: 12 }]}>
+              <View style={[styles.inputIcon, { marginTop: 4 }]}>
+                <AppIcon name="edit" size={20} color={COLORS.gray} />
+              </View>
+              <View style={styles.inputContent}>
+                <Text style={styles.inputLabel}>Ghi chú</Text>
+                <TextInput
+                  style={[styles.input, { height: 60, textAlignVertical: 'top' }]}
+                  value={customerInfo.notes}
+                  onChangeText={(text) =>
+                    setCustomerInfo({ ...customerInfo, notes: text })
+                  }
+                  placeholder="Yêu cầu đặc biệt (không bắt buộc)"
+                  placeholderTextColor="#ccc"
+                  multiline
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Price Breakdown */}
+          <View style={styles.priceSection}>
+            <Text style={styles.sectionTitle}>Chi tiết thanh toán</Text>
+            
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Tiền phòng ({calculateNights()} đêm)</Text>
+              <Text style={styles.priceValue}>{roomTotal.toLocaleString()}đ</Text>
+            </View>
+
+            {serviceTotal > 0 && (
+              <View style={styles.priceRow}>
+                <Text style={styles.priceLabel}>Dịch vụ thêm</Text>
+                <Text style={styles.priceValue}>{serviceTotal.toLocaleString()}đ</Text>
+              </View>
+            )}
 
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Tiền phòng:</Text>
-              <Text style={styles.priceValue}>
-                ${totalPrice.toLocaleString()}
-              </Text>
+              <Text style={styles.priceLabel}>Thuế VAT (10%)</Text>
+              <Text style={styles.priceValue}>{tax.toLocaleString()}đ</Text>
             </View>
 
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Thuế & phí (10%):</Text>
-              <Text style={styles.priceValue}>${tax.toLocaleString()}</Text>
-            </View>
+            <View style={styles.divider} />
 
-            <View style={[styles.priceRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Tổng cộng:</Text>
-              <Text style={styles.totalValue}>
-                ${grandTotal.toLocaleString()}
-              </Text>
-            </View>
-          </View>
-
-          {/* Policies */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Chính sách & lưu ý</Text>
-
-            <View style={styles.policyItem}>
-              <AppIcon name="clock-o" size={16} color={COLORS.primary} />
-              <Text style={styles.policyText}>
-                Giờ nhận phòng: 14:00, trả phòng: 12:00
-              </Text>
-            </View>
-
-            <View style={styles.policyItem}>
-              <AppIcon name="ban" size={16} color={COLORS.error} />
-              <Text style={styles.policyText}>
-                Hút thuốc nghiêm cấm trong phòng
-              </Text>
-            </View>
-
-            <View style={styles.policyItem}>
-              <AppIcon name="undo" size={16} color={COLORS.success} />
-              <Text style={styles.policyText}>Miễn phí hủy trong 24 giờ</Text>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Tổng thanh toán</Text>
+              <Text style={styles.totalValue}>{totalAmount.toLocaleString()}đ</Text>
             </View>
           </View>
         </ScrollView>
-
-        {/* Submit Button */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[
-              styles.submitButton,
-              loading && styles.submitButtonDisabled,
-            ]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            <Text style={styles.submitButtonText}>
-              {loading ? "Đang xử lý..." : "Xác nhận đặt phòng"}
-            </Text>
-          </TouchableOpacity>
-        </View>
       </KeyboardAvoidingView>
+
+      <View style={styles.bottomBar}>
+        <View style={styles.totalContainer}>
+          <Text style={styles.bottomTotalLabel}>Tổng cộng</Text>
+          <Text style={styles.bottomTotalPrice}>
+            {totalAmount.toLocaleString()}đ
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.paymentButton}
+          onPress={handleProceedToPayment}
+        >
+          <Text style={styles.paymentButtonText}>Thanh toán</Text>
+          <AppIcon name="arrow-right" size={20} color={COLORS.white} />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
@@ -542,7 +430,7 @@ const CheckoutScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F8F9FA",
   },
   loadingContainer: {
     flex: 1,
@@ -556,14 +444,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding,
     backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
   },
   backButton: {
     padding: 8,
+    borderRadius: 20,
+    backgroundColor: "#F5F5F5",
   },
   headerTitle: {
-    ...FONTS.h2,
+    ...FONTS.h3,
     fontWeight: "700",
     color: COLORS.secondary,
   },
@@ -571,156 +459,177 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: SIZES.padding,
   },
-  section: {
+  summaryCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: SIZES.padding,
-    marginBottom: SIZES.padding,
-    ...SHADOWS.medium,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    ...SHADOWS.light,
   },
-  sectionTitle: {
-    ...FONTS.h3,
-    fontWeight: "600",
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "700",
     color: COLORS.secondary,
-    marginBottom: SIZES.padding,
+    marginBottom: 16,
   },
-  sectionHeader: {
+  summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SIZES.padding,
-  },
-  loggedInBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.success + "20",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  loggedInText: {
-    ...FONTS.body4,
-    color: COLORS.success,
-    fontWeight: "600",
-    marginLeft: 4,
   },
   summaryItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  summaryLabel: {
-    ...FONTS.body3,
-    color: COLORS.gray,
-  },
-  summaryValue: {
-    ...FONTS.body3,
-    fontWeight: "600",
-    color: COLORS.secondary,
-  },
-  roomList: {
-    marginTop: 12,
-  },
-  roomListTitle: {
-    ...FONTS.body3,
-    fontWeight: "600",
-    color: COLORS.secondary,
-    marginBottom: 8,
-  },
-  roomItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 4,
-  },
-  roomName: {
-    ...FONTS.body4,
-    color: COLORS.secondary,
     flex: 1,
   },
-  roomPrice: {
-    ...FONTS.body4,
+  summaryLabel: {
+    fontSize: 12,
     color: COLORS.gray,
+    marginBottom: 4,
   },
-  inputGroup: {
-    marginBottom: SIZES.padding,
-  },
-  inputLabel: {
-    ...FONTS.body3,
+  summaryValue: {
+    fontSize: 15,
     fontWeight: "600",
     color: COLORS.secondary,
-    marginBottom: 8,
+  },
+  verticalLine: {
+    width: 1,
+    backgroundColor: "#F1F3F5",
+    marginHorizontal: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#F1F3F5",
+    marginVertical: 16,
+  },
+  summaryDetailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  summaryDetailText: {
+    fontSize: 13,
+    color: COLORS.gray,
+    fontWeight: "500",
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D1D5DB",
+  },
+  formSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    marginBottom: 16,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#F1F3F5",
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  inputContent: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 11,
+    color: COLORS.gray,
+    marginBottom: 2,
   },
   input: {
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: 8,
-    padding: SIZES.padding * 0.8,
-    fontSize: 16,
+    fontSize: 15,
     color: COLORS.secondary,
+    fontWeight: "500",
+    padding: 0,
+  },
+  priceSection: {
     backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    ...SHADOWS.light,
   },
   priceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
+    marginBottom: 12,
   },
   priceLabel: {
-    ...FONTS.body3,
+    fontSize: 14,
     color: COLORS.gray,
   },
   priceValue: {
-    ...FONTS.body3,
+    fontSize: 15,
     fontWeight: "600",
     color: COLORS.secondary,
   },
   totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-    paddingTop: 12,
-    marginTop: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   totalLabel: {
-    ...FONTS.h4,
+    fontSize: 16,
     fontWeight: "700",
     color: COLORS.secondary,
   },
   totalValue: {
-    ...FONTS.h4,
+    fontSize: 20,
     fontWeight: "700",
     color: COLORS.primary,
   },
-  policyItem: {
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.white,
+    padding: 20,
+    paddingBottom: 34,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    ...SHADOWS.dark,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    justifyContent: "space-between",
   },
-  policyText: {
-    ...FONTS.body4,
+  totalContainer: {
+    flex: 1,
+  },
+  bottomTotalLabel: {
+    fontSize: 12,
     color: COLORS.gray,
-    marginLeft: 8,
+    marginBottom: 2,
   },
-  footer: {
-    backgroundColor: COLORS.white,
-    padding: SIZES.padding,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
+  bottomTotalPrice: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.primary,
   },
-  submitButton: {
-    backgroundColor: "#d47153ff",
-    paddingVertical: SIZES.padding,
-    borderRadius: 8,
+  paymentButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    ...FONTS.h4,
+  paymentButtonText: {
+    fontSize: 16,
     color: COLORS.white,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });
 

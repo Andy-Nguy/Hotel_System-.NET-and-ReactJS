@@ -234,53 +234,12 @@ const Slidebar: React.FC = () => {
           label="Điểm tích lũy & Cấp bậc"
         />
 
-        <MenuItem
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M3 6h18v2H3zM3 12h18v2H3zM3 18h18v2H3z" fill="#4b5563" />
-            </svg>
-          }
-          label="Product"
-          badge="+3"
+        <NavItem
+          key="review"
+          routeFragment="admin/review"
+          label="Quản lý đánh giá"
         />
-        <MenuItem
-          icon={
-<svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M4 4h16v12H4zM4 20h16v-2H4z" fill="#4b5563" />
-            </svg>
-          }
-          label="Blog"
-        />
-        <MenuItem
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M6 13h12v7H6z" fill="#4b5563" />
-            </svg>
-          }
-          label="Sign in"
-        />
-        <div
-          style={{
-            height: 1,
-            background: "rgba(15,23,42,0.04)",
-            margin: "12px 0",
-            borderRadius: 2,
-          }}
-        />
-        <MenuItem
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M21 10H7l5-6H3"
-                stroke="#4b5563"
-                strokeWidth={1.2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          }
-          label="Not found"
-        />
+
       </nav>
       
     </aside>

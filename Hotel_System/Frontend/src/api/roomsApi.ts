@@ -60,9 +60,31 @@ export interface RoomType {
   urlAnhLoaiPhong?: string;
 }
 
-// === 2. LOGIC GỌI API CHUNG ===
+// === 2. LOGIC GỌP API CHUNG ===
 
 const API_BASE = ""; // Giữ trống để dùng proxy của Vite
+
+/**
+ * Utility function to decode JWT token and get claims
+ */
+function decodeJwt(token: string): any {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map(function (c) {
+          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error("Failed to decode JWT:", e);
+    return null;
+  }
+}
 
 /**
  * Hàm helper chung để gọi API và chuẩn hóa kết quả trả về
@@ -95,9 +117,9 @@ async function fetchApi(endpoint: string): Promise<any[]> {
  */
 export async function getRooms(): Promise<Room[]> {
   const data = await fetchApi("/api/Phong");
-  
+
   // Tự động chuẩn hóa PascalCase (C#) sang camelCase (JS)
-  const normalizedRooms: Room[] = (data as any[]).map(r => ({
+  const normalizedRooms: Room[] = (data as any[]).map((r) => ({
     idphong: r.idphong ?? r.Idphong,
     idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
     tenPhong: r.tenPhong ?? r.TenPhong,
@@ -108,9 +130,9 @@ export async function getRooms(): Promise<Room[]> {
     giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
     xepHangSao: r.xepHangSao ?? r.XepHangSao,
     trangThai: r.trangThai ?? r.TrangThai,
-    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong
+    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong,
   }));
-  
+
   return normalizedRooms;
 }
 
@@ -119,24 +141,35 @@ export async function getRooms(): Promise<Room[]> {
  */
 export async function getRoomTypes(): Promise<RoomType[]> {
   const data = await fetchApi("/api/LoaiPhong");
-  
+
   // Tự động chuẩn hóa
-  const normalizedTypes: RoomType[] = (data as any[]).map(rt => ({
+  const normalizedTypes: RoomType[] = (data as any[]).map((rt) => ({
     // backend may serialize the id using different camel/pascal variants
-    idLoaiPhong: rt.idLoaiPhong ?? rt.IdloaiPhong ?? rt.IdLoaiPhong ?? rt.idLoaiPhong ?? rt.IdLoaiPhong ?? rt.idloaiPhong,
-    tenLoaiPhong: rt.tenLoaiPhong ?? rt.TenLoaiPhong ?? rt.tenLoaiPhong ?? rt.TenLoaiPhong,
+    idLoaiPhong:
+      rt.idLoaiPhong ??
+      rt.IdloaiPhong ??
+      rt.IdLoaiPhong ??
+      rt.idLoaiPhong ??
+      rt.IdLoaiPhong ??
+      rt.idloaiPhong,
+    tenLoaiPhong:
+      rt.tenLoaiPhong ?? rt.TenLoaiPhong ?? rt.tenLoaiPhong ?? rt.TenLoaiPhong,
     moTa: rt.moTa ?? rt.MoTa ?? rt.moTa,
-    urlAnhLoaiPhong: rt.urlAnhLoaiPhong ?? rt.UrlAnhLoaiPhong ?? rt.urlAnhLoaiPhong,
+    urlAnhLoaiPhong:
+      rt.urlAnhLoaiPhong ?? rt.UrlAnhLoaiPhong ?? rt.urlAnhLoaiPhong,
   }));
-  
+
   return normalizedTypes;
 }
 // THÊM CÁC HÀM CRUD CHO RoomType VÀ Room Ở ĐÂY
 // === CRUD for RoomType ===
-export async function createRoomType(payload: Partial<RoomType>): Promise<RoomType> {
+export async function createRoomType(
+  payload: Partial<RoomType>
+): Promise<RoomType> {
+  const headers: any = { "Content-Type": "application/json" };
   const res = await fetch(`/api/LoaiPhong`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Failed to create room type: ${res.status}`);
@@ -149,25 +182,34 @@ export async function createRoomType(payload: Partial<RoomType>): Promise<RoomTy
   };
 }
 
-export async function updateRoomType(id: string, payload: Partial<RoomType>): Promise<void> {
+export async function updateRoomType(
+  id: string,
+  payload: Partial<RoomType>
+): Promise<void> {
+  const headers: any = { "Content-Type": "application/json" };
   const res = await fetch(`/api/LoaiPhong/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    method: "PUT",
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Failed to update room type: ${res.status}`);
 }
 
 export async function deleteRoomType(id: string): Promise<void> {
-  const res = await fetch(`/api/LoaiPhong/${id}`, { method: 'DELETE' });
+  const headers: any = {};
+  const res = await fetch(`/api/LoaiPhong/${id}`, {
+    method: "DELETE",
+    headers,
+  });
   if (!res.ok) throw new Error(`Failed to delete room type: ${res.status}`);
 }
 
 // === CRUD for Room ===
 export async function createRoom(payload: Partial<Room>): Promise<Room> {
+  const headers: any = { "Content-Type": "application/json" };
   const res = await fetch(`/api/Phong`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Failed to create room: ${res.status}`);
@@ -187,20 +229,33 @@ export async function createRoom(payload: Partial<Room>): Promise<Room> {
   };
 }
 
-export async function updateRoom(id: string, payload: Partial<Room>): Promise<void> {
+export async function updateRoom(
+  id: string,
+  payload: Partial<Room>
+): Promise<void> {
+  const headers: any = { "Content-Type": "application/json" };
+
+  // Debug logging
+  console.log("updateRoom - token:", "removed");
+  console.log("updateRoom - headers:", headers);
+
   const res = await fetch(`/api/Phong/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    method: "PUT",
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => null);
-    throw new Error(`Failed to update room: ${res.status}${text ? ` - ${text}` : ''}`);
+    console.log("updateRoom - response status:", res.status, "text:", text);
+    throw new Error(
+      `Failed to update room: ${res.status}${text ? ` - ${text}` : ""}`
+    );
   }
 }
 
 export async function deleteRoom(id: string): Promise<void> {
-  const res = await fetch(`/api/Phong/${id}`, { method: 'DELETE' });
+  const headers: any = {};
+  const res = await fetch(`/api/Phong/${id}`, { method: "DELETE", headers });
   if (!res.ok) throw new Error(`Failed to delete room: ${res.status}`);
 }
 
@@ -208,10 +263,12 @@ export async function deleteRoom(id: string): Promise<void> {
  * Lấy phòng theo loại phòng
  */
 export async function getRoomsByType(loaiPhongId: string): Promise<Room[]> {
-  const data = await fetchApi(`/api/Phong?loaiPhongId=${encodeURIComponent(loaiPhongId)}`);
-  
+  const data = await fetchApi(
+    `/api/Phong?loaiPhongId=${encodeURIComponent(loaiPhongId)}`
+  );
+
   // Chuẩn hóa tương tự getRooms
-  const normalizedRooms: Room[] = (data as any[]).map(r => ({
+  const normalizedRooms: Room[] = (data as any[]).map((r) => ({
     idphong: r.idphong ?? r.Idphong,
     idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
     tenPhong: r.tenPhong ?? r.TenPhong,
@@ -222,34 +279,58 @@ export async function getRoomsByType(loaiPhongId: string): Promise<Room[]> {
     giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
     xepHangSao: r.xepHangSao ?? r.XepHangSao,
     trangThai: r.trangThai ?? r.TrangThai,
-    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong
+    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong,
   }));
-  
+
   return normalizedRooms;
 }
 
 /**
  * Kiểm tra phòng trống theo loại phòng và khoảng thời gian
  */
-export async function checkRoomAvailability(loaiPhongId: string, checkin: string, checkout: string, numberOfGuests: number = 1): Promise<Room[]> {
-  const data = await fetchApi(`/api/Phong/kiem-tra-trong-theo-loai-phong?loaiPhongId=${encodeURIComponent(loaiPhongId)}&checkin=${encodeURIComponent(checkin)}&checkout=${encodeURIComponent(checkout)}&numberOfGuests=${encodeURIComponent(String(numberOfGuests))}`);
-  
+export async function checkRoomAvailability(
+  loaiPhongId: string,
+  checkin: string,
+  checkout: string,
+  numberOfGuests: number = 1
+): Promise<Room[]> {
+  const data = await fetchApi(
+    `/api/Phong/kiem-tra-trong-theo-loai-phong?loaiPhongId=${encodeURIComponent(
+      loaiPhongId
+    )}&checkin=${encodeURIComponent(checkin)}&checkout=${encodeURIComponent(
+      checkout
+    )}&numberOfGuests=${encodeURIComponent(String(numberOfGuests))}`
+  );
+
   // Chuẩn hóa tương tự, nhưng thêm support cho AvailableRoomResponse shape
   // (API có thể trả về RoomId, RoomName, RoomNumber, BasePricePerNight, RoomImageUrl, RoomTypeName, MaxOccupancy)
-  const normalizedRooms: Room[] = (data as any[]).map(r => ({
+  const normalizedRooms: Room[] = (data as any[]).map((r) => ({
     idphong: r.idphong ?? r.Idphong ?? r.roomId ?? r.RoomId,
     idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
-    tenPhong: r.tenPhong ?? r.TenPhong ?? r.roomName ?? r.RoomName ?? r.roomNumber ?? r.RoomNumber,
-    tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong ?? r.roomTypeName ?? r.RoomTypeName,
+    tenPhong:
+      r.tenPhong ??
+      r.TenPhong ??
+      r.roomName ??
+      r.RoomName ??
+      r.roomNumber ??
+      r.RoomNumber,
+    tenLoaiPhong:
+      r.tenLoaiPhong ?? r.TenLoaiPhong ?? r.roomTypeName ?? r.RoomTypeName,
     soPhong: r.soPhong ?? r.SoPhong ?? r.roomNumber ?? r.RoomNumber,
     moTa: r.moTa ?? r.MoTa ?? r.description ?? r.Description,
-    soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa ?? r.maxOccupancy ?? r.MaxOccupancy,
-    giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.basePricePerNight ?? r.BasePricePerNight,
+    soNguoiToiDa:
+      r.soNguoiToiDa ?? r.SoNguoiToiDa ?? r.maxOccupancy ?? r.MaxOccupancy,
+    giaCoBanMotDem:
+      r.giaCoBanMotDem ??
+      r.GiaCoBanMotDem ??
+      r.basePricePerNight ??
+      r.BasePricePerNight,
     xepHangSao: r.xepHangSao ?? r.XepHangSao,
     trangThai: r.trangThai ?? r.TrangThai,
-    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong ?? r.roomImageUrl ?? r.RoomImageUrl
+    urlAnhPhong:
+      r.urlAnhPhong ?? r.UrlAnhPhong ?? r.roomImageUrl ?? r.RoomImageUrl,
   }));
-  
+
   return normalizedRooms;
 }
 
@@ -284,23 +365,38 @@ export async function postCheckAvailableRooms(
   if (data && (data.message || data.Message)) return [];
 
   // Chuẩn hóa dữ liệu
-  const normalizedRooms: Room[] = (Array.isArray(data) ? data : [data]).map((r: any) => ({
-    idphong: r.idphong ?? r.Idphong ?? r.roomId ?? r.RoomId,
-    idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
-    tenPhong: r.tenPhong ?? r.TenPhong ?? r.roomName ?? r.RoomName ?? r.roomNumber ?? r.RoomNumber,
-    tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong ?? r.roomTypeName ?? r.RoomTypeName,
-    soPhong: r.soPhong ?? r.SoPhong ?? r.roomNumber ?? r.RoomNumber,
-    moTa: r.moTa ?? r.MoTa ?? r.description ?? r.Description,
-    soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa ?? r.maxOccupancy ?? r.MaxOccupancy,
-    giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.basePricePerNight ?? r.BasePricePerNight,
-    basePricePerNight: r.basePricePerNight ?? r.BasePricePerNight,
-    discountedPrice: r.discountedPrice ?? r.DiscountedPrice,
-    promotionName: r.promotionName ?? r.PromotionName,
-    discountPercent: r.discountPercent ?? r.DiscountPercent,
-    xepHangSao: r.xepHangSao ?? r.XepHangSao,
-    trangThai: r.trangThai ?? r.TrangThai,
-    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong ?? r.roomImageUrl ?? r.RoomImageUrl,
-  }));
+  const normalizedRooms: Room[] = (Array.isArray(data) ? data : [data]).map(
+    (r: any) => ({
+      idphong: r.idphong ?? r.Idphong ?? r.roomId ?? r.RoomId,
+      idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
+      tenPhong:
+        r.tenPhong ??
+        r.TenPhong ??
+        r.roomName ??
+        r.RoomName ??
+        r.roomNumber ??
+        r.RoomNumber,
+      tenLoaiPhong:
+        r.tenLoaiPhong ?? r.TenLoaiPhong ?? r.roomTypeName ?? r.RoomTypeName,
+      soPhong: r.soPhong ?? r.SoPhong ?? r.roomNumber ?? r.RoomNumber,
+      moTa: r.moTa ?? r.MoTa ?? r.description ?? r.Description,
+      soNguoiToiDa:
+        r.soNguoiToiDa ?? r.SoNguoiToiDa ?? r.maxOccupancy ?? r.MaxOccupancy,
+      giaCoBanMotDem:
+        r.giaCoBanMotDem ??
+        r.GiaCoBanMotDem ??
+        r.basePricePerNight ??
+        r.BasePricePerNight,
+      basePricePerNight: r.basePricePerNight ?? r.BasePricePerNight,
+      discountedPrice: r.discountedPrice ?? r.DiscountedPrice,
+      promotionName: r.promotionName ?? r.PromotionName,
+      discountPercent: r.discountPercent ?? r.DiscountPercent,
+      xepHangSao: r.xepHangSao ?? r.XepHangSao,
+      trangThai: r.trangThai ?? r.TrangThai,
+      urlAnhPhong:
+        r.urlAnhPhong ?? r.UrlAnhPhong ?? r.roomImageUrl ?? r.RoomImageUrl,
+    })
+  );
 
   return normalizedRooms;
 }

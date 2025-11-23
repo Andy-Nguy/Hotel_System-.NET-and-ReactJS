@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;

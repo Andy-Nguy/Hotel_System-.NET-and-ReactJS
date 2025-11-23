@@ -26,6 +26,7 @@ import {
   createPromotion,
   updatePromotion,
   uploadBanner,
+  getPromotionById,
 } from "../../api/promotionApi";
 
 interface PromotionFormProps {
@@ -38,6 +39,62 @@ interface Room {
   key: string;
   title: string;
 }
+
+interface Service {
+  iddichVu: string;
+  tenDichVu: string;
+  gia: number;
+}
+
+const ServiceAssignPanel: React.FC<{
+  selectedIds: string[];
+  onToggle: (id: string, checked: boolean) => void;
+}> = ({ selectedIds, onToggle }) => {
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        // backend route is `api/dich-vu/lay-danh-sach`
+        const res = await fetch('/api/dich-vu/lay-danh-sach');
+        const data = await res.json();
+        setServices(data || []);
+      } catch (err) {
+        console.error('Error loading services', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, []);
+
+  if (loading) return <Spin />;
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+      {services.map((s) => (
+        <div key={s.iddichVu} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8 }}>
+          <div style={{ fontWeight: 700 }}>{s.tenDichVu}</div>
+          <div style={{ color: '#666', marginBottom: 8 }}>{s.iddichVu}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(s.iddichVu)}
+                onChange={(e) => onToggle(s.iddichVu, e.target.checked)}
+              />
+              <span style={{ fontSize: 13 }}>Gán dịch vụ</span>
+            </label>
+            <div style={{ marginLeft: 'auto', color: '#333' }}>{s.gia?.toLocaleString?.() ?? s.gia}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const PromotionForm: React.FC<PromotionFormProps> = ({
   promotion,
@@ -83,6 +140,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
       // Edit mode: populate form with promotion data
       form.setFieldsValue({
         tenKhuyenMai: promotion.tenKhuyenMai,
+        loaiKhuyenMai: (promotion as any).loaiKhuyenMai || 'room',
         moTa: promotion.moTa,
         loaiGiamGia: promotion.loaiGiamGia,
         giaTriGiam: promotion.giaTriGiam,
@@ -91,12 +149,32 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
         trangThai: promotion.trangThai,
       });
 
-      // Set selected rooms
-      const selectedPhongIds = promotion.khuyenMaiPhongs.map((kmp) => kmp.idphong);
-      setSelectedRooms(selectedPhongIds);
+      // Try to load canonical promotion details to ensure khuyenMaiDichVus are present
+      (async () => {
+        try {
+          const full = await getPromotionById(promotion.idkhuyenMai);
+          if ((full as any).loaiKhuyenMai === 'service') {
+            const svcIds = (full as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu) || [];
+            setSelectedRooms(svcIds);
+          } else {
+            const selectedPhongIds = full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
+            setSelectedRooms(selectedPhongIds);
+          }
 
-      // Set banner image
-      setBannerImage(promotion.hinhAnhBanner || null);
+          // Set banner image from canonical data
+          setBannerImage(full.hinhAnhBanner || null);
+        } catch (err) {
+          // Fallback to whatever was passed in if fetch fails
+          if ((promotion as any).loaiKhuyenMai === 'service') {
+            const svcIds = (promotion as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu) || [];
+            setSelectedRooms(svcIds);
+          } else {
+            const selectedPhongIds = promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
+            setSelectedRooms(selectedPhongIds);
+          }
+          setBannerImage(promotion.hinhAnhBanner || null);
+        }
+      })();
     } else {
       // Create mode: reset form
       form.resetFields();
@@ -109,17 +187,24 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
     try {
       setLoading(true);
 
-      const payload = {
+      const base = {
         tenKhuyenMai: values.tenKhuyenMai,
+        loaiKhuyenMai: values.loaiKhuyenMai || 'room',
         moTa: values.moTa,
         loaiGiamGia: values.loaiGiamGia,
         giaTriGiam: values.giaTriGiam,
         ngayBatDau: values.ngayBatDau.format("YYYY-MM-DD"),
         ngayKetThuc: values.ngayKetThuc.format("YYYY-MM-DD"),
-        phongIds: selectedRooms,
         hinhAnhBanner: bannerImage,
         ...(promotion && { trangThai: values.trangThai || promotion.trangThai }),
       };
+
+      const payload: any = { ...base };
+      if ((values.loaiKhuyenMai || 'room') === 'service') {
+        payload.dichVuIds = selectedRooms;
+      } else {
+        payload.phongIds = selectedRooms;
+      }
 
       if (promotion) {
         // Update
@@ -207,6 +292,20 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                   options={[
                     { label: "% Giảm", value: "percent" },
                     { label: "Giảm Tiền", value: "amount" },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item label="Loại Khuyến Mãi" name="loaiKhuyenMai" initialValue={'room'}>
+                <Select
+                  options={[
+                    { label: 'Phòng', value: 'room' },
+                    { label: 'Dịch Vụ', value: 'service' },
+                    { label: 'Khách Hàng', value: 'customer' },
                   ]}
                 />
               </Form.Item>
@@ -322,14 +421,29 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
             </Form.Item>
           )}
 
-          <Form.Item label="Chọn Phòng Áp Dụng">
+          {/* Assignment area: either rooms or services depending on promotion type */}
+          <Form.Item label="Gán Áp Dụng">
             <div>
-              <Button onClick={() => setAssignModalVisible(true)}>Gán Phòng</Button>
+              <Form.Item noStyle shouldUpdate={(prev, cur) => prev.loaiKhuyenMai !== cur.loaiKhuyenMai}>
+                {({ getFieldValue }) => (
+                  <div>
+                    {getFieldValue('loaiKhuyenMai') === 'service' ? (
+                      <>
+                        <Button onClick={() => setAssignModalVisible(true)}>Gán Dịch Vụ</Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button onClick={() => setAssignModalVisible(true)}>Gán Phòng</Button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </Form.Item>
 
               {/* Assigned rooms list */}
               <div style={{ marginTop: 12 }}>
                 {selectedRooms.length === 0 ? (
-                  <div style={{ color: '#888' }}>Chưa có phòng nào được gán</div>
+                  <div style={{ color: '#888' }}>Chưa có mục nào được gán</div>
                 ) : (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     {selectedRooms.map((id) => (
@@ -343,32 +457,42 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               </div>
 
               <Modal
-                title="Gán Phòng cho Khuyến Mãi"
+                title={form.getFieldValue('loaiKhuyenMai') === 'service' ? "Gán Dịch Vụ cho Khuyến Mãi" : "Gán Phòng cho Khuyến Mãi"}
                 open={assignModalVisible}
                 onCancel={() => setAssignModalVisible(false)}
                 footer={null}
                 width={900}
               >
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
-                  {roomObjects.map((r) => (
-                    <div key={r.idphong} style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
-                      <div style={{ height: 120, backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url(${(r?.urlAnhPhong && (r.urlAnhPhong.startsWith('http') ? r.urlAnhPhong : `/img/room/${r.urlAnhPhong}`)) || '/img/placeholder.png'})` }} />
-                      <div style={{ padding: 8 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>{r.tenPhong}</div>
-                        <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>{r.idphong}</div>
-                        <div>
-                          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <input type="checkbox" checked={selectedRooms.includes(r.idphong)} onChange={(e) => {
-                              if (e.target.checked) setSelectedRooms((s) => (s.includes(r.idphong) ? s : [...s, r.idphong]));
-                              else setSelectedRooms((s) => s.filter(x => x !== r.idphong));
-                            }} />
-                            <span style={{ fontSize: 13 }}>Gán phòng</span>
-                          </label>
+                {form.getFieldValue('loaiKhuyenMai') === 'service' ? (
+                  <ServiceAssignPanel
+                    selectedIds={selectedRooms}
+                    onToggle={(id: string, checked: boolean) => {
+                      if (checked) setSelectedRooms((s) => (s.includes(id) ? s : [...s, id]));
+                      else setSelectedRooms((s) => s.filter(x => x !== id));
+                    }}
+                  />
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+                    {roomObjects.map((r) => (
+                      <div key={r.idphong} style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
+                        <div style={{ height: 120, backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url(${(r?.urlAnhPhong && (r.urlAnhPhong.startsWith('http') ? r.urlAnhPhong : `/img/room/${r.urlAnhPhong}`)) || '/img/placeholder.png'})` }} />
+                        <div style={{ padding: 8 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700 }}>{r.tenPhong}</div>
+                          <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>{r.idphong}</div>
+                          <div>
+                            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <input type="checkbox" checked={selectedRooms.includes(r.idphong)} onChange={(e) => {
+                                if (e.target.checked) setSelectedRooms((s) => (s.includes(r.idphong) ? s : [...s, r.idphong]));
+                                else setSelectedRooms((s) => s.filter(x => x !== r.idphong));
+                              }} />
+                              <span style={{ fontSize: 13 }}>Gán phòng</span>
+                            </label>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ marginTop: 12, textAlign: 'right' }}>
                   <Button onClick={() => setAssignModalVisible(false)}>Hoàn tất</Button>
                 </div>

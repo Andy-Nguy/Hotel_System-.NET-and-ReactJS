@@ -159,6 +159,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
           guests,
           rooms,
           availableRooms,
+          initialSelectedRoom: item,
         })
       }
     />
@@ -172,117 +173,104 @@ const CheckAvailableRoomsScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <AppIcon name="arrow-left" size={20} color={COLORS.secondary} />
+          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Kiểm tra phòng trống</Text>
-        <View style={{ width: 20 }} />
+        <Text style={styles.headerTitle}>Đặt phòng</Text>
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView
         style={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
       >
         {/* Search Form */}
         <View style={styles.searchForm}>
-          <Text style={styles.sectionTitle}>Chọn thời gian đặt phòng</Text>
+          <Text style={styles.formTitle}>Tìm kiếm phòng nghỉ</Text>
+          <Text style={styles.formSubtitle}>
+            Chọn thời gian và số lượng khách
+          </Text>
 
-          {/* Check-in Date */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Ngày nhận phòng</Text>
+          {/* Date Selection Row */}
+          <View style={styles.dateRow}>
+            {/* Check-in Date */}
             <TouchableOpacity
               style={styles.dateInput}
               onPress={() => setCheckInPickerVisibility(true)}
             >
-              <AppIcon
-                name="calendar"
-                size={20}
-                color={COLORS.primary}
-                style={styles.dateIcon}
-              />
-              <View style={styles.dateTextContainer}>
-                <Text style={styles.dateText}>{formatDate(checkIn)}</Text>
-                <Text style={styles.dateSubtext}>
-                  {formatDateShort(checkIn)}
-                </Text>
+              <View style={styles.iconContainer}>
+                <AppIcon name="calendar" size={20} color={COLORS.primary} />
               </View>
-              <AppIcon name="chevron-down" size={16} color={COLORS.gray} />
+              <View style={styles.dateContent}>
+                <Text style={styles.inputLabel}>Nhận phòng</Text>
+                <Text style={styles.dateValue}>{formatDateShort(checkIn)}</Text>
+              </View>
             </TouchableOpacity>
-          </View>
 
-          {/* Check-out Date */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Ngày trả phòng</Text>
+            <View style={styles.dateDivider} />
+
+            {/* Check-out Date */}
             <TouchableOpacity
               style={styles.dateInput}
               onPress={() => setCheckOutPickerVisibility(true)}
             >
-              <AppIcon
-                name="calendar"
-                size={20}
-                color={COLORS.primary}
-                style={styles.dateIcon}
-              />
-              <View style={styles.dateTextContainer}>
-                <Text style={styles.dateText}>{formatDate(checkOut)}</Text>
-                <Text style={styles.dateSubtext}>
+              <View style={styles.iconContainer}>
+                <AppIcon name="calendar" size={20} color={COLORS.primary} />
+              </View>
+              <View style={styles.dateContent}>
+                <Text style={styles.inputLabel}>Trả phòng</Text>
+                <Text style={styles.dateValue}>
                   {formatDateShort(checkOut)}
                 </Text>
               </View>
-              <AppIcon name="chevron-down" size={16} color={COLORS.gray} />
             </TouchableOpacity>
           </View>
 
-          {/* Number of Guests */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Số lượng khách</Text>
-            <View style={styles.guestSelector}>
-              <TouchableOpacity
-                style={styles.guestButton}
-                onPress={() => setGuests(Math.max(1, guests - 1))}
-              >
-                <AppIcon name="minus" size={16} color={COLORS.primary} />
-              </TouchableOpacity>
-              <View style={styles.guestCount}>
-                <Text style={styles.guestCountText}>{guests}</Text>
-                <Text style={styles.guestLabel}>khách</Text>
+          {/* Guests & Rooms Row */}
+          <View style={styles.selectionRow}>
+            <View style={styles.selectionItem}>
+              <Text style={styles.inputLabel}>Số khách</Text>
+              <View style={styles.counterContainer}>
+                <TouchableOpacity
+                  style={styles.counterBtn}
+                  onPress={() => setGuests(Math.max(1, guests - 1))}
+                >
+                  <AppIcon name="minus" size={14} color={COLORS.secondary} />
+                </TouchableOpacity>
+                <Text style={styles.counterValue}>{guests}</Text>
+                <TouchableOpacity
+                  style={styles.counterBtn}
+                  onPress={() => setGuests(Math.min(10, guests + 1))}
+                >
+                  <AppIcon name="plus" size={14} color={COLORS.secondary} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.guestButton}
-                onPress={() => setGuests(Math.min(10, guests + 1))}
-              >
-                <AppIcon name="plus" size={16} color={COLORS.primary} />
-              </TouchableOpacity>
             </View>
-          </View>
 
-          {/* Number of Rooms */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Số lượng phòng</Text>
-            <View style={styles.guestSelector}>
-              <TouchableOpacity
-                style={styles.guestButton}
-                onPress={() => setRooms(Math.max(1, rooms - 1))}
-              >
-                <AppIcon name="minus" size={16} color={COLORS.primary} />
-              </TouchableOpacity>
-              <View style={styles.guestCount}>
-                <Text style={styles.guestCountText}>{rooms}</Text>
-                <Text style={styles.guestLabel}>phòng</Text>
+            <View style={styles.verticalDivider} />
+
+            <View style={styles.selectionItem}>
+              <Text style={styles.inputLabel}>Số phòng</Text>
+              <View style={styles.counterContainer}>
+                <TouchableOpacity
+                  style={styles.counterBtn}
+                  onPress={() => setRooms(Math.max(1, rooms - 1))}
+                >
+                  <AppIcon name="minus" size={14} color={COLORS.secondary} />
+                </TouchableOpacity>
+                <Text style={styles.counterValue}>{rooms}</Text>
+                <TouchableOpacity
+                  style={styles.counterBtn}
+                  onPress={() => setRooms(Math.min(10, rooms + 1))}
+                >
+                  <AppIcon name="plus" size={14} color={COLORS.secondary} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.guestButton}
-                onPress={() => setRooms(Math.min(10, rooms + 1))}
-              >
-                <AppIcon name="plus" size={16} color={COLORS.primary} />
-              </TouchableOpacity>
             </View>
           </View>
 
           <TouchableOpacity
-            style={[
-              styles.searchButton,
-              loading && styles.searchButtonDisabled,
-            ]}
+            style={[styles.searchButton, loading && styles.searchButtonDisabled]}
             onPress={handleSearchRooms}
             disabled={loading}
           >
@@ -290,8 +278,8 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               <ActivityIndicator color={COLORS.white} />
             ) : (
               <>
-                <AppIcon name="search" size={18} color={COLORS.white} />
-                <Text style={styles.searchButtonText}>Tìm phòng trống</Text>
+                <Text style={styles.searchButtonText}>Kiểm tra phòng trống</Text>
+                <AppIcon name="arrow-right" size={20} color={COLORS.white} />
               </>
             )}
           </TouchableOpacity>
@@ -323,11 +311,12 @@ const CheckAvailableRoomsScreen: React.FC = () => {
         {/* Results */}
         {searched && (
           <View style={styles.resultsSection}>
-            <Text style={styles.resultsTitle}>
-              {availableRooms.length > 0
-                ? `Tìm thấy ${availableRooms.length} phòng trống`
-                : "Không có phòng trống"}
-            </Text>
+            <View style={styles.resultsHeader}>
+              <Text style={styles.resultsTitle}>Kết quả tìm kiếm</Text>
+              <Text style={styles.resultsCount}>
+                {availableRooms.length} phòng phù hợp
+              </Text>
+            </View>
 
             {availableRooms.length > 0 ? (
               <FlatList
@@ -336,13 +325,16 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                 keyExtractor={(item) => item.roomId}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ gap: 16 }}
               />
             ) : (
               <View style={styles.noResults}>
-                <AppIcon name="bed" size={48} color="#ccc" />
-                <Text style={styles.noResultsText}>Không có phòng phù hợp</Text>
+                <View style={styles.noResultsIcon}>
+                  <AppIcon name="search" size={40} color={COLORS.gray} />
+                </View>
+                <Text style={styles.noResultsText}>Không tìm thấy phòng</Text>
                 <Text style={styles.noResultsSubtext}>
-                  Thử chọn ngày khác hoặc ít khách hơn
+                  Vui lòng thử thay đổi ngày hoặc số lượng khách
                 </Text>
               </View>
             )}
@@ -361,8 +353,9 @@ const CheckAvailableRoomsScreen: React.FC = () => {
                 }
               >
                 <Text style={styles.continueButtonText}>
-                  Tiếp tục đặt phòng
+                  Tiếp tục chọn phòng
                 </Text>
+                <AppIcon name="arrow-right" size={18} color={COLORS.white} />
               </TouchableOpacity>
             )}
           </View>
@@ -414,32 +407,44 @@ const CheckAvailableRoomsScreen: React.FC = () => {
 
                   <View style={styles.modalRating}>
                     <Text style={styles.modalStars}>{renderStars(4.5)}</Text>
-                    <Text style={styles.modalRatingText}>4.5/5</Text>
+                    <Text style={styles.modalRatingText}>4.5/5 Tuyệt vời</Text>
                   </View>
 
-                  {selectedRoomDetail.description && (
+                  <View style={styles.divider} />
+
+                  <Text style={styles.modalSectionTitle}>Mô tả</Text>
+                  {selectedRoomDetail.description ? (
                     <Text style={styles.modalDescription}>
                       {selectedRoomDetail.description}
+                    </Text>
+                  ) : (
+                    <Text style={styles.modalDescription}>
+                      Không có mô tả chi tiết.
                     </Text>
                   )}
 
                   <View style={styles.modalPriceSection}>
-                    <Text style={styles.modalPriceLabel}>Giá/đêm:</Text>
+                    <Text style={styles.modalPriceLabel}>Giá mỗi đêm</Text>
                     <Text style={styles.modalPrice}>
-                      $
                       {Number(
                         selectedRoomDetail.basePricePerNight || 0
                       ).toLocaleString()}
+                      đ
                     </Text>
                   </View>
 
-                  <Text style={styles.modalNights}>
-                    Số đêm: {calculateNights()} | Tổng: $
-                    {(
-                      Number(selectedRoomDetail.basePricePerNight || 0) *
-                      calculateNights()
-                    ).toLocaleString()}
-                  </Text>
+                  <View style={styles.modalTotalSection}>
+                    <Text style={styles.modalTotalLabel}>
+                      Tổng cộng ({calculateNights()} đêm)
+                    </Text>
+                    <Text style={styles.modalTotalValue}>
+                      {(
+                        Number(selectedRoomDetail.basePricePerNight || 0) *
+                        calculateNights()
+                      ).toLocaleString()}
+                      đ
+                    </Text>
+                  </View>
                 </View>
               </ScrollView>
             )}
@@ -462,7 +467,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F8F9FA",
   },
   header: {
     flexDirection: "row",
@@ -471,16 +476,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding,
     backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
   },
   backButton: {
     padding: 8,
+    borderRadius: 20,
+    backgroundColor: "#F5F5F5",
   },
   headerTitle: {
-    ...FONTS.h2,
-    fontWeight: "700",
+    ...FONTS.h3,
     color: COLORS.secondary,
+    fontWeight: "700",
   },
   scrollContent: {
     flex: 1,
@@ -488,214 +493,171 @@ const styles = StyleSheet.create({
   searchForm: {
     backgroundColor: COLORS.white,
     margin: SIZES.padding,
-    padding: SIZES.padding,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sectionTitle: {
-    ...FONTS.h3,
-    fontWeight: "600",
-    color: COLORS.secondary,
-    marginBottom: SIZES.padding,
-  },
-  inputGroup: {
-    marginBottom: SIZES.padding,
-  },
-  inputLabel: {
-    ...FONTS.body3,
-    fontWeight: "600",
-    color: COLORS.secondary,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: 8,
-    padding: SIZES.padding * 0.8,
-    fontSize: 16,
-    color: COLORS.secondary,
-    backgroundColor: COLORS.white,
-  },
-  searchButton: {
-    backgroundColor: "#d47153ff",
-    borderRadius: 8,
-    paddingVertical: SIZES.padding,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: SIZES.padding,
-  },
-  searchButtonDisabled: {
-    opacity: 0.6,
-  },
-  searchButtonText: {
-    ...FONTS.h4,
-    color: COLORS.white,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  resultsSection: {
-    padding: SIZES.padding,
-  },
-  resultsTitle: {
-    ...FONTS.h3,
-    fontWeight: "600",
-    color: COLORS.secondary,
-    marginBottom: SIZES.padding,
-  },
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    overflow: "hidden",
-    marginBottom: 8,
+    padding: 20,
+    borderRadius: 24,
     ...SHADOWS.medium,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
   },
-  imageContainer: {
-    position: "relative",
-    width: "100%",
-    aspectRatio: 16 / 9,
-    backgroundColor: "#f0f0f0",
-  },
-  roomImage: {
-    width: "100%",
-    height: "100%",
-  },
-  imagePlaceholder: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f0f0f0",
-  },
-  imagePlaceholderText: {
-    fontSize: 48,
-  },
-  statusBadge: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#4CAF50",
-  },
-  statusText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  content: {
-    padding: SIZES.padding,
-  },
-  titleSection: {
-    marginBottom: 12,
-  },
-  roomName: {
-    fontSize: 18,
-    fontWeight: "700",
+  formTitle: {
+    ...FONTS.h2,
     color: COLORS.secondary,
     marginBottom: 4,
   },
-  roomNumber: {
-    fontSize: 12,
+  formSubtitle: {
+    ...FONTS.body3,
     color: COLORS.gray,
+    marginBottom: 24,
   },
-  ratingSection: {
+  dateRow: {
+    flexDirection: "row",
+    backgroundColor: "#F8F9FA",
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#E9ECEF",
+  },
+  dateInput: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    padding: 12,
   },
-  stars: {
-    fontSize: 16,
-    marginRight: 8,
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(223, 169, 116, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
   },
-  ratingText: {
-    fontSize: 13,
-    color: COLORS.secondary,
-    fontWeight: "600",
+  dateContent: {
+    flex: 1,
   },
-  description: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginBottom: 12,
-    lineHeight: 16,
-  },
-  amenitiesSection: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-    flexWrap: "wrap",
-  },
-  amenityBadge: {
-    backgroundColor: "#f0f0f0",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  amenityText: {
+  inputLabel: {
     fontSize: 11,
-    color: COLORS.secondary,
-    fontWeight: "500",
+    color: COLORS.gray,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    marginBottom: 2,
   },
-  priceSection: {
+  dateValue: {
+    fontSize: 15,
+    color: COLORS.secondary,
+    fontWeight: "700",
+  },
+  dateDivider: {
+    width: 1,
+    backgroundColor: "#E9ECEF",
+    marginVertical: 8,
+  },
+  selectionRow: {
+    flexDirection: "row",
+    backgroundColor: "#F8F9FA",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#E9ECEF",
+    alignItems: "center",
+  },
+  selectionItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  verticalDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: "#E9ECEF",
+    marginHorizontal: 8,
+  },
+  counterContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    gap: 12,
+  },
+  counterBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#DEE2E6",
+    ...SHADOWS.light,
+  },
+  counterValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    minWidth: 20,
+    textAlign: "center",
+  },
+  searchButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  searchButtonDisabled: {
+    opacity: 0.7,
+  },
+  searchButtonText: {
+    fontSize: 16,
+    color: COLORS.white,
+    fontWeight: "700",
+  },
+  resultsSection: {
+    paddingHorizontal: SIZES.padding,
+    paddingBottom: 40,
+  },
+  resultsHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
-    marginBottom: 12,
+    alignItems: "baseline",
+    marginBottom: 16,
   },
-  priceLabel: {
+  resultsTitle: {
+    ...FONTS.h3,
+    color: COLORS.secondary,
+  },
+  resultsCount: {
     fontSize: 13,
     color: COLORS.gray,
     fontWeight: "500",
-  },
-  price: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-  detailButton: {
-    backgroundColor: COLORS.secondary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    flex: 1,
-  },
-  detailButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  buttonSection: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  selectButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    flex: 1,
-  },
-  selectButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: "600",
   },
   noResults: {
     alignItems: "center",
-    paddingVertical: SIZES.padding * 3,
+    paddingVertical: 40,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 24,
+  },
+  noResultsIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#F8F9FA",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
   },
   noResultsText: {
     ...FONTS.h4,
     color: COLORS.secondary,
-    marginTop: SIZES.padding,
     marginBottom: 8,
   },
   noResultsSubtext: {
@@ -703,113 +665,55 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     textAlign: "center",
   },
-  dateInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: 12,
-    padding: SIZES.padding,
-    backgroundColor: COLORS.white,
-  },
-  dateIcon: {
-    marginRight: 12,
-  },
-  dateTextContainer: {
-    flex: 1,
-  },
-  dateText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.secondary,
-    marginBottom: 2,
-  },
-  dateSubtext: {
-    fontSize: 12,
-    color: COLORS.gray,
-  },
-  guestSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    overflow: "hidden",
-  },
-  guestButton: {
-    width: 50,
-    height: 50,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f8f9fa",
-  },
-  guestCount: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  guestCountText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.secondary,
-  },
-  guestLabel: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 2,
-  },
   continueButton: {
-    backgroundColor: "#d47153ff",
-    paddingVertical: SIZES.padding,
-    borderRadius: 8,
+    backgroundColor: COLORS.secondary,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: "center",
-    marginTop: SIZES.padding,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 24,
   },
   continueButtonText: {
-    ...FONTS.h4,
+    fontSize: 16,
     color: COLORS.white,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    width: "90%",
-    maxHeight: "80%",
-    ...SHADOWS.medium,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    height: "90%",
+    ...SHADOWS.dark,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: SIZES.padding,
+    padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
+    borderBottomColor: "#F1F3F5",
   },
   modalTitle: {
-    ...FONTS.h2,
-    fontWeight: "700",
+    ...FONTS.h3,
     color: COLORS.secondary,
   },
   closeButton: {
-    padding: 8,
+    padding: 4,
   },
   modalBody: {
-    padding: SIZES.padding,
+    flex: 1,
   },
   modalImageContainer: {
     width: "100%",
-    aspectRatio: 16 / 9,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
-    overflow: "hidden",
-    marginBottom: SIZES.padding,
+    height: 250,
+    backgroundColor: "#F8F9FA",
   },
   modalImage: {
     width: "100%",
@@ -822,82 +726,107 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalImagePlaceholderText: {
-    fontSize: 48,
+    fontSize: 64,
   },
   modalInfo: {
-    paddingVertical: SIZES.padding,
+    padding: 24,
   },
   modalRoomName: {
     fontSize: 24,
     fontWeight: "700",
     color: COLORS.secondary,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   modalRoomNumber: {
-    fontSize: 16,
+    fontSize: 14,
     color: COLORS.gray,
     marginBottom: 12,
   },
   modalRating: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 24,
+    backgroundColor: "#FFF9F2",
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   modalStars: {
-    fontSize: 18,
+    fontSize: 14,
     marginRight: 8,
   },
   modalRatingText: {
-    fontSize: 14,
-    color: COLORS.secondary,
+    fontSize: 13,
+    color: COLORS.primary,
     fontWeight: "600",
   },
+  divider: {
+    height: 1,
+    backgroundColor: "#F1F3F5",
+    marginVertical: 24,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    marginBottom: 12,
+  },
   modalDescription: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.gray,
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 24,
+    marginBottom: 24,
   },
   modalPriceSection: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
     marginBottom: 12,
   },
   modalPriceLabel: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.gray,
-    fontWeight: "500",
   },
   modalPrice: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
     color: COLORS.primary,
   },
-  modalNights: {
-    fontSize: 14,
-    color: COLORS.secondary,
+  modalTotalSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F8F9FA",
+    padding: 16,
+    borderRadius: 12,
+  },
+  modalTotalLabel: {
+    fontSize: 15,
     fontWeight: "600",
-    textAlign: "center",
-    marginBottom: 16,
+    color: COLORS.secondary,
+  },
+  modalTotalValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.secondary,
   },
   modalFooter: {
-    flexDirection: "row",
+    padding: 24,
     borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
+    borderTopColor: "#F1F3F5",
+    backgroundColor: COLORS.white,
   },
   modalCancelButton: {
-    flex: 1,
-    paddingVertical: SIZES.padding,
+    backgroundColor: "#F1F3F5",
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: "center",
   },
   modalCancelText: {
-    ...FONTS.h4,
-    color: COLORS.gray,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.secondary,
   },
 });
 

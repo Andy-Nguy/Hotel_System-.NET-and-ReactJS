@@ -4,6 +4,7 @@ using Hotel_System.API.Models;
 using System.Linq;
 using System;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using System.IO;
 
@@ -29,6 +30,88 @@ namespace Hotel_System.API.Controllers
         private static DichVuDto MapToDto(DichVu dv)
         {
             var detail = dv.TtdichVus?.FirstOrDefault(); // Lấy chi tiết đầu tiên (nếu có) - null-safe
+            decimal? giaKhuyenMai = null;
+            string? tenKhuyenMai = null;
+            double? phanTramGiam = null;
+
+            // Tính khuyến mãi áp dụng tốt nhất (nếu có)
+            try
+            {
+                var basePrice = dv.TienDichVu ?? 0m;
+                Console.WriteLine($"[MapToDto] Service: {dv.TenDichVu}, BasePrice: {basePrice}, KhuyenMaiDichVus count: {dv.KhuyenMaiDichVus?.Count ?? 0}");
+                
+                if (basePrice > 0 && dv.KhuyenMaiDichVus != null && dv.KhuyenMaiDichVus.Any())
+                {
+                    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                    Console.WriteLine($"[MapToDto] Today: {today}");
+                    
+                    // Log all promotions before filtering
+                    foreach (var link in dv.KhuyenMaiDichVus)
+                    {
+                        var promo = link.IdkhuyenMaiNavigation;
+                        Console.WriteLine($"[MapToDto] Promo: {promo?.TenKhuyenMai ?? "NULL"}, TrangThai: {promo?.TrangThai ?? "NULL"}, NgayBatDau: {promo?.NgayBatDau}, NgayKetThuc: {promo?.NgayKetThuc}, GiaTriGiam: {promo?.GiaTriGiam}, LoaiGiamGia: {promo?.LoaiGiamGia}");
+                    }
+                    
+                    var applicable = dv.KhuyenMaiDichVus
+                        .Where(link => link.IdkhuyenMaiNavigation != null
+                            && (string.IsNullOrWhiteSpace(link.IdkhuyenMaiNavigation.TrangThai)
+                                || link.IdkhuyenMaiNavigation.TrangThai.Equals("active", StringComparison.OrdinalIgnoreCase)
+                                || link.IdkhuyenMaiNavigation.TrangThai.Contains("hoạt động", StringComparison.OrdinalIgnoreCase)
+                                )
+                            && (link.IdkhuyenMaiNavigation.NgayBatDau <= today && link.IdkhuyenMaiNavigation.NgayKetThuc >= today)
+                        )
+                        .ToList();
+                    
+                    Console.WriteLine($"[MapToDto] Applicable promotions count: {applicable.Count}");
+
+                    decimal bestPrice = basePrice;
+                    KhuyenMai? bestPromo = null;
+
+                    foreach (var link in applicable)
+                    {
+                        var promo = link.IdkhuyenMaiNavigation;
+                        if (promo == null) continue;
+                        var value = promo.GiaTriGiam ?? 0m;
+                        decimal discounted;
+                        var loai = promo.LoaiGiamGia?.Trim().ToLowerInvariant() ?? string.Empty;
+                        if (loai.Contains("%") || loai.Contains("phan") || loai.Contains("percent"))
+                        {
+                            // value as percent 0..100
+                            var pct = Math.Clamp((double)value, 0d, 100d);
+                            discounted = basePrice * (decimal)(1 - pct / 100d);
+                        }
+                        else
+                        {
+                            // absolute amount
+                            discounted = basePrice - value;
+                        }
+                        if (discounted < bestPrice && discounted > 0)
+                        {
+                            bestPrice = discounted;
+                            bestPromo = promo;
+                        }
+                    }
+
+                    if (bestPromo != null && bestPrice < basePrice)
+                    {
+                        giaKhuyenMai = Math.Round(bestPrice, 0);
+                        tenKhuyenMai = bestPromo.TenKhuyenMai;
+                        // compute percent off for display
+                        var loai = bestPromo.LoaiGiamGia?.Trim().ToLowerInvariant() ?? string.Empty;
+                        if (loai.Contains("%") || loai.Contains("phan") || loai.Contains("percent"))
+                        {
+                            phanTramGiam = Math.Round((double)(bestPromo.GiaTriGiam ?? 0m), 0);
+                        }
+                        else
+                        {
+                            var pct = basePrice > 0 ? (double)((basePrice - bestPrice) / basePrice * 100m) : 0d;
+                            phanTramGiam = Math.Round(pct, 0);
+                        }
+                    }
+                }
+            }
+            catch { /* ignore promo calc errors */ }
+
             return new DichVuDto
             {
                 IddichVu = dv.IddichVu,
@@ -43,35 +126,57 @@ namespace Hotel_System.API.Controllers
                 IdttdichVu = detail?.IdttdichVu,
                 ThongTinDv = detail?.ThongTinDv,
                 ThoiLuongUocTinh = detail?.ThoiLuongUocTinh,
-                GhiChu = detail?.GhiChu
+                GhiChu = detail?.GhiChu,
+
+                // Khuyến mãi (nếu có)
+                GiaKhuyenMai = giaKhuyenMai,
+                TenKhuyenMai = tenKhuyenMai,
+                PhanTramGiam = phanTramGiam
             };
         }
 
         // [GET] api/dich-vu/lay-danh-sach
         [HttpGet("lay-danh-sach")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll()
         {
-            var services = await _context.DichVus
+            var dichVus = await _context.DichVus
                 .Include(dv => dv.TtdichVus) // Lấy kèm chi tiết
-                .Select(dv => MapToDto(dv)) // Chuyển sang DTO
+                .Include(dv => dv.KhuyenMaiDichVus)
+                    .ThenInclude(link => link.IdkhuyenMaiNavigation)
                 .ToListAsync();
+            
+            var services = dichVus.Select(dv => MapToDto(dv)).ToList();
+            
+            // Log response for debugging
+            Console.WriteLine($"[GetAll] Returning {services.Count} services");
+            foreach (var svc in services)
+            {
+                Console.WriteLine($"[GetAll] Service: {svc.TenDichVu}, GiaKhuyenMai: {svc.GiaKhuyenMai}, TenKhuyenMai: {svc.TenKhuyenMai}, PhanTramGiam: {svc.PhanTramGiam}");
+            }
+            
             return Ok(services);
         }
 
         // [GET] api/dich-vu/lay-chi-tiet/{id}
         [HttpGet("lay-chi-tiet/{id}")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetById(string id)
         {
             var dv = await _context.DichVus
                 .Include(d => d.TtdichVus)
+                .Include(d => d.KhuyenMaiDichVus)
+                    .ThenInclude(link => link.IdkhuyenMaiNavigation)
                 .FirstOrDefaultAsync(d => d.IddichVu == id);
                 
             if (dv == null) return NotFound();
-            return Ok(MapToDto(dv)); // Trả về DTO đã gộp
+            var dto = MapToDto(dv);
+            return Ok(dto); // Trả về DTO đã gộp
         }
         
         // [POST] api/dich-vu/them-moi
         [HttpPost("them-moi")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Create([FromBody] DichVuDto dto)
         {
             if (dto == null) return BadRequest();
@@ -137,20 +242,21 @@ namespace Hotel_System.API.Controllers
                 {
                     return StatusCode(500, new { message = "Lỗi: không thể tải dịch vụ vừa tạo" });
                 }
-                
+
                 var result = MapToDto(createdService);
-                Console.WriteLine($"[DichVuController.Create] Created service id={createdService.IddichVu}");
                 return CreatedAtAction(nameof(GetById), new { id = createdService.IddichVu }, result);
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[DichVuController.Create] Error: {ex}");
+                _logger?.LogError(ex, "Lỗi khi tạo dịch vụ");
                 return StatusCode(500, new { message = "Lỗi khi tạo dịch vụ", detail = ex.Message });
             }
+
         }
 
         // [PUT] api/dich-vu/cap-nhat/{id}
         [HttpPut("cap-nhat/{id}")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Update(string id, [FromBody] DichVuDto dto)
         {
             Console.WriteLine($"[DichVuController.Update] id={id} payload.hinhDichVu={(dto?.HinhDichVu ?? "<null>")}");
@@ -188,6 +294,7 @@ namespace Hotel_System.API.Controllers
 
         // [DELETE] api/dich-vu/xoa/{id}
         [HttpDelete("xoa/{id}")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Delete(string id)
         {
             var dv = await _context.DichVus.Include(x => x.Cthddvs).FirstOrDefaultAsync(x => x.IddichVu == id);
@@ -235,6 +342,7 @@ namespace Hotel_System.API.Controllers
         // [POST] api/dich-vu/tai-anh-len
         [HttpPost("tai-anh-len")]
         [DisableRequestSizeLimit]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> UploadImage(IFormFile file, [FromForm] string? serviceId = null, [FromForm] string? serviceName = null)
         {
             if (file == null || file.Length == 0) return BadRequest(new { message = "No file provided" });
@@ -304,6 +412,7 @@ namespace Hotel_System.API.Controllers
         
         // [POST] api/dich-vu/ghi-nhan-su-dung
         [HttpPost("ghi-nhan-su-dung")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> RecordUsage([FromBody] Cthddv payload)
         {
             if (payload == null)
@@ -344,19 +453,52 @@ namespace Hotel_System.API.Controllers
 
         // [GET] api/dich-vu/lich-su/tat-ca
         [HttpGet("lich-su/tat-ca")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetAllUsage()
         {
-            var usages = await _context.Cthddvs.OrderByDescending(x => x.ThoiGianThucHien).Take(200).ToListAsync();
+            // Project to a lightweight shape to avoid JSON cycles from navigation properties
+            var usages = await _context.Cthddvs
+                .OrderByDescending(x => x.ThoiGianThucHien)
+                .Take(200)
+                .Select(c => new {
+                    c.Idcthddv,
+                    c.IdhoaDon,
+                    c.IddichVu,
+                    TenDichVu = c.IddichVuNavigation != null ? c.IddichVuNavigation.TenDichVu : null,
+                    c.TienDichVu,
+                    c.ThoiGianThucHien,
+                    c.ThoiGianBatDau,
+                    c.ThoiGianKetThuc,
+                    c.TrangThai
+                })
+                .ToListAsync();
+
             return Ok(usages);
         }
 
         // [GET] api/dich-vu/lich-su/{id}
         [HttpGet("lich-su/{id}")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetUsage(string id)
         {
             var svc = await _context.DichVus.FindAsync(id);
             if (svc == null) return NotFound(new { message = "Dịch vụ không tồn tại" });
-            var usages = await _context.Cthddvs.Where(c => c.IddichVu == id).OrderByDescending(x => x.ThoiGianThucHien).ToListAsync();
+            var usages = await _context.Cthddvs
+                .Where(c => c.IddichVu == id)
+                .OrderByDescending(x => x.ThoiGianThucHien)
+                .Select(c => new {
+                    c.Idcthddv,
+                    c.IdhoaDon,
+                    c.IddichVu,
+                    TenDichVu = svc.TenDichVu,
+                    c.TienDichVu,
+                    c.ThoiGianThucHien,
+                    c.ThoiGianBatDau,
+                    c.ThoiGianKetThuc,
+                    c.TrangThai
+                })
+                .ToListAsync();
+
             return Ok(usages);
         }
 

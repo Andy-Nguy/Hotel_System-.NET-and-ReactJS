@@ -63,6 +63,21 @@ const OffcanvasMenu: React.FC = () => {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
+  const isNhanVien = () => {
+    if (!userInfo) return false;
+    const role =
+      userInfo.role ||
+      userInfo.roles ||
+      userInfo[
+        "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
+      ] ||
+      userInfo["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ||
+      userInfo.VaiTro;
+    if (!role) return false;
+    if (Array.isArray(role)) return role.includes("nhanvien");
+    return String(role).toLowerCase() === "nhanvien" || String(role) === "1";
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("hs_token");
     setIsLoggedIn(false);
@@ -238,6 +253,30 @@ const OffcanvasMenu: React.FC = () => {
                         Lịch sử đặt phòng
                       </a>
                     </li>
+                    {isNhanVien() && (
+                      <li>
+                        <a
+                          href="/admin/dashboard"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            try {
+                              window.history.pushState(
+                                null,
+                                "",
+                                "/admin/dashboard"
+                              );
+                              window.dispatchEvent(
+                                new PopStateEvent("popstate")
+                              );
+                            } catch {
+                              window.location.href = "/admin/dashboard";
+                            }
+                          }}
+                        >
+                          Quản trị
+                        </a>
+                      </li>
+                    )}
                     <li>
                       <a
                         href="#"
