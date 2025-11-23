@@ -1,8 +1,9 @@
 import React from "react";
-import { View, StyleSheet, Text } from "react-native";
+import { View, StyleSheet, Text, Platform } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { COLORS, SIZES } from "../constants/theme";
+import { Ionicons } from "@expo/vector-icons";
 import HomeScreen from "../screens/HomeScreen";
 import CheckAvailableRoomsScreen from "../screens/CheckAvailableRoomsScreen";
 import PromotionDetail from "../screens/PromotionDetail";
@@ -82,13 +83,33 @@ const HomeStackNavigator: React.FC = () => {
 interface TabIconProps {
   focused: boolean;
   color: string;
-  size: number;
-  icon: string;
+  iconName: string;
+  label: string;
 }
 
-const TabIcon: React.FC<TabIconProps> = ({ focused, color, size, icon }) => (
+const TabIcon: React.FC<TabIconProps> = ({
+  focused,
+  color,
+  iconName,
+  label,
+}) => (
   <View style={styles.iconContainer}>
-    <Text style={[styles.icon, { fontSize: size, color }]}>{icon}</Text>
+    <View style={[styles.iconWrapper, focused && styles.iconWrapperActive]}>
+      <Ionicons
+        name={iconName as any}
+        size={focused ? 26 : 24}
+        color={focused ? COLORS.primary : color}
+      />
+    </View>
+    <Text
+      style={[
+        styles.tabLabel,
+        { color: focused ? COLORS.primary : color },
+        focused && styles.tabLabelActive,
+      ]}
+    >
+      {label}
+    </Text>
   </View>
 );
 
@@ -97,24 +118,23 @@ const BottomTabNavigator: React.FC = () => {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#333",
-        tabBarInactiveTintColor: "#bbb",
+        tabBarActiveTintColor: COLORS.primary || "#1a1a1a",
+        tabBarInactiveTintColor: "#8E8E93",
         tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarIconStyle: styles.tabBarIcon,
+        tabBarShowLabel: false,
+        tabBarHideOnKeyboard: true,
       }}
     >
       <Tab.Screen
         name="HomeTab"
         component={HomeStackNavigator}
         options={{
-          title: "Home",
           tabBarIcon: ({ focused, color }) => (
             <TabIcon
               focused={focused}
               color={color}
-              size={24}
-              icon={focused ? "🏠" : "🏠"}
+              iconName="home"
+              label="Home"
             />
           ),
         }}
@@ -124,9 +144,13 @@ const BottomTabNavigator: React.FC = () => {
         name="Book"
         component={RoomsScreen}
         options={{
-          title: "Book",
           tabBarIcon: ({ focused, color }) => (
-            <TabIcon focused={focused} color={color} size={24} icon="📅" />
+            <TabIcon
+              focused={focused}
+              color={color}
+              iconName="calendar"
+              label="Book"
+            />
           ),
         }}
       />
@@ -135,13 +159,12 @@ const BottomTabNavigator: React.FC = () => {
         name="Trips"
         component={BookingsScreen}
         options={{
-          title: "Trips",
           tabBarIcon: ({ focused, color }) => (
             <TabIcon
               focused={focused}
               color={color}
-              size={24}
-              icon={focused ? "✈️" : "✈️"}
+              iconName="airplane"
+              label="Trips"
             />
           ),
         }}
@@ -151,13 +174,12 @@ const BottomTabNavigator: React.FC = () => {
         name="Wishlists"
         component={OffersScreen}
         options={{
-          title: "Wishlists",
           tabBarIcon: ({ focused, color }) => (
             <TabIcon
               focused={focused}
               color={color}
-              size={24}
-              icon={focused ? "❤️" : "🤍"}
+              iconName={focused ? "heart" : "heart-outline"}
+              label="Favorite"
             />
           ),
         }}
@@ -167,13 +189,12 @@ const BottomTabNavigator: React.FC = () => {
         name="Account"
         component={ProfileScreen}
         options={{
-          title: "Account",
           tabBarIcon: ({ focused, color }) => (
             <TabIcon
               focused={focused}
               color={color}
-              size={24}
-              icon={focused ? "👤" : "👤"}
+              iconName={focused ? "person" : "person-outline"}
+              label="Account"
             />
           ),
         }}
@@ -184,39 +205,49 @@ const BottomTabNavigator: React.FC = () => {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-    paddingBottom: 5,
-    paddingTop: 5,
-    height: 70,
-    ...{
-      shadowColor: "#000",
-      shadowOffset: {
-        width: 0,
-        height: 2,
-      },
-      shadowOpacity: 0.1,
-      shadowRadius: 3,
-      elevation: 5,
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 0,
+    height: Platform.OS === "ios" ? 88 : 68,
+    paddingBottom: Platform.OS === "ios" ? 28 : 8,
+    paddingTop: 8,
+    paddingHorizontal: 4,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -2,
     },
-  },
-  tabBarLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
-  },
-  tabBarIcon: {
-    marginBottom: 0,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 8,
   },
   iconContainer: {
-    justifyContent: "center",
     alignItems: "center",
-    width: 30,
-    height: 30,
+    justifyContent: "center",
+    paddingTop: 4,
   },
-  icon: {
-    textAlign: "center",
+  iconWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 48,
+    height: 32,
+    borderRadius: 16,
+    marginBottom: 4,
+  },
+  iconWrapperActive: {
+    backgroundColor: "rgba(0, 0, 0, 0.04)",
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 2,
+    letterSpacing: 0.1,
+  },
+  tabLabelActive: {
+    fontWeight: "600",
   },
 });
 
