@@ -3,7 +3,7 @@
 
 export const BASE_URLS: string[] = [
   // Primary local IP + port used in development
-  "http://192.168.1.34:8080",
+  "http://192.168.1.14:8080",
 ];
 
 export const DEFAULT_BASE_URL = BASE_URLS[0];

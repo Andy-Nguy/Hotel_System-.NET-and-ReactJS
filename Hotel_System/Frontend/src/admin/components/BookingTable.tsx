@@ -100,6 +100,7 @@ const BookingTable: React.FC<BookingTableProps> = ({
       dataIndex: "trangThai",
       key: "trangThai",
       align: "center",
+      fixed: "right",
       render: (status) => (
         <Tag color={getStatusColor(status)}>{getStatusLabel(status)}</Tag>
       ),
@@ -120,7 +121,11 @@ const BookingTable: React.FC<BookingTableProps> = ({
       key: "action",
       align: "right",
       render: (_, record) => (
-        <Space size="small" onClick={(e) => e.stopPropagation()}>
+        <Space
+          direction="vertical"
+          size="small"
+          onClick={(e) => e.stopPropagation()}
+        >
           {showActions && record.trangThai === 1 && (
             <Tooltip title="Xác nhận">
               <Popconfirm
@@ -131,10 +136,11 @@ const BookingTable: React.FC<BookingTableProps> = ({
                 cancelText="Không"
               >
                 <Button
+                  size="small"
                   type="text"
                   icon={
                     <CheckOutlined
-                      style={{ color: "#10b981", fontSize: "18px" }}
+                      style={{ color: "#10b981", fontSize: "14px" }}
                     />
                   }
                 />
@@ -154,10 +160,11 @@ const BookingTable: React.FC<BookingTableProps> = ({
                   cancelText="Không"
                 >
                   <Button
+                    size="small"
                     type="text"
                     icon={
                       <CloseOutlined
-                        style={{ color: "#ef4444", fontSize: "18px" }}
+                        style={{ color: "#ef4444", fontSize: "14px" }}
                       />
                     }
                   />
