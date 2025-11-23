@@ -1,6 +1,6 @@
 import React from "react";
 import { Tag, Button, Space, Popconfirm, Tooltip } from "antd";
-import { CheckOutlined, CloseOutlined, EyeOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { Booking } from "../../api/bookingApi";
 import DataTable from "./DataTable";
@@ -36,7 +36,7 @@ const BookingTable: React.FC<BookingTableProps> = ({
       key: "iddatPhong",
       render: (text) => (
         <Tooltip title={text}>
-          <span>
+          <span style={{ fontSize: 13 }}>
             {text && text.length > 8 ? text.substring(0, 8) + "..." : text}
           </span>
         </Tooltip>
@@ -47,8 +47,10 @@ const BookingTable: React.FC<BookingTableProps> = ({
       key: "khachHang",
       render: (_, record) => (
         <div>
-          <div style={{ fontWeight: 600 }}>{record.tenKhachHang || "N/A"}</div>
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>
+            {record.tenKhachHang || "N/A"}
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8" }}>
             {record.emailKhachHang}
           </div>
         </div>
@@ -59,8 +61,10 @@ const BookingTable: React.FC<BookingTableProps> = ({
       key: "phong",
       render: (_, record) => (
         <div>
-          <div>{record.tenPhong || record.idphong}</div>
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>
+          <div style={{ fontSize: 13 }}>
+            {record.tenPhong || record.idphong}
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8" }}>
             Phòng {record.soPhong || "—"}
           </div>
         </div>
@@ -71,8 +75,10 @@ const BookingTable: React.FC<BookingTableProps> = ({
       key: "ngay",
       render: (_, record) => (
         <div>
-          <div>{dayjs(record.ngayNhanPhong).format("DD/MM/YYYY")}</div>
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>
+          <div style={{ fontSize: 13 }}>
+            {dayjs(record.ngayNhanPhong).format("DD/MM/YYYY")}
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8" }}>
             {dayjs(record.ngayTraPhong).format("DD/MM/YYYY")}
           </div>
         </div>
@@ -84,7 +90,9 @@ const BookingTable: React.FC<BookingTableProps> = ({
       key: "tongTien",
       align: "right",
       render: (value) => (
-        <span style={{ fontWeight: 700 }}>{value?.toLocaleString()} đ</span>
+        <span style={{ fontWeight: 700, fontSize: 13 }}>
+          {value?.toLocaleString()} đ
+        </span>
       ),
     },
     {
@@ -156,13 +164,6 @@ const BookingTable: React.FC<BookingTableProps> = ({
                 </Popconfirm>
               </Tooltip>
             )}
-          <Tooltip title="Chi tiết">
-            <Button
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => onViewDetail(record)}
-            />
-          </Tooltip>
         </Space>
       ),
     },
