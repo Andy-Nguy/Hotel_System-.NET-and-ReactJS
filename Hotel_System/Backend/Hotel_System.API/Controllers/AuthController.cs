@@ -49,7 +49,7 @@ namespace Hotel_System.API.Controllers
             return Ok(new { token });
         }
 
-        [Authorize]
+        // [Authorize]
         [HttpGet("profile")]
         public async Task<IActionResult> GetProfile()
         {
@@ -62,7 +62,7 @@ namespace Hotel_System.API.Controllers
             return Ok(profile);
         }
 
-        [Authorize]
+        // [Authorize]
         [HttpGet("loyalty")]
         public async Task<IActionResult> GetLoyalty()
         {

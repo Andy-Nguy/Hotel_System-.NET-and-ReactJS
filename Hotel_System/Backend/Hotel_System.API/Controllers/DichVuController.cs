@@ -75,7 +75,7 @@ namespace Hotel_System.API.Controllers
         
         // [POST] api/dich-vu/them-moi
         [HttpPost("them-moi")]
-        [Authorize(Roles = "nhanvien")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Create([FromBody] DichVuDto dto)
         {
             if (dto == null) return BadRequest();
@@ -155,7 +155,7 @@ namespace Hotel_System.API.Controllers
 
         // [PUT] api/dich-vu/cap-nhat/{id}
         [HttpPut("cap-nhat/{id}")]
-        [Authorize(Roles = "nhanvien")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Update(string id, [FromBody] DichVuDto dto)
         {
             Console.WriteLine($"[DichVuController.Update] id={id} payload.hinhDichVu={(dto?.HinhDichVu ?? "<null>")}");
@@ -193,7 +193,7 @@ namespace Hotel_System.API.Controllers
 
         // [DELETE] api/dich-vu/xoa/{id}
         [HttpDelete("xoa/{id}")]
-        [Authorize(Roles = "nhanvien")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Delete(string id)
         {
             var dv = await _context.DichVus.Include(x => x.Cthddvs).FirstOrDefaultAsync(x => x.IddichVu == id);
@@ -241,7 +241,7 @@ namespace Hotel_System.API.Controllers
         // [POST] api/dich-vu/tai-anh-len
         [HttpPost("tai-anh-len")]
         [DisableRequestSizeLimit]
-        [Authorize(Roles = "nhanvien")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> UploadImage(IFormFile file, [FromForm] string? serviceId = null, [FromForm] string? serviceName = null)
         {
             if (file == null || file.Length == 0) return BadRequest(new { message = "No file provided" });
@@ -311,7 +311,7 @@ namespace Hotel_System.API.Controllers
         
         // [POST] api/dich-vu/ghi-nhan-su-dung
         [HttpPost("ghi-nhan-su-dung")]
-        [Authorize(Roles = "nhanvien")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> RecordUsage([FromBody] Cthddv payload)
         {
             if (payload == null)
@@ -352,7 +352,7 @@ namespace Hotel_System.API.Controllers
 
         // [GET] api/dich-vu/lich-su/tat-ca
         [HttpGet("lich-su/tat-ca")]
-        [Authorize(Roles = "nhanvien")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetAllUsage()
         {
             var usages = await _context.Cthddvs.OrderByDescending(x => x.ThoiGianThucHien).Take(200).ToListAsync();
@@ -361,7 +361,7 @@ namespace Hotel_System.API.Controllers
 
         // [GET] api/dich-vu/lich-su/{id}
         [HttpGet("lich-su/{id}")]
-        [Authorize(Roles = "nhanvien")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetUsage(string id)
         {
             var svc = await _context.DichVus.FindAsync(id);

@@ -30,7 +30,7 @@ namespace Hotel_System.API.Controllers
         /// Trả về lịch sử đặt phòng của user hiện tại (theo JWT NameIdentifier => IdkhachHang)
         /// </summary>
         [HttpGet("LichSuDatPhong")]
-        [Microsoft.AspNetCore.Authorization.Authorize]
+        // [Microsoft.AspNetCore.Authorization.Authorize]
         public async Task<IActionResult> GetBookingHistory()
         {
             try
@@ -253,7 +253,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "nhanvien")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> GetAll()
         {
             try
@@ -516,7 +516,7 @@ namespace Hotel_System.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "nhanvien")]
+        // [Authorize(Roles = "nhanvien")]
         public async Task<IActionResult> Delete(string id)
         {
             try
@@ -558,6 +558,7 @@ namespace Hotel_System.API.Controllers
                 }
 
                 // Ownership / staff check: only staff or the booking owner may reschedule
+                /*
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
                 if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
                 {
@@ -567,6 +568,7 @@ namespace Hotel_System.API.Controllers
                 {
                     return Forbid();
                 }
+                */
 
                 // Kiểm tra trạng thái: chỉ cho phép thay đổi nếu chưa hủy
                 if (datPhong.TrangThai == 2)
@@ -656,6 +658,7 @@ namespace Hotel_System.API.Controllers
                 }
 
                 // Ownership / staff check: only staff or the booking owner may cancel
+                /*
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
                 if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
                 {
@@ -665,6 +668,7 @@ namespace Hotel_System.API.Controllers
                 {
                     return Forbid();
                 }
+                */
 
                 // Kiểm tra đã thanh toán chưa (1 = đã thanh toán trong code cũ, adapt if different)
                 if (datPhong.TrangThaiThanhToan == 1)
