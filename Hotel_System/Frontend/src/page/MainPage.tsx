@@ -35,6 +35,8 @@ import MyBookingsPage from "./MyBookingsPage";
 import BlogDetail from "./BlogDetail";
 import ReviewPage from "./ReviewPage";
 
+import AdminLayout from "../admin/components/AdminLayout";
+
 const MainPage: React.FC = () => {
   const parseJwt = (): any | null => {
     const token = localStorage.getItem("hs_token");
@@ -371,7 +373,11 @@ const MainPage: React.FC = () => {
       redirectToNoAccess();
       return null;
     }
-    return <AdminDashboard />;
+    return (
+      <AdminLayout>
+        <AdminDashboard />
+      </AdminLayout>
+    );
   }
 
   // Admin room manager route (accessible at /admin/rooms or #admin/rooms)
@@ -384,7 +390,11 @@ const MainPage: React.FC = () => {
       redirectToNoAccess();
       return null;
     }
-    return <RoomManager />;
+    return (
+      <AdminLayout>
+        <RoomManager />
+      </AdminLayout>
+    );
   }
 
   // Admin amenities page route (accessible at /admin/amenities or #admin/amenities)
@@ -423,7 +433,11 @@ const MainPage: React.FC = () => {
       redirectToNoAccess();
       return null;
     }
-    return <PromotionManager />;
+    return (
+      <AdminLayout>
+        <PromotionManager />
+      </AdminLayout>
+    );
   }
 
   // Admin bookings page route (accessible at /admin/bookings or #admin/bookings)
@@ -436,7 +450,11 @@ const MainPage: React.FC = () => {
       redirectToNoAccess();
       return null;
     }
-    return <BookingManager />;
+    return (
+      <AdminLayout>
+        <BookingManager />
+      </AdminLayout>
+    );
   }
 
   // Admin invoices page route (accessible at /admin/invoices or #admin/invoices)
@@ -479,7 +497,11 @@ const MainPage: React.FC = () => {
   }
 
   // Blog detail route (internal blog pages)
-  if (route.startsWith("/blog/") || route.startsWith("#/blog/") || route.startsWith("#blog/")) {
+  if (
+    route.startsWith("/blog/") ||
+    route.startsWith("#/blog/") ||
+    route.startsWith("#blog/")
+  ) {
     return (
       <>
         <OffcanvasMenu />
@@ -491,7 +513,11 @@ const MainPage: React.FC = () => {
   }
 
   // Review page route (for customers to submit reviews after checkout)
-  if (route.startsWith("/review/") || route.startsWith("#/review/") || route.startsWith("#review/")) {
+  if (
+    route.startsWith("/review/") ||
+    route.startsWith("#/review/") ||
+    route.startsWith("#review/")
+  ) {
     return (
       <>
         <OffcanvasMenu />

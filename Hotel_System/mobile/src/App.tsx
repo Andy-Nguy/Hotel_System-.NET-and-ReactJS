@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View, Text, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import SplashScreen from "./components/SplashScreen";
+import WelcomeScreen from "./screens/WelcomeScreen";
 import { COLORS, FONTS } from "./constants/theme";
 import { useAuth } from "./context/AuthContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -52,33 +53,60 @@ function RootNavigator() {
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(false);
+
   useEffect(() => {
     // Preload vector icon font to avoid missing glyphs at runtime
     if (FontAwesome && typeof FontAwesome.loadFont === "function") {
       FontAwesome.loadFont();
     }
   }, []);
+
+  const handleWelcomeComplete = () => {
+    setShowWelcome(false);
+  };
+
+  const handleSplashFinish = () => {
+    setShowSplash(false);
+    setShowWelcome(true); // Always show welcome screen after splash
+  };
+
+  // Show splash screen first
+  if (showSplash) {
+    return (
+      <SafeAreaProvider>
+        <SplashScreen
+          backgroundColor={COLORS.secondary}
+          accentColor={COLORS.primary}
+          text={
+            <View style={splashStyles.textContainer}>
+              <FontAwesome name="home" size={56} color={COLORS.primary} />
+              <Text style={splashStyles.appName}>ROBIN'S VILLA</Text>
+              <Text style={splashStyles.tagline}>Luxury Experience</Text>
+            </View>
+          }
+          onFinish={handleSplashFinish}
+        />
+      </SafeAreaProvider>
+    );
+  }
+
+  // Show welcome screen after splash
+  if (showWelcome) {
+    return (
+      <SafeAreaProvider>
+        <WelcomeScreen onComplete={handleWelcomeComplete} />
+      </SafeAreaProvider>
+    );
+  }
+
+  // Show main app
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        {showSplash ? (
-          <SplashScreen
-            backgroundColor={COLORS.secondary}
-            accentColor={COLORS.primary}
-            text={
-              <View style={splashStyles.textContainer}>
-                <FontAwesome name="home" size={56} color={COLORS.primary} />
-                <Text style={splashStyles.appName}>ROBIN'S VILLA</Text>
-                <Text style={splashStyles.tagline}>Luxury Experience</Text>
-              </View>
-            }
-            onFinish={() => setShowSplash(false)}
-          />
-        ) : (
-          <NavigationContainer>
-            <RootNavigator />
-          </NavigationContainer>
-        )}
+        <NavigationContainer>
+          <RootNavigator />
+        </NavigationContainer>
       </AuthProvider>
     </SafeAreaProvider>
   );

@@ -1,6 +1,7 @@
-import React from 'react';
-import { Button, Space, Table, Tag, Segmented } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import React from "react";
+import { Button, Space, Tag, Segmented } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import DataTable from "../DataTable";
 
 export interface BookingRow {
   IddatPhong: string;
@@ -23,8 +24,8 @@ interface Props {
   onAddService?: (row: BookingRow) => void;
   onViewInvoice?: (row: BookingRow) => void;
   viewInvoiceIds?: string[];
-  viewMode?: 'using' | 'checkout';
-  onViewChange?: (mode: 'using' | 'checkout') => void;
+  viewMode?: "using" | "checkout";
+  onViewChange?: (mode: "using" | "checkout") => void;
 }
 
 const CheckoutTable: React.FC<Props> = ({
@@ -36,26 +37,67 @@ const CheckoutTable: React.FC<Props> = ({
   onAddService,
   onViewInvoice,
   viewInvoiceIds,
-  viewMode = 'using',
-  onViewChange
+  viewMode = "using",
+  onViewChange,
 }) => {
   const columns: ColumnsType<BookingRow> = [
-    { title: 'Mã đặt phòng', dataIndex: 'IddatPhong', key: 'IddatPhong', width: 160 },
-    { title: 'Khách hàng', key: 'customer', render: (_, r) => (<div>{r.TenKhachHang}<div style={{fontSize:12,color:'#64748b'}}>{r.EmailKhachHang}</div></div>) },
-    { title: 'Nhận', dataIndex: 'NgayNhanPhong', key: 'NgayNhanPhong', width: 120 },
-    { title: 'Trả', dataIndex: 'NgayTraPhong', key: 'NgayTraPhong', width: 120 },
-    { title: 'Tổng tiền', dataIndex: 'TongTien', key: 'TongTien', align: 'right', render: (v) => Number(v).toLocaleString() + ' đ' },
-    { title: 'Trạng thái TT', dataIndex: 'TrangThaiThanhToan', key: 'tt', render: (s) => <Tag color={s===2?'green':'orange'}>{s===2? 'Đã thanh toán' : 'Chưa/Chờ'}</Tag> },
     {
-      title: 'Hành động',
-      key: 'actions',
-      fixed: 'right',
+      title: "Mã đặt phòng",
+      dataIndex: "IddatPhong",
+      key: "IddatPhong",
+      width: 160,
+    },
+    {
+      title: "Khách hàng",
+      key: "customer",
+      render: (_, r) => (
+        <div>
+          {r.TenKhachHang}
+          <div style={{ fontSize: 12, color: "#64748b" }}>
+            {r.EmailKhachHang}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Nhận",
+      dataIndex: "NgayNhanPhong",
+      key: "NgayNhanPhong",
+      width: 120,
+    },
+    {
+      title: "Trả",
+      dataIndex: "NgayTraPhong",
+      key: "NgayTraPhong",
+      width: 120,
+    },
+    {
+      title: "Tổng tiền",
+      dataIndex: "TongTien",
+      key: "TongTien",
+      align: "right",
+      render: (v) => Number(v).toLocaleString() + " đ",
+    },
+    {
+      title: "Trạng thái TT",
+      dataIndex: "TrangThaiThanhToan",
+      key: "tt",
+      render: (s) => (
+        <Tag color={s === 2 ? "green" : "orange"}>
+          {s === 2 ? "Đã thanh toán" : "Chưa/Chờ"}
+        </Tag>
+      ),
+    },
+    {
+      title: "Hành động",
+      key: "actions",
+      fixed: "right",
       render: (_, r) => {
         const isPaid = (r.TrangThaiThanhToan ?? 0) === 2;
         const isCompleted = (r.TrangThai ?? 0) === 4;
 
         // Chế độ trả phòng hôm nay: chỉ cho "Xác nhận trả phòng"
-        if (viewMode === 'checkout') {
+        if (viewMode === "checkout") {
           return (
             <Space>
               {isCompleted ? (
@@ -64,12 +106,29 @@ const CheckoutTable: React.FC<Props> = ({
                 <>
                   {/* Show 'Xác nhận trả phòng' only when booking is already paid */}
                   {isPaid && (
-                    <Button type="primary" onClick={() => onViewInvoice ? onViewInvoice(r) : onComplete(r)}>Xác nhận trả phòng</Button>
+                    <Button
+                      type="primary"
+                      onClick={() =>
+                        onViewInvoice ? onViewInvoice(r) : onComplete(r)
+                      }
+                    >
+                      Xác nhận trả phòng
+                    </Button>
                   )}
 
                   {/* Show 'Xác nhận thanh toán' only when booking is NOT paid */}
                   {!isPaid && (
-                    <Button type="primary" danger={false} onClick={() => (typeof (/* istanbul ignore next */ (onOpenPaymentForm)) === 'function' ? onOpenPaymentForm!(r) : onPay?.(r))}>
+                    <Button
+                      type="primary"
+                      danger={false}
+                      onClick={() =>
+                        typeof (
+                          /* istanbul ignore next */ onOpenPaymentForm
+                        ) === "function"
+                          ? onOpenPaymentForm!(r)
+                          : onPay?.(r)
+                      }
+                    >
                       Xác nhận thanh toán
                     </Button>
                   )}
@@ -78,8 +137,8 @@ const CheckoutTable: React.FC<Props> = ({
             </Space>
           );
         }
-      }
-    }
+      },
+    },
   ];
 
   return (
@@ -88,19 +147,16 @@ const CheckoutTable: React.FC<Props> = ({
       <div style={{ marginBottom: 12 }}>
         <Segmented
           value={viewMode}
-          onChange={(v) => onViewChange?.(v as 'using' | 'checkout')}
-          options={[
-            { label: 'Trả phòng hôm nay', value: 'checkout' },
-          ]}
+          onChange={(v) => onViewChange?.(v as "using" | "checkout")}
+          options={[{ label: "Trả phòng hôm nay", value: "checkout" }]}
         />
       </div>
 
-      <Table
-        rowKey={(r) => r.IddatPhong}
+      <DataTable
+        rowKey="IddatPhong"
         dataSource={data}
         columns={columns}
         loading={loading}
-        scroll={{ x: 1000 }}
       />
     </div>
   );

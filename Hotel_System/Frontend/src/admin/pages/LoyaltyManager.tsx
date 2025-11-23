@@ -1,8 +1,21 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Slidebar from "../components/Slidebar";
 import HeaderSection from "../components/HeaderSection";
-import { Button, Card, Descriptions, Form, Input, InputNumber, message, Modal, Space, Table, Tabs, Tag } from "antd";
+import {
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Input,
+  InputNumber,
+  message,
+  Modal,
+  Space,
+  Tabs,
+  Tag,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
+import DataTable from "../components/DataTable";
 
 interface CustomerLoyalty {
   idKhachHang: string;
@@ -23,17 +36,44 @@ interface MembershipTier {
 
 // Updated tiers: Silver -> Gold -> Platinum -> Diamond
 const defaultTiers: MembershipTier[] = [
-  { name: "Silver", minPoints: 0, color: "#c0c0c0", benefits: "", multiplier: 1.0 },
-  { name: "Gold", minPoints: 100, color: "#ffd700", benefits: "", multiplier: 1.2 },
-  { name: "Platinum", minPoints: 500, color: "#e5e4e2", benefits: "", multiplier: 1.5 },
-  { name: "Diamond", minPoints: 1000, color: "#b9f2ff", benefits: "", multiplier: 2.0 },
+  {
+    name: "Silver",
+    minPoints: 0,
+    color: "#c0c0c0",
+    benefits: "",
+    multiplier: 1.0,
+  },
+  {
+    name: "Gold",
+    minPoints: 100,
+    color: "#ffd700",
+    benefits: "",
+    multiplier: 1.2,
+  },
+  {
+    name: "Platinum",
+    minPoints: 500,
+    color: "#e5e4e2",
+    benefits: "",
+    multiplier: 1.5,
+  },
+  {
+    name: "Diamond",
+    minPoints: 1000,
+    color: "#b9f2ff",
+    benefits: "",
+    multiplier: 2.0,
+  },
 ];
 
 const fetchJson = async (url: string, init?: RequestInit) => {
   const res = await fetch(url, init);
   const txt = await res.text().catch(() => "");
   const data = txt ? JSON.parse(txt) : null;
-  if (!res.ok) throw new Error((data && (data.message || data.error)) || `HTTP ${res.status}`);
+  if (!res.ok)
+    throw new Error(
+      (data && (data.message || data.error)) || `HTTP ${res.status}`
+    );
   return data;
 };
 
@@ -50,7 +90,8 @@ const LoyaltyManager: React.FC = () => {
 
   // Modal cho điều chỉnh điểm
   const [adjustModal, setAdjustModal] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerLoyalty | null>(null);
+  const [selectedCustomer, setSelectedCustomer] =
+    useState<CustomerLoyalty | null>(null);
   const [form] = Form.useForm();
 
   // Modal cho chỉnh sửa tier
@@ -63,9 +104,12 @@ const LoyaltyManager: React.FC = () => {
     try {
       // Giả sử backend có endpoint GET /api/KhachHang trả về danh sách khách hàng
       const data = await fetchJson(`/api/KhachHang`);
-      const list: CustomerLoyalty[] = (Array.isArray(data) ? data : data.data || []).map((c: any) => ({
+      const list: CustomerLoyalty[] = (
+        Array.isArray(data) ? data : data.data || []
+      ).map((c: any) => ({
         idKhachHang: c.idKhachHang || c.IdKhachHang,
-        tenKhachHang: c.tenKhachHang || c.TenKhachHang || c.hoTen || c.HoTen || "—",
+        tenKhachHang:
+          c.tenKhachHang || c.TenKhachHang || c.hoTen || c.HoTen || "—",
         email: c.email || c.Email,
         soDienThoai: c.soDienThoai || c.SoDienThoai,
         tichDiem: Number(c.tichDiem || c.TichDiem || 0),
@@ -121,7 +165,11 @@ const LoyaltyManager: React.FC = () => {
           Reason: v.reason || "Điều chỉnh thủ công",
         }),
       });
-      message.success(`Đã ${pointsToAdd > 0 ? 'cộng' : 'trừ'} ${Math.abs(pointsToAdd)} điểm cho ${selectedCustomer.tenKhachHang}`);
+      message.success(
+        `Đã ${pointsToAdd > 0 ? "cộng" : "trừ"} ${Math.abs(
+          pointsToAdd
+        )} điểm cho ${selectedCustomer.tenKhachHang}`
+      );
       setAdjustModal(false);
       loadCustomers();
     } catch (e: any) {
@@ -145,7 +193,9 @@ const LoyaltyManager: React.FC = () => {
   const submitTier = async () => {
     try {
       const v = await tierForm.validateFields();
-      const updated = tiers.map((t) => (t.name === editingTier?.name ? { ...t, ...v } : t));
+      const updated = tiers.map((t) =>
+        t.name === editingTier?.name ? { ...t, ...v } : t
+      );
       setTiers(updated);
       message.success("Đã cập nhật cấp bậc");
       setTierModal(false);
@@ -194,9 +244,26 @@ const LoyaltyManager: React.FC = () => {
   ];
 
   const tierColumns: ColumnsType<MembershipTier> = [
-    { title: "Cấp bậc", dataIndex: "name", key: "name", width: 120, render: (n, t) => <Tag color={t.color}>{n}</Tag> },
-    { title: "Điểm tối thiểu", dataIndex: "minPoints", key: "minPoints", width: 150 },
-    { title: "Hệ số tích lũy", dataIndex: "multiplier", key: "multiplier", width: 140, render: (m: number) => <strong>{m}x</strong> },
+    {
+      title: "Cấp bậc",
+      dataIndex: "name",
+      key: "name",
+      width: 120,
+      render: (n, t) => <Tag color={t.color}>{n}</Tag>,
+    },
+    {
+      title: "Điểm tối thiểu",
+      dataIndex: "minPoints",
+      key: "minPoints",
+      width: 150,
+    },
+    {
+      title: "Hệ số tích lũy",
+      dataIndex: "multiplier",
+      key: "multiplier",
+      width: 140,
+      render: (m: number) => <strong>{m}x</strong>,
+    },
     {
       title: "Thao tác",
       key: "actions",
@@ -235,42 +302,54 @@ const LoyaltyManager: React.FC = () => {
                       </Space>
                     </Card>
                     <Card>
-                      <Table
+                      <DataTable
                         rowKey="idKhachHang"
                         columns={customerColumns}
                         dataSource={filtered}
                         loading={loading}
-                        scroll={{ x: 1000 }}
                       />
                     </Card>
                   </>
                 ),
               },
-                          {
-                            key: "tiers",
-                            label: "Cấp bậc thành viên",
-                            children: (
-                              <Card>
-                                <Descriptions title="Quy đổi & Đổi điểm" bordered style={{ marginBottom: 16 }}>
-                                  <Descriptions.Item label="Tỉ lệ tích lũy">
-                                    <div>Mỗi 10.000 VND chi tiêu = 1 điểm (Silver baseline)</div>
-                                    {tiers.map((t) => (
-                                      <div key={t.name}>- {t.name}: {t.multiplier}x</div>
-                                    ))}
-                                  </Descriptions.Item>
-                                  <Descriptions.Item label="Quy đổi (đổi thưởng)">
-                                    <div>- Voucher 100.000₫ — 10 điểm</div>
-                                    <div>- Voucher 200.000₫ — 20 điểm</div>
-                                    <div>- Miễn phí 1 bữa sáng — 15 điểm</div>
-                                    <div>- Giảm 1 đêm phòng 20% — 40 điểm</div>
-                                    <div>- Miễn phí 1 đêm Standard — 100 điểm</div>
-                                    <div>- Giảm 1 đêm VIP 50% — 150 điểm</div>
-                                  </Descriptions.Item>
-                                </Descriptions>
-                                <Table rowKey="name" columns={tierColumns} dataSource={tiers} pagination={false} />
-                              </Card>
-                            ),
-                          },
+              {
+                key: "tiers",
+                label: "Cấp bậc thành viên",
+                children: (
+                  <Card>
+                    <Descriptions
+                      title="Quy đổi & Đổi điểm"
+                      bordered
+                      style={{ marginBottom: 16 }}
+                    >
+                      <Descriptions.Item label="Tỉ lệ tích lũy">
+                        <div>
+                          Mỗi 10.000 VND chi tiêu = 1 điểm (Silver baseline)
+                        </div>
+                        {tiers.map((t) => (
+                          <div key={t.name}>
+                            - {t.name}: {t.multiplier}x
+                          </div>
+                        ))}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Quy đổi (đổi thưởng)">
+                        <div>- Voucher 100.000₫ — 10 điểm</div>
+                        <div>- Voucher 200.000₫ — 20 điểm</div>
+                        <div>- Miễn phí 1 bữa sáng — 15 điểm</div>
+                        <div>- Giảm 1 đêm phòng 20% — 40 điểm</div>
+                        <div>- Miễn phí 1 đêm Standard — 100 điểm</div>
+                        <div>- Giảm 1 đêm VIP 50% — 150 điểm</div>
+                      </Descriptions.Item>
+                    </Descriptions>
+                    <DataTable
+                      rowKey="name"
+                      columns={tierColumns}
+                      dataSource={tiers}
+                      pagination={false}
+                    />
+                  </Card>
+                ),
+              },
             ]}
           />
         </main>
@@ -292,10 +371,16 @@ const LoyaltyManager: React.FC = () => {
             name="points"
             rules={[{ required: true, message: "Nhập số điểm" }]}
           >
-            <InputNumber style={{ width: "100%" }} placeholder="VD: 50 (cộng) hoặc -20 (trừ)" />
+            <InputNumber
+              style={{ width: "100%" }}
+              placeholder="VD: 50 (cộng) hoặc -20 (trừ)"
+            />
           </Form.Item>
           <Form.Item label="Lý do" name="reason">
-            <Input.TextArea rows={2} placeholder="VD: Thưởng sinh nhật, điều chỉnh sai sót..." />
+            <Input.TextArea
+              rows={2}
+              placeholder="VD: Thưởng sinh nhật, điều chỉnh sai sót..."
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -308,13 +393,25 @@ const LoyaltyManager: React.FC = () => {
         title={`Chỉnh sửa: ${editingTier?.name}`}
       >
         <Form form={tierForm} layout="vertical">
-          <Form.Item label="Tên cấp bậc" name="name" rules={[{ required: true }]}>
+          <Form.Item
+            label="Tên cấp bậc"
+            name="name"
+            rules={[{ required: true }]}
+          >
             <Input disabled />
           </Form.Item>
-          <Form.Item label="Điểm tối thiểu" name="minPoints" rules={[{ required: true }]}>
+          <Form.Item
+            label="Điểm tối thiểu"
+            name="minPoints"
+            rules={[{ required: true }]}
+          >
             <InputNumber style={{ width: "100%" }} min={0} />
           </Form.Item>
-          <Form.Item label="Hệ số tích lũy" name="multiplier" rules={[{ required: true, message: 'Nhập hệ số tích lũy' }]}>
+          <Form.Item
+            label="Hệ số tích lũy"
+            name="multiplier"
+            rules={[{ required: true, message: "Nhập hệ số tích lũy" }]}
+          >
             <InputNumber style={{ width: "100%" }} min={0.1} step={0.1} />
           </Form.Item>
           <Form.Item label="Màu sắc (hex)" name="color">
