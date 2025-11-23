@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { getServices, getServiceById, Service as ApiService } from "../api/serviceApi";
+import { getPromotionsForService } from "../api/promotionApi";
 
 type Service = {
   id: string;
@@ -12,6 +13,16 @@ type Service = {
   GhiChu?: string;
   ThoiGianBatDau?: string; // ISO time or HH:mm
   ThoiGianKetThuc?: string;
+  // promotion fields (optional, filled client-side)
+  promotionId?: string | null;
+  promotionName?: string | null;
+  loaiGiamGia?: string | null;
+  giaTriGiam?: number | null;
+  discountedPrice?: number | null;
+  promotionMoTa?: string | null;
+  promotionBanner?: string | null;
+  promotionNgayBatDau?: string | null;
+  promotionNgayKetThuc?: string | null;
 };
 
 const currencyFormatter = new Intl.NumberFormat("vi-VN", {
@@ -26,6 +37,7 @@ const Services: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [selected, setSelected] = useState<Service | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [selectedPromotion, setSelectedPromotion] = useState<any | null>(null);
 
   // slider refs & states
   const sliderRef = useRef<HTMLDivElement | null>(null);
@@ -53,7 +65,53 @@ const Services: React.FC = () => {
           ThoiGianBatDau: a.thoiGianBatDau ?? undefined,
           ThoiGianKetThuc: a.thoiGianKetThuc ?? undefined,
         }));
-        setServices(mapped);
+        // enrich each service with applicable promotion (pick best saving)
+        try {
+          const enriched = await Promise.all(mapped.map(async (s) => {
+            try {
+              const promos = await getPromotionsForService(s.id);
+              if (promos && promos.length > 0) {
+                const original = s.TienDichVu ?? 0;
+                const scored = promos.map((p: any) => {
+                  const val = Number(p.giaTriGiam ?? 0);
+                  if ((p.loaiGiamGia || '').toLowerCase() === 'percent') {
+                    return { p, saving: original * (val / 100) };
+                  }
+                  return { p, saving: val };
+                });
+                scored.sort((a: any, b: any) => (b.saving || 0) - (a.saving || 0));
+                const best = scored[0]?.p ?? null;
+                if (best) {
+                  let discounted = original;
+                  const val = Number(best.giaTriGiam ?? 0);
+                  const t = (best.loaiGiamGia || '').toLowerCase();
+                  if (t === 'percent') discounted = Math.round(original * (1 - val / 100));
+                  else discounted = Math.round(Math.max(0, original - val));
+
+                  return {
+                    ...s,
+                    promotionId: best.promotionId,
+                    promotionName: best.promotionName,
+                    loaiGiamGia: best.loaiGiamGia,
+                    giaTriGiam: best.giaTriGiam ?? null,
+                    discountedPrice: discounted,
+                    promotionMoTa: best.moTa ?? null,
+                    promotionBanner: best.hinhAnhBanner ?? null,
+                    promotionNgayBatDau: best.ngayBatDau ?? null,
+                    promotionNgayKetThuc: best.ngayKetThuc ?? null,
+                  } as Service;
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to fetch promos for service', s.id, err);
+            }
+            return s;
+          }));
+          setServices(enriched);
+        } catch (err) {
+          // fallback
+          setServices(mapped);
+        }
       } catch (e: any) {
         console.error('Failed to load services', e);
   if (!mounted) return;
@@ -163,6 +221,49 @@ const Services: React.FC = () => {
     } catch (e) {
       console.warn('Failed to load service details', e);
     }
+    // Load promotions that apply to this service and pick the best (highest discount)
+    try {
+      setSelectedPromotion(null);
+      const promos = await getPromotionsForService(s.id);
+      if (promos && promos.length > 0) {
+        // choose promotion with largest numeric reduction equivalent
+        const original = s.TienDichVu ?? 0;
+        const scored = promos.map((p: any) => {
+          const val = p.giaTriGiam ?? 0;
+          // For percent promotions compute equivalent VND saved
+          if ((p.loaiGiamGia || "").toLowerCase() === "percent") {
+            return { p, saving: original * (Number(val) / 100) };
+          }
+          // fixed/amount
+          return { p, saving: Number(val) };
+        });
+        scored.sort((a: any, b: any) => (b.saving || 0) - (a.saving || 0));
+        const best = scored[0]?.p ?? null;
+        if (best) {
+          // calculate discounted price
+          let discounted = original;
+          const val = Number(best.giaTriGiam ?? 0);
+          const t = (best.loaiGiamGia || "").toLowerCase();
+          if (t === "percent") discounted = Math.round(original * (1 - val / 100));
+          else discounted = Math.round(Math.max(0, original - val));
+
+          setSelectedPromotion({
+            id: best.promotionId,
+            name: best.promotionName,
+            loaiGiamGia: best.loaiGiamGia,
+            giaTriGiam: best.giaTriGiam,
+            moTa: best.moTa,
+            ngayBatDau: best.ngayBatDau,
+            ngayKetThuc: best.ngayKetThuc,
+            hinhAnhBanner: best.hinhAnhBanner,
+            discountedPrice: discounted
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load promotions for service', err);
+      setSelectedPromotion(null);
+    }
   };
 
   const formatDuration = (minutes?: number) => {
@@ -175,7 +276,15 @@ const Services: React.FC = () => {
 
   return (
     <section className="services-section spad" style={{ background: '#fff' }}>
-      <div className="container">
+      <style>{`
+        .services-container { padding-left: 150px !important; padding-right: 150px !important; }
+        .services-section { padding: 80px 0 !important; }
+        @media (max-width: 768px) {
+          .services-container { padding-left: 20px !important; padding-right: 20px !important; }
+          .services-section { padding: 60px 0 !important; }
+        }
+      `}</style>
+      <div className="container-fluid services-container">
         <div className="row">
           <div className="col-lg-12">
             <div className="section-title">
@@ -267,9 +376,23 @@ const Services: React.FC = () => {
 
                       <h5 style={{ margin: '4px 0 6px 0', color: '#222' }}>{s.TenDichVu}</h5>
 
-                      <div style={{ color: '#333', marginBottom: 6 }}>
-                        <strong>Giá: </strong>
-                        {currencyFormatter.format(s.TienDichVu)}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <div style={{ color: '#333', flex: 1 }}>
+                          <strong>Giá: </strong>
+                          {s.discountedPrice != null && s.discountedPrice < (s.TienDichVu ?? 0) ? (
+                            <span style={{ marginLeft: 8 }}>
+                              <span style={{ textDecoration: 'line-through', color: '#999', marginRight: 8 }}>{currencyFormatter.format(s.TienDichVu)}</span>
+                              <span style={{ color: '#d89860', fontWeight: 700 }}>{currencyFormatter.format(s.discountedPrice)}</span>
+                            </span>
+                          ) : (
+                            <span style={{ marginLeft: 8 }}>{currencyFormatter.format(s.TienDichVu)}</span>
+                          )}
+                        </div>
+                        {s.giaTriGiam != null && s.discountedPrice != null && s.discountedPrice < (s.TienDichVu ?? 0) && (
+                          <div style={{ background: '#fdeedb', color: '#d9534f', padding: '4px 8px', borderRadius: 6, fontSize: 12, fontWeight: 700 }}>
+                            {(String((s.loaiGiamGia || '').toLowerCase()) === 'percent') ? `Giảm ${Number(s.giaTriGiam)}%` : `Giảm ${currencyFormatter.format(Number(s.giaTriGiam || 0))}`}
+                          </div>
+                        )}
                       </div>
 
                       <div style={{ color: '#666', marginBottom: 8 }}>
@@ -280,9 +403,6 @@ const Services: React.FC = () => {
                       <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
                         <button className="btn" onClick={() => openDetails(s)} disabled={unavailable} style={{ flex: 1, background: 'linear-gradient(135deg, #dfa974 0%, #d89860 100%)', color: '#fff', border: 'none', borderRadius: 999, padding: '10px 14px' }}>
                           Xem chi tiết
-                        </button>
-                        <button className="btn" onClick={() => alert('Đặt dịch vụ: ' + s.TenDichVu)} disabled={unavailable} style={{ background: 'transparent', color: '#d89860', border: '1px solid rgba(217,152,96,0.18)', borderRadius: 999, padding: '10px 14px' }}>
-                          Đặt
                         </button>
                       </div>
                     </div>
@@ -374,15 +494,41 @@ const Services: React.FC = () => {
               <div style={{ flex: 1, padding: 18, overflow: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                   <div>
-                    <h3 style={{ marginTop: 0 }}>{selected.TenDichVu}</h3>
-                    <div style={{ marginBottom: 8 }}><strong>Giá: </strong>{currencyFormatter.format(selected.TienDichVu)}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <h3 style={{ marginTop: 0, marginBottom: 0 }}>{selected.TenDichVu}</h3>
+                        {selectedPromotion && (
+                          <div style={{ background: '#f5f7fa', borderRadius: 6, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <strong style={{ color: '#d9534f' }}>{(selectedPromotion.loaiGiamGia || '').toLowerCase() === 'percent' ? `Giảm ${Number(selectedPromotion.giaTriGiam)}%` : `Giảm ${currencyFormatter.format(Number(selectedPromotion.giaTriGiam || 0))}`}</strong>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ marginBottom: 8 }}>
+                        <strong>Giá: </strong>
+                        {selectedPromotion ? (
+                          <span style={{ marginLeft: 8 }}>
+                            <span style={{ textDecoration: 'line-through', color: '#999', marginRight: 8 }}>{currencyFormatter.format(selected.TienDichVu)}</span>
+                            <span style={{ color: '#d89860', fontWeight: 700 }}>{currencyFormatter.format(selectedPromotion.discountedPrice)}</span>
+                          </span>
+                        ) : (
+                          <span style={{ marginLeft: 8 }}>{currencyFormatter.format(selected.TienDichVu)}</span>
+                        )}
+                      </div>
                     <div style={{ marginBottom: 8 }}><strong>Trạng thái: </strong>{isAvailable(selected.TrangThai) ? (<span style={{ color: 'green' }}>Khả dụng</span>) : (<span style={{ color: '#d9534f' }}>Không khả dụng</span>)}</div>
                     <div style={{ marginBottom: 8 }}><strong>Thời lượng ước tính: </strong>{formatDuration(selected.ThoiLuongUocTinh)}</div>
                     <div style={{ marginBottom: 8 }}><strong>Khung giờ áp dụng: </strong>{selected.ThoiGianBatDau || '-'} — {selected.ThoiGianKetThuc || '-'}</div>
-                  </div>
-
-                  <div style={{ textAlign: 'right' }}>
-                    <button aria-label="Đóng" className="btn btn-light" onClick={() => setModalOpen(false)}>Đóng</button>
+                    {selectedPromotion && (
+                      <div style={{ marginTop: 8, marginBottom: 8, background: '#fafafa', padding: 10, borderRadius: 6 }}>
+                        {selectedPromotion.hinhAnhBanner && (
+                          <div style={{ marginBottom: 8 }}>
+                            <img src={selectedPromotion.hinhAnhBanner} alt={selectedPromotion.name} style={{ maxWidth: '100%', height: 120, objectFit: 'cover', borderRadius: 6 }} />
+                          </div>
+                        )}
+                        <div style={{ marginBottom: 6 }}><strong>Khuyến mãi:</strong> {selectedPromotion.name}</div>
+                        {selectedPromotion.moTa && <div style={{ marginBottom: 6, color: '#444' }}>{selectedPromotion.moTa}</div>}
+                        <div style={{ color: '#666' }}><strong>Thời gian áp dụng: </strong>{selectedPromotion.ngayBatDau ? new Date(selectedPromotion.ngayBatDau).toLocaleDateString('vi-VN') : '-'} — {selectedPromotion.ngayKetThuc ? new Date(selectedPromotion.ngayKetThuc).toLocaleDateString('vi-VN') : '-'}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -392,8 +538,7 @@ const Services: React.FC = () => {
 
                 <div style={{ marginBottom: 8 }}><strong>Ghi chú:</strong><p>{selected.GhiChu || '-'}</p></div>
 
-                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                  <button className="btn btn-primary" onClick={() => { alert('Xác nhận đặt: ' + selected.TenDichVu); }} disabled={!isAvailable(selected.TrangThai)}>Đặt dịch vụ</button>
+                <div style={{ marginLeft: 350, marginTop: 12, display: 'flex', gap: 8 }}>
                   <button className="btn btn-outline-secondary" onClick={() => setModalOpen(false)}>Đóng</button>
                 </div>
               </div>

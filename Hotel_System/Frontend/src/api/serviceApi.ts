@@ -16,6 +16,11 @@ export interface Service {
   thongTinDv?: string | null;
   thoiLuongUocTinh?: number | null;
   ghiChu?: string | null;
+
+  // Promotion fields
+  giaKhuyenMai?: number | null;
+  tenKhuyenMai?: string | null;
+  phanTramGiam?: number | null;
 }
 
 export interface ServiceUsage {
@@ -106,6 +111,11 @@ function normalizeService(raw: any): Service {
     thongTinDv: raw.thongTinDv ?? raw.ThongTinDv ?? null,
     thoiLuongUocTinh: raw.thoiLuongUocTinh ?? raw.ThoiLuongUocTinh ?? null,
     ghiChu: raw.ghiChu ?? raw.GhiChu ?? null,
+
+    // Promotion fields (backend returns camelCase via JsonSerializerOptions)
+    giaKhuyenMai: raw.giaKhuyenMai ?? raw.GiaKhuyenMai ?? null,
+    tenKhuyenMai: raw.tenKhuyenMai ?? raw.TenKhuyenMai ?? null,
+    phanTramGiam: raw.phanTramGiam ?? raw.PhanTramGiam ?? null,
   };
 }
 
