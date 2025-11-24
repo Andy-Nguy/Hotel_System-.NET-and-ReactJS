@@ -624,6 +624,23 @@ const CheckInManager: React.FC = () => {
 
         const invoiceAmountToUse = method === 2 ? remainingToPay : safeTongTien;
 
+        // Compute remaining due so QR invoice equals what customer actually owes
+        const totalFromServer = Number(summary?.money?.tongTien ?? summaryTotal ?? computedTotalWithVat);
+        const deposit = Number(summary?.money?.deposit ?? 0);
+        const paidAmountFromSummary = Number(summary?.money?.paidAmount ?? NaN);
+        let paidIncludingDeposit: number;
+        if (!isNaN(paidAmountFromSummary)) {
+          paidIncludingDeposit = Math.max(0, paidAmountFromSummary);
+        } else {
+          const invPaid = summary?.invoices && Array.isArray(summary.invoices) && summary.invoices.length > 0
+            ? Number(summary.invoices[0].tienThanhToan ?? NaN)
+            : NaN;
+          paidIncludingDeposit = !isNaN(invPaid) ? Math.max(0, invPaid + deposit) : 0;
+        }
+        const remainingToPay = Math.round(Math.max(0, totalFromServer - paidIncludingDeposit));
+
+        const invoiceAmountToUse = method === 2 ? remainingToPay : safeTongTien;
+
         const res = await checkoutApi.createInvoice({
           IDDatPhong: paymentRow!.IddatPhong,
           PhuongThucThanhToan: method,
