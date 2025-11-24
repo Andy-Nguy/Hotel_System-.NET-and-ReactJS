@@ -38,7 +38,7 @@ export const getUsingBookings = async (): Promise<UsingBooking[]> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.get(`${API_BASE_URL}/CheckIn`, { headers });
+  const res = await axios.get(`${API_BASE_URL}/NhanPhong`, { headers });
   return res.data;
 };
 
@@ -50,7 +50,7 @@ export const getTodayBookings = async (): Promise<UsingBooking[]> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.get(`${API_BASE_URL}/CheckIn/today`, { headers });
+  const res = await axios.get(`${API_BASE_URL}/NhanPhong/hom-nay`, { headers });
   return res.data;
 };
 
@@ -62,7 +62,7 @@ export const getCheckinById = async (id: string): Promise<any> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.get(`${API_BASE_URL}/CheckIn/${id}`, { headers });
+  const res = await axios.get(`${API_BASE_URL}/NhanPhong/${id}`, { headers });
   return res.data;
 };
 
@@ -76,7 +76,7 @@ export const confirmCheckIn = async (id: string): Promise<any> => {
   const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await axios.post(
-    `${API_BASE_URL}/CheckIn/confirm/${id}`,
+    `${API_BASE_URL}/NhanPhong/nhan-phong/${id}`,
     {},
     { headers }
   );
@@ -92,7 +92,7 @@ export const cancelCheckIn = async (id: string): Promise<void> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  await axios.put(`${API_BASE_URL}/CheckIn/cancel/${id}`, {}, { headers });
+  await axios.put(`${API_BASE_URL}/NhanPhong/huy-xac-nhan/${id}`, {}, { headers });
 };
 
 /** POST /api/CheckIn/complete-payment/{id} - mark booking as paid but keep status as 'Đang sử dụng' */
@@ -101,7 +101,7 @@ export const completePayment = async (id: string): Promise<any> => {
   const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await axios.post(
-    `${API_BASE_URL}/CheckIn/complete-payment/${id}`,
+    `${API_BASE_URL}/NhanPhong/cap-nhat-thanh-toan/${id}`,
     {},
     { headers }
   );

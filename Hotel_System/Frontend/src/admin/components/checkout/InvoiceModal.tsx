@@ -1,7 +1,7 @@
 // src/components/checkout/InvoiceModal.tsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Button, Descriptions, Table, Tag, message } from 'antd';
-import { useState } from 'react';
+import checkoutApi from '../../../api/checkout.Api';
 
 interface Props {
   visible: boolean;
@@ -12,7 +12,50 @@ interface Props {
   onClose: () => void;
   onComplete: (idDatPhong: string) => Promise<void>;
 }
+const getInvoiceId = (data: any): string | null => {
+  if (!data) return null;
 
+  // 1. Trên root
+  const direct =
+    data.IDHoaDon ??
+    data.IdHoaDon ??
+    data.IdhoaDon ??
+    data.idHoaDon ??
+    data.id ??
+    data.ID;
+  if (direct) return String(direct);
+
+  // 2. Trong thuộc tính HoaDon (nếu có)
+  const hoaDon = data.HoaDon ?? data.hoaDon;
+  if (hoaDon) {
+    const fromHoaDon =
+      hoaDon.IDHoaDon ??
+      hoaDon.IdHoaDon ??
+      hoaDon.IdhoaDon ??
+      hoaDon.idHoaDon ??
+      hoaDon.id ??
+      hoaDon.ID;
+    if (fromHoaDon) return String(fromHoaDon);
+  }
+
+  // 3. Trong mảng invoices[0] (nếu có)
+  const inv0 =
+    Array.isArray(data.invoices) && data.invoices.length > 0
+      ? data.invoices[0]
+      : null;
+  if (inv0) {
+    const fromInv =
+      inv0.IDHoaDon ??
+      inv0.IdHoaDon ??
+      inv0.IdhoaDon ??
+      inv0.idHoaDon ??
+      inv0.id ??
+      inv0.ID;
+    if (fromInv) return String(fromInv);
+  }
+
+  return null;
+};
 const InvoiceModal: React.FC<Props> = ({
   visible,
   invoiceData,
@@ -22,7 +65,7 @@ const InvoiceModal: React.FC<Props> = ({
   onComplete,
 }) => {
   const handleComplete = async () => {
-    const id = invoiceData?.IDDatPhong ?? invoiceData?.idDatPhong ?? paymentRow?.IddatPhong;
+    const id = (mergedInvoice ?? invoiceData ?? paymentRow)?.IDDatPhong ?? (mergedInvoice ?? invoiceData ?? paymentRow)?.idDatPhong ?? paymentRow?.IddatPhong;
     if (!id) return message.error('Không xác định được mã đặt phòng');
     await onComplete(String(id));
   };
@@ -30,7 +73,7 @@ const InvoiceModal: React.FC<Props> = ({
   const [submitting, setSubmitting] = useState(false);
 
   const handleCompleteClick = async () => {
-    const id = invoiceData?.IDDatPhong ?? invoiceData?.idDatPhong ?? paymentRow?.IddatPhong;
+    const id = (mergedInvoice ?? invoiceData ?? paymentRow)?.IDDatPhong ?? (mergedInvoice ?? invoiceData ?? paymentRow)?.idDatPhong ?? paymentRow?.IddatPhong;
     if (!id) return message.error('Không xác định được mã đặt phòng');
     try {
       setSubmitting(true);
@@ -43,9 +86,38 @@ const InvoiceModal: React.FC<Props> = ({
   };
 
   // === CHỈ THAY ĐOẠN NÀY – TÍNH ĐÚNG, KHÔNG VAT ===
-  const srcItems = (invoiceData?.items && Array.isArray(invoiceData.items) && invoiceData.items.length > 0)
-    ? invoiceData.items
-    : (paymentRow?.ChiTietDatPhongs ?? []);
+    // Merge invoiceData with server summary when invoice lacks booking/customer info
+    const [mergedInvoice, setMergedInvoice] = useState<any | null>(invoiceData);
+
+    useEffect(() => {
+      setMergedInvoice(invoiceData);
+      if (!invoiceData) return;
+      // If invoice doesn't include basic booking/customer fields, try fetching summary by booking id
+      const hasCustomer = invoiceData?.TenKhachHang || invoiceData?.EmailKhachHang || invoiceData?.IDDatPhong || invoiceData?.idDatPhong;
+      if (hasCustomer) return;
+      // try to extract booking id from invoice payload (various shapes)
+      const possibleId = invoiceData?.IDDatPhong ?? invoiceData?.idDatPhong ?? invoiceData?.idDatPhong ?? invoiceData?.hoaDon?.idDatPhong ?? invoiceData?.hoaDon?.IDDatPhong ?? invoiceData?.hoaDon?.iddatPhong ?? null;
+      if (!possibleId) return;
+      let cancelled = false;
+      (async () => {
+        try {
+          const sum = await checkoutApi.getSummary(possibleId);
+          if (cancelled) return;
+          // merge: prefer fields from invoiceData, but fill missing pieces from summary
+          const merged = { ...(invoiceData || {}), ...(sum || {}) };
+          setMergedInvoice(merged);
+        } catch (e) {
+          // ignore
+        }
+      })();
+      return () => { cancelled = true; };
+    }, [invoiceData]);
+
+    const data = mergedInvoice ?? invoiceData ?? paymentRow ?? {};
+
+    const srcItems = (data?.items && Array.isArray(data.items) && data.items.length > 0)
+      ? data.items
+      : (paymentRow?.ChiTietDatPhongs ?? []);
 
   const normalized = (srcItems || []).map((it: any, idx: number) => {
     const rawThanh = Number(it?.ThanhTien ?? it?.thanhTien ?? it?.Tien ?? 0);
@@ -67,9 +139,9 @@ const InvoiceModal: React.FC<Props> = ({
   // Tính tiền phòng (sau khuyến mãi)
   const roomTotal = normalized.reduce((s: number, r: any) => s + Number(r.discounted ?? r.ThanhTien ?? 0), 0);
 
-  // Dịch vụ từ server
-  const serverServices = Array.isArray(invoiceData?.services)
-    ? invoiceData.services.map((s: any) => ({
+  // Dịch vụ từ server (từ merged data)
+  const serverServices = Array.isArray(data?.services)
+    ? data.services.map((s: any) => ({
         tenDichVu: s.tenDichVu ?? s.TenDichVu ?? s.ten ?? '',
         // treat service as single unit; present donGia and thanhTien
         donGia: s.donGia ?? s.DonGia ?? 0,
@@ -92,19 +164,24 @@ const InvoiceModal: React.FC<Props> = ({
   const vat = Math.round(subTotal * 0.1);
   const finalTotal = Math.round(subTotal + vat);
 
-  // Tiền cọc
-  const deposit = Number(invoiceData?.money?.deposit ?? invoiceData?.TienCoc ?? 0);
+  // Tiền cọc (ưu tiên giá trị server)
+  const deposit = Number(data?.money?.deposit ?? data?.TienCoc ?? 0);
 
-  // Đã thanh toán = Tổng cộng (đã gồm VAT & dịch vụ mới) - Tiền cọc
-  // (the user requested that "Đã thanh toán" always be calculated as finalTotal - deposit)
-  const paid = Math.max(0, finalTotal - deposit);
+  // Lấy số tiền đã thanh toán từ server (hoaDon.TienThanhToan hoặc money.paidAmount)
+  const dbPaid = Number(data?.money?.paidAmount ?? data?.tienThanhToan ?? data?.TienThanhToan ?? 0);
+  // Đã thanh toán là giá trị thực tế từ DB
+  const paid = Math.max(0, dbPaid);
 
-  const needToPay = Math.max(0, finalTotal - deposit - paid);
+  // Số tiền còn phải thanh toán = Tổng cộng - Đã thanh toán
+  const needToPay = Math.max(0, finalTotal - paid);
   // ========================================
+
+  const invoiceId = getInvoiceId(data) ?? data?.IDHoaDon ?? data?.idHoaDon ?? '';
+  const invoiceDateStr = data?.NgayLap ? new Date(data.NgayLap).toLocaleString('vi-VN') : (data?.ngayLap ? new Date(data.ngayLap).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN'));
 
   return (
     <Modal
-      title={invoiceData ? `Hóa đơn - ${invoiceData?.IDHoaDon ?? invoiceData?.idHoaDon ?? ''}` : 'Hóa đơn'}
+      title={data ? `Hóa đơn - ${invoiceId}` : 'Hóa đơn'}
       open={visible}
       onCancel={onClose}
       width={900}
@@ -126,26 +203,26 @@ const InvoiceModal: React.FC<Props> = ({
               <div style={{ color: '#6b7280' }}>Hotline: 1900-xxxx</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div><strong>Hóa đơn:</strong> {invoiceData?.IDHoaDon ?? invoiceData?.idHoaDon}</div>
-              <div><strong>Ngày:</strong> {new Date().toLocaleString('vi-VN')}</div>
+                <div><strong>Hóa đơn:</strong> {invoiceId}</div>
+                <div><strong>Ngày:</strong> {invoiceDateStr}</div>
             </div>
           </div>
 
           <Descriptions bordered column={2} size="middle">
             <Descriptions.Item label="Khách hàng">
-              {invoiceData?.TenKhachHang ?? paymentRow?.TenKhachHang ?? '-'}
+              {data?.TenKhachHang ?? data?.customer?.name ?? paymentRow?.TenKhachHang ?? '-'}
             </Descriptions.Item>
             <Descriptions.Item label="Email">
-              {invoiceData?.EmailKhachHang ?? paymentRow?.EmailKhachHang ?? '-'}
+              {data?.EmailKhachHang ?? data?.customer?.email ?? paymentRow?.EmailKhachHang ?? '-'}
             </Descriptions.Item>
             <Descriptions.Item label="Mã đặt phòng">
-              {invoiceData?.IDDatPhong ?? paymentRow?.IddatPhong ?? '-'}
+              {data?.IDDatPhong ?? data?.idDatPhong ?? data?.idDatPhong ?? paymentRow?.IddatPhong ?? '-'}
             </Descriptions.Item>
             <Descriptions.Item label="Nhận phòng">
-              {paymentRow?.NgayNhanPhong?.slice(0, 10) ?? '-'}
+              {(data?.dates?.checkin ?? paymentRow?.NgayNhanPhong)?.toString()?.slice(0, 10) ?? '-'}
             </Descriptions.Item>
             <Descriptions.Item label="Trả phòng">
-              {paymentRow?.NgayTraPhong?.slice(0, 10) ?? '-'}
+              {(data?.dates?.checkout ?? paymentRow?.NgayTraPhong)?.toString()?.slice(0, 10) ?? '-'}
             </Descriptions.Item>
           </Descriptions>
 
@@ -233,14 +310,20 @@ const InvoiceModal: React.FC<Props> = ({
                 <span>TỔNG CỘNG:</span>
                 <span style={{ color: '#d4380d' }}>{finalTotal.toLocaleString()} đ</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
                 <span>Tiền cọc:</span>
                 <strong>- {deposit.toLocaleString()} đ</strong>
               </div>
               {paid > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
                   <span>Đã thanh toán:</span>
                   <strong>- {paid.toLocaleString()} đ</strong>
+                </div>
+              )}
+              {needToPay > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                  <span style={{ fontSize: 16 }}>Còn phải thanh toán:</span>
+                  <strong style={{ color: '#d4380d', fontSize: 16 }}>{needToPay.toLocaleString()} đ</strong>
                 </div>
               )}
             </div>

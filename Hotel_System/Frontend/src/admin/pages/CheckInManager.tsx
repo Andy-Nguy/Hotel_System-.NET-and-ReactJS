@@ -155,7 +155,7 @@ setData(mappedWithTotals);
   const openPaymentModal = async (row: BookingRow) => {
     setPaymentRow(row);
     setPaymentModalVisible(true);
-    setSummary(null);
+    // keep existing summary while opening modal; we'll refresh if needed
     setSummaryLoading(true);
     try {
       const sum = await checkoutApi.getSummary(row.IddatPhong);
@@ -375,13 +375,30 @@ setData(mappedWithTotals);
         let safeTongTien = formTongTien || summaryTotal || computedTotalWithVat || Math.max(1, Math.round(roomTotalForCalc));
         if (safeTongTien <= 0) safeTongTien = Math.max(1, computedTotalWithVat, Math.round(roomTotalForCalc));
 
+        // Compute remaining due so QR invoice equals what customer actually owes
+        const totalFromServer = Number(summary?.money?.tongTien ?? summaryTotal ?? computedTotalWithVat);
+        const deposit = Number(summary?.money?.deposit ?? 0);
+        const paidAmountFromSummary = Number(summary?.money?.paidAmount ?? NaN);
+        let paidIncludingDeposit: number;
+        if (!isNaN(paidAmountFromSummary)) {
+          paidIncludingDeposit = Math.max(0, paidAmountFromSummary);
+        } else {
+          const invPaid = summary?.invoices && Array.isArray(summary.invoices) && summary.invoices.length > 0
+            ? Number(summary.invoices[0].tienThanhToan ?? NaN)
+            : NaN;
+          paidIncludingDeposit = !isNaN(invPaid) ? Math.max(0, invPaid + deposit) : 0;
+        }
+        const remainingToPay = Math.round(Math.max(0, totalFromServer - paidIncludingDeposit));
+
+        const invoiceAmountToUse = method === 2 ? remainingToPay : safeTongTien;
+
         const res = await checkoutApi.createInvoice({
           IDDatPhong: paymentRow!.IddatPhong,
           PhuongThucThanhToan: method,
           // Mark paid for cash checkouts, pending for online
           TrangThaiThanhToan: method === 2 ? 1 : 2,
           GhiChu: vals.GhiChu ?? '',
-          TongTien: safeTongTien,
+          TongTien: invoiceAmountToUse,
           TienPhong: Math.round(roomTotalForCalc),
           SoLuongNgay: vals.SoLuongNgay ?? 1,
           TienCoc: Number(paymentRow?.TienCoc ?? 0),
@@ -389,9 +406,28 @@ setData(mappedWithTotals);
           Services: []
         });
         if (method === 2) {
-          setQrUrl(res?.paymentUrl || null);
-          setPaymentInvoiceId(res?.idHoaDon ?? res?.id ?? null);
-          setQrModalVisible(true);
+          try {
+            const hoaDonId = res?.idHoaDon ?? res?.id ?? null;
+            const payResp: any = await checkoutApi.payQr({ IDDatPhong: paymentRow.IddatPhong, HoaDonId: hoaDonId, Amount: remainingToPay });
+            setQrUrl(payResp?.paymentUrl ?? payResp?.qr ?? null);
+            setPaymentInvoiceId(hoaDonId);
+            try {
+              const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+              if (fresh) {
+                const prevPaid = Number(summary?.money?.paidAmount ?? 0);
+                const freshPaid = Number(fresh?.money?.paidAmount ?? 0);
+                if ((isNaN(freshPaid) || freshPaid === 0) && prevPaid > 0) {
+                  fresh.money = { ...fresh.money, paidAmount: prevPaid };
+                }
+                setSummary(fresh);
+                setInvoiceData(fresh);
+              }
+            } catch (e) { /* ignore */ }
+            setQrModalVisible(true);
+          } catch (e: any) {
+            console.error('payQr after createInvoice failed', e);
+            message.error(e?.message || 'Không thể tạo liên kết QR');
+          }
         } else {
           msg.success('Tạo hóa đơn & thanh toán thành công');
           try {
@@ -716,7 +752,7 @@ setData(mappedWithTotals);
       setSummary(sum);
       setInvoiceData(sum);
     } catch {
-      setSummary(null);
+      // keep existing summary; avoid clearing paid amounts on cancel
       setInvoiceData(null);
     }
     setPaymentModalVisible(true);
@@ -775,7 +811,6 @@ setData(mappedWithTotals);
 
             {/* Full Booking management section embedded on the Check-in page */}
             <Card style={{ marginBottom: 12 }}>
-              <h3 style={{ marginBottom: 12 }}>Quản Lý Check-In</h3>
               <CheckinSection />
             </Card>
             <div style={{ marginBottom: 12 }}>
@@ -825,7 +860,7 @@ setData(mappedWithTotals);
             roomLines={roomLines}
             selectedServices={selectedServices}
             servicesTotal={servicesTotal}
-            onCancel={() => { setPaymentModalVisible(false); setPaymentRow(null); setSummary(null); form.resetFields(); }}
+            onCancel={() => { setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); }}
             onSubmit={submitPayment}
           />
 
@@ -852,9 +887,12 @@ setData(mappedWithTotals);
           <Modal
             title="Thanh toán online - Quét mã QR"
             open={qrModalVisible}
-            onCancel={() => { setQrModalVisible(false); setQrUrl(null); setPaymentModalVisible(false); setPaymentRow(null); setSummary(null); form.resetFields(); load(); }}
+            width={900}
+            centered
+            bodyStyle={{ minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onCancel={() => { setQrModalVisible(false); setQrUrl(null); setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); load(); }}
             footer={[
-              <Button key="close" onClick={() => { setQrModalVisible(false); setQrUrl(null); setPaymentModalVisible(false); setPaymentRow(null); setSummary(null); form.resetFields(); load(); }}>Đóng</Button>,
+              <Button key="close" onClick={() => { setQrModalVisible(false); setQrUrl(null); setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); load(); }}>Đóng</Button>,
               <Button key="paid" type="primary" onClick={async () => {
               const key = `confirm_${paymentRow?.IddatPhong ?? 'unknown'}`;
               message.loading({ content: 'Đang xác nhận thanh toán...', key, duration: 0 });
@@ -865,8 +903,7 @@ setData(mappedWithTotals);
                   const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
                   const deposit = Number(summary?.money?.deposit ?? 0);
                   const paidExcl = Math.max(0, daTra - deposit);
-                  const amount = serverRemaining > 0 ? serverRemaining : Math.max(0, tongTien - deposit - paidExcl);
-                  const payload: any = { Amount: amount };
+                  const payload: any = { IsOnline: true };
                   if (paymentInvoiceId) payload.HoaDonId = paymentInvoiceId;
                   const resp = await checkoutApi.confirmPaid(paymentRow.IddatPhong, payload);
                   if (resp !== null) {
@@ -887,18 +924,21 @@ setData(mappedWithTotals);
                 setPaymentModalVisible(false);
                 setInvoiceModalVisible(true);
                 setPaymentRow(null);
-                setSummary(null);
+                // keep summary so the UI retains previous paid amount if not confirmed
                 form.resetFields();
                 await load();
               }
             }}>Đã thanh toán</Button>
           ]}>
             {qrUrl ? (
-              <div style={{ textAlign: 'center' }}>
-                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(qrUrl)}`} alt="QR" />
-                <div style={{ marginTop: 12 }}><a href={qrUrl} target="_blank" rel="noreferrer">Mở liên kết thanh toán</a></div>
+              <div style={{ textAlign: 'center', width: '100%' }}>
+                <img
+                  src={qrUrl ?? undefined}
+                  alt="QR"
+                  style={{ width: 420, height: 420, maxWidth: '100%', display: 'block', margin: '0 auto' }}
+                />
               </div>
-            ) : (<div>Không tìm thấy liên kết thanh toán</div>)}
+            ) : (<div style={{ minHeight: 220 }}>Không tìm thấy liên kết thanh toán</div>)}
           </Modal>
 
           <InvoiceModal

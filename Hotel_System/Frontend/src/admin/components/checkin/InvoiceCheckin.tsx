@@ -11,7 +11,51 @@ interface Props {
   onClose: () => void;
   onComplete: (idDatPhong: string) => Promise<void>;
 }
+// Lấy mã hóa đơn từ nhiều cấu trúc khác nhau
+const getInvoiceId = (data: any): string | null => {
+  if (!data) return null;
 
+  // 1. Trên root
+  const direct =
+    data.IDHoaDon ??
+    data.IdHoaDon ??
+    data.IdhoaDon ??
+    data.idHoaDon ??
+    data.id ??
+    data.ID;
+  if (direct) return String(direct);
+
+  // 2. Trong thuộc tính HoaDon (nếu có)
+  const hoaDon = data.HoaDon ?? data.hoaDon;
+  if (hoaDon) {
+    const fromHoaDon =
+      hoaDon.IDHoaDon ??
+      hoaDon.IdHoaDon ??
+      hoaDon.IdhoaDon ??
+      hoaDon.idHoaDon ??
+      hoaDon.id ??
+      hoaDon.ID;
+    if (fromHoaDon) return String(fromHoaDon);
+  }
+
+  // 3. Trong mảng invoices[0] (nếu có)
+  const inv0 =
+    Array.isArray(data.invoices) && data.invoices.length > 0
+      ? data.invoices[0]
+      : null;
+  if (inv0) {
+    const fromInv =
+      inv0.IDHoaDon ??
+      inv0.IdHoaDon ??
+      inv0.IdhoaDon ??
+      inv0.idHoaDon ??
+      inv0.id ??
+      inv0.ID;
+    if (fromInv) return String(fromInv);
+  }
+
+  return null;
+};
 const InvoiceModal: React.FC<Props> = ({
   visible,
   invoiceData,
@@ -25,6 +69,19 @@ const InvoiceModal: React.FC<Props> = ({
     if (!id) return message.error('Không xác định được mã đặt phòng');
     await onComplete(String(id));
   };
+
+  // Robust extraction of invoice/booking/customer fields (use server-provided values when available)
+    const invoiceId = getInvoiceId(invoiceData);
+  const rawInvoiceDate = invoiceData?.NgayLap ?? invoiceData?.NgayLap ?? invoiceData?.invoices?.[0]?.NgayLap ?? invoiceData?.invoices?.[0]?.ngayLap ?? invoiceData?.HoaDon?.NgayLap ?? null;
+  const invoiceDateStr = rawInvoiceDate ? (() => {
+    try { return new Date(rawInvoiceDate).toLocaleString('vi-VN'); } catch { return String(rawInvoiceDate); }
+  })() : new Date().toLocaleString('vi-VN');
+
+  const customerName = invoiceData?.customer?.name ?? invoiceData?.TenKhachHang ?? invoiceData?.HoTen ?? paymentRow?.TenKhachHang ?? '-';
+  const customerEmail = invoiceData?.customer?.email ?? invoiceData?.EmailKhachHang ?? paymentRow?.EmailKhachHang ?? '-';
+  const bookingId = invoiceData?.IDDatPhong ?? invoiceData?.idDatPhong ?? paymentRow?.IddatPhong ?? '-';
+  const checkinDate = invoiceData?.dates?.checkin ?? paymentRow?.NgayNhanPhong ?? '-';
+  const checkoutDate = invoiceData?.dates?.checkout ?? paymentRow?.NgayTraPhong ?? '-';
 
   // === CHỈ THAY ĐOẠN NÀY – TÍNH ĐÚNG, KHÔNG VAT ===
   const srcItems = (invoiceData?.items && Array.isArray(invoiceData.items) && invoiceData.items.length > 0)
@@ -99,7 +156,7 @@ const InvoiceModal: React.FC<Props> = ({
 
   return (
     <Modal
-      title={invoiceData ? `Hóa đơn - ${invoiceData?.IDHoaDon ?? invoiceData?.idHoaDon ?? ''}` : 'Hóa đơn'}
+      title={invoiceData ? `Hóa đơn - ${invoiceId ?? ''}` : 'Hóa đơn'}
       open={visible}
       onCancel={onClose}
       width={900}
@@ -124,26 +181,25 @@ const InvoiceModal: React.FC<Props> = ({
               <div style={{ color: '#6b7280' }}>Hotline: 1900-xxxx</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div><strong>Hóa đơn:</strong> {invoiceData?.IDHoaDon ?? invoiceData?.idHoaDon}</div>
-              <div><strong>Ngày:</strong> {new Date().toLocaleString('vi-VN')}</div>
+                <div><strong>Ngày:</strong> {invoiceDateStr}</div>
             </div>
           </div>
 
           <Descriptions bordered column={2} size="middle">
             <Descriptions.Item label="Khách hàng">
-              {invoiceData?.TenKhachHang ?? paymentRow?.TenKhachHang ?? '-'}
+              {customerName}
             </Descriptions.Item>
             <Descriptions.Item label="Email">
-              {invoiceData?.EmailKhachHang ?? paymentRow?.EmailKhachHang ?? '-'}
+              {customerEmail}
             </Descriptions.Item>
             <Descriptions.Item label="Mã đặt phòng">
-              {invoiceData?.IDDatPhong ?? paymentRow?.IddatPhong ?? '-'}
+              {bookingId}
             </Descriptions.Item>
             <Descriptions.Item label="Nhận phòng">
-              {paymentRow?.NgayNhanPhong?.slice(0, 10) ?? '-'}
+              {(typeof checkinDate === 'string' && checkinDate.slice) ? checkinDate.slice(0, 10) : checkinDate}
             </Descriptions.Item>
             <Descriptions.Item label="Trả phòng">
-              {paymentRow?.NgayTraPhong?.slice(0, 10) ?? '-'}
+              {(typeof checkoutDate === 'string' && checkoutDate.slice) ? checkoutDate.slice(0, 10) : checkoutDate}
             </Descriptions.Item>
           </Descriptions>
 
@@ -243,7 +299,7 @@ const InvoiceModal: React.FC<Props> = ({
               )}
               {alreadyPaid > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 600 }}>
-                  <span>Đã thanh toán:</span>
+                  <span>Đã thanh toán cọc:</span>
                   <strong>- {alreadyPaid.toLocaleString()} đ</strong>
                 </div>
               )}
