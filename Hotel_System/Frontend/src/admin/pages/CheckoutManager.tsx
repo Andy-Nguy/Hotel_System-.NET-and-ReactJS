@@ -581,6 +581,7 @@ const CheckoutManager: React.FC = () => {
             Math.round(roomTotalForCalc)
           );
 
+
         // Determine amount to create on invoice. For online (QR) payments we should
         // create the invoice with the customer's remaining due (tongTien - paid - deposit)
         // so the QR link shows the correct amount. For cash (method !== 2) keep full safeTongTien.
@@ -1093,140 +1094,63 @@ const CheckoutManager: React.FC = () => {
                 </div>
               )}
             </div>
-              </Modal>
+          </Modal>
+          <Modal
+            title="Thanh toán online - Quét mã QR" 
+            open={qrModalVisible}
+            width={'900'}
+            centered
+            onCancel={() => { setQrModalVisible(false); setQrUrl(null); setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); load(); }}
+            footer={[
+              <Button key="close" onClick={() => { setQrModalVisible(false); setQrUrl(null); setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); load(); }}>Đóng</Button>,
+              <Button key="paid" type="primary" onClick={async () => {
+              const key = `confirm_${paymentRow?.IddatPhong ?? 'unknown'}`;
+              message.loading({ content: 'Đang xác nhận thanh toán...', key, duration: 0 });
+              try {
+                if (paymentRow) {
+                  const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+                  const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+                  const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+                  const deposit = Number(summary?.money?.deposit ?? 0);
+                  const paidExcl = Math.max(0, daTra - deposit);
+                  const payload: any = { IsOnline: true };
+                  if (paymentInvoiceId) payload.HoaDonId = paymentInvoiceId;
 
-            <Modal
-              title="Thanh toán online - Quét mã QR"
-              open={qrModalVisible}
-              onCancel={() => {
+                  const resp = await checkoutApi.confirmPaid(paymentRow.IddatPhong, payload);
+                  if (resp !== null) {
+                    message.success({ content: 'Xác nhận thanh toán thành công', key, duration: 2 });
+                    try {
+                      const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+                      setInvoiceData(fresh);
+                    } catch { }
+                  } else {
+                    message.warning({ content: 'Không nhận được phản hồi xác nhận từ server', key, duration: 3 });
+                  }
+                }
+              } catch (err: any) {
+                message.error({ content: err?.message || 'Lỗi khi xác nhận thanh toán', key, duration: 3 });
+              } finally {
                 setQrModalVisible(false);
                 setQrUrl(null);
                 setPaymentModalVisible(false);
                 setPaymentRow(null);
-                setSummary(null);
+                // keep summary so previously-paid amounts are preserved when closing the QR modal
                 form.resetFields();
-                load();
-              }}
-              footer={[
-                <Button
-                  key="close"
-                  onClick={() => {
-                    setQrModalVisible(false);
-                    setQrUrl(null);
-                    setPaymentModalVisible(false);
-                    setPaymentRow(null);
-                    setSummary(null);
-                    form.resetFields();
-                    load();
-                  }}
-                >
-                  Đóng
-                </Button>,
-                <Button
-                  key="paid"
-                  type="primary"
-                  onClick={async () => {
-                    const key = `confirm_${
-                      paymentRow?.IddatPhong ?? "unknown"
-                    }`;
-                    message.loading({
-                      content: "Đang xác nhận thanh toán...",
-                      key,
-                      duration: 0,
-                    });
-                    try {
-                      if (paymentRow) {
-                        const serverRemaining = Number(
-                          summary?.soTienConLai ??
-                            summary?.money?.soTienConLai ??
-                            summary?.invoices?.[0]?.soTienConLai ??
-                            0
-                        );
-                        const tongTien = Number(
-                          summary?.money?.tongTien ??
-                            form.getFieldValue("TongTien") ??
-                            paymentRow?.TongTien ??
-                            0
-                        );
-                        const daTra = Number(
-                          summary?.invoices?.[0]?.tienThanhToan ??
-                            summary?.money?.paidAmount ??
-                            0
-                        );
-                        const deposit = Number(summary?.money?.deposit ?? 0);
-                        const paidExcl = Math.max(0, daTra - deposit);
-                        const amount =
-                          serverRemaining > 0
-                            ? serverRemaining
-                            : Math.max(0, tongTien - deposit - paidExcl);
-                        const payload: any = { Amount: amount };
-                        if (paymentInvoiceId)
-                          payload.HoaDonId = paymentInvoiceId;
-                        const resp = await checkoutApi.confirmPaid(
-                          paymentRow.IddatPhong,
-                          payload
-                        );
-                        if (resp !== null) {
-                          message.success({
-                            content: "Xác nhận thanh toán thành công",
-                            key,
-                            duration: 2,
-                          });
-                          try {
-                            const fresh = await checkoutApi.getSummary(
-                              paymentRow.IddatPhong
-                            );
-                            setInvoiceData(fresh);
-                          } catch {}
-                        } else {
-                          message.warning({
-                            content:
-                              "Không nhận được phản hồi xác nhận từ server",
-                            key,
-                            duration: 3,
-                          });
-                        }
-                      }
-                    } catch (err: any) {
-                      message.error({
-                        content: err?.message || "Lỗi khi xác nhận thanh toán",
-                        key,
-                        duration: 3,
-                      });
-                    } finally {
-                      setQrModalVisible(false);
-                      setQrUrl(null);
-                      setPaymentModalVisible(false);
-                      setInvoiceModalVisible(true);
-                      setPaymentRow(null);
-                      setSummary(null);
-                      form.resetFields();
-                      await load();
-                    }
-                  }}
-                >
-                  Đã thanh toán
-                </Button>,
-              ]}
-            >
-              {qrUrl ? (
-                <div style={{ textAlign: "center" }}>
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
-                      qrUrl
-                    )}`}
-                    alt="QR"
-                  />
-                  <div style={{ marginTop: 12 }}>
-                    <a href={qrUrl} target="_blank" rel="noreferrer">
-                      Mở liên kết thanh toán
-                    </a>
-                  </div>
-                </div>
-              ) : (
-                <div>Không tìm thấy liên kết thanh toán</div>
-              )}
-            </Modal>
+                await load();
+              }
+            }}>Đã thanh toán</Button>
+          ]}>
+            {qrUrl ? (
+              <div style={{ textAlign: 'center' }}>
+                <img
+                  src={qrUrl ?? undefined}
+                  alt="QR"
+                  style={{ width: 420, height: 420, display: 'block', margin: '0 auto' }}
+                />
+                {/* link removed: use image only */}
+              </div>
+            ) : (<div>Không tìm thấy liên kết thanh toán</div>)}
+          </Modal>
 
             <InvoiceModal
               visible={invoiceModalVisible}
