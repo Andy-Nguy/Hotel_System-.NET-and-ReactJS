@@ -119,24 +119,6 @@ const PromotionList: React.FC<PromotionListProps> = ({
       render: (_: any, record: Promotion) => getPromotionTypeLabel(record.loaiKhuyenMai),
     },
     {
-      title: "Số Lượng",
-      key: "comboCount",
-      width: 100,
-      render: (_: any, record: Promotion) => {
-        const roomCount = record.khuyenMaiPhongs?.length || 0;
-        const serviceCount = record.khuyenMaiDichVus?.length || 0;
-        if (record.loaiKhuyenMai === "combo" || record.loaiKhuyenMai === "room_service") {
-          return (
-            <span style={{ fontSize: 12 }}>
-              {roomCount > 0 && <div>Phòng: {roomCount}</div>}
-              {serviceCount > 0 && <div>DV: {serviceCount}</div>}
-            </span>
-          );
-        }
-        return roomCount + serviceCount || "-";
-      },
-    },
-    {
       title: "Banner",
       key: "banner",
       width: 100,
