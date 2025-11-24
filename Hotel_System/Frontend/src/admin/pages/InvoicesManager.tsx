@@ -6,30 +6,14 @@ import { DownloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { Dayjs } from "dayjs";
 import { getRoomTypes } from "../../api/roomsApi";
-import invoiceApi from "../../api/invoiceApi";
+import invoiceApi, { InvoiceRow as ApiInvoiceRow, InvoiceDetail } from "../../api/invoiceApi";
 
-interface InvoiceRow {
-  idHoaDon: string;
-  idDatPhong: string;
-  ngayLap?: string;
-  tongTien: number;
-  tienCoc: number;
-  tienThanhToan: number;
-  trangThaiThanhToan: number;
-  ghiChu?: string;
-  customer?: { id?: number; hoTen?: string; email?: string; soDienThoai?: string; tichDiem?: number };
-}
+type InvoiceRow = ApiInvoiceRow;
 
 const statusColor = (s: number) => (s === 2 ? "green" : s === 1 ? "orange" : "default");
 const statusText = (s: number) => (s === 2 ? "Đã thanh toán" : s === 1 ? "Chờ xử lý" : "Khác");
 
-const fetchJson = async (url: string, init?: RequestInit) => {
-  const res = await fetch(url, init);
-  const txt = await res.text().catch(() => "");
-  const data = txt ? JSON.parse(txt) : null;
-  if (!res.ok) throw new Error((data && (data.message || data.error)) || `HTTP ${res.status}`);
-  return data;
-};
+// Using `invoiceApi` helpers for data access; no local fetch helper needed
 
 const InvoicesManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -47,28 +31,18 @@ const InvoicesManager: React.FC = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const qs = new URLSearchParams();
-      if (from) qs.set("from", from.format("YYYY-MM-DD"));
-      if (to) qs.set("to", to.format("YYYY-MM-DD"));
-      if (status != null) qs.set("status", String(status));
-      if (selectedRoomType) qs.set("roomType", selectedRoomType);
-      if (staff) qs.set("staff", staff);
-      if (selectedCustomer) qs.set("customer", String(selectedCustomer));
-  const listRes = await fetchJson(`/api/Invoices/invoices?${qs.toString()}`);
-      const rows: InvoiceRow[] = (listRes.data || []).map((x: any) => ({
-        idHoaDon: x.idHoaDon,
-        idDatPhong: x.idDatPhong,
-        ngayLap: x.ngayLap,
-        tongTien: x.tongTien,
-        tienCoc: x.tienCoc,
-        tienThanhToan: x.tienThanhToan,
-        trangThaiThanhToan: x.trangThaiThanhToan,
-        ghiChu: x.ghiChu,
-        customer: x.customer,
-      }));
-      setData(rows);
-  const sumRes = await fetchJson(`/api/Invoices/summary?${qs.toString()}`);
-      setSummary(sumRes.data);
+      const params: any = {};
+      if (from) params.from = from.format("YYYY-MM-DD");
+      if (to) params.to = to.format("YYYY-MM-DD");
+      if (status != null) params.status = status;
+      if (selectedRoomType) params.roomType = selectedRoomType;
+      if (staff) params.staff = staff;
+      if (selectedCustomer) params.customer = String(selectedCustomer);
+
+      const rows = await invoiceApi.getInvoices(params);
+      setData(rows || []);
+      const sum = await invoiceApi.getSummary(params);
+      setSummary(sum || null);
     } catch (e: any) {
       message.error(e.message || "Không thể tải dữ liệu");
     } finally {
@@ -95,32 +69,29 @@ const InvoicesManager: React.FC = () => {
     try {
       setLoading(true);
       const d = await invoiceApi.getInvoiceDetail(idHoaDon);
-      // Normalize roomLines and services to handle different JSON naming (camelCase or PascalCase)
       if (d && d.data) {
-        const raw = d.data as any;
-        const rawRoomLines = raw.roomLines ?? raw.roomLines ?? raw.roomLines ?? raw.roomLines ?? raw.roomLines ?? raw.roomLines ?? raw.roomLines;
-        const roomLines = (raw.roomLines ?? raw.roomLines ?? raw.roomLines ?? raw.roomLines ?? raw.roomLines ?? raw.roomLines ?? raw.roomLines ?? [])
-          .map((r: any) => ({
-            IDPhong: r.IDPhong ?? r.idPhong ?? r.IDPhòng ?? r.idphong ?? r.IDPHONG ?? r.IDPhong,
-            SoDem: r.SoDem ?? r.soDem ?? r.sodem ?? r.SoDem ?? r.SoDem,
-            GiaPhong: r.GiaPhong ?? r.giaPhong ?? r.giaPhong ?? r.GiaPhong ?? r.GiaPhong,
-            ThanhTien: r.ThanhTien ?? r.thanhTien ?? r.ThanhTien ?? r.ThanhTien
-          }));
+        const raw: any = d.data;
+        const roomLinesRaw = raw.roomLines ?? raw.RoomLines ?? raw.room_lines ?? raw.Room_Lines ?? [];
+        const servicesRaw = raw.services ?? raw.Services ?? raw.cThdDvs ?? [];
 
-        const rawServices = raw.services ?? raw.services ?? [];
-        const services = (raw.services ?? raw.services ?? [])
-          .map((s: any) => ({
-            IddichVu: s.IddichVu ?? s.iddichVu ?? s.idDichVu ?? s.idDichVu ?? s.IddichVu,
-            TienDichVu: s.TienDichVu ?? s.tienDichVu ?? s.tiendichvu ?? s.TienDichVu ?? s.TienDichVu,
-            ThoiGianThucHien: s.ThoiGianThucHien ?? s.thoiGianThucHien ?? s.ThoiGianThucHien,
-            TrangThai: s.TrangThai ?? s.trangThai ?? s.TrangThai
-          }));
+        const roomLines = (roomLinesRaw || []).map((r: any) => ({
+          IDPhong: r.IDPhong ?? r.idPhong ?? r.id_phong ?? r.IDPHONG ?? r.idphong,
+          SoDem: r.SoDem ?? r.soDem ?? r.sodem ?? 0,
+          GiaPhong: r.GiaPhong ?? r.giaPhong ?? r.price ?? 0,
+          ThanhTien: r.ThanhTien ?? r.thanhTien ?? r.total ?? 0,
+        }));
 
-        // overwrite arrays so modal rendering uses normalized keys
+        const services = (servicesRaw || []).map((s: any) => ({
+          IddichVu: s.IddichVu ?? s.idDichVu ?? s.iddichVu ?? s.IddichVu,
+          TienDichVu: s.TienDichVu ?? s.tienDichVu ?? s.price ?? 0,
+          ThoiGianThucHien: s.ThoiGianThucHien ?? s.thoiGianThucHien ?? s.time ?? null,
+          TrangThai: s.TrangThai ?? s.trangThai ?? null,
+        }));
+
         d.data.roomLines = roomLines;
         d.data.services = services;
       }
-      setDetail(d);
+      setDetail(d as { data: InvoiceDetail } | null);
       setDetailVisible(true);
     } catch (e: any) {
       message.error(e.message || 'Không thể tải chi tiết');
@@ -145,7 +116,7 @@ const InvoicesManager: React.FC = () => {
  
 
   const downloadPdf = async (row: InvoiceRow) => {
-    const url = `/api/Payment/invoice/${row.idHoaDon}/pdf`;
+    const url = `/api/ThanhToan/hoa-don/${row.idHoaDon}/pdf`;
     try {
       setLoading(true);
       const res = await fetch(url, {
@@ -201,11 +172,20 @@ const handleDownloadPdf = (row: InvoiceRow) => {
 
   const updateStatus = async (row: InvoiceRow, newStatus: number) => {
     try {
-      await fetchJson(`/api/Payment/update-payment-status`, {
+      const token = localStorage.getItem("hs_token");
+      const headers: any = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`/api/ThanhToan/cap-nhat-trang-thanh-toan`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ IDDatPhong: row.idDatPhong, TrangThaiThanhToan: newStatus, GhiChu: row.ghiChu }),
       });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        let err = `HTTP ${res.status}`;
+        try { const parsed = txt ? JSON.parse(txt) : null; err = (parsed && (parsed.message || parsed.error)) || err; } catch {}
+        throw new Error(err);
+      }
       message.success("Đã cập nhật trạng thái");
       load();
     } catch (e: any) {

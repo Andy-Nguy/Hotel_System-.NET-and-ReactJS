@@ -11,14 +11,14 @@ namespace Hotel_System.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class CheckInController : ControllerBase
+    public class NhanPhongController : ControllerBase
     {
         private readonly HotelSystemContext _context;
-        private readonly ILogger<CheckInController> _logger;
+        private readonly ILogger<NhanPhongController> _logger;
         private readonly Hotel_System.API.Services.IEmailService _emailService;
         private readonly Hotel_System.API.Services.EmailTemplateRenderer _templateRenderer;
 
-        public CheckInController(HotelSystemContext context, ILogger<CheckInController> logger, Hotel_System.API.Services.IEmailService emailService, Hotel_System.API.Services.EmailTemplateRenderer templateRenderer)
+        public NhanPhongController(HotelSystemContext context, ILogger<NhanPhongController> logger, Hotel_System.API.Services.IEmailService emailService, Hotel_System.API.Services.EmailTemplateRenderer templateRenderer)
         {
             _context = context;
             _logger = logger;
@@ -59,7 +59,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        // GET: api/CheckIn
+        // GET: api/NhanPhong
         // Return bookings that are currently 'Đang sử dụng' (TrangThai == 3)
         [HttpGet]
         public async Task<IActionResult> GetUsingBookings()
@@ -90,9 +90,9 @@ namespace Hotel_System.API.Controllers
             return Ok(list);
         }
 
-        // GET: api/CheckIn/today
+        // GET: api/NhanPhong/hom-nay
         // Return bookings that have NgayNhanPhong == today and TrangThai == 2 (ready/confirmed)
-        [HttpGet("today")]
+        [HttpGet("hom-nay")]
         public async Task<IActionResult> GetTodayBookings()
         {
             var today = DateOnly.FromDateTime(DateTime.Now);
@@ -124,7 +124,7 @@ namespace Hotel_System.API.Controllers
             return Ok(list);
         }
 
-        // GET: api/CheckIn/{id}
+        // GET: api/NhanPhong/{id}
         [HttpGet("{id}")]
         public async Task<IActionResult> Get(string id)
         {
@@ -191,36 +191,10 @@ namespace Hotel_System.API.Controllers
             return Ok(result);
         }
 
-        // POST: api/CheckIn/start/{id}
-        // Mark the booking as 'Đang sử dụng' (TrangThai = 3) and set NgayNhanPhong to now if not set
-        [HttpPost("start/{id}")]
-        public async Task<IActionResult> StartCheckIn(string id)
-        {
-            if (string.IsNullOrWhiteSpace(id)) return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });
 
-            var booking = await _context.DatPhongs.FirstOrDefaultAsync(dp => dp.IddatPhong == id);
-            if (booking == null) return NotFound(new { message = "Không tìm thấy đặt phòng." });
-
-            try
-            {
-                booking.TrangThai = 3; // Đang sử dụng
-                // If NgayNhanPhong is default, set to today
-                if (booking.NgayNhanPhong == default)
-                    booking.NgayNhanPhong = DateOnly.FromDateTime(DateTime.Now);
-
-                await _context.SaveChangesAsync();
-                return Ok(new { message = "Bắt đầu nhận phòng thành công.", bookingId = booking.IddatPhong, trangThai = booking.TrangThai });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi bắt đầu nhận phòng cho {Id}", id);
-                return StatusCode(500, new { message = "Lỗi server.", error = ex.Message });
-            }
-        }
-
-    // PUT/POST: api/CheckIn/confirm/{id}
+    // PUT/POST: api/NhanPhong/nhan-phong/{id}
     // Confirm a booking as 'Đang sử dụng' (TrangThai = 3). Accepts either PUT or POST for compatibility.
-    [HttpPost("confirm/{id}")]
+    [HttpPost("nhan-phong/{id}")]
         public async Task<IActionResult> ConfirmCheckIn(string id)
         {
             if (string.IsNullOrWhiteSpace(id)) return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });
@@ -255,9 +229,9 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-    // PUT/POST: api/CheckIn/cancel/{id}
+    // PUT/POST: api/NhanPhong/huy/{id}
     // Cancel a booking (no-show) and set the room status to empty/available
-    [HttpPut("cancel/{id}")]
+    [HttpPut("huy-xac-nhan/{id}")]
         public async Task<IActionResult> CancelBooking(string id)
         {
             if (string.IsNullOrWhiteSpace(id)) return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });
@@ -304,9 +278,9 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        // POST: api/CheckIn/complete-payment/{id}
+        // POST: api/NhanPhong/cap-nhat-thanh-toan/{id}
         // Mark the booking as paid (TrangThaiThanhToan = 2) but keep TrangThai unchanged (e.g., still 3 = Đang sử dụng)
-        [HttpPost("complete-payment/{id}")]
+        [HttpPost("cap-nhat-thanh-toan/{id}")]
         public async Task<IActionResult> CompletePayment(string id)
         {
             if (string.IsNullOrWhiteSpace(id)) return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });

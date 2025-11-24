@@ -17,16 +17,16 @@ namespace Hotel_System.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class PaymentController : ControllerBase
+    public class ThanhToanController : ControllerBase
     {
         private readonly HotelSystemContext _context;
-        private readonly ILogger<PaymentController> _logger;
+        private readonly ILogger<ThanhToanController> _logger;
         private readonly IEmailService _emailService;
         private readonly Hotel_System.API.Services.EmailTemplateRenderer _templateRenderer;
 
-        public PaymentController(
+        public ThanhToanController(
             HotelSystemContext context,
-            ILogger<PaymentController> logger,
+            ILogger<ThanhToanController> logger,
             IEmailService emailService,
             Hotel_System.API.Services.EmailTemplateRenderer templateRenderer
         )
@@ -139,7 +139,7 @@ namespace Hotel_System.API.Controllers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "PaymentController: failed to apply promotions to ChiTietDatPhongs — continuing with original prices");
+                    _logger.LogWarning(ex, "ThanhToanController: failed to apply promotions to ChiTietDatPhongs — continuing with original prices");
                 }
 
                 // Fallback tiền phòng từ chi tiết nếu client không gửi — after applying promos we use ThanhTien
@@ -165,7 +165,7 @@ namespace Hotel_System.API.Controllers
                 decimal totalBeforeVat = roomTotal + servicesTotal;
                 // Apply VAT 10% and round to nearest integer
                 decimal tongTien = Math.Round(totalBeforeVat * 1.1m, 0, MidpointRounding.AwayFromZero);
-                _logger.LogInformation("PaymentController: computed tongTien server-side room={Room} services={Services} tongTien={TongTien}", roomTotal, servicesTotal, tongTien);
+                _logger.LogInformation("ThanhToanController: computed tongTien server-side room={Room} services={Services} tongTien={TongTien}", roomTotal, servicesTotal, tongTien);
 
                 // Lấy tiền cọc hiện có trên DatPhong làm nguồn dữ liệu mặc định
                 decimal tienCoc = datPhong.TienCoc ?? 0m;
@@ -239,7 +239,7 @@ TongTien = tongTien,
                         var dv = await _context.DichVus.FindAsync(svc.IddichVu);
                         if (dv == null)
                         {
-                            _logger.LogWarning("PaymentController: dịch vụ {Id} không tồn tại, bỏ qua", svc.IddichVu);
+                            _logger.LogWarning("ThanhToanController: dịch vụ {Id} không tồn tại, bỏ qua", svc.IddichVu);
                             continue;
                         }
 
@@ -361,7 +361,7 @@ _context.Cthddvs.Add(cthd);
         // - Nếu chuyển sang ĐÃ THANH TOÁN, set HoaDon.TienThanhToan nếu đang 0
         // - Gửi email hóa đơn nếu chuyển sang đã thanh toán — VỚI BODY
         // ===========================
-        [HttpPost("update-status")]
+        [HttpPost("cap-nhat-trang-thanh-toan")]
         public async Task<IActionResult> UpdatePaymentStatus([FromBody] PaymentStatusUpdateRequest request)
         {
             try
@@ -559,11 +559,10 @@ var type = _emailService.GetType();
                 }
             }
         }
-         // GET: api/Payment/invoice/{id}/pdf
+        // GET: api/ThanhToan/hoa-don/{id}/pdf
         // Generates a simple PDF invoice and returns it as attachment.
-        // PaymentController.cs hoặc CheckoutController.cs
-[HttpGet("invoice/{id}/pdf")]
-public async Task<IActionResult> GetInvoicePdf(string id)
+        [HttpGet("hoa-don/{id}/pdf")]
+    public async Task<IActionResult> GetInvoicePdf(string id)
 {
     var hoaDon = await _context.HoaDons
         .Include(h => h.Cthddvs).ThenInclude(c => c.IddichVuNavigation)

@@ -96,7 +96,7 @@ function normalizePaymentResponse(raw: any): PaymentResponse {
 // === Payment API calls ===
 
 export async function processPayment(req: PaymentRequest): Promise<PaymentResponse> {
-	const res = await fetch(`${API_BASE}/api/Payment/process`, {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/process`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -122,7 +122,7 @@ export async function processPayment(req: PaymentRequest): Promise<PaymentRespon
 }
 
 export async function payCash(idHoaDon: string, amount: number, note?: string): Promise<PaymentResponse> {
-	const res = await fetch(`${API_BASE}/api/Payment/cash`, {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/cash`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ IdHoaDon: idHoaDon, PaymentMethod: "CASH", Amount: amount, Note: note }),
@@ -132,7 +132,7 @@ export async function payCash(idHoaDon: string, amount: number, note?: string): 
 }
 
 export async function payBankTransfer(idHoaDon: string, amount: number, note?: string): Promise<PaymentResponse> {
-	const res = await fetch(`${API_BASE}/api/Payment/bank-transfer`, {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/bank-transfer`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ IdHoaDon: idHoaDon, PaymentMethod: "BANK_TRANSFER", Amount: amount, Note: note }),
@@ -142,7 +142,7 @@ export async function payBankTransfer(idHoaDon: string, amount: number, note?: s
 }
 
 export async function confirmBankTransfer(req: ConfirmBankTransferRequest): Promise<PaymentResponse> {
-	const res = await fetch(`${API_BASE}/api/Payment/confirm-bank-transfer`, {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/confirm-bank-transfer`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ IdHoaDon: req.idHoaDon, Amount: req.amount, Note: req.note }),
@@ -152,7 +152,7 @@ export async function confirmBankTransfer(req: ConfirmBankTransferRequest): Prom
 }
 
 export async function payCreditCard(idHoaDon: string, amount: number, card: CreditCardInfo, note?: string): Promise<PaymentResponse> {
-	const res = await fetch(`${API_BASE}/api/Payment/credit-card`, {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/credit-card`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -185,19 +185,19 @@ async function payEWallet(path: string, idHoaDon: string, amount: number, phone?
 }
 
 export const payMoMo = (idHoaDon: string, amount: number, phone?: string | null, note?: string) =>
-	payEWallet("/api/Payment/momo", idHoaDon, amount, phone, note);
+	payEWallet("/api/ThanhToan/momo", idHoaDon, amount, phone, note);
 
 export const payZaloPay = (idHoaDon: string, amount: number, phone?: string | null, note?: string) =>
-	payEWallet("/api/Payment/zalopay", idHoaDon, amount, phone, note);
+	payEWallet("/api/ThanhToan/zalopay", idHoaDon, amount, phone, note);
 
 export const payVNPay = (idHoaDon: string, amount: number, phone?: string | null, note?: string) =>
-	payEWallet("/api/Payment/vnpay", idHoaDon, amount, phone, note);
+	payEWallet("/api/ThanhToan/vnpay", idHoaDon, amount, phone, note);
 
 export const payShopeePay = (idHoaDon: string, amount: number, phone?: string | null, note?: string) =>
-	payEWallet("/api/Payment/shopeepay", idHoaDon, amount, phone, note);
+	payEWallet("/api/ThanhToan/shopeepay", idHoaDon, amount, phone, note);
 
 export async function checkPaymentStatus(idHoaDon: string): Promise<PaymentResponse> {
-	const res = await fetch(`${API_BASE}/api/Payment/status/${encodeURIComponent(idHoaDon)}`);
+	const res = await fetch(`${API_BASE}/api/ThanhToan/status/${encodeURIComponent(idHoaDon)}`);
 	if (res.status === 404) {
 		return { success: false, message: "Không tìm thấy hóa đơn", idHoaDon };
 	}
@@ -206,7 +206,7 @@ export async function checkPaymentStatus(idHoaDon: string): Promise<PaymentRespo
 }
 
 export async function refundPayment(req: RefundRequest): Promise<PaymentResponse> {
-	const res = await fetch(`${API_BASE}/api/Payment/refund`, {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/refund`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -221,7 +221,7 @@ export async function refundPayment(req: RefundRequest): Promise<PaymentResponse
 }
 
 export async function downloadInvoicePdf(idHoaDon: string): Promise<Blob> {
-	const res = await fetch(`${API_BASE}/api/Payment/invoice/${encodeURIComponent(idHoaDon)}/pdf`);
+	const res = await fetch(`${API_BASE}/api/ThanhToan/hoa-don/${encodeURIComponent(idHoaDon)}/pdf`);
 	if (!res.ok) {
 		const t = await res.text().catch(() => "");
 		throw new Error(t || `HTTP ${res.status}`);
@@ -230,12 +230,12 @@ export async function downloadInvoicePdf(idHoaDon: string): Promise<Blob> {
 }
 
 export async function getInvoiceDetail(idHoaDon: string): Promise<InvoiceDetailResponse> {
-	const res = await fetch(`${API_BASE}/api/Payment/invoice/${encodeURIComponent(idHoaDon)}`);
+	const res = await fetch(`${API_BASE}/api/ThanhToan/hoa-don/${encodeURIComponent(idHoaDon)}`);
 	return handleJson<InvoiceDetailResponse>(res);
 }
 
 export async function cancelPayment(req: CancelPaymentRequest): Promise<PaymentResponse> {
-	const res = await fetch(`${API_BASE}/api/Payment/cancel`, {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/cancel`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ IdHoaDon: req.idHoaDon, Reason: req.reason }),
@@ -245,7 +245,7 @@ export async function cancelPayment(req: CancelPaymentRequest): Promise<PaymentR
 }
 
 export async function getPaymentMethods(): Promise<Array<{ code: string; name: string; icon?: string; available?: boolean }>> {
-	const res = await fetch(`${API_BASE}/api/Payment/methods`);
+	const res = await fetch(`${API_BASE}/api/ThanhToan/methods`);
 	return handleJson(res);
 }
 

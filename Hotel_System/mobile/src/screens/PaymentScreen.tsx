@@ -149,7 +149,7 @@ const PaymentScreen: React.FC = () => {
             : [],
       };
 
-      const response = await fetch(buildApiUrl("/api/Payment/hoa-don"), {
+      const response = await fetch(buildApiUrl("/api/ThanhToan/hoa-don"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

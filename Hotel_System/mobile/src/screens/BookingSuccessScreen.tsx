@@ -105,7 +105,7 @@ const BookingSuccessScreen: React.FC = () => {
       return;
     }
 
-    const url = buildApiUrl(`/api/Payment/invoice/${idHoaDon}/pdf`);
+    const url = buildApiUrl(`/api/ThanhToan/hoa-don/${idHoaDon}/pdf`);
     Linking.canOpenURL(url)
       .then((supported) => {
         if (!supported) {
