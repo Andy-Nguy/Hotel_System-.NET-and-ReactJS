@@ -51,6 +51,37 @@ interface InvoiceRow {
   };
 }
 
+// Chi tiết hóa đơn (dùng cho modal xem chi tiết)
+interface InvoiceDetail {
+  idHoaDon: string;
+  idDatPhong: string;
+  ngayLap?: string;
+  tongTien?: number;
+  tienCoc?: number;
+  tienThanhToan?: number;
+  trangThaiThanhToan?: number;
+  ghiChu?: string;
+  customer?: {
+    id?: number;
+    hoTen?: string;
+    email?: string;
+    soDienThoai?: string;
+    tichDiem?: number;
+  };
+  roomLines?: Array<{
+    IDPhong?: string;
+    SoDem?: number;
+    GiaPhong?: number;
+    ThanhTien?: number;
+  }>;
+  services?: Array<{
+    IddichVu?: string;
+    TienDichVu?: number;
+    ThoiGianThucHien?: string;
+    TrangThai?: string;
+  }>;
+}
+
 const statusColor = (s: number) =>
   s === 2 ? "green" : s === 1 ? "red" : s === 0 ? "orange" : "default";
 const statusText = (s: number) =>
@@ -149,7 +180,6 @@ const InvoicesManager: React.FC = () => {
     try {
       setLoading(true);
       const d = await invoiceApi.getInvoiceDetail(idHoaDon);
-      // Normalize roomLines and services to handle different JSON naming (camelCase or PascalCase)
       if (d && d.data) {
         const raw = d.data as any;
         const rawRoomLines =
@@ -198,11 +228,10 @@ const InvoicesManager: React.FC = () => {
           TrangThai: s.TrangThai ?? s.trangThai ?? s.TrangThai,
         }));
 
-        // overwrite arrays so modal rendering uses normalized keys
         d.data.roomLines = roomLines;
         d.data.services = services;
       }
-      setDetail(d);
+      setDetail(d as { data: InvoiceDetail } | null);
       setDetailVisible(true);
     } catch (e: any) {
       message.error(e.message || "Không thể tải chi tiết");
@@ -228,7 +257,7 @@ const InvoicesManager: React.FC = () => {
   }, [data, keyword]);
 
   const downloadPdf = async (row: InvoiceRow) => {
-    const url = `/api/Payment/invoice/${row.idHoaDon}/pdf`;
+    const url = `/api/ThanhToan/hoa-don/${row.idHoaDon}/pdf`;
     try {
       setLoading(true);
       const res = await fetch(url, {
@@ -289,7 +318,10 @@ const InvoicesManager: React.FC = () => {
 
   const updateStatus = async (row: InvoiceRow, newStatus: number) => {
     try {
-      await fetchJson(`/api/Payment/update-payment-status`, {
+      const token = localStorage.getItem("hs_token");
+      const headers: any = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`/api/ThanhToan/cap-nhat-trang-thanh-toan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -298,6 +330,12 @@ const InvoicesManager: React.FC = () => {
           GhiChu: row.ghiChu,
         }),
       });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        let err = `HTTP ${res.status}`;
+        try { const parsed = txt ? JSON.parse(txt) : null; err = (parsed && (parsed.message || parsed.error)) || err; } catch {}
+        throw new Error(err);
+      }
       message.success("Đã cập nhật trạng thái");
       load();
     } catch (e: any) {

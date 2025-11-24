@@ -9,17 +9,17 @@ namespace Hotel_System.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class InvoicesController : ControllerBase
+    public class HoaDonController : ControllerBase
     {
         private readonly HotelSystemContext _db;
 
-        public InvoicesController(HotelSystemContext db)
+        public HoaDonController(HotelSystemContext db)
         {
             _db = db;
         }
 
-        // GET api/Invoices/invoices?from=yyyy-MM-dd&to=yyyy-MM-dd&status=2&customer=...&roomType=...&staff=...
-        [HttpGet("invoices")]
+        // GET api/HoaDon/danh-sach-hoa-don?from=yyyy-MM-dd&to=yyyy-MM-dd&status=2&customer=...&roomType=...&staff=...
+        [HttpGet("danh-sach-hoa-don")]
         public async Task<IActionResult> GetInvoices([FromQuery] string? from, [FromQuery] string? to, [FromQuery] int? status, [FromQuery] string? customer, [FromQuery] string? roomType, [FromQuery] string? staff)
         {
             DateTime? dFrom = TryParseDate(from);
@@ -78,8 +78,8 @@ namespace Hotel_System.API.Controllers
             return Ok(new { data = list });
         }
 
-        // GET api/Invoices/summary?from=...&to=...&status=...&customer=...&roomType=...&staff=...
-        [HttpGet("summary")]
+        // GET api/HoaDon/tong-quan?from=...&to=...&status=...&customer=...&roomType=...&staff=...
+        [HttpGet("thong-ke")]
         public async Task<IActionResult> GetSummary([FromQuery] string? from, [FromQuery] string? to, [FromQuery] int? status, [FromQuery] string? customer, [FromQuery] string? roomType, [FromQuery] string? staff)
         {
             DateTime? dFrom = TryParseDate(from);
@@ -124,8 +124,8 @@ namespace Hotel_System.API.Controllers
             return null;
         }
 
-        // GET api/Invoices/{id} - detailed invoice including room lines and services
-        [HttpGet("{id}")]
+        // GET api/HoaDon/chi-tiet/{id} - detailed invoice including room lines and services
+        [HttpGet("chi-tiet/{id}")]
         public async Task<IActionResult> GetInvoiceDetail(string id)
         {
             if (string.IsNullOrWhiteSpace(id)) return BadRequest();

@@ -5,7 +5,7 @@ import AppIcon from "./AppIcon";
 
 interface BookingProgressProps {
   totalRooms?: number;
-  currentStage?: "select" | "services" | "checkout" | "complete";
+  currentStage?: "select" | "services" | "checkout" | "complete"| "payment";
   currentRoom?: number; // 1-based current room when selecting
   selectedRoomNumbers?: number[]; // list of selected room numbers (1-based)
 }

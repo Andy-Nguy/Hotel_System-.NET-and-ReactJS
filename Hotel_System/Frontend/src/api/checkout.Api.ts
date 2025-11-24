@@ -33,8 +33,8 @@ const fetchJson = async (endpoint: string, init?: RequestInit) => {
 };
 
 export const checkoutApi = {
-  // 1. Lấy tóm tắt thanh toán (luôn dùng cái này)
-  getSummary: (id: string | number) => fetchJson(`/api/Checkout/summary/${id}`),
+  // 1. Lấy tóm tắt thanh toán (luôn dùng cái này) — gọi TraPhong controller
+  getSummary: (id: string | number) => fetchJson(`/api/TraPhong/tong-hop-thanh-toan/${id}`),
 
   // 2. Tạo hóa đơn + thêm dịch vụ mới (Checkout endpoint)
   createInvoice: (payload: {
@@ -55,7 +55,7 @@ export const checkoutApi = {
     }>;
     ServicesTotal?: number;
   }) =>
-    fetchJson(`/api/Checkout/hoa-don`, {
+    fetchJson(`/api/TraPhong/hoa-don`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -66,7 +66,7 @@ export const checkoutApi = {
     id: string | number,
     payload?: { Amount?: number; HoaDonId?: string; Note?: string }
   ) =>
-    fetchJson(`/api/Checkout/confirm-paid/${id}`, {
+    fetchJson(`/api/TraPhong/xac-nhan-thanh-toan/${id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload ?? {}),
@@ -80,7 +80,7 @@ export const checkoutApi = {
     Services?: Array<{ IddichVu: string | number; TienDichVu?: number }>;
     Note?: string;
   }) =>
-    fetchJson(`/api/Checkout/pay-qr`, {
+    fetchJson(`/api/TraPhong/thanh-toan-qr`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -88,7 +88,7 @@ export const checkoutApi = {
 
   // 4. Hoàn tất trả phòng
   completeCheckout: (id: string | number) =>
-    fetchJson(`/api/Checkout/complete/${id}`, { method: "POST" }),
+    fetchJson(`/api/TraPhong/hoan-tat-tra-phong/${id}`, { method: "POST" }),
 
   // 5. Thêm dịch vụ vào hóa đơn của booking
   // Business rule: always finds THE ONE invoice for the booking by IDDatPhong
@@ -103,7 +103,7 @@ export const checkoutApi = {
       GhiChu?: string;
     }>;
   }) =>
-    fetchJson(`/api/Checkout/add-service-to-invoice`, {
+    fetchJson(`/api/TraPhong/them-dich-vu-vao-hoa-don`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
