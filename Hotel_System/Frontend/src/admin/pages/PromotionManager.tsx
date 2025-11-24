@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   getAllPromotions,
   updateExpiredStatus,
@@ -23,19 +23,66 @@ const PromotionManager: React.FC = () => {
   // Tabs: 'list' = Danh sách khuyến mãi (default), 'form' = Tạo/Chỉnh sửa
   const [activeTab, setActiveTab] = useState<"list" | "form">("list");
 
+  // Track current request to prevent duplicate calls
+  const requestInProgressRef = useRef<Promise<Promotion[]> | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Load promotions - runs when filters or refreshTrigger changes
   useEffect(() => {
     const loadPromotions = async () => {
+      // If a request is already in progress with same params, reuse it
+      if (requestInProgressRef.current) {
+        try {
+          const data = await requestInProgressRef.current;
+          if (isMountedRef.current) {
+            setPromotions(data);
+            console.log("[PROMOTION_MANAGER] Loaded promotions from cache:", data);
+          }
+        } catch (error) {
+          if (isMountedRef.current) {
+            console.error("[PROMOTION_MANAGER] Error loading promotions:", error);
+          }
+        }
+        return;
+      }
+
+      // Start new request and cache it
+      const newRequest = getAllPromotions(filterStatus, filterDiscountType);
+      requestInProgressRef.current = newRequest;
+
       try {
-        const data = await getAllPromotions(filterStatus, filterDiscountType);
-        setPromotions(data);
-        console.log("[PROMOTION_MANAGER] Loaded promotions:", data);
+        const data = await newRequest;
+        if (isMountedRef.current && requestInProgressRef.current === newRequest) {
+          setPromotions(data);
+          console.log("[PROMOTION_MANAGER] Loaded promotions:", data);
+        }
       } catch (error) {
-        console.error("[PROMOTION_MANAGER] Error loading promotions:", error);
+        if (isMountedRef.current && requestInProgressRef.current === newRequest) {
+          console.error("[PROMOTION_MANAGER] Error loading promotions:", error);
+        }
+      } finally {
+        // Clear cache only if this was the current request
+        if (requestInProgressRef.current === newRequest) {
+          requestInProgressRef.current = null;
+        }
       }
     };
-    
+
     loadPromotions();
+
+    // Cleanup on unmount
+    return () => {
+      // Don't clear requestInProgressRef here - let it complete
+    };
   }, [refreshTrigger, filterStatus, filterDiscountType]);
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const handleUpdateExpired = async () => {
     try {

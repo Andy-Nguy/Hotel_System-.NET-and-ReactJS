@@ -67,6 +67,8 @@ CREATE TABLE Phong (
 ALTER TABLE Phong
 ALTER COLUMN TenPhong NVARCHAR(50);
 
+select * from Phong;
+
 INSERT INTO LoaiPhong (IDLoaiPhong, TenLoaiPhong, MoTa, UrlAnhLoaiPhong)
 VALUES
 ('LP01', N'Deluxe Room', 
@@ -320,7 +322,7 @@ CREATE TABLE DatPhong (
     TongTien DECIMAL(18,2) NOT NULL,
     TienCoc DECIMAL(18,2) DEFAULT 0,
     TrangThai INT NOT NULL,          -- 1:Chờ XN, 2:Đã XN, 0:Hủy, 3:Đang dùng, 4:Hoàn thành
-    TrangThaiThanhToan INT NOT NULL, -- 1:Chưa TT, 2:Đã TT, 0:Đã cọc,
+    TrangThaiThanhToan INT NOT NULL, -- 1:Chưa TT, 2:Đã TT, 0:Đã cọc
     CONSTRAINT FK_DatPhong_KhachHang FOREIGN KEY (IDKhachHang)
         REFERENCES KhachHang(IDKhachHang)
         ON DELETE SET NULL ON UPDATE CASCADE,
@@ -329,7 +331,34 @@ CREATE TABLE DatPhong (
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- Thêm dữ liệu mẫu cho DatPhong để test
+ALTER TABLE DatPhong;
+ADD SoNguoi int,
+SoLuongPhong int,
+ThoiHan DATETIME2(7)
+
+CREATE TABLE ChiTietDatPhong (
+    IDChiTiet INT IDENTITY(1,1) PRIMARY KEY,
+    IDDatPhong NVARCHAR(50) NOT NULL,
+    IDPhong NVARCHAR(50) NOT NULL,
+    SoDem INT NOT NULL,
+    GiaPhong DECIMAL(18,2) NOT NULL,
+    ThanhTien DECIMAL(18,2) NOT NULL,
+    GhiChu NVARCHAR(MAX),
+    
+    CONSTRAINT FK_ChiTietDatPhong_DatPhong 
+        FOREIGN KEY (IDDatPhong) REFERENCES DatPhong(IDDatPhong)
+        ON DELETE CASCADE ON UPDATE NO ACTION,
+    
+    CONSTRAINT FK_ChiTietDatPhong_Phong 
+        FOREIGN KEY (IDPhong) REFERENCES Phong(IDPhong)
+        ON DELETE NO ACTION ON UPDATE NO ACTION,
+    
+    -- Đảm bảo không đặt trùng phòng trong cùng 1 đơn
+    CONSTRAINT UQ_DatPhong_Phong UNIQUE (IDDatPhong, IDPhong)
+);
+GO
+
+
 INSERT INTO DatPhong (
     IDDatPhong, IDKhachHang, IDPhong, NgayDatPhong,
     NgayNhanPhong, NgayTraPhong, SoDem,
@@ -339,7 +368,7 @@ VALUES
 ('DP003', 1, 'P102', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 4, 2),  -- Hoàn thành (quá khứ)
 ('DP002', 1, 'P301', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 2, 2),  -- Hoàn thành (quá khứ)
 
-('DP004', 2, 'P101', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 2, 1); -- Đã xác nhận (tương lai)
+('DP004', 1, 'P101', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 2, 1); -- Đã xác nhận (tương lai)
 
 GO
 
@@ -367,11 +396,16 @@ CREATE TABLE DichVu (
     IDDichVu NVARCHAR(50) PRIMARY KEY,
     TenDichVu NVARCHAR(100) NOT NULL,
     TienDichVu DECIMAL(18,2) DEFAULT 0,
-    HinhDichVu NVARCHAR(255),
-    ThoiGianBatDau TIME NULL,
-    ThoiGianKetThuc TIME NULL,
-    TrangThai NVARCHAR(50) DEFAULT N'Đang hoạt động'
+    HinhDichVu NVARCHAR(255)
 );
+
+ALTER TABLE DichVu
+ADD ThoiGianBatDau TIME NULL,
+    TrangThai NVARCHAR(50),
+    ThoiGianKetThuc TIME NULL;
+
+ALTER TABLE DichVu
+ADD TrangThai NVARCHAR(50);
 
 CREATE TABLE TTDichVu (
     IDTTDichVu NVARCHAR(50) PRIMARY KEY,
@@ -399,6 +433,15 @@ CREATE TABLE CTHDDV (
         REFERENCES DichVu(IDDichVu)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+ALTER TABLE CTHDDV
+ADD IDKhuyenMaiCombo NVARCHAR(50) NULL;
+ALTER TABLE CTHDDV
+ADD CONSTRAINT FK_CTHDDV_KhuyenMaiCombo
+FOREIGN KEY (IDKhuyenMaiCombo)
+REFERENCES KhuyenMaiCombo(IDKhuyenMaiCombo);
+
+select * from CTHDDV
 
 ALTER TABLE CTHDDV
 ADD ThoiGianBatDau DATETIME2 NULL,
@@ -464,6 +507,7 @@ CREATE TABLE DanhGia (
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+select * from DanhGia;
 -------------------------------------------
 -- 8) KHUYẾN MẠI (MỚI)
 -------------------------------------------
@@ -592,6 +636,30 @@ CONSTRAINT FK_KhuyenMaiPhongDichVu_DichVu FOREIGN KEY (IDDichVu)
 
 );
 
+CREATE PROCEDURE sp_CapNhatTrangThaiKhuyenMai
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Chuyển những khuyến mãi đã hết hạn sang 'expired'
+    UPDATE KhuyenMai
+    SET TrangThai = 'expired',
+        updated_at = GETDATE()
+    WHERE TrangThai = 'active'
+      AND NgayKetThuc < CONVERT(date, GETDATE());
+
+    -- (Tuỳ chọn) Cập nhật KhuyenMaiPhong tương ứng
+    UPDATE KP
+    SET KP.IsActive = 0,
+        KP.updated_at = GETDATE()
+    FROM KhuyenMaiPhong KP
+    INNER JOIN KhuyenMai K ON KP.IDKhuyenMai = K.IDKhuyenMai
+    WHERE K.TrangThai = 'expired'
+      AND KP.IsActive = 1;
+END;
+GO
+
+/* =========================================
    9) THỐNG KÊ DOANH THU KHÁCH SẠN (LIÊN KẾT TRỰC TIẾP)
 ========================================= */
 CREATE TABLE ThongKeDoanhThuKhachSan (
@@ -624,7 +692,6 @@ CREATE TABLE ThongKeDoanhThuKhachSan (
         ON DELETE NO ACTION ON UPDATE NO ACTION
 );
 GO
-
 
 CREATE PROCEDURE sp_TopPhong2025
     @Top INT = 5  -- Số lượng phòng muốn lấy

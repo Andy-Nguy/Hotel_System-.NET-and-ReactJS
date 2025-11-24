@@ -17,6 +17,7 @@ public class KhuyenMaiDto
     public List<KhuyenMaiPhongDto> KhuyenMaiPhongs { get; set; } = new();
     public List<KhuyenMaiDichVuDto> KhuyenMaiDichVus { get; set; } = new();
     public List<KhuyenMaiComboDto> KhuyenMaiCombos { get; set; } = new();
+    public List<KhuyenMaiPhongDichVuDto> KhuyenMaiPhongDichVus { get; set; } = new();
 }
 
 public class KhuyenMaiPhongDto
@@ -45,5 +46,23 @@ public class KhuyenMaiComboDichVuDto
     public int Id { get; set; }
     public string IdkhuyenMaiCombo { get; set; } = null!;
     public string IddichVu { get; set; } = null!;
+    public string TenDichVu { get; set; } = null!;
+    public decimal? TienDichVu { get; set; }
+    public string? HinhDichVu { get; set; }
+    public string? ThongTinDv { get; set; }
+    public int? ThoiLuongUocTinh { get; set; }
+    public bool? IsActive { get; set; }
+}
+
+public class KhuyenMaiPhongDichVuDto
+{
+    public int Id { get; set; }
+    public string IdkhuyenMai { get; set; } = null!;
+    public string Idphong { get; set; } = null!;
+    public string IddichVu { get; set; } = null!;
+    public bool IsActive { get; set; }
+    public DateOnly? NgayApDung { get; set; }
+    public DateOnly? NgayKetThuc { get; set; }
+    public string TenPhong { get; set; } = null!;
     public string TenDichVu { get; set; } = null!;
 }

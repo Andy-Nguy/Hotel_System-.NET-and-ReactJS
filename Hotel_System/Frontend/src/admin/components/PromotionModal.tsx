@@ -106,6 +106,33 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
     },
   ];
 
+  // Services for room_service type always have "Đang Áp Dụng" status, so no status column
+  const serviceColumnsForRoomService = [
+    {
+      title: "Mã Dịch Vụ",
+      dataIndex: "iddichVu",
+      key: "iddichVu",
+      width: "25%",
+    },
+    {
+      title: "Tên Dịch Vụ",
+      dataIndex: "tenDichVu",
+      key: "tenDichVu",
+      width: "50%",
+    },
+    {
+      title: "Trạng Thái Áp Dụng",
+      key: "isActive",
+      width: "25%",
+      render: (_: any, record: any) =>
+        record.isActive ? (
+          <Tag color="blue">Đang Áp Dụng</Tag>
+        ) : (
+          <Tag>Không Áp Dụng</Tag>
+        ),
+    },
+  ];
+
   useEffect(() => {
     // load service mappings when modal is visible and promotion involves services
     const loadServices = async () => {
@@ -147,37 +174,57 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
 
         // Helper to normalize a service item
         const normalizeItem = (it: any, idx: number) => ({
-          id: it.id ?? idx,
-          iddichVu: it.iddichVu || it.IddichVu || it.iddichvu || it.idDichVu || it.id || "",
+          id: it.id ?? it.Id ?? idx,
+          iddichVu: it.iddichVu || it.IddichVu || it.idDichVu || it.IdDichVu || "",
           tenDichVu: it.tenDichVu || it.TenDichVu || it.ten || it.name || "",
           isActive: it.isActive ?? it.IsActive ?? true,
           ngayApDung: it.ngayApDung || it.NgayApDung,
           ngayKetThuc: it.ngayKetThuc || it.NgayKetThuc,
         });
 
+        // Check if promotion already has the data we need
+        const existingServices = (promotion as any).khuyenMaiDichVus;
+        const existingCombos = (promotion as any).khuyenMaiCombos;
+        const existingPairs = (promotion as any).khuyenMaiPhongDichVus;
+
         let derived: any[] = [];
 
-        // If this promotion includes explicit service mappings
-        if ((full as any).khuyenMaiDichVus && Array.isArray((full as any).khuyenMaiDichVus) && (full as any).khuyenMaiDichVus.length > 0) {
-          derived = (full as any).khuyenMaiDichVus.map((m: any, i: number) => normalizeItem(m, i));
+        // For service type, use khuyenMaiDichVus
+        if (loai === "service" && existingServices && Array.isArray(existingServices) && existingServices.length > 0) {
+          derived = existingServices.map((m: any, idx: number) => normalizeItem(m, idx));
+          setServiceList(derived);
+          return;
         }
 
-        // If it's a combo promotion, collect combo items
-        if (((full as any).khuyenMaiCombos && Array.isArray((full as any).khuyenMaiCombos) && (full as any).khuyenMaiCombos.length > 0)) {
-          const combos = (full as any).khuyenMaiCombos;
-          const comboItems = combos.flatMap((c: any) => (c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || []).map((it: any) => it));
-          if (comboItems.length > 0) derived = comboItems.map((m: any, i: number) => normalizeItem(m, i));
+        // For combo type, extract from khuyenMaiCombos
+        if (loai === "combo" && existingCombos && Array.isArray(existingCombos) && existingCombos.length > 0) {
+          const comboItems = existingCombos.flatMap((c: any) =>
+            (c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || []).map((it: any) => it)
+          );
+          if (comboItems.length > 0) {
+            derived = comboItems.map((m: any, idx: number) => normalizeItem(m, idx));
+            setServiceList(derived);
+            return;
+          }
         }
 
-        // If it's a room_service promotion and there are explicit room-service pairs
-        if ((full as any).khuyenMaiPhongDichVus && Array.isArray((full as any).khuyenMaiPhongDichVus) && (full as any).khuyenMaiPhongDichVus.length > 0) {
-          // dedupe by iddichVu
-          const pairs = (full as any).khuyenMaiPhongDichVus;
-          const unique = Array.from(new Map(pairs.map((p: any) => [p.iddichVu || p.IddichVu || p.idDichVu || p.Iddichvu || p.id, p])).values());
-          derived = unique.map((m: any, i: number) => normalizeItem(m, i));
+        // For room_service type, extract unique services from khuyenMaiPhongDichVus
+        if (loai === "room_service" && existingPairs && Array.isArray(existingPairs) && existingPairs.length > 0) {
+          // Dedupe by service ID and extract just services (not room-service pairs)
+          const uniqueMap = new Map();
+          existingPairs.forEach((p: any) => {
+            const serviceId = p.iddichVu || p.IddichVu || p.idDichVu || p.IdDichVu;
+            if (serviceId && !uniqueMap.has(serviceId)) {
+              uniqueMap.set(serviceId, p);
+            }
+          });
+          derived = Array.from(uniqueMap.values()).map((m: any, idx: number) => normalizeItem(m, idx));
+          setServiceList(derived);
+          return;
         }
 
-        setServiceList(derived || []);
+        // Fallback: if no local data, just set empty
+        setServiceList([]);
       } catch (err) {
         console.error("Failed to load promotion services", err);
         setServiceList([]);
@@ -293,10 +340,10 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
                 )}
 
                 <Divider />
-                <h3>Dịch Vụ Áp Dụng cho Gói ({serviceList.length} dịch vụ)</h3>
+                <h3>Dịch Vụ Áp Dụng - Đang Áp Dụng ({serviceList.length} dịch vụ)</h3>
                 {serviceList.length > 0 ? (
                   <Table
-                    columns={serviceColumns}
+                    columns={serviceColumnsForRoomService}
                     dataSource={serviceList.map((s, index) => ({ ...s, key: `${s.id}_${index}` }))}
                     pagination={false}
                     size="small"
