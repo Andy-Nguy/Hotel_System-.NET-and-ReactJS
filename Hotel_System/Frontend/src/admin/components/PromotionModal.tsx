@@ -101,6 +101,7 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
 
   ];
 
+  
   useEffect(() => {
     // load service mappings when modal is visible and promotion involves services
     const loadServices = async () => {
