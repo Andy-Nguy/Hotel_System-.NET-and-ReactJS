@@ -288,7 +288,7 @@ const PaymentPage: React.FC = () => {
       };
 
       // Gọi API tạo hóa đơn
-      const response = await fetch(`${API_BASE}/Payment/hoa-don`, {
+      const response = await fetch("/api/ThanhToan/hoa-don", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

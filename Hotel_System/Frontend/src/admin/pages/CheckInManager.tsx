@@ -216,7 +216,7 @@ const CheckInManager: React.FC = () => {
   const openPaymentModal = async (row: BookingRow) => {
     setPaymentRow(row);
     setPaymentModalVisible(true);
-    setSummary(null);
+    // keep existing summary while opening modal; we'll refresh if needed
     setSummaryLoading(true);
     try {
       const sum = await checkoutApi.getSummary(row.IddatPhong);
@@ -607,13 +607,30 @@ const CheckInManager: React.FC = () => {
             Math.round(roomTotalForCalc)
           );
 
+        // Compute remaining due so QR invoice equals what customer actually owes
+        const totalFromServer = Number(summary?.money?.tongTien ?? summaryTotal ?? computedTotalWithVat);
+        const deposit = Number(summary?.money?.deposit ?? 0);
+        const paidAmountFromSummary = Number(summary?.money?.paidAmount ?? NaN);
+        let paidIncludingDeposit: number;
+        if (!isNaN(paidAmountFromSummary)) {
+          paidIncludingDeposit = Math.max(0, paidAmountFromSummary);
+        } else {
+          const invPaid = summary?.invoices && Array.isArray(summary.invoices) && summary.invoices.length > 0
+            ? Number(summary.invoices[0].tienThanhToan ?? NaN)
+            : NaN;
+          paidIncludingDeposit = !isNaN(invPaid) ? Math.max(0, invPaid + deposit) : 0;
+        }
+        const remainingToPay = Math.round(Math.max(0, totalFromServer - paidIncludingDeposit));
+
+        const invoiceAmountToUse = method === 2 ? remainingToPay : safeTongTien;
+
         const res = await checkoutApi.createInvoice({
           IDDatPhong: paymentRow!.IddatPhong,
           PhuongThucThanhToan: method,
           // Mark paid for cash checkouts, pending for online
           TrangThaiThanhToan: method === 2 ? 1 : 2,
-          GhiChu: vals.GhiChu ?? "",
-          TongTien: safeTongTien,
+          GhiChu: vals.GhiChu ?? '',
+          TongTien: invoiceAmountToUse,
           TienPhong: Math.round(roomTotalForCalc),
           SoLuongNgay: vals.SoLuongNgay ?? 1,
           TienCoc: Number(paymentRow?.TienCoc ?? 0),
@@ -621,9 +638,28 @@ const CheckInManager: React.FC = () => {
           Services: [],
         });
         if (method === 2) {
-          setQrUrl(res?.paymentUrl || null);
-          setPaymentInvoiceId(res?.idHoaDon ?? res?.id ?? null);
-          setQrModalVisible(true);
+          try {
+            const hoaDonId = res?.idHoaDon ?? res?.id ?? null;
+            const payResp: any = await checkoutApi.payQr({ IDDatPhong: paymentRow.IddatPhong, HoaDonId: hoaDonId, Amount: remainingToPay });
+            setQrUrl(payResp?.paymentUrl ?? payResp?.qr ?? null);
+            setPaymentInvoiceId(hoaDonId);
+            try {
+              const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+              if (fresh) {
+                const prevPaid = Number(summary?.money?.paidAmount ?? 0);
+                const freshPaid = Number(fresh?.money?.paidAmount ?? 0);
+                if ((isNaN(freshPaid) || freshPaid === 0) && prevPaid > 0) {
+                  fresh.money = { ...fresh.money, paidAmount: prevPaid };
+                }
+                setSummary(fresh);
+                setInvoiceData(fresh);
+              }
+            } catch (e) { /* ignore */ }
+            setQrModalVisible(true);
+          } catch (e: any) {
+            console.error('payQr after createInvoice failed', e);
+            message.error(e?.message || 'Không thể tạo liên kết QR');
+          }
         } else {
           msg.success("Tạo hóa đơn & thanh toán thành công");
           try {
@@ -1081,7 +1117,7 @@ const CheckInManager: React.FC = () => {
       setSummary(sum);
       setInvoiceData(sum);
     } catch {
-      setSummary(null);
+      // keep existing summary; avoid clearing paid amounts on cancel
       setInvoiceData(null);
     }
     setPaymentModalVisible(true);
@@ -1157,81 +1193,133 @@ const CheckInManager: React.FC = () => {
 
             {/* Full Booking management section embedded on the Check-in page */}
             <Card style={{ marginBottom: 12 }}>
-              <h3 style={{ marginBottom: 12 }}>Quản Lý Check-In</h3>
               <CheckinSection />
             </Card>
             <div style={{ marginBottom: 12 }}>
               <Card style={{ marginBottom: 12 }}>
-                <Space wrap>
-                  <Input.Search
-                    placeholder="Tìm mã đặt / khách / email"
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                  />
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    style={{
-                      padding: "8px 12px",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 10,
-                      background: "#fff",
-                      fontSize: 13,
-                    }}
-                  >
-                    <option value="">Tất cả trạng thái</option>
-                    <option value="0">Đã hủy</option>
-                    <option value="1">Chờ xác nhận</option>
-                    <option value="2">Đã xác nhận</option>
-                    <option value="3">Đang sử dụng</option>
-                    <option value="4">Hoàn thành</option>
-                  </select>
-                  <DatePicker
-                    value={selectedDate}
-                    onChange={(d) => setSelectedDate(d)}
-                    format="YYYY-MM-DD"
-                    allowClear={true}
-                  />
-                  <Button onClick={() => setSelectedDate(dayjs())}>
-                    Hôm nay
-                  </Button>
-                  <Button onClick={load}>Tải lại</Button>
-                </Space>
-              </Card>
-            </div>
-
-            <Card>
-              <CheckinTable
-                data={due}
-                loading={loading}
-                onPay={markPaid}
-                onOpenPaymentForm={openPaymentModal}
-                onComplete={completeCheckout}
-                onAddService={handleAddService}
-                onViewInvoice={onViewInvoice}
-                viewInvoiceIds={viewInvoiceIds}
-                viewMode={viewMode}
-                onViewChange={(mode: "using" | "checkin") => setViewMode(mode)}
-              />
+              <Space wrap>
+                <Input.Search placeholder="Tìm mã đặt / khách / email" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 10, background: '#fff', fontSize: 13 }}
+                >
+                  <option value="">Tất cả trạng thái</option>
+                  <option value="0">Đã hủy</option>
+                  <option value="1">Chờ xác nhận</option>
+                  <option value="2">Đã xác nhận</option>
+                  <option value="3">Đang sử dụng</option>
+                  <option value="4">Hoàn thành</option>
+                </select>
+                <DatePicker value={selectedDate} onChange={(d) => setSelectedDate(d)} format="YYYY-MM-DD" allowClear={true} />
+                <Button onClick={() => setSelectedDate(dayjs())}>Hôm nay</Button>
+                <Button onClick={load}>Tải lại</Button>
+              </Space>
             </Card>
+          </div>
 
-            <PaymentModal
-              visible={paymentModalVisible}
-              paymentRow={paymentRow}
-              summary={summary}
-              summaryLoading={summaryLoading}
-              form={form}
-              roomLines={roomLines}
-              selectedServices={selectedServices}
-              servicesTotal={servicesTotal}
-              onCancel={() => {
+          <Card>
+            <CheckinTable
+              data={due}
+              loading={loading}
+           onPay={markPaid}
+           onOpenPaymentForm={openPaymentModal}
+              onComplete={completeCheckout}
+              onAddService={handleAddService}
+              onViewInvoice={onViewInvoice}
+              viewInvoiceIds={viewInvoiceIds}
+              viewMode={viewMode}
+              onViewChange={(mode: 'using' | 'checkin') => setViewMode(mode)}
+            />
+          </Card>
+
+          <PaymentModal
+            visible={paymentModalVisible}
+            paymentRow={paymentRow}
+            summary={summary}
+            summaryLoading={summaryLoading}
+            form={form}
+            roomLines={roomLines}
+            selectedServices={selectedServices}
+            servicesTotal={servicesTotal}
+            onCancel={() => { setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); }}
+            onSubmit={submitPayment}
+          />
+
+          <Modal
+            title={paymentRow ? `Thêm dịch vụ cho ${paymentRow.IddatPhong}` : 'Thêm dịch vụ'}
+            open={serviceModalVisible}
+            width={900}
+            onCancel={() => { setServiceModalVisible(false); setSelectedServices([]); setServicesTotal(0); }}
+            footer={[
+              <Button key="cancel" onClick={() => { setServiceModalVisible(false); setSelectedServices([]); setServicesTotal(0); }}>Hủy</Button>,
+              <Button key="add" type="primary" onClick={handleServiceModalAdd}>Thêm dịch vụ</Button>
+            ]}
+          >
+            <div style={{ minHeight: 320 }}>
+              <ServicesSelector onServicesChange={handleServicesChange} />
+              {selectedServices && selectedServices.length > 0 && (
+                <div style={{ marginTop: 12, textAlign: 'right' }}>
+                  <div style={{ fontSize: 14 }}><strong>Tổng dịch vụ:</strong> {Number(servicesTotal).toLocaleString()} đ</div>
+                </div>
+              )}
+            </div>
+</Modal>
+          <Modal
+            title="Thanh toán online - Quét mã QR"
+            open={qrModalVisible}
+            width={900}
+            centered
+            bodyStyle={{ minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onCancel={() => { setQrModalVisible(false); setQrUrl(null); setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); load(); }}
+            footer={[
+              <Button key="close" onClick={() => { setQrModalVisible(false); setQrUrl(null); setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); load(); }}>Đóng</Button>,
+              <Button key="paid" type="primary" onClick={async () => {
+              const key = `confirm_${paymentRow?.IddatPhong ?? 'unknown'}`;
+              message.loading({ content: 'Đang xác nhận thanh toán...', key, duration: 0 });
+              try {
+                if (paymentRow) {
+                  const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+                  const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+                  const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+                  const deposit = Number(summary?.money?.deposit ?? 0);
+                  const paidExcl = Math.max(0, daTra - deposit);
+                  const payload: any = { IsOnline: true };
+                  if (paymentInvoiceId) payload.HoaDonId = paymentInvoiceId;
+                  const resp = await checkoutApi.confirmPaid(paymentRow.IddatPhong, payload);
+                  if (resp !== null) {
+                    message.success({ content: 'Xác nhận thanh toán thành công', key, duration: 2 });
+                    try {
+                      const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+                      setInvoiceData(fresh);
+                    } catch { }
+                  } else {
+                    message.warning({ content: 'Không nhận được phản hồi xác nhận từ server', key, duration: 3 });
+                  }
+                }
+              } catch (err: any) {
+                message.error({ content: err?.message || 'Lỗi khi xác nhận thanh toán', key, duration: 3 });
+              } finally {
+                setQrModalVisible(false);
+                setQrUrl(null);
                 setPaymentModalVisible(false);
                 setPaymentRow(null);
-                setSummary(null);
+                // keep summary so the UI retains previous paid amount if not confirmed
                 form.resetFields();
-              }}
-              onSubmit={submitPayment}
-            />
+                await load();
+              }
+            }}>Đã thanh toán</Button>
+          ]}>
+            {qrUrl ? (
+              <div style={{ textAlign: 'center', width: '100%' }}>
+                <img
+                  src={qrUrl ?? undefined}
+                  alt="QR"
+                  style={{ width: 420, height: 420, maxWidth: '100%', display: 'block', margin: '0 auto' }}
+                />
+              </div>
+            ) : (<div style={{ minHeight: 220 }}>Không tìm thấy liên kết thanh toán</div>)}
+          </Modal>
 
             <Modal
               title={
@@ -1451,5 +1539,6 @@ const CheckInManager: React.FC = () => {
     </div>
   );
 };
+
 
 export default CheckInManager;

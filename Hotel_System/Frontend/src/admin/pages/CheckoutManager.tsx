@@ -226,7 +226,6 @@ const CheckoutManager: React.FC = () => {
   const openPaymentModal = async (row: BookingRow) => {
     setPaymentRow(row);
     setPaymentModalVisible(true);
-    setSummary(null);
     setSummaryLoading(true);
     try {
       const sum = await checkoutApi.getSummary(row.IddatPhong);
@@ -582,22 +581,65 @@ const CheckoutManager: React.FC = () => {
             Math.round(roomTotalForCalc)
           );
 
+        // Determine amount to create on invoice. For online (QR) payments we should
+        // create the invoice with the customer's remaining due (tongTien - paid - deposit)
+        // so the QR link shows the correct amount. For cash (method !== 2) keep full safeTongTien.
+        const totalFromServer = Number(summary?.money?.tongTien ?? summaryTotal ?? computedTotalWithVat);
+        const deposit = Number(summary?.money?.deposit ?? 0);
+        // Prefer canonical total paid reported by summary.money.paidAmount (includes deposit when present).
+        // Only fall back to invoice.tienThanhToan + deposit when paidAmount is not available.
+        const paidAmountFromSummary = Number(summary?.money?.paidAmount ?? NaN);
+        let paidIncludingDeposit: number;
+        if (!isNaN(paidAmountFromSummary)) {
+          paidIncludingDeposit = Math.max(0, paidAmountFromSummary);
+        } else {
+          const invPaid = summary?.invoices && Array.isArray(summary.invoices) && summary.invoices.length > 0
+            ? Number(summary.invoices[0].tienThanhToan ?? NaN)
+            : NaN;
+          paidIncludingDeposit = !isNaN(invPaid) ? Math.max(0, invPaid + deposit) : 0;
+        }
+        const remainingToPay = Math.round(Math.max(0, totalFromServer - paidIncludingDeposit));
+
+        const invoiceAmountToUse = method === 2 ? remainingToPay : safeTongTien;
+
         const res = await checkoutApi.createInvoice({
           IDDatPhong: paymentRow.IddatPhong,
           PhuongThucThanhToan: method,
           // Tiền mặt (1) -> Gửi trạng thái 2 (Đã thanh toán). QR (2) -> Gửi 1 (Chờ)
           TrangThaiThanhToan: method === 2 ? 1 : 2,
-          GhiChu: vals.GhiChu ?? "",
-          TongTien: safeTongTien,
+          GhiChu: vals.GhiChu ?? '',
+          TongTien: invoiceAmountToUse,
           TienPhong: Math.round(roomTotalForCalc),
           SoLuongNgay: vals.SoLuongNgay ?? 1,
           Services: [],
         });
 
         if (method === 2) {
-          setQrUrl(res?.paymentUrl || null);
-          setPaymentInvoiceId(res?.idHoaDon ?? res?.id ?? null);
-          setQrModalVisible(true);
+          // After creating invoice for online payment, explicitly request a QR payment link
+          // for the customer's remaining due (we computed remainingToPay above).
+          try {
+            const hoaDonId = res?.idHoaDon ?? res?.id ?? null;
+            const payResp: any = await checkoutApi.payQr({ IDDatPhong: paymentRow.IddatPhong, HoaDonId: hoaDonId, Amount: remainingToPay });
+            setQrUrl(payResp?.paymentUrl ?? payResp?.qr ?? null);
+            setPaymentInvoiceId(hoaDonId);
+            // update summary/invoiceData from server but preserve previously-paid if server shows 0
+            try {
+              const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+              if (fresh) {
+                const prevPaid = Number(summary?.money?.paidAmount ?? 0);
+                const freshPaid = Number(fresh?.money?.paidAmount ?? 0);
+                if ((isNaN(freshPaid) || freshPaid === 0) && prevPaid > 0) {
+                  fresh.money = { ...fresh.money, paidAmount: prevPaid };
+                }
+                setSummary(fresh);
+                setInvoiceData(fresh);
+              }
+            } catch (e) { /* ignore */ }
+            setQrModalVisible(true);
+          } catch (e: any) {
+            console.error('payQr after createInvoice failed', e);
+            message.error(e?.message || 'Không thể tạo liên kết QR');
+          }
         } else {
           msg.success("Thanh toán thành công");
           try {
@@ -659,16 +701,10 @@ const CheckoutManager: React.FC = () => {
           sum?.invoices?.[0]?.IDHoaDon ?? sum?.invoices?.[0]?.id ?? null;
 
         if (existingInvoiceId) {
-          await fetchJson("/api/Checkout/add-service-to-invoice", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              IDDatPhong: paymentRow.IddatPhong,
-              DichVu: selectedServices.map((s) => ({
-                IddichVu: String(s.serviceId),
-                TienDichVu: Math.round(Number(s.price) || 0),
-              })),
-            }),
+          await fetchJson('/api/TraPhong/them-dich-vu-vao-hoa-don', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ IDDatPhong: paymentRow.IddatPhong, DichVu: selectedServices.map(s => ({ IddichVu: String(s.serviceId), TienDichVu: Math.round(Number(s.price) || 0) })) })
           });
         } else {
           // Do NOT auto-create invoice when adding services.
@@ -718,16 +754,10 @@ const CheckoutManager: React.FC = () => {
         message.error("Không có đặt phòng được chọn");
         return;
       }
-      await fetchJson("/api/Checkout/add-service-to-invoice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          IDDatPhong: paymentRow.IddatPhong,
-          DichVu: selectedServices.map((s) => ({
-            IddichVu: String(s.serviceId),
-            TienDichVu: Math.round(Number(s.price) || 0),
-          })),
-        }),
+      await fetchJson('/api/TraPhong/them-dich-vu-vao-hoa-don', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ IDDatPhong: paymentRow.IddatPhong, DichVu: selectedServices.map(s => ({ IddichVu: String(s.serviceId), TienDichVu: Math.round(Number(s.price) || 0) })) })
       });
       msg.success("Thêm dịch vụ thành công");
       setServiceModalVisible(false);
@@ -951,7 +981,7 @@ const CheckoutManager: React.FC = () => {
       setSummary(sum);
       setInvoiceData(sum);
     } catch {
-      setSummary(null);
+      // keep existing summary to preserve previously-paid amounts
       setInvoiceData(null);
     }
     setPaymentModalVisible(true);
@@ -1003,116 +1033,67 @@ const CheckoutManager: React.FC = () => {
       <Slidebar />
       <div style={{ marginLeft: 240 }}>
         <HeaderSection showStats={false} />
-        <main style={{ padding: "0px 60px" }}>
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 12,
-              padding: 20,
-              boxShadow: "0 8px 24px rgba(2,6,23,0.06)",
-            }}
-          >
+        <main style={{ padding: '0px 60px' }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 8px 24px rgba(2,6,23,0.06)' }}>
             <h2 style={{ marginBottom: 16 }}>Quản lý trả phòng</h2>
-            {contextHolder}
+          {contextHolder}
 
-            <Card style={{ marginBottom: 12 }}>
-              <Space wrap>
-                <Input.Search
-                  placeholder="Tìm mã đặt / khách / email"
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                />
-                <DatePicker
-                  value={selectedDate}
-                  onChange={(d) => setSelectedDate(d)}
-                  format="YYYY-MM-DD"
-                  allowClear={false}
-                />
-                <Button onClick={() => setSelectedDate(dayjs())}>
-                  Hôm nay
-                </Button>
-                <Button onClick={load}>Tải lại</Button>
-              </Space>
-            </Card>
+          <Card style={{ marginBottom: 12 }}>
+            <Space wrap>
+              <Input.Search placeholder="Tìm mã đặt / khách / email" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+              <DatePicker value={selectedDate} onChange={(d) => setSelectedDate(d)} format="YYYY-MM-DD" allowClear={false} />
+              <Button onClick={() => setSelectedDate(dayjs())}>Hôm nay</Button>
+              <Button onClick={load}>Tải lại</Button>
+            </Space>
+          </Card>
 
-            <Card>
-              <CheckoutTable
-                data={due}
-                loading={loading}
-                onPay={markPaid}
-                onOpenPaymentForm={openPaymentModal}
-                onComplete={completeCheckout}
-                onAddService={handleAddService}
-                onViewInvoice={onViewInvoice}
-                viewInvoiceIds={viewInvoiceIds}
-                viewMode={viewMode}
-                onViewChange={(mode) => setViewMode(mode)}
-              />
-            </Card>
-
-            <PaymentModal
-              visible={paymentModalVisible}
-              paymentRow={paymentRow}
-              summary={summary}
-              summaryLoading={summaryLoading}
-              form={form}
-              roomLines={roomLines}
-              selectedServices={selectedServices}
-              servicesTotal={servicesTotal}
-              onCancel={() => {
-                setPaymentModalVisible(false);
-                setPaymentRow(null);
-                setSummary(null);
-                form.resetFields();
-              }}
-              onSubmit={submitPayment}
+          <Card>
+            <CheckoutTable
+              data={due}
+              loading={loading}
+           onPay={markPaid}
+           onOpenPaymentForm={openPaymentModal}
+              onComplete={completeCheckout}
+              onAddService={handleAddService}
+              onViewInvoice={onViewInvoice}
+              viewInvoiceIds={viewInvoiceIds}
+              viewMode={viewMode}
+              onViewChange={(mode) => setViewMode(mode)}
             />
+          </Card>
 
-            <Modal
-              title={
-                paymentRow
-                  ? `Thêm dịch vụ cho ${paymentRow.IddatPhong}`
-                  : "Thêm dịch vụ"
-              }
-              open={serviceModalVisible}
-              width={900}
-              onCancel={() => {
-                setServiceModalVisible(false);
-                setSelectedServices([]);
-                setServicesTotal(0);
-              }}
-              footer={[
-                <Button
-                  key="cancel"
-                  onClick={() => {
-                    setServiceModalVisible(false);
-                    setSelectedServices([]);
-                    setServicesTotal(0);
-                  }}
-                >
-                  Hủy
-                </Button>,
-                <Button
-                  key="add"
-                  type="primary"
-                  onClick={handleServiceModalAdd}
-                >
-                  Thêm dịch vụ
-                </Button>,
-              ]}
-            >
-              <div style={{ minHeight: 320 }}>
-                <ServicesSelector onServicesChange={handleServicesChange} />
-                {selectedServices && selectedServices.length > 0 && (
-                  <div style={{ marginTop: 12, textAlign: "right" }}>
-                    <div style={{ fontSize: 14 }}>
-                      <strong>Tổng dịch vụ:</strong>{" "}
-                      {Number(servicesTotal).toLocaleString()} đ
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Modal>
+          <PaymentModal
+            visible={paymentModalVisible}
+            paymentRow={paymentRow}
+            summary={summary}
+            summaryLoading={summaryLoading}
+            form={form}
+            roomLines={roomLines}
+            selectedServices={selectedServices}
+            servicesTotal={servicesTotal}
+            onCancel={() => { setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); }}
+            onSubmit={submitPayment}
+          />
+
+          <Modal
+            title={paymentRow ? `Thêm dịch vụ cho ${paymentRow.IddatPhong}` : 'Thêm dịch vụ'}
+            open={serviceModalVisible}
+            width={900}
+            onCancel={() => { setServiceModalVisible(false); setSelectedServices([]); setServicesTotal(0); }}
+            footer={[
+              <Button key="cancel" onClick={() => { setServiceModalVisible(false); setSelectedServices([]); setServicesTotal(0); }}>Hủy</Button>,
+              <Button key="add" type="primary" onClick={handleServiceModalAdd}>Thêm dịch vụ</Button>
+            ]}
+          >
+            <div style={{ minHeight: 320 }}>
+              <ServicesSelector onServicesChange={handleServicesChange} />
+              {selectedServices && selectedServices.length > 0 && (
+                <div style={{ marginTop: 12, textAlign: 'right' }}>
+                  <div style={{ fontSize: 14 }}><strong>Tổng dịch vụ:</strong> {Number(servicesTotal).toLocaleString()} đ</div>
+                </div>
+              )}
+            </div>
+              </Modal>
 
             <Modal
               title="Thanh toán online - Quét mã QR"

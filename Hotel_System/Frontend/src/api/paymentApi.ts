@@ -98,114 +98,83 @@ function normalizePaymentResponse(raw: any): PaymentResponse {
 
 // === Payment API calls ===
 
-export async function processPayment(
-  req: PaymentRequest
-): Promise<PaymentResponse> {
-  const res = await fetch(`${API_BASE}/Payment/process`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      IdHoaDon: req.idHoaDon,
-      PaymentMethod: req.paymentMethod,
-      Amount: req.amount,
-      CreditCardInfo: req.creditCardInfo
-        ? {
-            CardNumber: req.creditCardInfo.cardNumber,
-            CardHolderName: req.creditCardInfo.cardHolderName,
-            ExpiryMonth: req.creditCardInfo.expiryMonth,
-            ExpiryYear: req.creditCardInfo.expiryYear,
-            CVV: req.creditCardInfo.cvv,
-            CardType: req.creditCardInfo.cardType ?? "VISA",
-          }
-        : undefined,
-      EWalletPhone: req.eWalletPhone,
-      Note: req.note,
-    }),
-  });
-  const data = await handleJson<any>(res);
-  return normalizePaymentResponse(data);
+export async function processPayment(req: PaymentRequest): Promise<PaymentResponse> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/process`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			IdHoaDon: req.idHoaDon,
+			PaymentMethod: req.paymentMethod,
+			Amount: req.amount,
+			CreditCardInfo: req.creditCardInfo
+				? {
+						CardNumber: req.creditCardInfo.cardNumber,
+						CardHolderName: req.creditCardInfo.cardHolderName,
+						ExpiryMonth: req.creditCardInfo.expiryMonth,
+						ExpiryYear: req.creditCardInfo.expiryYear,
+						CVV: req.creditCardInfo.cvv,
+						CardType: req.creditCardInfo.cardType ?? "VISA",
+					}
+				: undefined,
+			EWalletPhone: req.eWalletPhone,
+			Note: req.note,
+		}),
+	});
+	const data = await handleJson<any>(res);
+	return normalizePaymentResponse(data);
 }
 
-export async function payCash(
-  idHoaDon: string,
-  amount: number,
-  note?: string
-): Promise<PaymentResponse> {
-  const res = await fetch(`${API_BASE}/Payment/cash`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      IdHoaDon: idHoaDon,
-      PaymentMethod: "CASH",
-      Amount: amount,
-      Note: note,
-    }),
-  });
-  const data = await handleJson<any>(res);
-  return normalizePaymentResponse(data);
+export async function payCash(idHoaDon: string, amount: number, note?: string): Promise<PaymentResponse> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/cash`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ IdHoaDon: idHoaDon, PaymentMethod: "CASH", Amount: amount, Note: note }),
+	});
+	const data = await handleJson<any>(res);
+	return normalizePaymentResponse(data);
 }
 
-export async function payBankTransfer(
-  idHoaDon: string,
-  amount: number,
-  note?: string
-): Promise<PaymentResponse> {
-  const res = await fetch(`${API_BASE}/Payment/bank-transfer`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      IdHoaDon: idHoaDon,
-      PaymentMethod: "BANK_TRANSFER",
-      Amount: amount,
-      Note: note,
-    }),
-  });
-  const data = await handleJson<any>(res);
-  return normalizePaymentResponse(data);
+export async function payBankTransfer(idHoaDon: string, amount: number, note?: string): Promise<PaymentResponse> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/bank-transfer`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ IdHoaDon: idHoaDon, PaymentMethod: "BANK_TRANSFER", Amount: amount, Note: note }),
+	});
+	const data = await handleJson<any>(res);
+	return normalizePaymentResponse(data);
 }
 
-export async function confirmBankTransfer(
-  req: ConfirmBankTransferRequest
-): Promise<PaymentResponse> {
-  const res = await fetch(`${API_BASE}/Payment/confirm-bank-transfer`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      IdHoaDon: req.idHoaDon,
-      Amount: req.amount,
-      Note: req.note,
-    }),
-  });
-  const data = await handleJson<any>(res);
-  return normalizePaymentResponse(data);
+export async function confirmBankTransfer(req: ConfirmBankTransferRequest): Promise<PaymentResponse> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/confirm-bank-transfer`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ IdHoaDon: req.idHoaDon, Amount: req.amount, Note: req.note }),
+	});
+	const data = await handleJson<any>(res);
+	return normalizePaymentResponse(data);
 }
 
-export async function payCreditCard(
-  idHoaDon: string,
-  amount: number,
-  card: CreditCardInfo,
-  note?: string
-): Promise<PaymentResponse> {
-  const res = await fetch(`${API_BASE}/Payment/credit-card`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      IdHoaDon: idHoaDon,
-      PaymentMethod: "CREDIT_CARD",
-      Amount: amount,
-      CreditCardInfo: {
-        CardNumber: card.cardNumber,
-        CardHolderName: card.cardHolderName,
-        ExpiryMonth: card.expiryMonth,
-        ExpiryYear: card.expiryYear,
-        CVV: card.cvv,
-        CardType: card.cardType ?? "VISA",
-      },
-      Note: note,
-    }),
-  });
-  const data = await handleJson<any>(res);
-  return normalizePaymentResponse(data);
+export async function payCreditCard(idHoaDon: string, amount: number, card: CreditCardInfo, note?: string): Promise<PaymentResponse> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/credit-card`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			IdHoaDon: idHoaDon,
+			PaymentMethod: "CREDIT_CARD",
+			Amount: amount,
+			CreditCardInfo: {
+				CardNumber: card.cardNumber,
+				CardHolderName: card.cardHolderName,
+				ExpiryMonth: card.expiryMonth,
+				ExpiryYear: card.expiryYear,
+				CVV: card.cvv,
+				CardType: card.cardType ?? "VISA",
+			},
+			Note: note,
+		}),
+	});
+	const data = await handleJson<any>(res);
+	return normalizePaymentResponse(data);
 }
 
 async function payEWallet(
@@ -229,101 +198,69 @@ async function payEWallet(
   return normalizePaymentResponse(data);
 }
 
-export const payMoMo = (
-  idHoaDon: string,
-  amount: number,
-  phone?: string | null,
-  note?: string
-) => payEWallet("/Payment/momo", idHoaDon, amount, phone, note);
+export const payMoMo = (idHoaDon: string, amount: number, phone?: string | null, note?: string) =>
+	payEWallet("/api/ThanhToan/momo", idHoaDon, amount, phone, note);
 
-export const payZaloPay = (
-  idHoaDon: string,
-  amount: number,
-  phone?: string | null,
-  note?: string
-) => payEWallet("/Payment/zalopay", idHoaDon, amount, phone, note);
+export const payZaloPay = (idHoaDon: string, amount: number, phone?: string | null, note?: string) =>
+	payEWallet("/api/ThanhToan/zalopay", idHoaDon, amount, phone, note);
 
-export const payVNPay = (
-  idHoaDon: string,
-  amount: number,
-  phone?: string | null,
-  note?: string
-) => payEWallet("/Payment/vnpay", idHoaDon, amount, phone, note);
+export const payVNPay = (idHoaDon: string, amount: number, phone?: string | null, note?: string) =>
+	payEWallet("/api/ThanhToan/vnpay", idHoaDon, amount, phone, note);
 
-export const payShopeePay = (
-  idHoaDon: string,
-  amount: number,
-  phone?: string | null,
-  note?: string
-) => payEWallet("/Payment/shopeepay", idHoaDon, amount, phone, note);
+export const payShopeePay = (idHoaDon: string, amount: number, phone?: string | null, note?: string) =>
+	payEWallet("/api/ThanhToan/shopeepay", idHoaDon, amount, phone, note);
 
-export async function checkPaymentStatus(
-  idHoaDon: string
-): Promise<PaymentResponse> {
-  const res = await fetch(
-    `${API_BASE}/Payment/status/${encodeURIComponent(idHoaDon)}`
-  );
-  if (res.status === 404) {
-    return { success: false, message: "Không tìm thấy hóa đơn", idHoaDon };
-  }
-  const data = await handleJson<any>(res);
-  return normalizePaymentResponse(data);
+export async function checkPaymentStatus(idHoaDon: string): Promise<PaymentResponse> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/status/${encodeURIComponent(idHoaDon)}`);
+	if (res.status === 404) {
+		return { success: false, message: "Không tìm thấy hóa đơn", idHoaDon };
+	}
+	const data = await handleJson<any>(res);
+	return normalizePaymentResponse(data);
 }
 
-export async function refundPayment(
-  req: RefundRequest
-): Promise<PaymentResponse> {
-  const res = await fetch(`${API_BASE}/Payment/refund`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      IdHoaDon: req.idHoaDon,
-      RefundAmount: req.refundAmount,
-      Reason: req.reason,
-      RefundMethod: req.refundMethod,
-    }),
-  });
-  const data = await handleJson<any>(res);
-  return normalizePaymentResponse(data);
+export async function refundPayment(req: RefundRequest): Promise<PaymentResponse> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/refund`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			IdHoaDon: req.idHoaDon,
+			RefundAmount: req.refundAmount,
+			Reason: req.reason,
+			RefundMethod: req.refundMethod,
+		}),
+	});
+	const data = await handleJson<any>(res);
+	return normalizePaymentResponse(data);
 }
 
 export async function downloadInvoicePdf(idHoaDon: string): Promise<Blob> {
-  const res = await fetch(
-    `${API_BASE}/Payment/invoice/${encodeURIComponent(idHoaDon)}/pdf`
-  );
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(t || `HTTP ${res.status}`);
-  }
-  return await res.blob();
+	const res = await fetch(`${API_BASE}/api/ThanhToan/hoa-don/${encodeURIComponent(idHoaDon)}/pdf`);
+	if (!res.ok) {
+		const t = await res.text().catch(() => "");
+		throw new Error(t || `HTTP ${res.status}`);
+	}
+	return await res.blob();
 }
 
-export async function getInvoiceDetail(
-  idHoaDon: string
-): Promise<InvoiceDetailResponse> {
-  const res = await fetch(
-    `${API_BASE}/Payment/invoice/${encodeURIComponent(idHoaDon)}`
-  );
-  return handleJson<InvoiceDetailResponse>(res);
+export async function getInvoiceDetail(idHoaDon: string): Promise<InvoiceDetailResponse> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/hoa-don/${encodeURIComponent(idHoaDon)}`);
+	return handleJson<InvoiceDetailResponse>(res);
 }
 
-export async function cancelPayment(
-  req: CancelPaymentRequest
-): Promise<PaymentResponse> {
-  const res = await fetch(`${API_BASE}/Payment/cancel`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ IdHoaDon: req.idHoaDon, Reason: req.reason }),
-  });
-  const data = await handleJson<any>(res);
-  return normalizePaymentResponse(data);
+export async function cancelPayment(req: CancelPaymentRequest): Promise<PaymentResponse> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/cancel`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ IdHoaDon: req.idHoaDon, Reason: req.reason }),
+	});
+	const data = await handleJson<any>(res);
+	return normalizePaymentResponse(data);
 }
 
-export async function getPaymentMethods(): Promise<
-  Array<{ code: string; name: string; icon?: string; available?: boolean }>
-> {
-  const res = await fetch(`${API_BASE}/Payment/methods`);
-  return handleJson(res);
+export async function getPaymentMethods(): Promise<Array<{ code: string; name: string; icon?: string; available?: boolean }>> {
+	const res = await fetch(`${API_BASE}/api/ThanhToan/methods`);
+	return handleJson(res);
 }
 
 export default {

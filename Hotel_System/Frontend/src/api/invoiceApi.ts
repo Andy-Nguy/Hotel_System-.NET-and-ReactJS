@@ -85,7 +85,7 @@ export async function getInvoices(params?: {
   if (params?.customer) qs.set("customer", params.customer);
   if (params?.roomType) qs.set("roomType", params.roomType);
   if (params?.staff) qs.set("staff", params.staff);
-  const res = await fetchJson(`/Invoices/invoices?${qs.toString()}`, {
+  const res = await fetchJson(`/api/HoaDon/danh-sach-hoa-don?${qs.toString()}`, {
     headers,
   });
   // backend returns { data: [...] }
@@ -110,7 +110,7 @@ export async function getSummary(params?: {
   if (params?.customer) qs.set("customer", params.customer);
   if (params?.roomType) qs.set("roomType", params.roomType);
   if (params?.staff) qs.set("staff", params.staff);
-  const res = await fetchJson(`/Invoices/summary?${qs.toString()}`, {
+  const res = await fetchJson(`/api/HoaDon/thong-ke?${qs.toString()}`, {
     headers,
   });
   return (res && res.data) || null;
@@ -123,7 +123,7 @@ export async function getInvoiceDetail(
   const token = localStorage.getItem("hs_token");
   const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetchJson(`/Invoices/${encodeURIComponent(id)}`, {
+  const res = await fetchJson(`/api/HoaDon/chi-tiet/${encodeURIComponent(id)}`, {
     headers,
   });
   // The backend returns an object shaped like the InvoiceDetail directly; wrap into { data }
