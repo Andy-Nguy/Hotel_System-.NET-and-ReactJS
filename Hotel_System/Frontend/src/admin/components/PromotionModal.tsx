@@ -91,21 +91,96 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
     },
   ];
 
+  // Services for room_service type always have "Đang Áp Dụng" status, so no status column
+  const serviceColumnsForRoomService = [
+    {
+      title: "Mã Dịch Vụ",
+      dataIndex: "iddichVu",
+      key: "iddichVu",
+      width: "25%",
+    },
+    {
+      title: "Tên Dịch Vụ",
+      dataIndex: "tenDichVu",
+      key: "tenDichVu",
+      width: "50%",
+    },
+    {
+      title: "Trạng Thái Áp Dụng",
+      key: "isActive",
+      width: "25%",
+      render: (_: any, record: any) =>
+        record.isActive ? (
+          <Tag color="blue">Đang Áp Dụng</Tag>
+        ) : (
+          <Tag>Không Áp Dụng</Tag>
+        ),
+    },
+  ];
+
   useEffect(() => {
-    // load service mappings when modal is visible and promotion is service-type
+    // load service mappings when modal is visible and promotion involves services
     const loadServices = async () => {
       if (!visible || !promotion) return;
-      if ((promotion as any).loaiKhuyenMai !== "service") return;
+      const loai = (promotion as any).loaiKhuyenMai;
+      if (!loai) return;
+
       try {
         setLoadingServices(true);
-        const resp = await fetch(`/api/KhuyenMai/${promotion.idkhuyenMai}/services`);
-        if (!resp.ok) {
-          setServiceList([]);
+
+        // Helper to normalize a service item from various shapes
+        const normalizeItem = (it: any, idx: number) => ({
+          id: it.id ?? it.Id ?? idx,
+          iddichVu: it.iddichVu || it.IddichVu || it.idDichVu || it.IdDichVu || "",
+          tenDichVu: it.tenDichVu || it.TenDichVu || it.ten || it.name || "",
+          isActive: it.isActive ?? it.IsActive ?? true,
+          ngayApDung: it.ngayApDung || it.NgayApDung,
+          ngayKetThuc: it.ngayKetThuc || it.NgayKetThuc,
+        });
+
+        // Check if promotion already has the data we need
+        const existingServices = (promotion as any).khuyenMaiDichVus;
+        const existingCombos = (promotion as any).khuyenMaiCombos;
+        const existingPairs = (promotion as any).khuyenMaiPhongDichVus;
+
+        let derived: any[] = [];
+
+        // For service type, use khuyenMaiDichVus
+        if (loai === "service" && existingServices && Array.isArray(existingServices) && existingServices.length > 0) {
+          derived = existingServices.map((m: any, idx: number) => normalizeItem(m, idx));
+          setServiceList(derived);
           return;
         }
-        const data = await resp.json();
-        // Expecting array of mapping objects with iddichVu and tenDichVu
-        setServiceList(data || []);
+
+        // For combo type, extract from khuyenMaiCombos
+        if (loai === "combo" && existingCombos && Array.isArray(existingCombos) && existingCombos.length > 0) {
+          const comboItems = existingCombos.flatMap((c: any) =>
+            (c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || []).map((it: any) => it)
+          );
+          if (comboItems.length > 0) {
+            derived = comboItems.map((m: any, idx: number) => normalizeItem(m, idx));
+            setServiceList(derived);
+            return;
+          }
+        }
+
+        // For room_service type, extract unique services from khuyenMaiPhongDichVus
+        if (loai === "room_service" && existingPairs && Array.isArray(existingPairs) && existingPairs.length > 0) {
+          // Dedupe by service ID and extract just services (not room-service pairs)
+          const uniqueMap = new Map();
+          existingPairs.forEach((p: any) => {
+            const serviceId = p.iddichVu || p.IddichVu || p.idDichVu || p.IdDichVu;
+            if (serviceId && !uniqueMap.has(serviceId)) {
+              uniqueMap.set(serviceId, p);
+            }
+          });
+          derived = Array.from(uniqueMap.values()).map((m: any, idx: number) => normalizeItem(m, idx));
+          setServiceList(derived);
+          return;
+        }
+
+        // Fallback: if no local data, just set empty
+        setServiceList([]);
       } catch (err) {
         console.error("Failed to load promotion services", err);
         setServiceList([]);
@@ -159,40 +234,105 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       )}
 
       <Divider />
-      {((promotion as any).loaiKhuyenMai === "service") ? (
-        <>
-          <h3>Danh Sách Dịch Vụ Áp Dụng ({serviceList.length} dịch vụ)</h3>
-          {serviceList.length > 0 ? (
-            <Table
-              columns={serviceColumns}
-              dataSource={serviceList.map((s, index) => ({ ...s, key: `${s.id}_${index}` }))}
-              pagination={false}
-              size="small"
-              loading={loadingServices}
-            />
-          ) : (
-            <Empty description="Không có dịch vụ nào áp dụng khuyến mãi này" />
-          )}
-        </>
-      ) : (
-        <>
-          <h3>Danh Sách Phòng Áp Dụng ({promotion.khuyenMaiPhongs?.length ?? 0} phòng)</h3>
+      {
+        (() => {
+          const loai = (promotion as any).loaiKhuyenMai;
+          if (loai === "service") {
+            return (
+              <>
+                <h3>Danh Sách Dịch Vụ Áp Dụng ({serviceList.length} dịch vụ)</h3>
+                {serviceList.length > 0 ? (
+                  <Table
+                    columns={serviceColumns}
+                    dataSource={serviceList.map((s, index) => ({ ...s, key: `${s.id}_${index}` }))}
+                    pagination={false}
+                    size="small"
+                    loading={loadingServices}
+                  />
+                ) : (
+                  <Empty description="Không có dịch vụ nào áp dụng khuyến mãi này" />
+                )}
+              </>
+            );
+          }
 
-          {promotion.khuyenMaiPhongs && promotion.khuyenMaiPhongs.length > 0 ? (
-            <Table
-              columns={roomColumns}
-              dataSource={promotion.khuyenMaiPhongs.map((room, index) => ({
-                ...room,
-                key: `${room.idphong}_${index}`,
-              }))}
-              pagination={false}
-              size="small"
-            />
-          ) : (
-            <Empty description="Không có phòng nào áp dụng khuyến mãi này" />
-          )}
-        </>
-      )}
+          if (loai === "combo") {
+            return (
+              <>
+                <h3>Combo Dịch Vụ ({serviceList.length} dịch vụ)</h3>
+                {serviceList.length > 0 ? (
+                  <Table
+                    columns={serviceColumns}
+                    dataSource={serviceList.map((s, index) => ({ ...s, key: `${s.id}_${index}` }))}
+                    pagination={false}
+                    size="small"
+                    loading={loadingServices}
+                  />
+                ) : (
+                  <Empty description="Không có dịch vụ nào trong combo" />
+                )}
+              </>
+            );
+          }
+
+          if (loai === "room_service") {
+            return (
+              <>
+                <h3>Danh Sách Phòng Áp Dụng ({promotion.khuyenMaiPhongs?.length ?? 0} phòng)</h3>
+
+                {promotion.khuyenMaiPhongs && promotion.khuyenMaiPhongs.length > 0 ? (
+                  <Table
+                    columns={roomColumns}
+                    dataSource={promotion.khuyenMaiPhongs.map((room, index) => ({
+                      ...room,
+                      key: `${room.idphong}_${index}`,
+                    }))}
+                    pagination={false}
+                    size="small"
+                  />
+                ) : (
+                  <Empty description="Không có phòng nào áp dụng khuyến mãi này" />
+                )}
+
+                <Divider />
+                <h3>Dịch Vụ Áp Dụng - Đang Áp Dụng ({serviceList.length} dịch vụ)</h3>
+                {serviceList.length > 0 ? (
+                  <Table
+                    columns={serviceColumnsForRoomService}
+                    dataSource={serviceList.map((s, index) => ({ ...s, key: `${s.id}_${index}` }))}
+                    pagination={false}
+                    size="small"
+                    loading={loadingServices}
+                  />
+                ) : (
+                  <Empty description="Không có dịch vụ nào được gán cho gói" />
+                )}
+              </>
+            );
+          }
+
+          // default: show rooms if any
+          return (
+            <>
+              <h3>Danh Sách Phòng Áp Dụng ({promotion.khuyenMaiPhongs?.length ?? 0} phòng)</h3>
+
+              {promotion.khuyenMaiPhongs && promotion.khuyenMaiPhongs.length > 0 ? (
+                <Table
+                  columns={roomColumns}
+                  dataSource={promotion.khuyenMaiPhongs.map((room, index) => ({
+                    ...room,
+                    key: `${room.idphong}_${index}`,
+                  }))}
+                  pagination={false}
+                  size="small"
+                />
+              ) : (
+                <Empty description="Không có phòng nào áp dụng khuyến mãi này" />
+              )}
+            </>
+          );
+        })()
+      }
 
       {promotion.createdAt && promotion.updatedAt && (
         <>

@@ -25,6 +25,7 @@ public class UpdateKhuyenMaiDto
     public DateOnly NgayKetThuc { get; set; }
     public string TrangThai { get; set; } = "active"; // active, inactive, expired
     public string? HinhAnhBanner { get; set; } // Đường dẫn tương đối đến hình ảnh banner
-    public List<string> PhongIds { get; set; } = new();
-    public List<string> DichVuIds { get; set; } = new();
+    // Make these nullable so an update can omit them to mean "don't change mappings"
+    public List<string>? PhongIds { get; set; } = null;
+    public List<string>? DichVuIds { get; set; } = null;
 }

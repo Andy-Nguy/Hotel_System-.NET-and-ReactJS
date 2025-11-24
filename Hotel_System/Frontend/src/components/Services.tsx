@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { getServices, getServiceById, Service as ApiService } from "../api/serviceApi";
-import { getPromotionsForService } from "../api/promotionApi";
+import { getPromotionsForService, getAllPromotions } from "../api/promotionApi";
+import ComboCard from './ComboCard';
+import DetailComboCard from './DetailComboCard';
 
 type Service = {
   id: string;
@@ -47,6 +49,9 @@ const Services: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [combos, setCombos] = useState<any[]>([]);
+  const [selectedCombo, setSelectedCombo] = useState<any | null>(null);
+  const [comboModalOpen, setComboModalOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -65,6 +70,104 @@ const Services: React.FC = () => {
           ThoiGianBatDau: a.thoiGianBatDau ?? undefined,
           ThoiGianKetThuc: a.thoiGianKetThuc ?? undefined,
         }));
+        // Load combos from khuyenMaiCombos (only active promotions)
+        try {
+          const promos = await getAllPromotions("active");
+          if (Array.isArray(promos) && promos.length > 0) {
+            // Extract combos from khuyenMaiCombos field
+            const allCombos: any[] = [];
+            promos.forEach((p: any) => {
+              // Only process active promotions
+              const promoActive = (p.trangThai || p.TrangThai || '').toLowerCase() === 'active';
+              if (!promoActive) return;
+
+              const combos = p.khuyenMaiCombos || p.KhuyenMaiCombos || [];
+              combos.forEach((combo: any) => {
+                  // Check if combo itself is active
+                  const comboActive = !combo.trangThai || (combo.trangThai || combo.TrangThai || '').toLowerCase() === 'active';
+                  if (!comboActive) return;
+
+                  const mappings = (combo.khuyenMaiComboDichVus || combo.KhuyenMaiComboDichVus || []);
+                  const serviceIds = mappings.map((s: any) => s.iddichVu || s.IddichVu).filter(Boolean);
+
+                  if (serviceIds.length > 0) {
+                    allCombos.push({
+                      comboId: combo.idkhuyenMaiCombo || combo.IdkhuyenMaiCombo || String(Math.random()),
+                      promotionId: p.idkhuyenMai || p.IdkhuyenMai,
+                      name: combo.tenCombo || combo.TenCombo || 'Combo',
+                      description: combo.moTa || combo.MoTa || p.moTa || p.MoTa || null,
+                      banner: p.hinhAnhBanner || p.HinhAnhBanner || null,
+                      // store mapping objects and service ids; we'll enrich with full service details below
+                      mappingItems: mappings,
+                      serviceIds: serviceIds,
+                      comboMeta: {
+                        ngayBatDau: combo.ngayBatDau || combo.NgayBatDau || p.ngayBatDau || p.NgayBatDau || null,
+                        ngayKetThuc: combo.ngayKetThuc || combo.NgayKetThuc || p.ngayKetThuc || p.NgayKetThuc || null,
+                        createdAt: combo.createdAt || combo.CreatedAt || null,
+                        updatedAt: combo.updatedAt || combo.UpdatedAt || null,
+                      },
+                      comboPrice: p.giaTriGiam ?? p.GiaTriGiam ?? 0,
+                      loaiGiamGia: p.loaiGiamGia || p.LoaiGiamGia || 'amount',
+                      isActive: true
+                    });
+                  }
+                });
+            });
+
+            // Enrich combos with full service details from service API and mapping metadata
+            try {
+              const enriched = await Promise.all(allCombos.map(async (c) => {
+                try {
+                  const servicesFull = await Promise.all((c.serviceIds || []).map(async (id: string) => {
+                    try {
+                      const svc = await getServiceById(id);
+                      return svc;
+                    } catch (e) {
+                      return null;
+                    }
+                  }));
+
+                  // merge mappingItems metadata (e.g., IsActive, CreatedAt) into service objects when available
+                  const mergedServices = (servicesFull || []).map((svc: any, idx: number) => {
+                    const mapping = (c.mappingItems || [])[idx] || {};
+                    if (!svc) {
+                      return {
+                        id: c.serviceIds[idx],
+                        TenDichVu: mapping.tenDichVu || mapping.TenDichVu || 'Dịch vụ',
+                        TienDichVu: mapping.tienDichVu ?? mapping.TienDichVu ?? 0,
+                        IsActive: mapping.isActive ?? mapping.IsActive ?? true,
+                      };
+                    }
+                    return {
+                      id: svc.iddichVu ?? svc.id ?? c.serviceIds[idx],
+                      HinhDichVu: svc.hinhDichVu ?? svc.HinhDichVu ?? undefined,
+                      TenDichVu: (svc.tenDichVu ?? svc.TenDichVu) || mapping.tenDichVu || mapping.TenDichVu || 'Dịch vụ',
+                      TienDichVu: svc.tienDichVu ?? svc.TienDichVu ?? mapping.tienDichVu ?? mapping.TienDichVu ?? 0,
+                      TrangThai: svc.trangThai ?? svc.TrangThai ?? undefined,
+                      ThoiLuongUocTinh: svc.thoiLuongUocTinh ?? svc.ThoiLuongUocTinh ?? undefined,
+                      ThongTinDV: svc.thongTinDv ?? svc.ThongTinDV ?? undefined,
+                      GhiChu: svc.ghiChu ?? svc.GhiChu ?? undefined,
+                      IsActive: mapping.isActive ?? mapping.IsActive ?? true,
+                    };
+                  });
+
+                  const originalPrice = mergedServices.reduce((sum: number, s: any) => sum + (s.TienDichVu ?? s.tienDichVu ?? 0), 0);
+
+                  return { ...c, services: mergedServices, originalPrice };
+                } catch (e) {
+                  return { ...c, services: [], originalPrice: 0 };
+                }
+              }));
+              setCombos(enriched);
+            } catch (e) {
+              // fallback to raw combos if enrichment fails
+              setCombos(allCombos);
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to load combos:', err);
+          // ignore - combos optional
+        }
         // enrich each service with applicable promotion (pick best saving)
         try {
           const enriched = await Promise.all(mapped.map(async (s) => {
@@ -293,6 +396,20 @@ const Services: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Combos */}
+        {combos && combos.length > 0 && (
+          <div style={{ margin: '12px 0 20px 0' }}>
+            <div style={{ display: 'grid', gap: 12 }}>
+              {combos.map(c => (
+                <ComboCard key={c.comboId} combo={c} onView={(combo) => {
+                  setSelectedCombo(combo);
+                  setComboModalOpen(true);
+                }} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Slider */}
         {loading && (
@@ -546,6 +663,9 @@ const Services: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Combo detail modal */}
+      <DetailComboCard visible={comboModalOpen} combo={selectedCombo} onClose={() => { setComboModalOpen(false); setSelectedCombo(null); }} />
     </section>
   );
 };
