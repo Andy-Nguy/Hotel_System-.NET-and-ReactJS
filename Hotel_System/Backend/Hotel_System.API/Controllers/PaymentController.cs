@@ -235,12 +235,24 @@ TongTien = tongTien,
                 {
                     foreach (var svc in request.Services)
                     {
-                        // Kiểm tra dịch vụ tồn tại
-                        var dv = await _context.DichVus.FindAsync(svc.IddichVu);
-                        if (dv == null)
+                        string? comboId = null;
+                        string? serviceId = svc.IddichVu;
+
+                        // Check for combo
+                        if (!string.IsNullOrEmpty(serviceId) && serviceId.StartsWith("combo:"))
                         {
-                            _logger.LogWarning("PaymentController: dịch vụ {Id} không tồn tại, bỏ qua", svc.IddichVu);
-                            continue;
+                            comboId = serviceId.Substring(6);
+                            serviceId = null;
+                        }
+                        else
+                        {
+                            // Kiểm tra dịch vụ tồn tại nếu không phải combo
+                            var dv = await _context.DichVus.FindAsync(svc.IddichVu);
+                            if (dv == null)
+                            {
+                                _logger.LogWarning("PaymentController: dịch vụ {Id} không tồn tại, bỏ qua", svc.IddichVu);
+                                continue;
+                            }
                         }
 
                         var tienDichVu = svc.TienDichVu != 0m ? svc.TienDichVu : svc.DonGia * Math.Max(1, svc.SoLuong);
@@ -269,19 +281,18 @@ TongTien = tongTien,
                         var cthd = new Cthddv
                         {
                             IdhoaDon = idHoaDon,
-                            IddichVu = svc.IddichVu,
+                            IddichVu = serviceId,
+                            IdkhuyenMaiCombo = comboId,
                             TienDichVu = tienDichVu,
                             ThoiGianThucHien = thoiGianThucHien,
                             ThoiGianBatDau = thoiGianBatDau,
                             ThoiGianKetThuc = thoiGianKetThuc,
                             TrangThai = "new"
                         };
-_context.Cthddvs.Add(cthd);
+                        _context.Cthddvs.Add(cthd);
                     }
                 }
 
-                // Đồng bộ Đặt Phòng
-                datPhong.TongTien = tongTien;
                 datPhong.TrangThaiThanhToan = trangThaiThanhToan;
 
                 // Nếu TrangThai chưa được set (vẫn là 0 = chờ xác nhận), thì chỉ set lên 1 (payment created)

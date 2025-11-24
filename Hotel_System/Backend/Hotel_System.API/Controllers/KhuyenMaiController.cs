@@ -44,6 +44,7 @@ public class KhuyenMaiController : ControllerBase
                 .Include(k => k.KhuyenMaiCombos)
                     .ThenInclude(c => c.KhuyenMaiComboDichVus)
                         .ThenInclude(cd => cd.IddichVuNavigation)
+                            .ThenInclude(d => d.TtdichVus)
                 .Include(k => k.KhuyenMaiPhongDichVus)
                     .ThenInclude(pd => pd.IdphongNavigation)
                 .Include(k => k.KhuyenMaiPhongDichVus)
@@ -440,7 +441,11 @@ public class KhuyenMaiController : ControllerBase
                         }
                         _context.KhuyenMaiCombos.RemoveRange(oldCombos);
                     }
+                }
 
+                // For room_service, only remove room-service pairs if BOTH lists provided
+                if (newType == "room_service" && dto.PhongIds != null && dto.DichVuIds != null)
+                {
                     if (oldRoomServicePairs.Any()) _context.KhuyenMaiPhongDichVus.RemoveRange(oldRoomServicePairs);
                 }
             }
@@ -534,12 +539,35 @@ public class KhuyenMaiController : ControllerBase
             }
             else if (newType == "room_service")
             {
+                // Rebuild room_service: need both KhuyenMaiPhongs and KhuyenMaiPhongDichVus
                 // determine lists to use: prefer DTO values, otherwise reuse existing mappings
                 var roomIdsToUse = dto.PhongIds ?? oldRoomServicePairs.Select(p => p.Idphong).Distinct().ToList();
                 var dvIdsToUse = dto.DichVuIds ?? oldRoomServicePairs.Select(p => p.IddichVu).Distinct().ToList();
 
                 if (roomIdsToUse != null && dvIdsToUse != null && roomIdsToUse.Count > 0 && dvIdsToUse.Count > 0)
                 {
+                    // First, recreate KhuyenMaiPhongs (rooms)
+                    foreach (var phongId in roomIdsToUse)
+                    {
+                        var room = await _context.Phongs.FirstOrDefaultAsync(p => p.Idphong == phongId);
+                        if (room != null)
+                        {
+                            var khuyenMaiPhong = new KhuyenMaiPhong
+                            {
+                                IdkhuyenMai = id,
+                                Idphong = phongId,
+                                IsActive = true,
+                                NgayApDung = dto.NgayBatDau,
+                                NgayKetThuc = dto.NgayKetThuc,
+                                CreatedAt = promotion.CreatedAt,
+                                UpdatedAt = DateTime.Now
+                            };
+                            _context.KhuyenMaiPhongs.Add(khuyenMaiPhong);
+                        }
+                    }
+                    await _context.SaveChangesAsync();
+
+                    // Then, recreate KhuyenMaiPhongDichVus (room-service pairs)
                     foreach (var phongId in roomIdsToUse)
                     {
                         foreach (var dvId in dvIdsToUse)
@@ -1007,14 +1035,36 @@ public class KhuyenMaiController : ControllerBase
                 NgayBatDau = c.NgayBatDau,
                 NgayKetThuc = c.NgayKetThuc,
                 TrangThai = c.TrangThai,
-                KhuyenMaiComboDichVus = c.KhuyenMaiComboDichVus?.Select(cd => new DTOs.Promotions.KhuyenMaiComboDichVuDto
+                KhuyenMaiComboDichVus = c.KhuyenMaiComboDichVus?.Select(cd =>
                 {
-                    Id = cd.Id,
-                    IdkhuyenMaiCombo = cd.IdkhuyenMaiCombo,
-                    IddichVu = cd.IddichVu,
-                    TenDichVu = cd.IddichVuNavigation?.TenDichVu ?? cd.IddichVu
+                    var dichVu = cd.IddichVuNavigation;
+                    var details = dichVu?.TtdichVus?.FirstOrDefault();
+                    return new DTOs.Promotions.KhuyenMaiComboDichVuDto
+                    {
+                        Id = cd.Id,
+                        IdkhuyenMaiCombo = cd.IdkhuyenMaiCombo,
+                        IddichVu = cd.IddichVu,
+                        TenDichVu = dichVu?.TenDichVu ?? cd.IddichVu,
+                        TienDichVu = dichVu?.TienDichVu,
+                        HinhDichVu = dichVu?.HinhDichVu,
+                        ThongTinDv = details?.ThongTinDv,
+                        ThoiLuongUocTinh = details?.ThoiLuongUocTinh,
+                        IsActive = dichVu?.TrangThai == "Đang hoạt động"
+                    };
                 }).ToList() ?? new List<DTOs.Promotions.KhuyenMaiComboDichVuDto>()
-            }).ToList() ?? new List<DTOs.Promotions.KhuyenMaiComboDto>()
+            }).ToList() ?? new List<DTOs.Promotions.KhuyenMaiComboDto>(),
+            KhuyenMaiPhongDichVus = promotion.KhuyenMaiPhongDichVus?.Select(pd => new DTOs.Promotions.KhuyenMaiPhongDichVuDto
+            {
+                Id = pd.Id,
+                IdkhuyenMai = pd.IdkhuyenMai,
+                Idphong = pd.Idphong,
+                IddichVu = pd.IddichVu,
+                IsActive = pd.IsActive,
+                NgayApDung = pd.NgayApDung,
+                NgayKetThuc = pd.NgayKetThuc,
+                TenPhong = pd.IdphongNavigation?.TenPhong ?? pd.Idphong ?? "N/A",
+                TenDichVu = pd.IddichVuNavigation?.TenDichVu ?? pd.IddichVu ?? "N/A"
+            }).ToList() ?? new List<DTOs.Promotions.KhuyenMaiPhongDichVuDto>()
         };
     }
 }

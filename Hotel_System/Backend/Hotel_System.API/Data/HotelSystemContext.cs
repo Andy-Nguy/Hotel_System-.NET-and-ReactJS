@@ -70,7 +70,8 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.Idcthddv).HasColumnName("IDCTHDDV");
             entity.Property(e => e.IddichVu)
                 .HasMaxLength(50)
-                .HasColumnName("IDDichVu");
+                .HasColumnName("IDDichVu")
+                .IsRequired(false); // Nullable
                 entity.Property(e => e.IdhoaDon)
                 .HasMaxLength(50)
                 .HasColumnName("IDHoaDon");
@@ -81,10 +82,18 @@ public partial class HotelSystemContext : DbContext
             // Keep the model property for application-side use but prevent EF Core
             // from mapping it (and therefore querying a non-existent column).
             entity.Ignore(e => e.IdkhuyenMai);
+            
+            entity.Property(e => e.IdkhuyenMaiCombo)
+                .HasMaxLength(50)
+                .HasColumnName("IDKhuyenMaiCombo");
 
             entity.HasOne(d => d.IddichVuNavigation).WithMany(p => p.Cthddvs)
                 .HasForeignKey(d => d.IddichVu)
                 .HasConstraintName("FK_CTHDDV_DichVu");
+                
+            entity.HasOne(d => d.IdkhuyenMaiComboNavigation).WithMany()
+                .HasForeignKey(d => d.IdkhuyenMaiCombo)
+                .HasConstraintName("FK_CTHDDV_KhuyenMaiCombo");
 
             entity.HasOne(d => d.IdhoaDonNavigation).WithMany(p => p.Cthddvs)
                 .HasForeignKey(d => d.IdhoaDon)

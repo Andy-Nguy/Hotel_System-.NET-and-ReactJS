@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Form,
   Input,
@@ -117,6 +117,10 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
   const [loading, setLoading] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
+  // Track promotion ID to avoid re-fetching on object reference change
+  const promotionIdRef = useRef<string | undefined>(undefined);
+  // Track if rooms already loaded to prevent double-fetch in Strict Mode
+  const roomsLoadedRef = useRef(false);
   // selectedRooms lưu ID Phòng cho type 'room', 'combo', 'room_service' HOẶC ID Dịch vụ cho type 'service'
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   // selectedServiceIds chỉ lưu ID Dịch vụ cho type 'combo' và 'room_service'
@@ -128,12 +132,15 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
   // State cho combo: lưu danh sách dịch vụ với giá để tính tổng
   const [comboServices, setComboServices] = useState<{ id: string; name: string; price: number }[]>([]);
 
-  // Load rooms from API
+  // Load rooms from API - only once
   useEffect(() => {
+    const controller = new AbortController();
+
     const loadRooms = async () => {
       try {
         setLoadingRooms(true);
-        const response = await fetch("/api/Phong");
+        const response = await fetch("/api/Phong", { signal: controller.signal });
+        if (!response.ok) throw new Error('Failed to fetch rooms');
         const data = await response.json();
         const roomList = data.map((room: any) => ({
           key: room.idphong,
@@ -141,20 +148,34 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
         }));
         setRooms(roomList);
         setRoomObjects(data);
-      } catch (error) {
-        console.error("[PROMOTION_FORM] Error loading rooms:", error);
-        message.error("Lỗi khi tải danh sách phòng");
+        roomsLoadedRef.current = true;
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          console.error("[PROMOTION_FORM] Error loading rooms:", error);
+          message.error("Lỗi khi tải danh sách phòng");
+        }
       } finally {
         setLoadingRooms(false);
       }
     };
 
-    loadRooms();
+    // Only load if not already loaded
+    if (!roomsLoadedRef.current) {
+      loadRooms();
+    }
+
+    return () => controller.abort();
   }, []);
 
   // Populate form and selected IDs in Edit mode
   useEffect(() => {
+    // Only proceed if promotion ID changed
+    if (promotion?.idkhuyenMai === promotionIdRef.current) {
+      return; // Same promotion, no need to reload
+    }
+
     if (promotion) {
+      promotionIdRef.current = promotion.idkhuyenMai;
       // Edit mode: populate form with promotion data
       form.setFieldsValue({
         tenKhuyenMai: promotion.tenKhuyenMai,
@@ -167,7 +188,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
         trangThai: promotion.trangThai,
       });
 
-      // Try to load canonical promotion details to ensure khuyenMaiDichVus are present
+      // Try to load canonical promotion details to ensure khuyenMaiDichVus and combos are present
       (async () => {
         try {
           const full = await getPromotionById(promotion.idkhuyenMai);
@@ -175,53 +196,155 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
           
           if (promoType === 'service') {
             // Loại 'service': ID dịch vụ được lưu vào selectedRooms
-            const svcIds = (full as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu) || [];
+            const svcIds = (full as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu || m.IddichVu) || [];
             setSelectedRooms(svcIds);
-            setSelectedServiceIds([]); // Đảm bảo reset selectedServiceIds
-          } else if (promoType === 'combo' || promoType === 'room_service') {
-            // Loại 'combo' hoặc 'room_service': ID phòng vào selectedRooms, ID dịch vụ vào selectedServiceIds
-            const selectedPhongIds = full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
-            const svcIds = (full as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu) || [];
+            setSelectedServiceIds([]);
+            setComboServices([]);
+          } else if (promoType === 'combo') {
+            // Loại 'combo': Load combo dịch vụ và giá từ khuyenMaiCombos
+            const selectedPhongIds = full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
+            setSelectedRooms(selectedPhongIds);
+            
+            // Extract service IDs and prices from combos
+            const combos = (full as any).khuyenMaiCombos || [];
+            const allComboItems: any[] = [];
+            combos.forEach((c: any) => {
+              const items = c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || [];
+              items.forEach((it: any) => {
+                if (!allComboItems.find(x => x.id === (it.iddichVu || it.IddichVu))) {
+                  allComboItems.push({
+                    id: it.iddichVu || it.IddichVu || it.id || '',
+                    name: it.tenDichVu || it.TenDichVu || it.ten || '',
+                    price: it.gia || it.Gia || 0,
+                  });
+                }
+              });
+            });
+            
+            // If prices are missing, fetch from service API
+            const itemsWithoutPrice = allComboItems.filter(item => !item.price || item.price === 0);
+            if (itemsWithoutPrice.length > 0) {
+              try {
+                const res = await fetch('/api/dich-vu/lay-danh-sach');
+                const allServices = await res.json();
+                itemsWithoutPrice.forEach(item => {
+                  const svc = allServices.find((s: any) => (s.iddichVu || s.IddichVu) === item.id);
+                  if (svc) {
+                    item.price = svc.tienDichVu || svc.TienDichVu || 0;
+                    if (!item.name) item.name = svc.tenDichVu || svc.TenDichVu || item.id;
+                  }
+                });
+              } catch (err) {
+                console.error('Error fetching service prices', err);
+              }
+            }
+            
+            setSelectedServiceIds(allComboItems.map(x => x.id));
+            setComboServices(allComboItems);
+          } else if (promoType === 'room_service') {
+            // Loại 'room_service': ID phòng vào selectedRooms, ID dịch vụ vào selectedServiceIds
+            const selectedPhongIds = full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
+            // room_service may have explicit khuyenMaiDichVus or derive from khuyenMaiPhongDichVus
+            let svcIds: string[] = [];
+            if ((full as any).khuyenMaiDichVus && (full as any).khuyenMaiDichVus.length > 0) {
+              svcIds = (full as any).khuyenMaiDichVus.map((m: any) => m.iddichVu || m.IddichVu);
+            } else if ((full as any).khuyenMaiPhongDichVus && (full as any).khuyenMaiPhongDichVus.length > 0) {
+              const pairs = (full as any).khuyenMaiPhongDichVus;
+              const uniqueSvcIds = Array.from(new Set(pairs.map((p: any) => p.iddichVu || p.IddichVu || p.idDichVu)));
+              svcIds = uniqueSvcIds.filter(Boolean) as string[];
+            }
             setSelectedRooms(selectedPhongIds);
             setSelectedServiceIds(svcIds);
+            setComboServices([]);
           } else {
             // Loại 'room': ID phòng vào selectedRooms
-            const selectedPhongIds = full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
+            const selectedPhongIds = full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
             setSelectedRooms(selectedPhongIds);
-            setSelectedServiceIds([]); // Đảm bảo reset selectedServiceIds
+            setSelectedServiceIds([]);
+            setComboServices([]);
           }
 
           // Set banner image from canonical data
           setBannerImage(full.hinhAnhBanner || null);
         } catch (err) {
+          console.error('Error loading promotion details for edit', err);
           // Fallback to whatever was passed in if fetch fails
           const promoType = (promotion as any).loaiKhuyenMai;
           
           if (promoType === 'service') {
-            const svcIds = (promotion as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu) || [];
+            const svcIds = (promotion as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu || m.IddichVu) || [];
             setSelectedRooms(svcIds);
             setSelectedServiceIds([]);
-          } else if (promoType === 'combo' || promoType === 'room_service') {
-            const selectedPhongIds = promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
-            const svcIds = (promotion as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu) || [];
+            setComboServices([]);
+          } else if (promoType === 'combo') {
+            const selectedPhongIds = promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
+            const combos = (promotion as any).khuyenMaiCombos || [];
+            const allComboItems: any[] = [];
+            combos.forEach((c: any) => {
+              const items = c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || [];
+              items.forEach((it: any) => {
+                if (!allComboItems.find(x => x.id === (it.iddichVu || it.IddichVu))) {
+                  allComboItems.push({
+                    id: it.iddichVu || it.IddichVu || it.id || '',
+                    name: it.tenDichVu || it.TenDichVu || it.ten || '',
+                    price: it.gia || it.Gia || 0,
+                  });
+                }
+              });
+            });
+            
+            // If prices are missing, fetch from service API (fallback case)
+            const itemsWithoutPrice = allComboItems.filter(item => !item.price || item.price === 0);
+            if (itemsWithoutPrice.length > 0) {
+              try {
+                const res = await fetch('/api/dich-vu/lay-danh-sach');
+                const allServices = await res.json();
+                itemsWithoutPrice.forEach(item => {
+                  const svc = allServices.find((s: any) => (s.iddichVu || s.IddichVu) === item.id);
+                  if (svc) {
+                    item.price = svc.tienDichVu || svc.TienDichVu || 0;
+                    if (!item.name) item.name = svc.tenDichVu || svc.TenDichVu || item.id;
+                  }
+                });
+              } catch (err) {
+                console.error('Error fetching service prices (fallback)', err);
+              }
+            }
+            
+            setSelectedRooms(selectedPhongIds);
+            setSelectedServiceIds(allComboItems.map(x => x.id));
+            setComboServices(allComboItems);
+          } else if (promoType === 'room_service') {
+            const selectedPhongIds = promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
+            let svcIds: string[] = [];
+            if ((promotion as any).khuyenMaiDichVus && (promotion as any).khuyenMaiDichVus.length > 0) {
+              svcIds = (promotion as any).khuyenMaiDichVus.map((m: any) => m.iddichVu || m.IddichVu);
+            } else if ((promotion as any).khuyenMaiPhongDichVus && (promotion as any).khuyenMaiPhongDichVus.length > 0) {
+              const pairs = (promotion as any).khuyenMaiPhongDichVus;
+              const uniqueSvcIds = Array.from(new Set(pairs.map((p: any) => p.iddichVu || p.IddichVu || p.idDichVu)));
+              svcIds = uniqueSvcIds.filter(Boolean) as string[];
+            }
             setSelectedRooms(selectedPhongIds);
             setSelectedServiceIds(svcIds);
+            setComboServices([]);
           } else {
-            const selectedPhongIds = promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
+            const selectedPhongIds = promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
             setSelectedRooms(selectedPhongIds);
             setSelectedServiceIds([]);
+            setComboServices([]);
           }
           setBannerImage(promotion.hinhAnhBanner || null);
         }
       })();
     } else {
-      // Create mode: reset form
+      // Create mode: reset form and ref
+      promotionIdRef.current = undefined;
       form.resetFields();
       setSelectedRooms([]);
       setSelectedServiceIds([]);
       setBannerImage(null);
     }
-  }, [promotion, form]);
+  }, [promotion]);
 
   const handleSubmit = async (values: any) => {
     try {
@@ -358,10 +481,12 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                     { label: 'Khách Hàng', value: 'customer' },
                   ]}
                   onChange={(value) => {
-                    // Reset selected rooms/services when type changes
-                    setSelectedRooms([]);
-                    setSelectedServiceIds([]);
-                    setComboServices([]);
+                    // Only reset when creating new promotion, not when editing
+                    if (!promotion) {
+                      setSelectedRooms([]);
+                      setSelectedServiceIds([]);
+                      setComboServices([]);
+                    }
                   }}
                 />
               </Form.Item>

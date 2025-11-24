@@ -77,6 +77,9 @@ namespace Hotel_System.API.Controllers
                 .Include(b => b.HoaDons)
                     .ThenInclude(h => h.Cthddvs)
                         .ThenInclude(c => c.IddichVuNavigation)
+                .Include(b => b.HoaDons)
+                    .ThenInclude(h => h.Cthddvs)
+                        .ThenInclude(c => c.IdkhuyenMaiComboNavigation)
                 .FirstOrDefaultAsync(b => b.IddatPhong == idDatPhong);
 
             if (booking == null)
@@ -107,7 +110,7 @@ namespace Hotel_System.API.Controllers
 
                         services.AddRange(lines.Select(c => new
                         {
-                            tenDichVu = c.IddichVuNavigation?.TenDichVu,
+                            tenDichVu = c.IddichVuNavigation?.TenDichVu ?? c.IdkhuyenMaiComboNavigation?.TenCombo,
                             donGia = c.TienDichVu,   // line total (chưa VAT)
                             thanhTien = c.TienDichVu // line total (chưa VAT)
                         }));
