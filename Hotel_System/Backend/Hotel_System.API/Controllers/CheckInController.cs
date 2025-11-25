@@ -48,7 +48,6 @@ namespace Hotel_System.API.Controllers
                     return true;
                 }
 
-                // fallback to common 3-arg signature
                 await _emailService.SendEmailAsync(to, subject, body);
                 return true;
             }
