@@ -117,9 +117,9 @@ builder.Services.AddResponseCompression(options =>
     options.EnableForHttps = true;
 });
 
-// ✅ Connect to SQL Server
+// ✅ Connect to PostgreSQL
 builder.Services.AddDbContext<HotelSystemContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ==========================================
 // 2️⃣ Build app

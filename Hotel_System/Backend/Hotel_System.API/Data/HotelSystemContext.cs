@@ -142,7 +142,7 @@ public partial class HotelSystemContext : DbContext
 
             entity.Property(e => e.IddanhGia).HasColumnName("IDDanhGia");
             entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("created_at");
             entity.Property(e => e.IdkhachHang).HasColumnName("IDKhachHang");
             entity.Property(e => e.Idphong)
@@ -152,11 +152,11 @@ public partial class HotelSystemContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("IDDatPhong");
             entity.Property(e => e.IsAnonym).HasDefaultValue(false);
-            entity.Property(e => e.NoiDung).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.NoiDung).HasColumnType("text");
             entity.Property(e => e.SoSao).HasColumnName("SoSao");
             entity.Property(e => e.TieuDe).HasMaxLength(200);
             entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("updated_at");
 
             entity.HasOne(d => d.IdkhachHangNavigation).WithMany(p => p.DanhGia)
@@ -181,19 +181,18 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.Idphong)
                 .HasMaxLength(50)
                 .HasColumnName("IDPhong");
-            entity.Property(e => e.NgayDatPhong).HasDefaultValueSql("(CONVERT([date],getdate()))");
-            entity.Property(e => e.SoNguoi).HasColumnName("SoNguoi");
-            entity.Property(e => e.SoLuongPhong).HasColumnName("SoLuongPhong");
-            entity.Property(e => e.ThoiHan).HasColumnName("ThoiHan");
-            entity.Property(e => e.TienCoc)
-                .HasDefaultValue(0m)
-                .HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.TongTien).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.NgayDatPhong)
+                .HasDefaultValueSql("CURRENT_DATE")
+                .HasColumnType("timestamp");
             entity.Property(e => e.SoNguoi).HasColumnName("SoNguoi");
             entity.Property(e => e.SoLuongPhong).HasColumnName("SoLuongPhong");
             entity.Property(e => e.ThoiHan)
                 .HasColumnName("ThoiHan")
-                .HasColumnType("datetime2");
+                .HasColumnType("timestamptz");
+            entity.Property(e => e.TienCoc)
+                .HasDefaultValue(0m)
+                .HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.TongTien).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.IdkhachHangNavigation).WithMany(p => p.DatPhongs)
                 .HasForeignKey(d => d.IdkhachHang)
@@ -244,10 +243,10 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.NgayApDung).HasColumnName("NgayApDung");
             entity.Property(e => e.NgayKetThuc).HasColumnName("NgayKetThuc");
             entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("updated_at");
 
             entity.HasOne(d => d.IdkhuyenMaiNavigation).WithMany(p => p.KhuyenMaiDichVus)
@@ -366,7 +365,7 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.IddatPhong)
                 .HasMaxLength(50)
                 .HasColumnName("IDDatPhong");
-            entity.Property(e => e.NgayLap).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.NgayLap).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.Slngay).HasColumnName("SLNgay");
             entity.Property(e => e.TienCoc)
                 .HasDefaultValue(0m)
@@ -391,7 +390,7 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.IdkhachHang).HasColumnName("IDKhachHang");
             entity.Property(e => e.Email).HasMaxLength(100);
             entity.Property(e => e.HoTen).HasMaxLength(100);
-            entity.Property(e => e.NgayDangKy).HasDefaultValueSql("(CONVERT([date],getdate()))");
+            entity.Property(e => e.NgayDangKy).HasDefaultValueSql("CURRENT_DATE");
             entity.Property(e => e.SoDienThoai).HasMaxLength(20);
             entity.Property(e => e.TichDiem).HasDefaultValue(0);
         });
@@ -406,7 +405,7 @@ public partial class HotelSystemContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("IDKhuyenMai");
             entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("created_at");
             entity.Property(e => e.GiaTriGiam)
                 .HasDefaultValue(0m)
@@ -424,7 +423,7 @@ public partial class HotelSystemContext : DbContext
                 .IsUnicode(false)
                 .HasDefaultValue("active");
             entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("updated_at");
         });
 
@@ -436,7 +435,7 @@ public partial class HotelSystemContext : DbContext
 
             entity.Property(e => e.Id).HasColumnName("ID");
             entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("created_at");
             entity.Property(e => e.IdkhuyenMai)
                 .HasMaxLength(50)
@@ -444,9 +443,9 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.Idphong)
                 .HasMaxLength(50)
                 .HasColumnName("IDPhong");
-            entity.Property(e => e.NgayApDung).HasDefaultValueSql("(CONVERT([date],getdate()))");
+            entity.Property(e => e.NgayApDung).HasDefaultValueSql("CURRENT_DATE");
             entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("updated_at");
 
             entity.HasOne(d => d.IdkhuyenMaiNavigation).WithMany(p => p.KhuyenMaiPhongs)
@@ -468,7 +467,7 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.IddatPhong)
                 .HasMaxLength(50)
                 .HasColumnName("IDDatPhong");
-            entity.Property(e => e.NgayCapNhat).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.NgayCapNhat).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.TrangThaiCu).HasMaxLength(50);
             entity.Property(e => e.TrangThaiMoi).HasMaxLength(50);
 
@@ -500,7 +499,7 @@ public partial class HotelSystemContext : DbContext
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("created_at");
             entity.Property(e => e.Email)
                 .HasMaxLength(255)
@@ -570,10 +569,10 @@ public partial class HotelSystemContext : DbContext
 
             entity.Property(e => e.Id).HasColumnName("ID");
             entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("created_at");
             entity.Property(e => e.DoanhThuThucNhan)
-                .HasComputedColumnSql("((isnull([TienPhong],(0))+isnull([TienDichVu],(0)))-isnull([TienGiamGia],(0)))", true)
+                .HasComputedColumnSql("(coalesce(\"TienPhong\", 0) + coalesce(\"TienDichVu\", 0) - coalesce(\"TienGiamGia\", 0))", true)
                 .HasColumnType("decimal(20, 2)");
             entity.Property(e => e.IddatPhong)
                 .HasMaxLength(50)
@@ -581,12 +580,12 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.IdhoaDon)
                 .HasMaxLength(50)
                 .HasColumnName("IDHoaDon");
-            entity.Property(e => e.Ngay).HasDefaultValueSql("(CONVERT([date],getdate()))");
+            entity.Property(e => e.Ngay).HasDefaultValueSql("CURRENT_DATE");
             entity.Property(e => e.TienDichVu).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.TienGiamGia).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.TienPhong).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("(getdate())")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnName("updated_at");
 
             entity.HasOne(d => d.IddatPhongNavigation).WithMany(p => p.ThongKeDoanhThuKhachSans)
