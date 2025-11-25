@@ -5,7 +5,6 @@ const AboutUsSection: React.FC = () => {
     window.location.pathname = path;
   };
 
-  // State để quản lý hiệu ứng hover cho các nút
   const [isButtonHovered, setIsButtonHovered] = useState(false);
   const [isButtonPressed, setIsButtonPressed] = useState(false);
   const [isLinkHovered, setIsLinkHovered] = useState(false);
