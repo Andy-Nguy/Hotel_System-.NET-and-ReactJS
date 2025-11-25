@@ -384,14 +384,20 @@ namespace Hotel_System.API.Controllers
                         await conn.OpenAsync();
 
                     using var cmd = conn.CreateCommand();
-                    cmd.CommandText = "sp_TopPhong2025";
-                    cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                    cmd.CommandText = "SELECT * FROM sp_top_phong(@year_input, @top_n)";
+                    cmd.CommandType = System.Data.CommandType.Text; // Call function via SELECT
 
-                    var param = cmd.CreateParameter();
-                    param.ParameterName = "@Top";
-                    param.Value = top;
-                    param.DbType = System.Data.DbType.Int32;
-                    cmd.Parameters.Add(param);
+                    var paramYear = cmd.CreateParameter();
+                    paramYear.ParameterName = "@year_input";
+                    paramYear.Value = 2025; // Default or pass as arg if needed
+                    paramYear.DbType = System.Data.DbType.Int32;
+                    cmd.Parameters.Add(paramYear);
+
+                    var paramTop = cmd.CreateParameter();
+                    paramTop.ParameterName = "@top_n";
+                    paramTop.Value = top;
+                    paramTop.DbType = System.Data.DbType.Int32;
+                    cmd.Parameters.Add(paramTop);
 
                     var list = new List<object>();
                     using var reader = await cmd.ExecuteReaderAsync();
