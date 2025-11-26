@@ -1,4 +1,4 @@
-import axios from "axios";
+import axiosClient from "./axiosClient";
 
 const API_BASE_URL = "/api";
 
@@ -35,10 +35,7 @@ export const calculateRemainingBalance = (booking: UsingBooking): number => {
  * Return bookings that are currently 'Đang sử dụng' (TrangThai == 3)
  */
 export const getUsingBookings = async (): Promise<UsingBooking[]> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.get(`${API_BASE_URL}/CheckIn`, { headers });
+  const res = await axiosClient.get(`${API_BASE_URL}/CheckIn`);
   return res.data;
 };
 
@@ -47,10 +44,7 @@ export const getUsingBookings = async (): Promise<UsingBooking[]> => {
  * Return bookings that have NgayNhanPhong == today and are not cancelled/completed
  */
 export const getTodayBookings = async (): Promise<UsingBooking[]> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.get(`${API_BASE_URL}/CheckIn/today`, { headers });
+  const res = await axiosClient.get(`${API_BASE_URL}/CheckIn/today`);
   return res.data;
 };
 
@@ -59,10 +53,7 @@ export const getTodayBookings = async (): Promise<UsingBooking[]> => {
  * Return detailed booking (including services/invoices)
  */
 export const getCheckinById = async (id: string): Promise<any> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.get(`${API_BASE_URL}/CheckIn/${id}`, { headers });
+  const res = await axiosClient.get(`${API_BASE_URL}/CheckIn/${id}`);
   return res.data;
 };
 
@@ -72,14 +63,7 @@ export const getCheckinById = async (id: string): Promise<any> => {
  */
 export const confirmCheckIn = async (id: string): Promise<any> => {
   // Backend exposes POST for confirm; return server response (may include emailSent flag)
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.post(
-    `${API_BASE_URL}/CheckIn/confirm/${id}`,
-    {},
-    { headers }
-  );
+  const res = await axiosClient.post(`${API_BASE_URL}/CheckIn/confirm/${id}`, {});
   return res.data;
 };
 
@@ -89,21 +73,14 @@ export const confirmCheckIn = async (id: string): Promise<any> => {
  */
 export const cancelCheckIn = async (id: string): Promise<void> => {
   // Use PUT by default; server accepts PUT or POST
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  await axios.put(`${API_BASE_URL}/CheckIn/cancel/${id}`, {}, { headers });
+  await axiosClient.put(`${API_BASE_URL}/CheckIn/cancel/${id}`, {});
 };
 
 /** POST /api/CheckIn/complete-payment/{id} - mark booking as paid but keep status as 'Đang sử dụng' */
 export const completePayment = async (id: string): Promise<any> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.post(
+  const res = await axiosClient.post(
     `${API_BASE_URL}/CheckIn/complete-payment/${id}`,
-    {},
-    { headers }
+    {}
   );
   return res.data;
 };
@@ -116,36 +93,24 @@ export const completePayment = async (id: string): Promise<any> => {
 
 /** GET /api/DatPhong - list all bookings */
 export const getBookings = async (): Promise<any[]> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.get(`${API_BASE_URL}/DatPhong`, { headers });
+  const res = await axiosClient.get(`${API_BASE_URL}/DatPhong`);
   return res.data;
 };
 
 /** GET /api/DatPhong/{id} - get booking detail (alias) */
 export const getBookingById = async (id: string): Promise<any> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.get(`${API_BASE_URL}/DatPhong/${id}`, { headers });
+  const res = await axiosClient.get(`${API_BASE_URL}/DatPhong/${id}`);
   return res.data;
 };
 
 /** PUT /api/DatPhong/{id} - update booking fields (trangThai, trangThaiThanhToan, etc.) */
 export const updateBooking = async (id: string, data: any): Promise<void> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  await axios.put(`${API_BASE_URL}/DatPhong/${id}`, data, { headers });
+  await axiosClient.put(`${API_BASE_URL}/DatPhong/${id}`, data);
 };
 
 /** DELETE /api/DatPhong/{id} - remove a booking */
 export const deleteBooking = async (id: string): Promise<void> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  await axios.delete(`${API_BASE_URL}/DatPhong/${id}`, { headers });
+  await axiosClient.delete(`${API_BASE_URL}/DatPhong/${id}`);
 };
 
 /** Helper: update payment status */
@@ -161,13 +126,9 @@ export const rescheduleBooking = async (
   id: string,
   body: { ngayNhanPhong: string; ngayTraPhong: string }
 ): Promise<any> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await axios.put(
+  const res = await axiosClient.put(
     `${API_BASE_URL}/DatPhong/${id}/reschedule`,
-    body,
-    { headers }
+    body
   );
   return res.data;
 };

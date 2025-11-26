@@ -79,7 +79,7 @@ namespace Hotel_System.API.Controllers
                     var roomIds = datPhong.ChiTietDatPhongs?.Select(ct => ct.IDPhong).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList() ?? new System.Collections.Generic.List<string>();
                     if (roomIds.Any())
                     {
-                        var now = DateTime.Now;
+                        var now = DateTime.UtcNow;
                         var promos = _context.KhuyenMaiPhongs
                             .Include(kmp => kmp.IdkhuyenMaiNavigation)
                             .Where(kmp => roomIds.Contains(kmp.Idphong) && kmp.IdkhuyenMaiNavigation != null
@@ -213,12 +213,12 @@ namespace Hotel_System.API.Controllers
                     tienThanhToan = 0m;
                 }
 
-                var idHoaDon = $"HD{DateTime.Now:yyyyMMddHHmmssfff}";
+                var idHoaDon = $"HD{DateTime.UtcNow:yyyyMMddHHmmssfff}";
                 var hoaDon = new HoaDon
                 {
                     IdhoaDon = idHoaDon,
                     IddatPhong = datPhong.IddatPhong,
-                    NgayLap = DateTime.Now,
+                    NgayLap = DateTime.UtcNow,
                     TienPhong = tienPhong,
                     Slngay = soNgay,
 TongTien = tongTien,
@@ -247,7 +247,7 @@ TongTien = tongTien,
 
                         // Nếu client không gửi thời gian thực hiện, mặc định dùng khoảng đặt phòng (check-in -> check-out)
                         DateTime? svcTime = svc.ThoiGianThucHien;
-                        DateTime thoiGianThucHien = svcTime ?? DateTime.Now;
+                        DateTime thoiGianThucHien = svcTime ?? DateTime.UtcNow;
 
                         DateTime thoiGianBatDau;
                         DateTime thoiGianKetThuc;
@@ -262,8 +262,8 @@ TongTien = tongTien,
                         catch
                         {
                             // Fallback nếu DateOnly->DateTime không khả dụng
-                            thoiGianBatDau = svcTime ?? DateTime.Now;
-                            thoiGianKetThuc = svcTime != null ? svcTime.Value.AddMinutes(30) : DateTime.Now.AddHours(1);
+                            thoiGianBatDau = svcTime ?? DateTime.UtcNow;
+                            thoiGianKetThuc = svcTime != null ? svcTime.Value.AddMinutes(30) : DateTime.UtcNow.AddHours(1);
                         }
 
                         var cthd = new Cthddv

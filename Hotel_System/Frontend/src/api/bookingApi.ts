@@ -1,4 +1,4 @@
-import axios from "axios";
+import axiosClient from "./axiosClient";
 
 export interface Booking {
   iddatPhong: string;
@@ -29,20 +29,12 @@ export interface UpdateBookingRequest {
 const API_BASE_URL = "/api";
 
 export const getBookings = async (): Promise<Booking[]> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await axios.get(`${API_BASE_URL}/DatPhong`, { headers });
+  const response = await axiosClient.get(`${API_BASE_URL}/DatPhong`);
   return response.data;
 };
 
 export const getBookingById = async (id: string): Promise<Booking> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await axios.get(`${API_BASE_URL}/DatPhong/${id}`, {
-    headers,
-  });
+  const response = await axiosClient.get(`${API_BASE_URL}/DatPhong/${id}`);
   return response.data;
 };
 
@@ -50,17 +42,11 @@ export const updateBooking = async (
   id: string,
   data: UpdateBookingRequest
 ): Promise<void> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  await axios.put(`${API_BASE_URL}/DatPhong/${id}`, data, { headers });
+  await axiosClient.put(`${API_BASE_URL}/DatPhong/${id}`, data);
 };
 
 export const deleteBooking = async (id: string): Promise<void> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  await axios.delete(`${API_BASE_URL}/DatPhong/${id}`, { headers });
+  await axiosClient.delete(`${API_BASE_URL}/DatPhong/${id}`);
 };
 
 /**
@@ -68,12 +54,7 @@ export const deleteBooking = async (id: string): Promise<void> => {
  * Lấy lịch sử đặt phòng của user hiện tại dựa trên JWT
  */
 export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
-  const token = localStorage.getItem("hs_token");
-  const headers: any = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await axios.get(`${API_BASE_URL}/DatPhong/LichSuDatPhong`, {
-    headers,
-  });
+  const response = await axiosClient.get(`${API_BASE_URL}/DatPhong/LichSuDatPhong`);
   const raw = response.data || [];
   // backend returns an array of bookings (PascalCase); normalize each
   return (raw as any[]).map(normalizeBookingSummary);
@@ -83,7 +64,9 @@ export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
  * Handles booking operations: get details, history, reschedule, cancel, QR code
  */
 
-const API_BASE = "/api/datphong";
+const API_BASE = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api/datphong` 
+  : "/api/datphong";
 
 // ============================================
 // Type Definitions
