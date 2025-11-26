@@ -16,7 +16,7 @@ import ProfilePage from "./ProfilePage";
 import SelectRoomPage from "./SelectRoomPage";
 import CheckoutPage from "./CheckoutPage";
 import PaymentPage from "./PaymentPage";
-import AdminDashboard from "../admin/pages/dashboard";
+import AdminDashboard from "../admin/pages/Dashboard";
 import RoomManager from "../admin/pages/RoomManager";
 import AmenticsManager from "../admin/pages/AmenticsManager";
 import ServiceManager from "../admin/pages/ServiceManager";
