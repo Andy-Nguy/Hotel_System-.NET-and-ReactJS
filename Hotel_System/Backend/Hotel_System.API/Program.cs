@@ -117,7 +117,7 @@ builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
 });
-
+//Chọn nhánh deploy
 // ✅ Connect to PostgreSQL
 builder.Services.AddDbContext<HotelSystemContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
