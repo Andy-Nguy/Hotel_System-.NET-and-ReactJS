@@ -130,11 +130,9 @@ var app = builder.Build();
 // ==========================================
 // 3️⃣ Configure middleware pipeline
 // ==========================================
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Enable Swagger in all environments
+app.UseSwagger();
+app.UseSwaggerUI();
 
 // Comment out HTTPS redirect for mobile development
 // app.UseHttpsRedirection();
@@ -166,6 +164,9 @@ if (Directory.Exists(assetsPath))
 }
 
 app.MapControllers();
+
+// Add a simple root endpoint to prevent 404 on the home page
+app.MapGet("/", () => "Welcome to Hotel System API! Visit /swagger for API documentation.");
 
 // If no controller route matches, fallback to serve index.html for the SPA
 app.MapFallbackToFile("index.html");
