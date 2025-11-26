@@ -267,12 +267,30 @@ namespace Hotel_System.API.Controllers
                 foreach (var item in req.DichVu)
                 {
                     var lineTotal = item.TongTien ?? item.TienDichVu ?? item.DonGia ?? 0m;
-                    // Use computed line total as the stored price for the service line.
-                    // applied promotion id is not provided in the request here, so leave it null.
+                    
+                    // Detect if this is a combo service (format: "combo:${comboId}")
+                    bool isCombo = !string.IsNullOrEmpty(item.IddichVu) && item.IddichVu.StartsWith("combo:");
+                    string? comboId = null;
+                    string? serviceId = null;
+                    
+                    if (isCombo)
+                    {
+                        // Extract combo ID by removing "combo:" prefix
+                        comboId = item.IddichVu.Substring(6); // "combo:".Length = 6
+                        serviceId = null; // Combos don't have a single service ID
+                    }
+                    else
+                    {
+                        // Regular service
+                        serviceId = item.IddichVu;
+                        comboId = null;
+                    }
+                    
                     _context.Cthddvs.Add(new Cthddv
                     {
                         IdhoaDon = hoaDon.IdhoaDon,
-                        IddichVu = item.IddichVu,
+                        IddichVu = serviceId,
+                        IdkhuyenMaiCombo = comboId,
                         TienDichVu = Math.Round(lineTotal),
                         IdkhuyenMai = null,
                         ThoiGianThucHien = DateTime.Now,
