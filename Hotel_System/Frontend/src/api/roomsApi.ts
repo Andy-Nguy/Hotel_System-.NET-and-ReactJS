@@ -62,7 +62,9 @@ export interface RoomType {
 
 // === 2. LOGIC GỌP API CHUNG ===
 
-const API_BASE = ""; // Giữ trống để dùng proxy của Vite
+// Resolve API base from Vite env when available, otherwise keep empty for Vite proxy in dev
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, ""); // remove trailing slash
 
 /**
  * Utility function to decode JWT token and get claims
@@ -90,7 +92,7 @@ function decodeJwt(token: string): any {
  * Hàm helper chung để gọi API và chuẩn hóa kết quả trả về
  */
 async function fetchApi(endpoint: string): Promise<any[]> {
-  const url = `${API_BASE}${endpoint}`;
+  const url = API_BASE ? `${API_BASE}${endpoint}` : `${endpoint}`;
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text().catch(() => null);

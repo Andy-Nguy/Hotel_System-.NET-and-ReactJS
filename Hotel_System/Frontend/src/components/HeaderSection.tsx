@@ -198,7 +198,7 @@ const HeaderSection: React.FC = () => {
                       }
                     }}
                   >
-                    <img src="/img/logo.webp" alt="" />
+                    <img src="/img/logo.png" alt="" />
                   </a>
                 </div>
               </div>

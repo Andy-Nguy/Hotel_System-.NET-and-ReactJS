@@ -6,7 +6,10 @@ const HeroSection: React.FC = () => {
       <div className="container">
         <div className="row">
           <div className="col-lg-6">
-            <div className="hero-text" style={{ position: "relative", zIndex: 3 }}>
+            <div
+              className="hero-text"
+              style={{ position: "relative", zIndex: 3 }}
+            >
               <h1
                 style={{
                   textShadow:
@@ -86,11 +89,13 @@ const HeroSection: React.FC = () => {
         </div>
       </div>
       <div className="hero-slider owl-carousel">
+        {/* Fallback hero slides: original hero images may not be present in `public/img/hero`.
+            Use an existing static image `video-bg.jpg` from public/img as a safe fallback. */}
         <div
           className="hs-item"
           style={{
             backgroundImage:
-              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/hero/hero1.png)",
+              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/video-bg.jpg)",
             backgroundSize: "cover",
             backgroundPosition: "center",
             zIndex: 1,
@@ -100,7 +105,7 @@ const HeroSection: React.FC = () => {
           className="hs-item"
           style={{
             backgroundImage:
-              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/hero/hero2.jpg)",
+              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/footer-logo.png)",
             backgroundSize: "cover",
             backgroundPosition: "center",
             zIndex: 1,
@@ -110,7 +115,7 @@ const HeroSection: React.FC = () => {
           className="hs-item"
           style={{
             backgroundImage:
-              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/hero/hero3.jpg)",
+              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/play.png)",
             backgroundSize: "cover",
             backgroundPosition: "center",
             zIndex: 1,

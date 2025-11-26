@@ -33,14 +33,18 @@ export interface ServiceUsage {
   trangThai?: string | null;
 }
 
-const API_BASE = ""; // use relative paths so Vite proxy forwards /api to backend in dev
+// Resolve API base from Vite env when available. Use empty string to keep relative paths
+// in local dev (Vite proxy). Use a safe any-cast to avoid TS issues when types not picked up.
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "");
 
 async function fetchApi(endpoint: string, options?: RequestInit) {
   try {
     const token = localStorage.getItem("hs_token");
     const headers: any = { ...options?.headers };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    const url = API_BASE ? `${API_BASE}${endpoint}` : `${endpoint}`;
+    const res = await fetch(url, { ...options, headers });
 
     // treat not-found and no-content as null (caller will handle)
     if (res.status === 404 || res.status === 204) return null;
