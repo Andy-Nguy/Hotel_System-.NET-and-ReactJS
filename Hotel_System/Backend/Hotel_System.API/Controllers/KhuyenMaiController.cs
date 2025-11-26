@@ -296,7 +296,7 @@ public class KhuyenMaiController : ControllerBase
                         {
                             IdkhuyenMaiCombo = comboId,
                             IddichVu = dvId,
-                            IsActive = true,
+                            IsActive = false,
                             CreatedAt = DateTime.Now,
                             UpdatedAt = DateTime.Now
                         };
@@ -528,7 +528,7 @@ public class KhuyenMaiController : ControllerBase
                         {
                             IdkhuyenMaiCombo = comboId,
                             IddichVu = dvId,
-                            IsActive = true,
+                            IsActive = false,
                             CreatedAt = DateTime.Now,
                             UpdatedAt = DateTime.Now
                         };

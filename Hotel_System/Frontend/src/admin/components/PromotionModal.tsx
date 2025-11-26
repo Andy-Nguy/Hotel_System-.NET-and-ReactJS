@@ -49,17 +49,6 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       key: "tenPhong",
       width: "40%",
     },
-    {
-      title: "Trạng Thái Áp Dụng",
-      key: "isActive",
-      width: "30%",
-      render: (_: any, record: any) =>
-        record.isActive ? (
-          <Tag color="blue">Đang Áp Dụng</Tag>
-        ) : (
-          <Tag>Không Áp Dụng</Tag>
-        ),
-    },
   ];
 
   const [serviceList, setServiceList] = useState<PromotionService[]>([]);
@@ -78,17 +67,6 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       key: "tenDichVu",
       width: "40%",
     },
-    {
-      title: "Trạng Thái Áp Dụng",
-      key: "isActive",
-      width: "30%",
-      render: (_: any, record: any) =>
-        record.isActive ? (
-          <Tag color="blue">Đang Áp Dụng</Tag>
-        ) : (
-          <Tag>Không Áp Dụng</Tag>
-        ),
-    },
   ];
 
   // Services for room_service type always have "Đang Áp Dụng" status, so no status column
@@ -105,17 +83,7 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       key: "tenDichVu",
       width: "50%",
     },
-    {
-      title: "Trạng Thái Áp Dụng",
-      key: "isActive",
-      width: "25%",
-      render: (_: any, record: any) =>
-        record.isActive ? (
-          <Tag color="blue">Đang Áp Dụng</Tag>
-        ) : (
-          <Tag>Không Áp Dụng</Tag>
-        ),
-    },
+
   ];
 
   useEffect(() => {
