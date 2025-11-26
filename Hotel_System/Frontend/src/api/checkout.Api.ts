@@ -1,13 +1,14 @@
 // src/api/checkoutApi.ts
 // Use Vite env var when provided, otherwise fall back to the backend dev URL.
 // In dev this should match the backend launch URL (see Backend/Hotel_System.API/Properties/launchSettings.json).
-const API_BASE = "";
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "");
 
 const fetchJson = async (endpoint: string, init?: RequestInit) => {
   const token = localStorage.getItem("hs_token");
   const headers: any = { ...init?.headers };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = `${API_BASE}${endpoint}`;
+  const url = API_BASE ? `${API_BASE}${endpoint}` : `${endpoint}`;
   // helpful debug when requests are routed to the wrong origin (405 from Vite server)
   // open browser console Network tab to inspect the actual outgoing request
   // and adjust Vite proxy or API_BASE accordingly.

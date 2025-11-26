@@ -1,10 +1,13 @@
 // Lightweight invoice API helper
 import { Room, RoomType } from "./roomsApi";
 
-const API_BASE = "";
+// Resolve API base from Vite env when available, otherwise keep empty for dev proxy
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "");
 
 async function fetchJson(url: string, init?: RequestInit) {
-  const res = await fetch(`${API_BASE}${url}`, init);
+  const reqUrl = API_BASE ? `${API_BASE}${url}` : url;
+  const res = await fetch(reqUrl, init);
   const txt = await res.text().catch(() => "");
   const data = txt ? JSON.parse(txt) : null;
   if (!res.ok)
