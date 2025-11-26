@@ -18,6 +18,7 @@ import RoomsScreen from "../screens/RoomsScreen";
 import BookingsScreen from "../screens/BookingsScreen";
 import OffersScreen from "../screens/OffersScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import BlogDetailScreen from "../screens/BlogDetailScreen";
 
 export type TabParamList = {
   HomeTab: undefined;
@@ -49,6 +50,7 @@ export type HomeStackParamList = {
   Checkout: undefined;
   Payment: undefined;
   BookingSuccess: undefined;
+  BlogDetail: { blogId: number };
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -76,6 +78,7 @@ const HomeStackNavigator: React.FC = () => {
         name="BookingSuccess"
         component={BookingSuccessScreen}
       />
+      <HomeStack.Screen name="BlogDetail" component={BlogDetailScreen} />
     </HomeStack.Navigator>
   );
 };

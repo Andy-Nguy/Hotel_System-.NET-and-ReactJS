@@ -240,6 +240,12 @@ const Slidebar: React.FC = () => {
           label="Quản lý đánh giá"
         />
 
+        <NavItem
+          key="blog"
+          routeFragment="admin/blog"
+          label="Quản lý Blog"
+        />
+
       </nav>
       
     </aside>

@@ -27,6 +27,10 @@ import CheckoutManager from "../admin/pages/CheckoutManager";
 import CheckInManager from "../admin/pages/CheckInManager";
 import LoyaltyManager from "../admin/pages/LoyaltyManager";
 import ReviewManager from "../admin/pages/ReviewManager";
+import BlogManager from "../admin/pages/BlogManager";
+import BlogCreate from "../admin/components/BlogCreate";
+import BlogEdit from "../admin/components/BlogEdit";
+
 import NoAccessPage from "./NoAccessPage";
 import BookingSuccessPage from "./BookingSuccessPage";
 import AboutUsSection from "../components/AboutUsSection";
@@ -541,6 +545,8 @@ const MainPage: React.FC = () => {
     );
   }
 
+  
+
   // Admin loyalty / points management route (accessible at /admin/loyalty or #admin/loyalty)
   if (
     route === "#admin/loyalty" ||
@@ -552,6 +558,48 @@ const MainPage: React.FC = () => {
       return null;
     }
     return <LoyaltyManager />;
+  }
+
+  // No-access page
+  if (route === "#no-access" || route === "/no-access") {
+    return <NoAccessPage />;
+  }
+
+  if (
+    route === "#admin/blog" ||
+    route === "/admin/blog" ||
+    route === "#/admin/blog"
+  ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
+    return <BlogManager />;
+  }
+
+  if (
+    route === "#admin/blog/create" ||
+    route === "/admin/blog/create" ||
+    route === "#/admin/blog/create"
+  ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
+    return <BlogCreate />;
+  }
+
+  // Blog edit route
+  if (
+    route.startsWith("#admin/blog/edit/") ||
+    route.startsWith("/admin/blog/edit/") ||
+    route.startsWith("#/admin/blog/edit/")
+  ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
+    return <BlogEdit />;
   }
 
   // No-access page

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,56 +6,186 @@ import {
   ImageBackground,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  Dimensions,
 } from "react-native";
-import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
+import { useNavigation } from "@react-navigation/native";
+import { COLORS, SIZES, FONTS } from "../constants/theme";
 
-const blogsData = [
-  {
-    id: 1,
-    tag: "Travel Trip",
-    title: "Tremblant In Canada",
-    date: "15th April, 2019",
-    image: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800",
-  },
-  {
-    id: 2,
-    tag: "Camping",
-    title: "Choosing A Static Caravan",
-    date: "15th April, 2019",
-    image: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=800",
-  },
-  {
-    id: 3,
-    tag: "Event",
-    title: "Trip To Iqaluit In Nunavut",
-    date: "08th April, 2019",
-    image: "https://images.unsplash.com/photo-1530789253388-582c481c54b0?w=800",
-  },
-];
+interface BlogData {
+  id: number;
+  title: string;
+  category: string;
+  type: "internal" | "external";
+  externalLink?: string;
+  image: string;
+  date: string;
+  excerpt?: string;
+  author?: string;
+  tags?: string[];
+  content?: string;
+  images?: string[];
+  status?: string;
+}
+const getCategoryColor = (category: string): string => {
+  const colors: { [key: string]: string } = {
+    "Travel Trip": COLORS.primary,
+    "Camping": COLORS.secondary,
+    "Event": COLORS.warning,
+    "Blog": COLORS.primary,
+    "Khách sạn Sang Trọng": COLORS.primary,
+    "CẢNH BÁO KHẨN CẤP": COLORS.error,
+    "Ẩm thực": COLORS.secondary,
+  };
+  return colors[category] || COLORS.primary;
+};
 
 const BlogSection: React.FC = () => {
-  const renderBlog = ({ item }: { item: (typeof blogsData)[0] }) => (
-    <TouchableOpacity activeOpacity={0.8} style={styles.blogContainer}>
-      <ImageBackground
-        source={{ uri: item.image }}
-        style={styles.blogItem}
-        imageStyle={styles.blogImage}
+  const navigation = useNavigation<any>();
+  const [blogsData, setBlogsData] = useState<BlogData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchBlogs();
+  }, []);
+
+  const fetchBlogs = async () => {
+    // Android emulator: 10.0.2.2 maps to localhost
+    // iOS simulator: localhost works directly
+    const apiEndpoints = [
+      "http://10.0.2.2:5001/api/blog",
+      "http://localhost:5001/api/blog",
+      "https://localhost:5001/api/blog",
+    ];
+
+    for (const endpoint of apiEndpoints) {
+      try {
+        console.log(`📡 Fetching from: ${endpoint}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+        const res = await fetch(endpoint, {
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        console.log(`✅ Response from ${endpoint}: ${res.status}`);
+        if (res.ok) {
+          const data = await res.json();
+          console.log(`✅ Data fetched successfully:`, data);
+          if (!Array.isArray(data) || data.length === 0) {
+            console.log("⚠️ Empty data, continuing to next endpoint...");
+            continue;
+          }
+
+          const mapped: BlogData[] = (data as any[]).slice(0, 5).map((d) => ({
+            id: d.id || d.Id,
+            title: d.title || d.Title || "",
+            category: d.category || d.Category || "Blog",
+            type: (d.type || d.Type || "internal") as "internal" | "external",
+            externalLink: d.externalLink || d.ExternalLink,
+            image: d.image || d.Image || "https://via.placeholder.com/800x400?text=No+Image",
+            date: d.date || d.Date || d.publishedAt || d.PublishedAt || "",
+            excerpt: d.excerpt || d.Excerpt || "",
+            author: d.author || d.Author || "",
+            tags: d.tags || d.Tags || [],
+            content: d.content || d.Content || "",
+            images: d.images || d.Images || [],
+            status: d.status || d.Status || "published",
+          }));
+          setBlogsData(mapped);
+          setLoading(false);
+          console.log(`✅ Blog data loaded from ${endpoint}`);
+          return;
+        }
+      } catch (e: any) {
+        console.warn(`❌ Error from ${endpoint}:`, e.message);
+        continue;
+      }
+    }
+    // All endpoints failed
+    console.warn("❌ All endpoints failed, no data available");
+    setBlogsData([]);
+    setLoading(false);
+  };
+
+  const handleBlogPress = (blog: BlogData) => {
+    if (blog.type === "external" && blog.externalLink) {
+      alert("External link: " + blog.externalLink);
+    } else {
+      navigation.navigate("BlogDetail", { blogId: blog.id });
+    }
+  };
+
+  const renderBlog = ({ item, index }: { item: BlogData; index: number }) => {
+    const isLarge = index === 0 || index === 1;
+    const height = isLarge ? 300 : 200;
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        style={[styles.blogContainer, { height }]}
+        onPress={() => handleBlogPress(item)}
       >
-        <View style={styles.blogOverlay}>
-          <View style={styles.blogText}>
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>{item.tag}</Text>
-            </View>
-            <Text style={styles.blogTitle}>{item.title}</Text>
-            <View style={styles.blogTime}>
-              <Text style={styles.timeIcon}>�</Text>
-              <Text style={styles.timeText}>{item.date}</Text>
+        <ImageBackground
+          source={{ uri: item.image }}
+          style={styles.blogItem}
+          imageStyle={styles.blogImage}
+        >
+          <View style={styles.blogOverlay}>
+            <View style={styles.blogText}>
+              <View
+                style={[
+                  styles.tag,
+                  { backgroundColor: getCategoryColor(item.category) },
+                ]}
+              >
+                <Text style={styles.tagText}>{item.category}</Text>
+              </View>
+              <Text style={styles.blogTitle} numberOfLines={2}>
+                {item.title}
+              </Text>
+              <View style={styles.blogTime}>
+                <Text style={styles.timeIcon}>🕐</Text>
+                <Text style={styles.timeText} numberOfLines={1}>
+                  {item.date}
+                </Text>
+              </View>
             </View>
           </View>
+        </ImageBackground>
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionTitle}>
+          <Text style={styles.span}>Hotel News</Text>
+          <Text style={styles.h2}>Our Blog & Event</Text>
         </View>
-      </ImageBackground>
-    </TouchableOpacity>
-  );
+        <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
+      </View>
+    );
+  }
+
+  if (blogsData.length === 0) {
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionTitle}>
+          <Text style={styles.span}>Hotel News</Text>
+          <Text style={styles.h2}>Our Blog & Event</Text>
+        </View>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📰</Text>
+          <Text style={styles.emptyText}>Không có bài viết nào</Text>
+          <Text style={styles.emptySubtext}>Vui lòng kiểm tra kết nối mạng và thử lại</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.section}>
@@ -105,10 +235,11 @@ const styles = StyleSheet.create({
   },
   blogContainer: {
     marginBottom: SIZES.margin * 1.5,
+    borderRadius: SIZES.radiusLarge,
+    overflow: "hidden",
   },
   blogItem: {
     width: "100%",
-    height: 280,
     borderRadius: SIZES.radiusLarge,
     overflow: "hidden",
   },
@@ -127,7 +258,6 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: SIZES.radiusLarge,
   },
   tag: {
-    backgroundColor: COLORS.primary,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: SIZES.radius,
@@ -156,6 +286,28 @@ const styles = StyleSheet.create({
   timeText: {
     ...FONTS.body4,
     color: COLORS.gray,
+    flex: 1,
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: SIZES.padding * 4,
+  },
+  emptyIcon: {
+    fontSize: 60,
+    marginBottom: SIZES.margin * 2,
+  },
+  emptyText: {
+    ...FONTS.h3,
+    color: COLORS.secondary,
+    marginBottom: SIZES.margin,
+    textAlign: "center",
+  },
+  emptySubtext: {
+    ...FONTS.body4,
+    color: COLORS.gray,
+    textAlign: "center",
+    paddingHorizontal: SIZES.padding * 2,
   },
 });
 
