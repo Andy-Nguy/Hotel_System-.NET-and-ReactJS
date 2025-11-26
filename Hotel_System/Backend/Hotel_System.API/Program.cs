@@ -105,7 +105,9 @@ builder.Services.AddCors(options =>
             "http://10.0.2.2:8080",      // Android emulator accessing host
             "http://192.168.2.62:8080",   // Physical device on same network
             "http://localhost:19006",    // Expo dev server
-            "http://localhost:19000"     // Expo dev tools
+            "http://localhost:19000",    // Expo dev tools
+            // Vercel frontend domain (added)
+            "https://hotel-system-net-and-react-dj5spvul7.vercel.app"
         )
         .AllowAnyHeader()
         .AllowAnyMethod()
