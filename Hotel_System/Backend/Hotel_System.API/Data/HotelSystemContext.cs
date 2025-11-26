@@ -55,6 +55,7 @@ public partial class HotelSystemContext : DbContext
     public virtual DbSet<TienNghiPhong> TienNghiPhongs { get; set; }
 
     public virtual DbSet<TtdichVu> TtdichVus { get; set; }
+    public virtual DbSet<BlogPost> BlogPosts { get; set; }
 
 //     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 // #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -169,6 +170,26 @@ public partial class HotelSystemContext : DbContext
             entity.HasOne(d => d.IdphongNavigation).WithMany(p => p.DanhGia)
                 .HasForeignKey(d => d.Idphong)
                 .HasConstraintName("FK_DanhGia_Phong");
+        });
+
+        modelBuilder.Entity<BlogPost>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_BlogPost");
+            entity.ToTable("BlogPost");
+
+            entity.Property(e => e.Id).HasColumnName("Id");
+            entity.Property(e => e.Title).HasMaxLength(500).HasColumnName("Title");
+            entity.Property(e => e.Slug).HasMaxLength(500).HasColumnName("Slug");
+            entity.Property(e => e.Excerpt).HasColumnType("text").HasColumnName("Excerpt");
+            entity.Property(e => e.Content).HasColumnType("text").HasColumnName("Content");
+            entity.Property(e => e.Image).HasMaxLength(1024).HasColumnName("Image");
+            entity.Property(e => e.Category).HasMaxLength(200).HasColumnName("Category");
+            entity.Property(e => e.AuthorId).HasColumnName("AuthorId");
+            entity.Property(e => e.Status).HasMaxLength(50).HasColumnName("Status");
+            entity.Property(e => e.Tags).HasMaxLength(1000).HasColumnName("Tags");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()").HasColumnName("CreatedAt");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()").HasColumnName("UpdatedAt");
+            entity.Property(e => e.PublishedAt).HasColumnName("PublishedAt");
         });
 
         modelBuilder.Entity<DatPhong>(entity =>

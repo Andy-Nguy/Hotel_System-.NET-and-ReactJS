@@ -277,13 +277,36 @@ namespace Hotel_System.API.Controllers
                     {
                         // Extract combo ID by removing "combo:" prefix
                         comboId = item.IddichVu.Substring(6); // "combo:".Length = 6
-                        serviceId = null; // Combos don't have a single service ID
+                        
+                        // For combos, get the first service ID from the combo
+                        var comboServices = await _context.KhuyenMaiComboDichVus
+                            .Where(kmc => kmc.IdkhuyenMaiCombo == comboId)
+                            .OrderBy(kmc => kmc.Id)
+                            .FirstOrDefaultAsync();
+                        
+                        if (comboServices != null)
+                        {
+                            serviceId = comboServices.IddichVu;
+                            _logger.LogInformation("CheckoutController: combo {ComboId} mapped to service {ServiceId}", comboId, serviceId);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("CheckoutController: combo {ComboId} không có dịch vụ nào, bỏ qua", comboId);
+                            continue;
+                        }
                     }
                     else
                     {
                         // Regular service
                         serviceId = item.IddichVu;
                         comboId = null;
+                    }
+                    
+                    // Ensure serviceId is not null (required for IddichVu)
+                    if (string.IsNullOrEmpty(serviceId))
+                    {
+                        _logger.LogWarning("CheckoutController: không thể xác định serviceId cho dịch vụ, bỏ qua");
+                        continue;
                     }
                     
                     _context.Cthddvs.Add(new Cthddv
@@ -521,8 +544,26 @@ namespace Hotel_System.API.Controllers
                     {
                         foreach (var svc in request.Services)
                         {
-                            var dv = await _context.DichVus.FindAsync(svc.IddichVu);
-                            if (dv == null) continue;
+                            string? comboId = null;
+                            string? serviceId = svc.IddichVu;
+
+                            if (!string.IsNullOrEmpty(serviceId) && serviceId.StartsWith("combo:"))
+                            {
+                                comboId = serviceId.Substring(6);
+                                var comboServices = await _context.KhuyenMaiComboDichVus
+                                    .Where(kmc => kmc.IdkhuyenMaiCombo == comboId)
+                                    .OrderBy(kmc => kmc.Id)
+                                    .FirstOrDefaultAsync();
+                                if (comboServices != null) serviceId = comboServices.IddichVu;
+                                else { _logger.LogWarning("CheckoutController: combo {ComboId} không có dịch vụ nào, bỏ qua", comboId); continue; }
+                            }
+                            else
+                            {
+                                var dv = await _context.DichVus.FindAsync(serviceId);
+                                if (dv == null) continue;
+                            }
+
+                            if (string.IsNullOrEmpty(serviceId)) { _logger.LogWarning("CheckoutController: không thể xác định serviceId cho dịch vụ, bỏ qua"); continue; }
 
                             var tienDichVu = svc.TienDichVu != 0m
                                 ? svc.TienDichVu
@@ -531,7 +572,8 @@ namespace Hotel_System.API.Controllers
                             var cthd = new Cthddv
                             {
                                 IdhoaDon = existingInvoice.IdhoaDon,
-                                IddichVu = svc.IddichVu,
+                                IddichVu = serviceId,
+                                IdkhuyenMaiCombo = comboId,
                                 TienDichVu = Math.Round(tienDichVu),
                                 ThoiGianThucHien = svc.ThoiGianThucHien ?? DateTime.Now,
                                 TrangThai = "Hoạt động"
@@ -639,13 +681,33 @@ namespace Hotel_System.API.Controllers
                 {
                     foreach (var svc in request.Services)
                     {
-                        var dv = await _context.DichVus.FindAsync(svc.IddichVu);
-                        if (dv == null) continue;
+                        string? comboId = null;
+                        string? serviceId = svc.IddichVu;
+
+                        if (!string.IsNullOrEmpty(serviceId) && serviceId.StartsWith("combo:"))
+                        {
+                            comboId = serviceId.Substring(6);
+                            var comboServices = await _context.KhuyenMaiComboDichVus
+                                .Where(kmc => kmc.IdkhuyenMaiCombo == comboId)
+                                .OrderBy(kmc => kmc.Id)
+                                .FirstOrDefaultAsync();
+                            if (comboServices != null) serviceId = comboServices.IddichVu;
+                            else { _logger.LogWarning("CheckoutController: combo {ComboId} không có dịch vụ nào, bỏ qua", comboId); continue; }
+                        }
+                        else
+                        {
+                            var dv = await _context.DichVus.FindAsync(serviceId);
+                            if (dv == null) continue;
+                        }
+
+                        if (string.IsNullOrEmpty(serviceId)) { _logger.LogWarning("CheckoutController: không thể xác định serviceId cho dịch vụ, bỏ qua"); continue; }
+
                         var tienDichVu = svc.TienDichVu != 0m ? svc.TienDichVu : svc.DonGia * Math.Max(1, svc.SoLuong);
                         var cthd = new Cthddv
                         {
                             IdhoaDon = newIdHoaDon,
-                            IddichVu = svc.IddichVu,
+                            IddichVu = serviceId,
+                            IdkhuyenMaiCombo = comboId,
                             TienDichVu = Math.Round(tienDichVu),
                             ThoiGianThucHien = svc.ThoiGianThucHien ?? DateTime.Now,
                             TrangThai = "Hoạt động"
@@ -760,13 +822,33 @@ namespace Hotel_System.API.Controllers
                     {
                         foreach (var svc in req.Services)
                         {
-                            var dv = await _context.DichVus.FindAsync(svc.IddichVu);
-                            if (dv == null) continue;
+                            string? comboId = null;
+                            string? serviceId = svc.IddichVu;
+
+                            if (!string.IsNullOrEmpty(serviceId) && serviceId.StartsWith("combo:"))
+                            {
+                                comboId = serviceId.Substring(6);
+                                var comboServices = await _context.KhuyenMaiComboDichVus
+                                    .Where(kmc => kmc.IdkhuyenMaiCombo == comboId)
+                                    .OrderBy(kmc => kmc.Id)
+                                    .FirstOrDefaultAsync();
+                                if (comboServices != null) serviceId = comboServices.IddichVu;
+                                else { _logger.LogWarning("CheckoutController: combo {ComboId} không có dịch vụ nào, bỏ qua", comboId); continue; }
+                            }
+                            else
+                            {
+                                var dv = await _context.DichVus.FindAsync(serviceId);
+                                if (dv == null) continue;
+                            }
+
+                            if (string.IsNullOrEmpty(serviceId)) { _logger.LogWarning("CheckoutController: không thể xác định serviceId cho dịch vụ, bỏ qua"); continue; }
+
                             var tienDichVu = svc.TienDichVu ?? 0m;
                             _context.Cthddvs.Add(new Cthddv
                             {
                                 IdhoaDon = hoaDon.IdhoaDon,
-                                IddichVu = svc.IddichVu,
+                                IddichVu = serviceId,
+                                IdkhuyenMaiCombo = comboId,
                                 TienDichVu = Math.Round(tienDichVu),
                                 ThoiGianThucHien = DateTime.Now,
                                 ThoiGianBatDau = DateTime.Now,
