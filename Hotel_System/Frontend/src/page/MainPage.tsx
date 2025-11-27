@@ -41,6 +41,10 @@ import AdminLayout from "../admin/components/AdminLayout";
 const MainPage: React.FC = () => {
   const parseJwt = (): any | null => {
     const token = localStorage.getItem("hs_token");
+    console.log(
+      "[MainPage] Token from localStorage:",
+      token ? token.substring(0, 50) + "..." : "null"
+    );
     if (!token) return null;
     try {
       const base64Payload = token.split(".")[1];
@@ -52,8 +56,11 @@ const MainPage: React.FC = () => {
           })
           .join("")
       );
-      return JSON.parse(decodedPayload);
+      const payload = JSON.parse(decodedPayload);
+      console.log("[MainPage] JWT payload:", payload);
+      return payload;
     } catch (e) {
+      console.error("[MainPage] JWT decode error:", e);
       return null;
     }
   };
@@ -64,12 +71,23 @@ const MainPage: React.FC = () => {
     const role =
       payload.role ||
       payload.roles ||
+      payload.Role ||
+      payload.Roles ||
       payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ||
       payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ||
-      payload.VaiTro;
+      payload.VaiTro ||
+      payload.vaiTro;
     if (!role) return false;
-    if (Array.isArray(role)) return role.includes("nhanvien");
-    return String(role).toLowerCase() === "nhanvien" || String(role) === "1";
+    const roleStr = Array.isArray(role) ? role[0] : String(role);
+    const normalizedRole = roleStr.toLowerCase().trim();
+    // Accept various role values for staff/admin
+    return (
+      normalizedRole === "nhanvien" ||
+      normalizedRole === "admin" ||
+      normalizedRole === "staff" ||
+      normalizedRole === "1" ||
+      normalizedRole === "2"
+    );
   };
 
   const redirectToNoAccess = () => {

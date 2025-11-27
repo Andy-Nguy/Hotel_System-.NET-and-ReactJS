@@ -15,10 +15,29 @@ const LoginPage: React.FC = () => {
     setMessage(null);
     try {
       const res = await authApi.login(form);
-      const token = res?.token;
+      console.log("[Login] API response:", res);
+      // Handle both camelCase and PascalCase response from backend
+      const token = res?.token || res?.Token;
+      console.log(
+        "[Login] Token extracted:",
+        token ? token.substring(0, 50) + "..." : "null"
+      );
       if (token) {
         // store token in localStorage for later calls
         localStorage.setItem("hs_token", token);
+        // Verify it was stored
+        const storedToken = localStorage.getItem("hs_token");
+        console.log("[Login] Token stored successfully:", !!storedToken);
+        // Also store user info if available
+        if (res?.user || res?.User) {
+          localStorage.setItem(
+            "hs_user",
+            JSON.stringify(res?.user || res?.User)
+          );
+        }
+        if (res?.role || res?.Role) {
+          localStorage.setItem("hs_role", res?.role || res?.Role);
+        }
         setMessage("Đăng nhập thành công! Đang chuyển về trang chủ...");
         // return to home page after a short delay
         setTimeout(() => {
