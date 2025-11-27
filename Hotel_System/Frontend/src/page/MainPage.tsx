@@ -39,46 +39,93 @@ import ReviewPage from "./ReviewPage";
 import AdminLayout from "../admin/components/AdminLayout";
 
 const MainPage: React.FC = () => {
+  const [cachedUserInfo, setCachedUserInfo] = React.useState<any>(null);
+  const [authLoading, setAuthLoading] = React.useState(true);
+
+  // Fetch user info on mount
+  React.useEffect(() => {
+    const fetchUserInfo = async () => {
+      const token = localStorage.getItem("hs_token");
+      if (!token) {
+        setCachedUserInfo(null);
+        setAuthLoading(false);
+        return;
+      }
+
+      // Check if JWT (3 parts) or GUID
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        // JWT - decode
+        try {
+          const base64Payload = parts[1];
+          const decodedPayload = decodeURIComponent(
+            atob(base64Payload)
+              .split("")
+              .map(function (c) {
+                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+              })
+              .join("")
+          );
+          const payload = JSON.parse(decodedPayload);
+          console.log("[MainPage] JWT payload:", payload);
+          setCachedUserInfo(payload);
+        } catch (e) {
+          console.error("[MainPage] JWT decode error:", e);
+          setCachedUserInfo(null);
+        }
+      } else {
+        // GUID token - fetch profile from API
+        try {
+          const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+          const API_BASE = _VITE_API.replace(/\/$/, "")
+            ? `${_VITE_API.replace(/\/$/, "")}/api`
+            : "/api";
+          const res = await fetch(`${API_BASE}/Auth/profile`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const profile = await res.json();
+            console.log("[MainPage] Profile from API:", profile);
+            setCachedUserInfo({
+              name: profile.hoTen || profile.HoTen || profile.name,
+              role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
+              email: profile.email || profile.Email,
+            });
+          } else {
+            console.warn("[MainPage] Profile fetch failed:", res.status);
+            setCachedUserInfo(null);
+          }
+        } catch (e) {
+          console.error("[MainPage] Profile fetch error:", e);
+          setCachedUserInfo(null);
+        }
+      }
+      setAuthLoading(false);
+    };
+
+    fetchUserInfo();
+  }, []);
+
   const parseJwt = (): any | null => {
-    const token = localStorage.getItem("hs_token");
-    console.log(
-      "[MainPage] Token from localStorage:",
-      token ? token.substring(0, 50) + "..." : "null"
-    );
-    if (!token) return null;
-    try {
-      const base64Payload = token.split(".")[1];
-      const decodedPayload = decodeURIComponent(
-        atob(base64Payload)
-          .split("")
-          .map(function (c) {
-            return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-          })
-          .join("")
-      );
-      const payload = JSON.parse(decodedPayload);
-      console.log("[MainPage] JWT payload:", payload);
-      return payload;
-    } catch (e) {
-      console.error("[MainPage] JWT decode error:", e);
-      return null;
-    }
+    return cachedUserInfo;
   };
 
   const isNhanVien = (): boolean => {
-    const payload = parseJwt();
+    const payload = cachedUserInfo;
     if (!payload) return false;
     const role =
       payload.role ||
       payload.roles ||
       payload.Role ||
       payload.Roles ||
-      payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ||
-      payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ||
+      payload.vaiTro ||
       payload.VaiTro ||
-      payload.vaiTro;
-    if (!role) return false;
-    const roleStr = Array.isArray(role) ? role[0] : String(role);
+      payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ||
+      payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"];
+    if (role === undefined || role === null) return false;
+    // Handle numeric role (1 = nhanvien)
+    if (typeof role === "number") return role === 1;
+    const roleStr = Array.isArray(role) ? String(role[0]) : String(role);
     const normalizedRole = roleStr.toLowerCase().trim();
     // Accept various role values for staff/admin
     return (

@@ -13,25 +13,57 @@ const HeaderSection: React.FC = () => {
     return "/";
   };
 
-  const refreshAuth = () => {
+  const refreshAuth = async () => {
     const token = localStorage.getItem("hs_token");
     setIsLoggedIn(!!token);
     if (token) {
-      try {
-        const base64Payload = token.split(".")[1];
-        const decodedPayload = decodeURIComponent(
-          atob(base64Payload)
-            .split("")
-            .map(function (c) {
-              return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-            })
-            .join("")
-        );
-        const payload = JSON.parse(decodedPayload);
-        setUserInfo(payload);
-      } catch (e) {
-        console.warn("Could not decode token:", e);
-        setUserInfo(null);
+      // Check if token is JWT (has 3 parts separated by dots)
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        // JWT token - decode payload
+        try {
+          const base64Payload = parts[1];
+          const decodedPayload = decodeURIComponent(
+            atob(base64Payload)
+              .split("")
+              .map(function (c) {
+                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+              })
+              .join("")
+          );
+          const payload = JSON.parse(decodedPayload);
+          setUserInfo(payload);
+        } catch (e) {
+          console.warn("Could not decode JWT token:", e);
+          setUserInfo(null);
+        }
+      } else {
+        // GUID token - need to fetch user profile from API
+        try {
+          const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+          const API_BASE = _VITE_API.replace(/\/$/, "")
+            ? `${_VITE_API.replace(/\/$/, "")}/api`
+            : "/api";
+          const res = await fetch(`${API_BASE}/Auth/profile`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const profile = await res.json();
+            // Map profile to userInfo format
+            setUserInfo({
+              name: profile.hoTen || profile.HoTen || profile.name || "User",
+              email: profile.email || profile.Email,
+              role: profile.vaiTro || profile.VaiTro || profile.role,
+              phone: profile.soDienThoai || profile.SoDienThoai,
+            });
+          } else {
+            console.warn("Could not fetch profile:", res.status);
+            setUserInfo({ name: "User" });
+          }
+        } catch (e) {
+          console.warn("Could not fetch user profile:", e);
+          setUserInfo({ name: "User" });
+        }
       }
     } else {
       setUserInfo(null);
@@ -43,15 +75,28 @@ const HeaderSection: React.FC = () => {
     if (!userInfo) return false;
     const role =
       userInfo.role ||
+      userInfo.Role ||
       userInfo.roles ||
+      userInfo.vaiTro ||
+      userInfo.VaiTro ||
       userInfo[
         "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
       ] ||
-      userInfo["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ||
-      userInfo.VaiTro;
-    if (!role) return false;
-    if (Array.isArray(role)) return role.includes("nhanvien");
-    return String(role).toLowerCase() === "nhanvien" || String(role) === "1";
+      userInfo["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"];
+    if (role === undefined || role === null) return false;
+    // Handle numeric role (1 = nhanvien)
+    if (typeof role === "number") return role === 1;
+    if (Array.isArray(role))
+      return role.some(
+        (r) => String(r).toLowerCase() === "nhanvien" || String(r) === "1"
+      );
+    const roleStr = String(role).toLowerCase().trim();
+    return (
+      roleStr === "nhanvien" ||
+      roleStr === "admin" ||
+      roleStr === "staff" ||
+      roleStr === "1"
+    );
   };
 
   const headerRef = useRef<HTMLElement | null>(null);
@@ -334,10 +379,12 @@ const HeaderSection: React.FC = () => {
                             ? (() => {
                                 try {
                                   const fullName =
+                                    userInfo?.name ||
+                                    userInfo?.hoTen ||
+                                    userInfo?.HoTen ||
                                     userInfo?.[
                                       "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
                                     ] ||
-                                    userInfo?.name ||
                                     "User";
                                   const firstName =
                                     String(fullName).trim().split(" ")[0] ||
