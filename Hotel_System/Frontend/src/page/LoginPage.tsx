@@ -40,6 +40,7 @@ const LoginPage: React.FC = () => {
         }
 
         // Fetch user profile to get role and save to localStorage for immediate access
+        let userInfoSaved = false;
         try {
           const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
           const API_BASE = _VITE_API.replace(/\/$/, "")
@@ -59,6 +60,7 @@ const LoginPage: React.FC = () => {
             };
             localStorage.setItem("hs_userInfo", JSON.stringify(userInfo));
             console.log("[Login] userInfo saved to localStorage:", userInfo);
+            userInfoSaved = true;
           }
         } catch (e) {
           console.warn("[Login] Could not fetch profile:", e);
@@ -66,10 +68,15 @@ const LoginPage: React.FC = () => {
 
         setMessage("Đăng nhập thành công! Đang chuyển về trang chủ...");
         // return to home page after a short delay
+        // Only navigate AFTER userInfo has been saved
         setTimeout(() => {
           // Prefer client-side SPA navigation: push '/' and dispatch popstate so
           // MainPage will re-evaluate route without a full reload.
           try {
+            console.log(
+              "[Login] Navigating to home, userInfoSaved:",
+              userInfoSaved
+            );
             window.history.pushState(null, "", "/");
             // notify listeners (MainPage listens for popstate)
             window.dispatchEvent(new PopStateEvent("popstate"));

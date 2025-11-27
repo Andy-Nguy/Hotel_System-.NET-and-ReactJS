@@ -153,8 +153,17 @@ const MainPage: React.FC = () => {
   };
 
   const isNhanVien = (): boolean => {
-    const payload = cachedUserInfo;
-    console.log("[isNhanVien] cachedUserInfo:", payload);
+    // Always read fresh from localStorage to avoid stale state issues
+    let payload = cachedUserInfo;
+    try {
+      const freshCached = localStorage.getItem("hs_userInfo");
+      if (freshCached) {
+        payload = JSON.parse(freshCached);
+      }
+    } catch (e) {
+      // Use state as fallback
+    }
+    console.log("[isNhanVien] payload:", payload);
     if (!payload) return false;
     // Use nullish coalescing (??) to handle role = 0 correctly (0 is falsy but valid)
     const role =
@@ -182,9 +191,17 @@ const MainPage: React.FC = () => {
     );
   };
 
+  // Helper to check admin access - returns true if should show loading
+  const shouldShowAdminLoading = (): boolean => {
+    const hasToken = !!localStorage.getItem("hs_token");
+    const hasUserInfo = !!localStorage.getItem("hs_userInfo");
+    // Show loading only if has token but no userInfo yet
+    return hasToken && !hasUserInfo && authLoading;
+  };
+
   // Helper to check admin access with loading state
   const checkAdminAccess = (): "loading" | "allowed" | "denied" => {
-    if (authLoading) return "loading";
+    if (shouldShowAdminLoading()) return "loading";
     if (isNhanVien()) return "allowed";
     return "denied";
   };
@@ -213,13 +230,45 @@ const MainPage: React.FC = () => {
 
   const [route, setRoute] = React.useState<string>(resolveRoute);
 
+  // Function to refresh userInfo from localStorage
+  const refreshUserInfoFromStorage = () => {
+    try {
+      const cached = localStorage.getItem("hs_userInfo");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        console.log(
+          "[MainPage] Refreshing userInfo from localStorage:",
+          parsed
+        );
+        setCachedUserInfo(parsed);
+        setAuthLoading(false);
+      } else {
+        // No cached userInfo but has token - might need to fetch
+        const token = localStorage.getItem("hs_token");
+        if (!token) {
+          setCachedUserInfo(null);
+          setAuthLoading(false);
+        }
+      }
+    } catch (e) {
+      console.warn("[MainPage] Could not refresh userInfo:", e);
+    }
+  };
+
   React.useEffect(() => {
-    const onLocationChange = () => setRoute(resolveRoute());
+    const onLocationChange = () => {
+      setRoute(resolveRoute());
+      // Also refresh userInfo when route changes (e.g., after login navigates here)
+      refreshUserInfoFromStorage();
+    };
     window.addEventListener("hashchange", onLocationChange);
     window.addEventListener("popstate", onLocationChange);
+    // Also listen for storage changes (other tabs or same tab updates)
+    window.addEventListener("storage", refreshUserInfoFromStorage);
     return () => {
       window.removeEventListener("hashchange", onLocationChange);
       window.removeEventListener("popstate", onLocationChange);
+      window.removeEventListener("storage", refreshUserInfoFromStorage);
     };
   }, []);
   // If URL has only a single '#' (empty hash), remove it to keep clean URLs
@@ -487,8 +536,7 @@ const MainPage: React.FC = () => {
     route === "/admin/dashboard" ||
     route === "#/admin/dashboard"
   ) {
-    // Wait for auth to load before checking access
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -510,7 +558,7 @@ const MainPage: React.FC = () => {
     route === "/admin/rooms" ||
     route === "#/admin/rooms"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -532,7 +580,7 @@ const MainPage: React.FC = () => {
     route === "/admin/amenities" ||
     route === "#/admin/amenities"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -550,7 +598,7 @@ const MainPage: React.FC = () => {
     route === "/admin/services" ||
     route === "#/admin/services"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -568,7 +616,7 @@ const MainPage: React.FC = () => {
     route === "/admin/promotions" ||
     route === "#/admin/promotions"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -590,7 +638,7 @@ const MainPage: React.FC = () => {
     route === "/admin/bookings" ||
     route === "#/admin/bookings"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -612,7 +660,7 @@ const MainPage: React.FC = () => {
     route === "/admin/invoices" ||
     route === "#/admin/invoices"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -630,7 +678,7 @@ const MainPage: React.FC = () => {
     route === "/admin/checkout" ||
     route === "#/admin/checkout"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -648,7 +696,7 @@ const MainPage: React.FC = () => {
     route === "/admin/checkin" ||
     route === "#/admin/checkin"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -665,7 +713,7 @@ const MainPage: React.FC = () => {
     route === "/admin/review" ||
     route === "#/admin/review"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
@@ -715,7 +763,7 @@ const MainPage: React.FC = () => {
     route === "/admin/loyalty" ||
     route === "#/admin/loyalty"
   ) {
-    if (authLoading) {
+    if (shouldShowAdminLoading()) {
       return (
         <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
       );
