@@ -29,9 +29,7 @@ const API_BASE = _VITE_API.replace(/\/$/, "")
 
 const fetchJson = async (url: string, init?: RequestInit) => {
   // Prepend API_BASE if url starts with /api
-  const finalUrl = url.startsWith("/api")
-    ? `${API_BASE}${url.slice(4)}`
-    : url;
+  const finalUrl = url.startsWith("/api") ? `${API_BASE}${url.slice(4)}` : url;
   const res = await fetch(finalUrl, init);
   let text = "";
   try {

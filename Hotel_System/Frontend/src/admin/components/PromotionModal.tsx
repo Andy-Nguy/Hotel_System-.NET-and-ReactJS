@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Descriptions, Tag, Table, Empty, Divider, Row, Col } from "antd";
+import {
+  Modal,
+  Descriptions,
+  Tag,
+  Table,
+  Empty,
+  Divider,
+  Row,
+  Col,
+} from "antd";
 import dayjs from "dayjs";
 import { Promotion } from "../../api/promotionApi";
 
@@ -104,7 +113,9 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       if ((promotion as any).loaiKhuyenMai !== "service") return;
       try {
         setLoadingServices(true);
-        const resp = await fetch(`${API_BASE}/KhuyenMai/${promotion.idkhuyenMai}/services`);
+        const resp = await fetch(
+          `${API_BASE}/KhuyenMai/${promotion.idkhuyenMai}/services`
+        );
         if (!resp.ok) {
           setServiceList([]);
           return;
@@ -142,7 +153,8 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
           {promotion.loaiGiamGia === "percent" ? "% Giảm" : "Giảm Tiền"}
         </Descriptions.Item>
         <Descriptions.Item label="Giá Trị Giảm">
-          {promotion.giaTriGiam} {promotion.loaiGiamGia === "percent" ? "%" : "đ"}
+          {promotion.giaTriGiam}{" "}
+          {promotion.loaiGiamGia === "percent" ? "%" : "đ"}
         </Descriptions.Item>
         <Descriptions.Item label="Ngày Bắt Đầu">
           {dayjs(promotion.ngayBatDau).format("DD/MM/YYYY")}
@@ -165,13 +177,16 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       )}
 
       <Divider />
-      {((promotion as any).loaiKhuyenMai === "service") ? (
+      {(promotion as any).loaiKhuyenMai === "service" ? (
         <>
           <h3>Danh Sách Dịch Vụ Áp Dụng ({serviceList.length} dịch vụ)</h3>
           {serviceList.length > 0 ? (
             <Table
               columns={serviceColumns}
-              dataSource={serviceList.map((s, index) => ({ ...s, key: `${s.id}_${index}` }))}
+              dataSource={serviceList.map((s, index) => ({
+                ...s,
+                key: `${s.id}_${index}`,
+              }))}
               pagination={false}
               size="small"
               loading={loadingServices}
@@ -182,7 +197,10 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
         </>
       ) : (
         <>
-          <h3>Danh Sách Phòng Áp Dụng ({promotion.khuyenMaiPhongs?.length ?? 0} phòng)</h3>
+          <h3>
+            Danh Sách Phòng Áp Dụng ({promotion.khuyenMaiPhongs?.length ?? 0}{" "}
+            phòng)
+          </h3>
 
           {promotion.khuyenMaiPhongs && promotion.khuyenMaiPhongs.length > 0 ? (
             <Table
@@ -206,12 +224,14 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <p style={{ fontSize: "12px", color: "#999" }}>
-                <strong>Ngày Tạo:</strong> {dayjs(promotion.createdAt).format("DD/MM/YYYY HH:mm")}
+                <strong>Ngày Tạo:</strong>{" "}
+                {dayjs(promotion.createdAt).format("DD/MM/YYYY HH:mm")}
               </p>
             </Col>
             <Col xs={24} md={12}>
               <p style={{ fontSize: "12px", color: "#999" }}>
-                <strong>Ngày Cập Nhật:</strong> {dayjs(promotion.updatedAt).format("DD/MM/YYYY HH:mm")}
+                <strong>Ngày Cập Nhật:</strong>{" "}
+                {dayjs(promotion.updatedAt).format("DD/MM/YYYY HH:mm")}
               </p>
             </Col>
           </Row>

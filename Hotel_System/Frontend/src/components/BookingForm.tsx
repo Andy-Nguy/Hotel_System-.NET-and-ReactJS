@@ -77,7 +77,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
       const json = await res.json().catch(() => null);
       console.log("Raw API Response from check-available-rooms:", json);
-      
+
       if (!res.ok) {
         const text = json && (json.message || JSON.stringify(json));
         throw new Error(text || `HTTP ${res.status}`);

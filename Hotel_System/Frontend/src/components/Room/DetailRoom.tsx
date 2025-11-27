@@ -37,9 +37,17 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 
   const [promotion, setPromotion] = React.useState<Promotion | null>(null);
 
-  const rawStatus = (room as any).TrangThai || (room as any).trangThai || (room as any).status || "";
+  const rawStatus =
+    (room as any).TrangThai ||
+    (room as any).trangThai ||
+    (room as any).status ||
+    "";
   const statusStr = String(rawStatus || "").toLowerCase();
-  const isSoldOut = statusStr === "occupied" || statusStr === "soldout" || statusStr === "sold out" || statusStr === "unavailable";
+  const isSoldOut =
+    statusStr === "occupied" ||
+    statusStr === "soldout" ||
+    statusStr === "sold out" ||
+    statusStr === "unavailable";
 
   React.useEffect(() => {
     let cancelled = false;
@@ -48,9 +56,12 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       try {
         const promos = await getAllPromotions("active");
         if (cancelled) return;
-        const found = promos.find((p) =>
-          Array.isArray(p.khuyenMaiPhongs) &&
-          p.khuyenMaiPhongs.some((r) => String(r.idphong) === String(room.idphong))
+        const found = promos.find(
+          (p) =>
+            Array.isArray(p.khuyenMaiPhongs) &&
+            p.khuyenMaiPhongs.some(
+              (r) => String(r.idphong) === String(room.idphong)
+            )
         );
         // also verify date range if present
         if (found && found.ngayBatDau && found.ngayKetThuc) {
@@ -98,7 +109,9 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       setLoadingStats(true);
       try {
         setStatsError(null);
-        const res = await fetch(`${BACKEND_BASE}/Review/room/${room.idphong}/stats`);
+        const res = await fetch(
+          `${BACKEND_BASE}/Review/room/${room.idphong}/stats`
+        );
         if (!res.ok) {
           const txt = await res.text().catch(() => null);
           console.error("Failed to fetch stats", res.status, txt);
@@ -122,7 +135,9 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       setLoadingReviews(true);
       try {
         setReviewError(null);
-        const res = await fetch(`${BACKEND_BASE}/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${pageSize}`);
+        const res = await fetch(
+          `${BACKEND_BASE}/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${pageSize}`
+        );
         if (!res.ok) {
           const txt = await res.text().catch(() => null);
           console.error("Failed to fetch reviews", res.status, txt);
@@ -158,7 +173,9 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       if (!room?.idphong) return;
       setLoadingReviewPanel(true);
       try {
-        const res = await fetch(`${BACKEND_BASE}/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${reviewPanelPageSize}`);
+        const res = await fetch(
+          `${BACKEND_BASE}/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${reviewPanelPageSize}`
+        );
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
@@ -171,7 +188,9 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       }
     };
     loadPage(reviewPanelPage);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [showReviewPanel, reviewPanelPage, room?.idphong]);
 
   return (
@@ -296,14 +315,14 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
               disabled={isSoldOut}
               style={{
                 borderRadius: 6,
-                background: isSoldOut ? '#cfcfcf' : '#4a5a4a',
+                background: isSoldOut ? "#cfcfcf" : "#4a5a4a",
                 color: "#fff",
-                borderColor: isSoldOut ? '#cfcfcf' : '#4a5a4a',
+                borderColor: isSoldOut ? "#cfcfcf" : "#4a5a4a",
                 padding: "8px 20px",
                 height: "auto",
               }}
             >
-              {isSoldOut ? 'Hết phòng' : 'Đặt ngay'}
+              {isSoldOut ? "Hết phòng" : "Đặt ngay"}
             </Button>
           </div>
 
@@ -346,16 +365,36 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
               )}
 
               <div style={{ color: "#666" }}>
-                Giá: {room.giaCoBanMotDem != null ? (
+                Giá:{" "}
+                {room.giaCoBanMotDem != null ? (
                   <>
                     {room.giaCoBanMotDem.toLocaleString("vi-VN")}₫/đêm
                     {promotion && room.giaCoBanMotDem != null && (
-                      <div style={{ marginTop: 6, color: "#d83737", fontWeight: 700 }}>
-                        Giá sau khuyến mãi: {(
-                          promotion.loaiGiamGia === "percent"
-                            ? Math.max(0, Math.round((room.giaCoBanMotDem || 0) * (1 - (promotion.giaTriGiam || 0) / 100)))
-                            : Math.max(0, Math.round((room.giaCoBanMotDem || 0) - (promotion.giaTriGiam || 0)))
-                        ).toLocaleString("vi-VN")}₫/đêm
+                      <div
+                        style={{
+                          marginTop: 6,
+                          color: "#d83737",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Giá sau khuyến mãi:{" "}
+                        {(promotion.loaiGiamGia === "percent"
+                          ? Math.max(
+                              0,
+                              Math.round(
+                                (room.giaCoBanMotDem || 0) *
+                                  (1 - (promotion.giaTriGiam || 0) / 100)
+                              )
+                            )
+                          : Math.max(
+                              0,
+                              Math.round(
+                                (room.giaCoBanMotDem || 0) -
+                                  (promotion.giaTriGiam || 0)
+                              )
+                            )
+                        ).toLocaleString("vi-VN")}
+                        ₫/đêm
                       </div>
                     )}
                   </>

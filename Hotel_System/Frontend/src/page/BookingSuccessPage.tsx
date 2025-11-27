@@ -118,7 +118,9 @@ const BookingSuccessPage: React.FC = () => {
       }
 
       message.loading({ content: "Đang tải hóa đơn...", key: "download" });
-      const response = await fetch(`${API_BASE}/Payment/invoice/${idHoaDon}/pdf`);
+      const response = await fetch(
+        `${API_BASE}/Payment/invoice/${idHoaDon}/pdf`
+      );
       if (!response.ok) throw new Error(`Lỗi tải PDF: ${response.status}`);
 
       const blob = await response.blob();

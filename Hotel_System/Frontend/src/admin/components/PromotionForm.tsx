@@ -68,7 +68,7 @@ const ServiceAssignPanel: React.FC<{
         const data = await res.json();
         setServices(data || []);
       } catch (err) {
-        console.error('Error loading services', err);
+        console.error("Error loading services", err);
       } finally {
         setLoading(false);
       }
@@ -80,13 +80,18 @@ const ServiceAssignPanel: React.FC<{
   if (loading) return <Spin />;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+    <div
+      style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}
+    >
       {services.map((s) => (
-        <div key={s.iddichVu} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8 }}>
+        <div
+          key={s.iddichVu}
+          style={{ border: "1px solid #eee", borderRadius: 8, padding: 8 }}
+        >
           <div style={{ fontWeight: 700 }}>{s.tenDichVu}</div>
-          <div style={{ color: '#666', marginBottom: 8 }}>{s.iddichVu}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ color: "#666", marginBottom: 8 }}>{s.iddichVu}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input
                 type="checkbox"
                 checked={selectedIds.includes(s.iddichVu)}
@@ -94,7 +99,9 @@ const ServiceAssignPanel: React.FC<{
               />
               <span style={{ fontSize: 13 }}>Gán dịch vụ</span>
             </label>
-            <div style={{ marginLeft: 'auto', color: '#333' }}>{s.gia?.toLocaleString?.() ?? s.gia}</div>
+            <div style={{ marginLeft: "auto", color: "#333" }}>
+              {s.gia?.toLocaleString?.() ?? s.gia}
+            </div>
           </div>
         </div>
       ))}
@@ -146,7 +153,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
       // Edit mode: populate form with promotion data
       form.setFieldsValue({
         tenKhuyenMai: promotion.tenKhuyenMai,
-        loaiKhuyenMai: (promotion as any).loaiKhuyenMai || 'room',
+        loaiKhuyenMai: (promotion as any).loaiKhuyenMai || "room",
         moTa: promotion.moTa,
         loaiGiamGia: promotion.loaiGiamGia,
         giaTriGiam: promotion.giaTriGiam,
@@ -159,11 +166,13 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
       (async () => {
         try {
           const full = await getPromotionById(promotion.idkhuyenMai);
-          if ((full as any).loaiKhuyenMai === 'service') {
-            const svcIds = (full as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu) || [];
+          if ((full as any).loaiKhuyenMai === "service") {
+            const svcIds =
+              (full as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu) || [];
             setSelectedRooms(svcIds);
           } else {
-            const selectedPhongIds = full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
+            const selectedPhongIds =
+              full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
             setSelectedRooms(selectedPhongIds);
           }
 
@@ -171,11 +180,15 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
           setBannerImage(full.hinhAnhBanner || null);
         } catch (err) {
           // Fallback to whatever was passed in if fetch fails
-          if ((promotion as any).loaiKhuyenMai === 'service') {
-            const svcIds = (promotion as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu) || [];
+          if ((promotion as any).loaiKhuyenMai === "service") {
+            const svcIds =
+              (promotion as any).khuyenMaiDichVus?.map(
+                (m: any) => m.iddichVu
+              ) || [];
             setSelectedRooms(svcIds);
           } else {
-            const selectedPhongIds = promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
+            const selectedPhongIds =
+              promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong) || [];
             setSelectedRooms(selectedPhongIds);
           }
           setBannerImage(promotion.hinhAnhBanner || null);
@@ -195,18 +208,20 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
       const base = {
         tenKhuyenMai: values.tenKhuyenMai,
-        loaiKhuyenMai: values.loaiKhuyenMai || 'room',
+        loaiKhuyenMai: values.loaiKhuyenMai || "room",
         moTa: values.moTa,
         loaiGiamGia: values.loaiGiamGia,
         giaTriGiam: values.giaTriGiam,
         ngayBatDau: values.ngayBatDau.format("YYYY-MM-DD"),
         ngayKetThuc: values.ngayKetThuc.format("YYYY-MM-DD"),
         hinhAnhBanner: bannerImage,
-        ...(promotion && { trangThai: values.trangThai || promotion.trangThai }),
+        ...(promotion && {
+          trangThai: values.trangThai || promotion.trangThai,
+        }),
       };
 
       const payload: any = { ...base };
-      if ((values.loaiKhuyenMai || 'room') === 'service') {
+      if ((values.loaiKhuyenMai || "room") === "service") {
         payload.dichVuIds = selectedRooms;
       } else {
         payload.phongIds = selectedRooms;
@@ -228,7 +243,9 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
       onSuccess();
     } catch (error) {
       console.error("[PROMOTION_FORM] Error submitting:", error);
-      message.error(`Lỗi: ${error instanceof Error ? error.message : "Lỗi không xác định"}`);
+      message.error(
+        `Lỗi: ${error instanceof Error ? error.message : "Lỗi không xác định"}`
+      );
     } finally {
       setLoading(false);
     }
@@ -246,7 +263,11 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
       return false; // Prevent default upload behavior
     } catch (error) {
       console.error("[PROMOTION_FORM] Error uploading banner:", error);
-      message.error(`Lỗi upload: ${error instanceof Error ? error.message : "Lỗi không xác định"}`);
+      message.error(
+        `Lỗi upload: ${
+          error instanceof Error ? error.message : "Lỗi không xác định"
+        }`
+      );
       return false;
     } finally {
       setUploading(false);
@@ -291,7 +312,9 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               <Form.Item
                 label="Loại Giảm Giá"
                 name="loaiGiamGia"
-                rules={[{ required: true, message: "Vui lòng chọn loại giảm giá" }]}
+                rules={[
+                  { required: true, message: "Vui lòng chọn loại giảm giá" },
+                ]}
               >
                 <Select
                   placeholder="Chọn loại giảm giá"
@@ -306,12 +329,16 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item label="Loại Khuyến Mãi" name="loaiKhuyenMai" initialValue={'room'}>
+              <Form.Item
+                label="Loại Khuyến Mãi"
+                name="loaiKhuyenMai"
+                initialValue={"room"}
+              >
                 <Select
                   options={[
-                    { label: 'Phòng', value: 'room' },
-                    { label: 'Dịch Vụ', value: 'service' },
-                    { label: 'Khách Hàng', value: 'customer' },
+                    { label: "Phòng", value: "room" },
+                    { label: "Dịch Vụ", value: "service" },
+                    { label: "Khách Hàng", value: "customer" },
                   ]}
                 />
               </Form.Item>
@@ -340,7 +367,9 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               <Form.Item
                 label="Ngày Bắt Đầu"
                 name="ngayBatDau"
-                rules={[{ required: true, message: "Vui lòng chọn ngày bắt đầu" }]}
+                rules={[
+                  { required: true, message: "Vui lòng chọn ngày bắt đầu" },
+                ]}
               >
                 <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
               </Form.Item>
@@ -349,7 +378,9 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               <Form.Item
                 label="Ngày Kết Thúc"
                 name="ngayKetThuc"
-                rules={[{ required: true, message: "Vui lòng chọn ngày kết thúc" }]}
+                rules={[
+                  { required: true, message: "Vui lòng chọn ngày kết thúc" },
+                ]}
               >
                 <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
               </Form.Item>
@@ -386,9 +417,17 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                 <div style={{ position: "relative", display: "inline-block" }}>
                   <Image
                     // bannerImage may already be a relative path returned from backend
-                    src={bannerImage.startsWith("/") ? bannerImage : `/img/promotion/${bannerImage}`}
+                    src={
+                      bannerImage.startsWith("/")
+                        ? bannerImage
+                        : `/img/promotion/${bannerImage}`
+                    }
                     alt="Banner preview"
-                    style={{ maxWidth: "300px", maxHeight: "150px", objectFit: "cover" }}
+                    style={{
+                      maxWidth: "300px",
+                      maxHeight: "150px",
+                      objectFit: "cover",
+                    }}
                     fallback="/img/placeholder.png"
                   />
                   <Button
@@ -430,16 +469,25 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
           {/* Assignment area: either rooms or services depending on promotion type */}
           <Form.Item label="Gán Áp Dụng">
             <div>
-              <Form.Item noStyle shouldUpdate={(prev, cur) => prev.loaiKhuyenMai !== cur.loaiKhuyenMai}>
+              <Form.Item
+                noStyle
+                shouldUpdate={(prev, cur) =>
+                  prev.loaiKhuyenMai !== cur.loaiKhuyenMai
+                }
+              >
                 {({ getFieldValue }) => (
                   <div>
-                    {getFieldValue('loaiKhuyenMai') === 'service' ? (
+                    {getFieldValue("loaiKhuyenMai") === "service" ? (
                       <>
-                        <Button onClick={() => setAssignModalVisible(true)}>Gán Dịch Vụ</Button>
+                        <Button onClick={() => setAssignModalVisible(true)}>
+                          Gán Dịch Vụ
+                        </Button>
                       </>
                     ) : (
                       <>
-                        <Button onClick={() => setAssignModalVisible(true)}>Gán Phòng</Button>
+                        <Button onClick={() => setAssignModalVisible(true)}>
+                          Gán Phòng
+                        </Button>
                       </>
                     )}
                   </div>
@@ -449,13 +497,39 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               {/* Assigned rooms list */}
               <div style={{ marginTop: 12 }}>
                 {selectedRooms.length === 0 ? (
-                  <div style={{ color: '#888' }}>Chưa có mục nào được gán</div>
+                  <div style={{ color: "#888" }}>Chưa có mục nào được gán</div>
                 ) : (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
                     {selectedRooms.map((id) => (
-                      <div key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: '1px solid #e6e6e6', borderRadius: 20, background: '#fff' }}>
+                      <div
+                        key={id}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 10px",
+                          border: "1px solid #e6e6e6",
+                          borderRadius: 20,
+                          background: "#fff",
+                        }}
+                      >
                         <div style={{ fontWeight: 700 }}>{id}</div>
-                        <Button size="small" danger onClick={() => setSelectedRooms((s) => s.filter(x => x !== id))}>X</Button>
+                        <Button
+                          size="small"
+                          danger
+                          onClick={() =>
+                            setSelectedRooms((s) => s.filter((x) => x !== id))
+                          }
+                        >
+                          X
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -463,34 +537,95 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               </div>
 
               <Modal
-                title={form.getFieldValue('loaiKhuyenMai') === 'service' ? "Gán Dịch Vụ cho Khuyến Mãi" : "Gán Phòng cho Khuyến Mãi"}
+                title={
+                  form.getFieldValue("loaiKhuyenMai") === "service"
+                    ? "Gán Dịch Vụ cho Khuyến Mãi"
+                    : "Gán Phòng cho Khuyến Mãi"
+                }
                 open={assignModalVisible}
                 onCancel={() => setAssignModalVisible(false)}
                 footer={null}
                 width={900}
               >
-                {form.getFieldValue('loaiKhuyenMai') === 'service' ? (
+                {form.getFieldValue("loaiKhuyenMai") === "service" ? (
                   <ServiceAssignPanel
                     selectedIds={selectedRooms}
                     onToggle={(id: string, checked: boolean) => {
-                      if (checked) setSelectedRooms((s) => (s.includes(id) ? s : [...s, id]));
-                      else setSelectedRooms((s) => s.filter(x => x !== id));
+                      if (checked)
+                        setSelectedRooms((s) =>
+                          s.includes(id) ? s : [...s, id]
+                        );
+                      else setSelectedRooms((s) => s.filter((x) => x !== id));
                     }}
                   />
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4,1fr)",
+                      gap: 12,
+                    }}
+                  >
                     {roomObjects.map((r) => (
-                      <div key={r.idphong} style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
-                        <div style={{ height: 120, backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url(${(r?.urlAnhPhong && (r.urlAnhPhong.startsWith('http') ? r.urlAnhPhong : `/img/room/${r.urlAnhPhong}`)) || '/img/placeholder.png'})` }} />
+                      <div
+                        key={r.idphong}
+                        style={{
+                          border: "1px solid #eee",
+                          borderRadius: 8,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: 120,
+                            backgroundSize: "cover",
+                            backgroundPosition: "center",
+                            backgroundImage: `url(${
+                              (r?.urlAnhPhong &&
+                                (r.urlAnhPhong.startsWith("http")
+                                  ? r.urlAnhPhong
+                                  : `/img/room/${r.urlAnhPhong}`)) ||
+                              "/img/placeholder.png"
+                            })`,
+                          }}
+                        />
                         <div style={{ padding: 8 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700 }}>{r.tenPhong}</div>
-                          <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>{r.idphong}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700 }}>
+                            {r.tenPhong}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#666",
+                              marginBottom: 8,
+                            }}
+                          >
+                            {r.idphong}
+                          </div>
                           <div>
-                            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <input type="checkbox" checked={selectedRooms.includes(r.idphong)} onChange={(e) => {
-                                if (e.target.checked) setSelectedRooms((s) => (s.includes(r.idphong) ? s : [...s, r.idphong]));
-                                else setSelectedRooms((s) => s.filter(x => x !== r.idphong));
-                              }} />
+                            <label
+                              style={{
+                                display: "flex",
+                                gap: 8,
+                                alignItems: "center",
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedRooms.includes(r.idphong)}
+                                onChange={(e) => {
+                                  if (e.target.checked)
+                                    setSelectedRooms((s) =>
+                                      s.includes(r.idphong)
+                                        ? s
+                                        : [...s, r.idphong]
+                                    );
+                                  else
+                                    setSelectedRooms((s) =>
+                                      s.filter((x) => x !== r.idphong)
+                                    );
+                                }}
+                              />
                               <span style={{ fontSize: 13 }}>Gán phòng</span>
                             </label>
                           </div>
@@ -499,8 +634,10 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                     ))}
                   </div>
                 )}
-                <div style={{ marginTop: 12, textAlign: 'right' }}>
-                  <Button onClick={() => setAssignModalVisible(false)}>Hoàn tất</Button>
+                <div style={{ marginTop: 12, textAlign: "right" }}>
+                  <Button onClick={() => setAssignModalVisible(false)}>
+                    Hoàn tất
+                  </Button>
                 </div>
               </Modal>
             </div>

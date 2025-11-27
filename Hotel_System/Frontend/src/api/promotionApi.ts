@@ -299,7 +299,9 @@ export const getPromotionsForService = async (
     await Promise.all(
       candidates.map(async (p) => {
         try {
-          const url2 = `${API_BASE}/KhuyenMai/${p.idkhuyenMai || p.IdkhuyenMai}/services`;
+          const url2 = `${API_BASE}/KhuyenMai/${
+            p.idkhuyenMai || p.IdkhuyenMai
+          }/services`;
           const resp = await fetch(url2);
           if (!resp.ok) return;
           const mappingList = await resp.json();

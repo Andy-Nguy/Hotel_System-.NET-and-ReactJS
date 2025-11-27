@@ -210,7 +210,10 @@ const RoomManager: React.FC = () => {
         /* ignore */
       }
     } finally {
-      setRoomLoading((prev: Record<string, boolean>) => ({ ...prev, [roomId]: false }));
+      setRoomLoading((prev: Record<string, boolean>) => ({
+        ...prev,
+        [roomId]: false,
+      }));
     }
   };
 

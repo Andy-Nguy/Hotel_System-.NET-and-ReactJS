@@ -203,7 +203,8 @@ const CheckoutPage: React.FC = () => {
       // Build rooms payload robustly: support different possible id/price field names
       const roomsPayload = (bookingInfo.selectedRooms || []).map((sr) => {
         const r = sr.room || {};
-        const idPhong = r.idphong ?? r.idPhong ?? r.id ?? r.roomId ?? String(sr.roomNumber);
+        const idPhong =
+          r.idphong ?? r.idPhong ?? r.id ?? r.roomId ?? String(sr.roomNumber);
         const gia = r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.gia ?? r.Gia ?? 0;
         return {
           IdPhong: String(idPhong),
@@ -240,7 +241,10 @@ const CheckoutPage: React.FC = () => {
 
       if (!result.success || !result.data || !result.data.idDatPhong) {
         console.error("Booking API returned unexpected response:", result);
-        throw new Error(result.message || "Tạo đặt phòng thất bại (không có ID đặt phòng trả về)!");
+        throw new Error(
+          result.message ||
+            "Tạo đặt phòng thất bại (không có ID đặt phòng trả về)!"
+        );
       }
 
       const invoiceInfo = {
