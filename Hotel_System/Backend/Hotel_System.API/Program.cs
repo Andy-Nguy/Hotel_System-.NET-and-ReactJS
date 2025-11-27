@@ -95,7 +95,7 @@ if (!string.IsNullOrEmpty(jwtKey))
     });
 }
 
-//  Add CORS *BEFORE* Build()
+//  Add CORS *BEFORE* Build() ok
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
