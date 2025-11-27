@@ -4,9 +4,11 @@
 export const BASE_URLS: string[] = [
   // Primary local IP + port used in development
   "http://192.168.2.62:8080",
+  // Production URL
+  "https://hotelsystem-net-and-reactjs-production.up.railway.app",
 ];
 
-export const DEFAULT_BASE_URL = BASE_URLS[0];
+export const DEFAULT_BASE_URL = BASE_URLS[1];
 
 // Helper to build a full URL from a path
 import { Platform } from "react-native";

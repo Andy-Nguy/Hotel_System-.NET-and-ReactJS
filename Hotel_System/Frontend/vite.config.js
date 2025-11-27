@@ -8,17 +8,20 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://localhost:5001",
+        target: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
+        // target: "https://localhost:5001",
         changeOrigin: true,
         secure: false,
       },
       "/img": {
-        target: "https://localhost:5001",
+        target: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
+        // target: "https://localhost:5001",
         changeOrigin: true,
         secure: false,
       },
       "/assets": {
-        target: "https://localhost:5001",
+        target: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
+        // target: "https://localhost:5001",
         changeOrigin: true,
         secure: false,
       },
