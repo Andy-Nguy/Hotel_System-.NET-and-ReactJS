@@ -107,7 +107,8 @@ builder.Services.AddCors(options =>
             "http://localhost:19006",    // Expo dev server
             "http://localhost:19000",    // Expo dev tools
             // Vercel frontend domain (added)
-            "https://hotel-system-net-and-react-dj5spvul7.vercel.app"
+            "https://hotel-system-net-and-react-dj5spvul7.vercel.app",
+            "https://hotel-system-net-and-react-9lzsvgtfm.vercel.app"
         )
         .AllowAnyHeader()
         .AllowAnyMethod()
