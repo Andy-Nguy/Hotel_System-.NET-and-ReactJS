@@ -161,14 +161,64 @@ const PaymentScreen: React.FC = () => {
       });
 
       if (response.ok) {
-        // Success
+        // Success - booking created
         const result = await response.json();
+        const idDatPhong = result.data?.idDatPhong;
+
+        // Tính tiền phòng
+        const nights = invoiceInfo.nights || 1;
+        const tienPhong = invoiceInfo.rooms.reduce((sum: number, r: any) => {
+          const price = r.room.discountedPrice || r.room.basePricePerNight || 0;
+          return sum + price * nights;
+        }, 0);
+
+        // Tạo payload cho API hóa đơn (giống Web)
+        const invoicePayload = {
+          IDDatPhong: idDatPhong,
+          TienPhong: Math.round(tienPhong),
+          SoLuongNgay: nights,
+          TongTien: Math.round(invoiceInfo.grandTotal),
+          TienCoc: tienCoc,
+          TrangThaiThanhToan: trangThaiThanhToan === 3 ? 2 : trangThaiThanhToan, // 3 -> 2 (đã TT)
+          PhuongThucThanhToan: phuongThucThanhToan,
+          GhiChu: `Mobile - ${selectedMethod}${
+            paymentRef ? ` | Mã GD: ${paymentRef}` : ""
+          }`,
+          PaymentGateway:
+            selectedMethod === "bank-transfer" ? "VietQR" : selectedMethod,
+          Services:
+            invoiceInfo.selectedServices?.map((svc: any) => ({
+              IddichVu: svc.serviceId,
+              SoLuong: svc.quantity || 1,
+              DonGia: svc.price,
+              TienDichVu: svc.price * (svc.quantity || 1),
+            })) || [],
+        };
+
+        // Gọi API tạo hóa đơn để clear ThoiHan và cập nhật trạng thái
+        const invoiceResponse = await fetch(
+          buildApiUrl("/api/Payment/hoa-don"),
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(invoicePayload),
+          }
+        );
+
+        if (!invoiceResponse.ok) {
+          console.warn(
+            "Invoice creation failed, but booking was created:",
+            await invoiceResponse.text()
+          );
+        }
+
         setQrModalVisible(false);
         setConfirmModalVisible(false);
         Alert.alert(
           "Thành công",
-          "Đặt phòng thành công! Mã đặt phòng: " +
-            (result.data?.idDatPhong || ""),
+          "Đặt phòng thành công! Mã đặt phòng: " + (idDatPhong || ""),
           [{ text: "OK", onPress: () => (navigation as any).navigate("Home") }]
         );
       } else {
