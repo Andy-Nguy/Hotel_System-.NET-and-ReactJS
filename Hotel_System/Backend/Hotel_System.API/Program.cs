@@ -99,23 +99,16 @@ if (!string.IsNullOrEmpty(jwtKey))
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.SetIsOriginAllowed(origin =>
-        {
-            // Allow localhost dev servers
-            if (origin.StartsWith("http://localhost:") || 
-                origin.StartsWith("http://127.0.0.1:") ||
-                origin.StartsWith("http://10.0.2.2:") ||
-                origin.StartsWith("http://192.168."))
-                return true;
-            
-            // Allow all Vercel deployments (*.vercel.app)
-            if (origin.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase))
-                return true;
-            
-            // Log rejected origins for debugging
-            Console.WriteLine($"🚫 CORS: Rejected origin: {origin}");
-            return false;
-        })
+        policy.WithOrigins(
+            "http://localhost:5173",     // Vite dev server
+            "http://localhost:3000",     // React dev server
+            "http://10.0.2.2:8080",      // Android emulator accessing host
+            "http://192.168.2.62:8080",   // Physical device on same network
+            "http://localhost:19006",    // Expo dev server
+            "http://localhost:19000",    // Expo dev tools
+            // Vercel frontend domain (added)
+            "https://hotel-system-net-and-react-dj5spvul7.vercel.app"
+        )
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials());
