@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Modal,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
@@ -59,13 +60,13 @@ const PaymentScreen: React.FC = () => {
         // Map finalBookingData to InvoiceInfo structure if needed, or just use it directly
         // Assuming finalBookingData has the necessary fields or we adapt here
         setInvoiceInfo({
-            ...parsed,
-            grandTotal: parsed.pricing.totalAmount,
-            totalPrice: parsed.pricing.roomTotal + parsed.pricing.serviceTotal,
-            tax: parsed.pricing.tax,
-            nights: calculateNights(parsed.checkIn, parsed.checkOut),
-            rooms: parsed.selectedRooms,
-            customer: parsed.customerInfo
+          ...parsed,
+          grandTotal: parsed.pricing.totalAmount,
+          totalPrice: parsed.pricing.roomTotal + parsed.pricing.serviceTotal,
+          tax: parsed.pricing.tax,
+          nights: calculateNights(parsed.checkIn, parsed.checkOut),
+          rooms: parsed.selectedRooms,
+          customer: parsed.customerInfo,
         });
       } else {
         Alert.alert("Lỗi", "Không tìm thấy thông tin hóa đơn");
@@ -125,63 +126,64 @@ const PaymentScreen: React.FC = () => {
         }
         phuongThucThanhToan = 2; // CK
       } else if (selectedMethod === "momo") {
-         paymentStatus = "paid";
-         amountPaid = invoiceInfo.grandTotal;
-         trangThaiThanhToan = 3;
-         phuongThucThanhToan = 3; // Momo (assuming 3)
-         tienCoc = invoiceInfo.grandTotal;
+        paymentStatus = "paid";
+        amountPaid = invoiceInfo.grandTotal;
+        trangThaiThanhToan = 3;
+        phuongThucThanhToan = 3; // Momo (assuming 3)
+        tienCoc = invoiceInfo.grandTotal;
       }
 
-      // Prepare booking payload
+      // Prepare booking payload theo CreateBookingRequest của backend
       const bookingPayload = {
+        hoTen: invoiceInfo.customer.fullName,
+        email: invoiceInfo.customer.email,
+        soDienThoai: invoiceInfo.customer.phone,
+        diaChi: invoiceInfo.customer.address || "",
+        ghiChu: invoiceInfo.customer.notes || "",
         ngayNhanPhong: invoiceInfo.checkIn,
         ngayTraPhong: invoiceInfo.checkOut,
         soLuongKhach: invoiceInfo.guests,
-        tongTien: invoiceInfo.grandTotal,
-        tienCoc: tienCoc,
-        trangThai: 1, // 1: Chờ xác nhận
-        trangThaiThanhToan: trangThaiThanhToan,
-        idkhachHang: invoiceInfo.customer.id || null, // If logged in
-        khachHang: {
-            hoTen: invoiceInfo.customer.fullName,
-            soDienThoai: invoiceInfo.customer.phone,
-            email: invoiceInfo.customer.email,
-            diaChi: invoiceInfo.customer.address,
-            cccd: "" // Optional
-        },
-        chiTietDatPhongs: invoiceInfo.rooms.map((r: any) => ({
-            idphong: r.room.roomId,
-            giaPhong: r.room.discountedPrice || r.room.basePricePerNight
+        rooms: invoiceInfo.rooms.map((r: any) => ({
+          idPhong: r.room.roomId,
+          soPhong: r.room.roomNumber || 0,
+          giaCoBanMotDem:
+            r.room.discountedPrice || r.room.basePricePerNight || 0,
         })),
-        dichVuDatPhongs: invoiceInfo.selectedServices?.map((s: any) => ({
-            iddichVu: s.serviceId,
-            soLuong: s.quantity,
-            giaDichVu: s.price
-        })) || []
       };
 
       // Call API to create booking
-      const response = await fetch(buildApiUrl("/api/dat-phong/tao-moi"), {
+      const response = await fetch(buildApiUrl("/api/datphong/create"), {
         method: "POST",
         headers: {
-            "Content-Type": "application/json",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(bookingPayload),
       });
 
       if (response.ok) {
         // Success
+        const result = await response.json();
         setQrModalVisible(false);
         setConfirmModalVisible(false);
-        Alert.alert("Thành công", "Đặt phòng thành công!", [
-            { text: "OK", onPress: () => (navigation as any).navigate("Home") }
-        ]);
+        Alert.alert(
+          "Thành công",
+          "Đặt phòng thành công! Mã đặt phòng: " +
+            (result.data?.idDatPhong || ""),
+          [{ text: "OK", onPress: () => (navigation as any).navigate("Home") }]
+        );
       } else {
         const err = await response.text();
         console.error("Booking error:", err);
-        Alert.alert("Lỗi", "Đặt phòng thất bại. Vui lòng thử lại.");
+        try {
+          const errJson = JSON.parse(err);
+          Alert.alert(
+            "Lỗi",
+            errJson.message || "Đặt phòng thất bại. Vui lòng thử lại."
+          );
+        } catch {
+          Alert.alert("Lỗi", "Đặt phòng thất bại. Vui lòng thử lại.");
+        }
       }
-
     } catch (error) {
       console.error("Error processing payment:", error);
       Alert.alert("Lỗi", "Đã có lỗi xảy ra khi xử lý thanh toán.");
@@ -219,42 +221,64 @@ const PaymentScreen: React.FC = () => {
         selectedRoomNumbers={[]}
       />
 
-      <ScrollView style={styles.scrollContent} contentContainerStyle={{paddingBottom: 100}}>
+      <ScrollView
+        style={styles.scrollContent}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
         {/* Invoice Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chi tiết hóa đơn</Text>
           <View style={styles.invoiceCard}>
             <View style={styles.invoiceRow}>
               <Text style={styles.invoiceLabel}>Khách hàng</Text>
-              <Text style={styles.invoiceValue}>{invoiceInfo.customer.fullName}</Text>
+              <Text style={styles.invoiceValue}>
+                {invoiceInfo.customer.fullName}
+              </Text>
             </View>
             <View style={styles.invoiceRow}>
               <Text style={styles.invoiceLabel}>Số điện thoại</Text>
-              <Text style={styles.invoiceValue}>{invoiceInfo.customer.phone}</Text>
+              <Text style={styles.invoiceValue}>
+                {invoiceInfo.customer.phone}
+              </Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.invoiceRow}>
               <Text style={styles.invoiceLabel}>Tổng tiền phòng</Text>
               <Text style={styles.invoiceValue}>
-                {(invoiceInfo.totalPrice - (invoiceInfo.selectedServices?.reduce((s:any, i:any) => s + i.price*i.quantity, 0) || 0)).toLocaleString()}đ
+                {(
+                  invoiceInfo.totalPrice -
+                  (invoiceInfo.selectedServices?.reduce(
+                    (s: any, i: any) => s + i.price * i.quantity,
+                    0
+                  ) || 0)
+                ).toLocaleString()}
+                đ
               </Text>
             </View>
-            {invoiceInfo.selectedServices && invoiceInfo.selectedServices.length > 0 && (
+            {invoiceInfo.selectedServices &&
+              invoiceInfo.selectedServices.length > 0 && (
                 <View style={styles.invoiceRow}>
-                <Text style={styles.invoiceLabel}>Dịch vụ thêm</Text>
-                <Text style={styles.invoiceValue}>
-                    {invoiceInfo.selectedServices.reduce((s:any, i:any) => s + i.price*i.quantity, 0).toLocaleString()}đ
-                </Text>
+                  <Text style={styles.invoiceLabel}>Dịch vụ thêm</Text>
+                  <Text style={styles.invoiceValue}>
+                    {invoiceInfo.selectedServices
+                      .reduce((s: any, i: any) => s + i.price * i.quantity, 0)
+                      .toLocaleString()}
+                    đ
+                  </Text>
                 </View>
-            )}
+              )}
             <View style={styles.invoiceRow}>
               <Text style={styles.invoiceLabel}>Thuế VAT (10%)</Text>
-              <Text style={styles.invoiceValue}>{invoiceInfo.tax.toLocaleString()}đ</Text>
+              <Text style={styles.invoiceValue}>
+                {invoiceInfo.tax.toLocaleString()}đ
+              </Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Tổng thanh toán</Text>
-              <Text style={styles.totalValue}>{invoiceInfo.grandTotal.toLocaleString()}đ</Text>
+              <Text style={styles.totalValue}>
+                {invoiceInfo.grandTotal.toLocaleString()}đ
+              </Text>
             </View>
           </View>
         </View>
@@ -262,7 +286,7 @@ const PaymentScreen: React.FC = () => {
         {/* Payment Methods */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Phương thức thanh toán</Text>
-          
+
           <TouchableOpacity
             style={[
               styles.methodCard,
@@ -271,11 +295,28 @@ const PaymentScreen: React.FC = () => {
             onPress={() => setSelectedMethod("bank-transfer")}
           >
             <View style={styles.methodIconContainer}>
-              <AppIcon name="credit-card" size={24} color={selectedMethod === "bank-transfer" ? COLORS.primary : COLORS.gray} />
+              <AppIcon
+                name="credit-card"
+                size={24}
+                color={
+                  selectedMethod === "bank-transfer"
+                    ? COLORS.primary
+                    : COLORS.gray
+                }
+              />
             </View>
             <View style={styles.methodContent}>
-              <Text style={[styles.methodTitle, selectedMethod === "bank-transfer" && styles.textSelected]}>Chuyển khoản ngân hàng</Text>
-              <Text style={styles.methodDesc}>Quét mã QR để thanh toán nhanh</Text>
+              <Text
+                style={[
+                  styles.methodTitle,
+                  selectedMethod === "bank-transfer" && styles.textSelected,
+                ]}
+              >
+                Chuyển khoản ngân hàng
+              </Text>
+              <Text style={styles.methodDesc}>
+                Quét mã QR để thanh toán nhanh
+              </Text>
             </View>
             {selectedMethod === "bank-transfer" && (
               <AppIcon name="check-circle" size={20} color={COLORS.primary} />
@@ -290,11 +331,24 @@ const PaymentScreen: React.FC = () => {
             onPress={() => setSelectedMethod("momo")}
           >
             <View style={styles.methodIconContainer}>
-              <AppIcon name="smartphone" size={24} color={selectedMethod === "momo" ? COLORS.primary : COLORS.gray} />
+              <AppIcon
+                name="mobile"
+                size={24}
+                color={selectedMethod === "momo" ? COLORS.primary : COLORS.gray}
+              />
             </View>
             <View style={styles.methodContent}>
-              <Text style={[styles.methodTitle, selectedMethod === "momo" && styles.textSelected]}>Ví MoMo</Text>
-              <Text style={styles.methodDesc}>Thanh toán qua ứng dụng MoMo</Text>
+              <Text
+                style={[
+                  styles.methodTitle,
+                  selectedMethod === "momo" && styles.textSelected,
+                ]}
+              >
+                Ví MoMo
+              </Text>
+              <Text style={styles.methodDesc}>
+                Thanh toán qua ứng dụng MoMo
+              </Text>
             </View>
             {selectedMethod === "momo" && (
               <AppIcon name="check-circle" size={20} color={COLORS.primary} />
@@ -309,10 +363,25 @@ const PaymentScreen: React.FC = () => {
             onPress={() => setSelectedMethod("hotel-payment")}
           >
             <View style={styles.methodIconContainer}>
-              <AppIcon name="home" size={24} color={selectedMethod === "hotel-payment" ? COLORS.primary : COLORS.gray} />
+              <AppIcon
+                name="home"
+                size={24}
+                color={
+                  selectedMethod === "hotel-payment"
+                    ? COLORS.primary
+                    : COLORS.gray
+                }
+              />
             </View>
             <View style={styles.methodContent}>
-              <Text style={[styles.methodTitle, selectedMethod === "hotel-payment" && styles.textSelected]}>Thanh toán tại khách sạn</Text>
+              <Text
+                style={[
+                  styles.methodTitle,
+                  selectedMethod === "hotel-payment" && styles.textSelected,
+                ]}
+              >
+                Thanh toán tại khách sạn
+              </Text>
               <Text style={styles.methodDesc}>Thanh toán khi nhận phòng</Text>
             </View>
             {selectedMethod === "hotel-payment" && (
@@ -333,8 +402,22 @@ const PaymentScreen: React.FC = () => {
                 ]}
                 onPress={() => setDepositOption("full")}
               >
-                <Text style={[styles.depositTitle, depositOption === "full" && styles.textSelected]}>Thanh toán toàn bộ</Text>
-                <Text style={[styles.depositAmount, depositOption === "full" && styles.textSelected]}>{invoiceInfo.grandTotal.toLocaleString()}đ</Text>
+                <Text
+                  style={[
+                    styles.depositTitle,
+                    depositOption === "full" && styles.textSelected,
+                  ]}
+                >
+                  Thanh toán toàn bộ
+                </Text>
+                <Text
+                  style={[
+                    styles.depositAmount,
+                    depositOption === "full" && styles.textSelected,
+                  ]}
+                >
+                  {invoiceInfo.grandTotal.toLocaleString()}đ
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -344,14 +427,30 @@ const PaymentScreen: React.FC = () => {
                 ]}
                 onPress={() => setDepositOption("deposit")}
               >
-                <Text style={[styles.depositTitle, depositOption === "deposit" && styles.textSelected]}>Đặt cọc trước</Text>
-                <Text style={[styles.depositAmount, depositOption === "deposit" && styles.textSelected]}>{DEPOSIT_AMOUNT.toLocaleString()}đ</Text>
+                <Text
+                  style={[
+                    styles.depositTitle,
+                    depositOption === "deposit" && styles.textSelected,
+                  ]}
+                >
+                  Đặt cọc trước
+                </Text>
+                <Text
+                  style={[
+                    styles.depositAmount,
+                    depositOption === "deposit" && styles.textSelected,
+                  ]}
+                >
+                  {DEPOSIT_AMOUNT.toLocaleString()}đ
+                </Text>
               </TouchableOpacity>
             </View>
             {depositOption === "deposit" && (
-                <Text style={styles.depositNote}>
-                    * Bạn sẽ thanh toán phần còn lại ({ (invoiceInfo.grandTotal - DEPOSIT_AMOUNT).toLocaleString() }đ) tại khách sạn.
-                </Text>
+              <Text style={styles.depositNote}>
+                * Bạn sẽ thanh toán phần còn lại (
+                {(invoiceInfo.grandTotal - DEPOSIT_AMOUNT).toLocaleString()}đ)
+                tại khách sạn.
+              </Text>
             )}
           </View>
         )}
@@ -360,12 +459,15 @@ const PaymentScreen: React.FC = () => {
       <View style={styles.bottomBar}>
         <View style={styles.totalContainer}>
           <Text style={styles.bottomTotalLabel}>
-            {selectedMethod === "bank-transfer" && depositOption === "deposit" ? "Số tiền cọc" : "Tổng thanh toán"}
+            {selectedMethod === "bank-transfer" && depositOption === "deposit"
+              ? "Số tiền cọc"
+              : "Tổng thanh toán"}
           </Text>
           <Text style={styles.bottomTotalPrice}>
-            {selectedMethod === "bank-transfer" && depositOption === "deposit" 
-                ? DEPOSIT_AMOUNT.toLocaleString() 
-                : invoiceInfo.grandTotal.toLocaleString()}đ
+            {selectedMethod === "bank-transfer" && depositOption === "deposit"
+              ? DEPOSIT_AMOUNT.toLocaleString()
+              : invoiceInfo.grandTotal.toLocaleString()}
+            đ
           </Text>
         </View>
         <TouchableOpacity
@@ -388,62 +490,72 @@ const PaymentScreen: React.FC = () => {
           <View style={styles.qrModalContent}>
             <Text style={styles.qrTitle}>Quét mã để thanh toán</Text>
             <Text style={styles.qrSubtitle}>
-                Vui lòng chuyển khoản với nội dung bên dưới
+              Vui lòng chuyển khoản với nội dung bên dưới
             </Text>
 
             <View style={styles.qrPlaceholder}>
-                <AppIcon name="maximize" size={100} color={COLORS.secondary} />
-                <Text style={{marginTop: 10, color: COLORS.gray}}>QR Code</Text>
+              <AppIcon name="qrcode" size={100} color={COLORS.secondary} />
+              <Text style={{ marginTop: 10, color: COLORS.gray }}>QR Code</Text>
             </View>
 
             <View style={styles.transferInfo}>
-                <Text style={styles.transferLabel}>Ngân hàng:</Text>
-                <Text style={styles.transferValue}>MB Bank</Text>
+              <Text style={styles.transferLabel}>Ngân hàng:</Text>
+              <Text style={styles.transferValue}>MB Bank</Text>
             </View>
             <View style={styles.transferInfo}>
-                <Text style={styles.transferLabel}>Số tài khoản:</Text>
-                <Text style={styles.transferValue}>0000 1234 56789</Text>
+              <Text style={styles.transferLabel}>Số tài khoản:</Text>
+              <Text style={styles.transferValue}>0000 1234 56789</Text>
             </View>
             <View style={styles.transferInfo}>
-                <Text style={styles.transferLabel}>Chủ tài khoản:</Text>
-                <Text style={styles.transferValue}>HOTEL SYSTEM</Text>
+              <Text style={styles.transferLabel}>Chủ tài khoản:</Text>
+              <Text style={styles.transferValue}>HOTEL SYSTEM</Text>
             </View>
             <View style={styles.transferInfo}>
-                <Text style={styles.transferLabel}>Số tiền:</Text>
-                <Text style={[styles.transferValue, {color: COLORS.primary, fontWeight: '700'}]}>
-                    {depositOption === "deposit" ? DEPOSIT_AMOUNT.toLocaleString() : invoiceInfo.grandTotal.toLocaleString()}đ
-                </Text>
+              <Text style={styles.transferLabel}>Số tiền:</Text>
+              <Text
+                style={[
+                  styles.transferValue,
+                  { color: COLORS.primary, fontWeight: "700" },
+                ]}
+              >
+                {depositOption === "deposit"
+                  ? DEPOSIT_AMOUNT.toLocaleString()
+                  : invoiceInfo.grandTotal.toLocaleString()}
+                đ
+              </Text>
             </View>
             <View style={styles.transferInfo}>
-                <Text style={styles.transferLabel}>Nội dung:</Text>
-                <Text style={[styles.transferValue, {fontWeight: '700'}]}>{paymentRef}</Text>
+              <Text style={styles.transferLabel}>Nội dung:</Text>
+              <Text style={[styles.transferValue, { fontWeight: "700" }]}>
+                {paymentRef}
+              </Text>
             </View>
 
             <TouchableOpacity
-                style={styles.paidButton}
-                onPress={handleFinalConfirm}
-                disabled={processingPayment}
+              style={styles.paidButton}
+              onPress={handleFinalConfirm}
+              disabled={processingPayment}
             >
-                {processingPayment ? (
-                    <ActivityIndicator color={COLORS.white} />
-                ) : (
-                    <Text style={styles.paidButtonText}>Tôi đã chuyển khoản</Text>
-                )}
+              {processingPayment ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <Text style={styles.paidButtonText}>Tôi đã chuyển khoản</Text>
+              )}
             </TouchableOpacity>
-            
+
             <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setQrModalVisible(false)}
-                disabled={processingPayment}
+              style={styles.closeButton}
+              onPress={() => setQrModalVisible(false)}
+              disabled={processingPayment}
             >
-                <Text style={styles.closeButtonText}>Đóng</Text>
+              <Text style={styles.closeButtonText}>Đóng</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-       {/* Confirm Modal */}
-       <Modal
+      {/* Confirm Modal */}
+      <Modal
         visible={confirmModalVisible}
         animationType="fade"
         transparent={true}
@@ -454,25 +566,25 @@ const PaymentScreen: React.FC = () => {
             <AppIcon name="check-circle" size={48} color={COLORS.primary} />
             <Text style={styles.confirmTitle}>Xác nhận đặt phòng</Text>
             <Text style={styles.confirmMessage}>
-                Bạn có chắc chắn muốn hoàn tất đặt phòng không?
+              Bạn có chắc chắn muốn hoàn tất đặt phòng không?
             </Text>
             <View style={styles.confirmActions}>
-                <TouchableOpacity 
-                    style={styles.cancelAction}
-                    onPress={() => setConfirmModalVisible(false)}
-                >
-                    <Text style={styles.cancelActionText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={styles.confirmAction}
-                    onPress={handleFinalConfirm}
-                >
-                    {processingPayment ? (
-                        <ActivityIndicator color={COLORS.white} />
-                    ) : (
-                        <Text style={styles.confirmActionText}>Xác nhận</Text>
-                    )}
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelAction}
+                onPress={() => setConfirmModalVisible(false)}
+              >
+                <Text style={styles.cancelActionText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmAction}
+                onPress={handleFinalConfirm}
+              >
+                {processingPayment ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <Text style={styles.confirmActionText}>Xác nhận</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -643,7 +755,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 34,
+    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,

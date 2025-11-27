@@ -178,7 +178,7 @@ namespace Hotel_System.API.Controllers
                     SoLuongPhong = request.Rooms?.Count ?? 0,
                     TongTien = tongCong,
                     TienCoc = 0,
-                    TrangThai = 0, // 0 = Chờ xác nhận (giữ phòng bằng ThoiHan)
+                    TrangThai = 1, // 1 = Chờ xác nhận
                     TrangThaiThanhToan = 0, // 0 = Chưa thanh toán
                     ThoiHan = holdExpiresAt
                 };
