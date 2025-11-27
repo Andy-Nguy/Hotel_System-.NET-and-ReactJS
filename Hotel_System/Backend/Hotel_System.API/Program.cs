@@ -95,7 +95,7 @@ if (!string.IsNullOrEmpty(jwtKey))
     });
 }
 
-// ✅ Add CORS *BEFORE* Build()
+//  Add CORS *BEFORE* Build()
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -120,17 +120,17 @@ builder.Services.AddResponseCompression(options =>
     options.EnableForHttps = true;
 });
 //Chọn nhánh deploy
-// ✅ Connect to PostgreSQL
+//  Connect to PostgreSQL
 builder.Services.AddDbContext<HotelSystemContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ==========================================
-// 2️⃣ Build app
+// 2️ Build app
 // ==========================================
 var app = builder.Build();
 
 // ==========================================
-// 3️⃣ Configure middleware pipeline
+// 3Configure middleware pipeline
 // ==========================================
 // Enable Swagger in all environments
 app.UseSwagger();
@@ -139,7 +139,7 @@ app.UseSwaggerUI();
 // Comment out HTTPS redirect for mobile development
 // app.UseHttpsRedirection();
 
-// ✅ Enable CORS here (AFTER Build)
+//  Enable CORS here (AFTER Build)
 app.UseCors("AllowFrontend");
 
 // Enable response compression
@@ -173,7 +173,6 @@ app.MapGet("/", () => "Welcome to Hotel System API! Visit /swagger for API docum
 // If no controller route matches, fallback to serve index.html for the SPA
 app.MapFallbackToFile("index.html");
 
-// ✅ Optional log
 Console.WriteLine("📚 Swagger docs: https://localhost:5001/swagger");
 
 app.Run();
