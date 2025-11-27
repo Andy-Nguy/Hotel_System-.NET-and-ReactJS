@@ -39,17 +39,49 @@ import ReviewPage from "./ReviewPage";
 import AdminLayout from "../admin/components/AdminLayout";
 
 const MainPage: React.FC = () => {
-  const [cachedUserInfo, setCachedUserInfo] = React.useState<any>(null);
-  const [authLoading, setAuthLoading] = React.useState(true);
+  // Try to read cached userInfo from localStorage first for instant access
+  const getInitialUserInfo = () => {
+    try {
+      const cached = localStorage.getItem("hs_userInfo");
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.warn("[MainPage] Could not parse cached userInfo:", e);
+    }
+    return null;
+  };
 
-  // Fetch user info on mount
+  const [cachedUserInfo, setCachedUserInfo] =
+    React.useState<any>(getInitialUserInfo);
+  // If we have cached userInfo, we don't need to show loading
+  const [authLoading, setAuthLoading] = React.useState(!getInitialUserInfo());
+
+  // Fetch user info on mount (to refresh/validate)
   React.useEffect(() => {
     const fetchUserInfo = async () => {
       const token = localStorage.getItem("hs_token");
       if (!token) {
         setCachedUserInfo(null);
+        localStorage.removeItem("hs_userInfo");
         setAuthLoading(false);
         return;
+      }
+
+      // If we already have cached userInfo from localStorage, don't show loading
+      const existingCached = localStorage.getItem("hs_userInfo");
+      if (existingCached) {
+        try {
+          const parsed = JSON.parse(existingCached);
+          setCachedUserInfo(parsed);
+          setAuthLoading(false);
+          console.log(
+            "[MainPage] Using cached userInfo from localStorage:",
+            parsed
+          );
+        } catch (e) {
+          // Will fetch fresh below
+        }
       }
 
       // Check if JWT (3 parts) or GUID
@@ -69,35 +101,45 @@ const MainPage: React.FC = () => {
           const payload = JSON.parse(decodedPayload);
           console.log("[MainPage] JWT payload:", payload);
           setCachedUserInfo(payload);
+          localStorage.setItem("hs_userInfo", JSON.stringify(payload));
         } catch (e) {
           console.error("[MainPage] JWT decode error:", e);
-          setCachedUserInfo(null);
+          if (!existingCached) {
+            setCachedUserInfo(null);
+            localStorage.removeItem("hs_userInfo");
+          }
         }
       } else {
-        // GUID token - fetch profile from API
-        try {
-          const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-          const API_BASE = _VITE_API.replace(/\/$/, "")
-            ? `${_VITE_API.replace(/\/$/, "")}/api`
-            : "/api";
-          const res = await fetch(`${API_BASE}/Auth/profile`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            const profile = await res.json();
-            console.log("[MainPage] Profile from API:", profile);
-            setCachedUserInfo({
-              name: profile.hoTen || profile.HoTen || profile.name,
-              role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
-              email: profile.email || profile.Email,
+        // GUID token - fetch profile from API (but only if we don't have cached data)
+        if (!existingCached) {
+          try {
+            const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+            const API_BASE = _VITE_API.replace(/\/$/, "")
+              ? `${_VITE_API.replace(/\/$/, "")}/api`
+              : "/api";
+            const res = await fetch(`${API_BASE}/Auth/profile`, {
+              headers: { Authorization: `Bearer ${token}` },
             });
-          } else {
-            console.warn("[MainPage] Profile fetch failed:", res.status);
+            if (res.ok) {
+              const profile = await res.json();
+              console.log("[MainPage] Profile from API:", profile);
+              const userInfo = {
+                name: profile.hoTen || profile.HoTen || profile.name,
+                role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
+                email: profile.email || profile.Email,
+              };
+              setCachedUserInfo(userInfo);
+              localStorage.setItem("hs_userInfo", JSON.stringify(userInfo));
+            } else {
+              console.warn("[MainPage] Profile fetch failed:", res.status);
+              setCachedUserInfo(null);
+              localStorage.removeItem("hs_userInfo");
+            }
+          } catch (e) {
+            console.error("[MainPage] Profile fetch error:", e);
             setCachedUserInfo(null);
+            localStorage.removeItem("hs_userInfo");
           }
-        } catch (e) {
-          console.error("[MainPage] Profile fetch error:", e);
-          setCachedUserInfo(null);
         }
       }
       setAuthLoading(false);

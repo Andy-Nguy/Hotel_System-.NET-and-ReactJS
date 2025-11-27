@@ -38,6 +38,32 @@ const LoginPage: React.FC = () => {
         if (res?.role || res?.Role) {
           localStorage.setItem("hs_role", res?.role || res?.Role);
         }
+
+        // Fetch user profile to get role and save to localStorage for immediate access
+        try {
+          const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+          const API_BASE = _VITE_API.replace(/\/$/, "")
+            ? `${_VITE_API.replace(/\/$/, "")}/api`
+            : "/api";
+          const profileRes = await fetch(`${API_BASE}/Auth/profile`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (profileRes.ok) {
+            const profile = await profileRes.json();
+            console.log("[Login] Profile fetched:", profile);
+            const userInfo = {
+              name: profile.hoTen || profile.HoTen || profile.name,
+              email: profile.email || profile.Email,
+              role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
+              phone: profile.soDienThoai || profile.SoDienThoai,
+            };
+            localStorage.setItem("hs_userInfo", JSON.stringify(userInfo));
+            console.log("[Login] userInfo saved to localStorage:", userInfo);
+          }
+        } catch (e) {
+          console.warn("[Login] Could not fetch profile:", e);
+        }
+
         setMessage("Đăng nhập thành công! Đang chuyển về trang chủ...");
         // return to home page after a short delay
         setTimeout(() => {

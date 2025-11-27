@@ -33,9 +33,12 @@ const OffcanvasMenu: React.FC = () => {
           );
           const payload = JSON.parse(decodedPayload);
           setUserInfo(payload);
+          // Save to localStorage for other components to read
+          localStorage.setItem("hs_userInfo", JSON.stringify(payload));
         } catch (e) {
           console.warn("[OffcanvasMenu] Could not decode JWT token:", e);
           setUserInfo(null);
+          localStorage.removeItem("hs_userInfo");
         }
       } else {
         // GUID token - need to fetch user profile from API
@@ -51,26 +54,32 @@ const OffcanvasMenu: React.FC = () => {
             const profile = await res.json();
             console.log("[OffcanvasMenu] Profile from API:", profile);
             // Map profile to userInfo format - use ?? to handle role=0 correctly
-            setUserInfo({
+            const mappedUserInfo = {
               name: profile.hoTen || profile.HoTen || profile.name || "User",
               email: profile.email || profile.Email,
               role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
               phone: profile.soDienThoai || profile.SoDienThoai,
-            });
+            };
+            setUserInfo(mappedUserInfo);
+            // Save to localStorage for other components to read
+            localStorage.setItem("hs_userInfo", JSON.stringify(mappedUserInfo));
           } else {
             console.warn(
               "[OffcanvasMenu] Could not fetch profile:",
               res.status
             );
             setUserInfo({ name: "User" });
+            localStorage.removeItem("hs_userInfo");
           }
         } catch (e) {
           console.warn("[OffcanvasMenu] Could not fetch user profile:", e);
           setUserInfo({ name: "User" });
+          localStorage.removeItem("hs_userInfo");
         }
       }
     } else {
       setUserInfo(null);
+      localStorage.removeItem("hs_userInfo");
     }
   };
 
