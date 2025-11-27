@@ -112,6 +112,9 @@ namespace Hotel_System.API.Services
             var kh = _db.KhachHangs.FirstOrDefault(k => k.IdkhachHang == userId);
             if (kh == null) return Task.FromResult<(bool, string?, UserProfileResponse?)>((false, "User not found", null));
 
+            // Get account to retrieve VaiTro
+            var acc = _db.TaiKhoanNguoiDungs.FirstOrDefault(a => a.IdkhachHang == userId);
+
             var profile = new UserProfileResponse
             {
                 IdkhachHang = kh.IdkhachHang,
@@ -120,7 +123,8 @@ namespace Hotel_System.API.Services
                 SoDienThoai = kh.SoDienThoai,
                 Email = kh.Email,
                 NgayDangKy = kh.NgayDangKy,
-                TichDiem = kh.TichDiem
+                TichDiem = kh.TichDiem,
+                VaiTro = acc?.VaiTro  // Include role: 0 = khachhang, 1 = nhanvien
             };
 
             return Task.FromResult<(bool, string?, UserProfileResponse?)>((true, null, profile));

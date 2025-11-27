@@ -137,6 +137,13 @@ const MainPage: React.FC = () => {
     );
   };
 
+  // Helper to check admin access with loading state
+  const checkAdminAccess = (): "loading" | "allowed" | "denied" => {
+    if (authLoading) return "loading";
+    if (isNhanVien()) return "allowed";
+    return "denied";
+  };
+
   const redirectToNoAccess = () => {
     try {
       window.history.replaceState(null, "", "/no-access");
@@ -435,6 +442,12 @@ const MainPage: React.FC = () => {
     route === "/admin/dashboard" ||
     route === "#/admin/dashboard"
   ) {
+    // Wait for auth to load before checking access
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -452,6 +465,11 @@ const MainPage: React.FC = () => {
     route === "/admin/rooms" ||
     route === "#/admin/rooms"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -469,6 +487,11 @@ const MainPage: React.FC = () => {
     route === "/admin/amenities" ||
     route === "#/admin/amenities"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -482,6 +505,11 @@ const MainPage: React.FC = () => {
     route === "/admin/services" ||
     route === "#/admin/services"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -495,6 +523,11 @@ const MainPage: React.FC = () => {
     route === "/admin/promotions" ||
     route === "#/admin/promotions"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -512,6 +545,11 @@ const MainPage: React.FC = () => {
     route === "/admin/bookings" ||
     route === "#/admin/bookings"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -529,6 +567,11 @@ const MainPage: React.FC = () => {
     route === "/admin/invoices" ||
     route === "#/admin/invoices"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -542,6 +585,11 @@ const MainPage: React.FC = () => {
     route === "/admin/checkout" ||
     route === "#/admin/checkout"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -555,6 +603,11 @@ const MainPage: React.FC = () => {
     route === "/admin/checkin" ||
     route === "#/admin/checkin"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -567,6 +620,11 @@ const MainPage: React.FC = () => {
     route === "/admin/review" ||
     route === "#/admin/review"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -612,6 +670,11 @@ const MainPage: React.FC = () => {
     route === "/admin/loyalty" ||
     route === "#/admin/loyalty"
   ) {
+    if (authLoading) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
