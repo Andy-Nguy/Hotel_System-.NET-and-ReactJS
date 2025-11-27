@@ -112,16 +112,19 @@ const MainPage: React.FC = () => {
 
   const isNhanVien = (): boolean => {
     const payload = cachedUserInfo;
+    console.log("[isNhanVien] cachedUserInfo:", payload);
     if (!payload) return false;
+    // Use nullish coalescing (??) to handle role = 0 correctly (0 is falsy but valid)
     const role =
-      payload.role ||
-      payload.roles ||
-      payload.Role ||
-      payload.Roles ||
-      payload.vaiTro ||
-      payload.VaiTro ||
-      payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ||
+      payload.role ??
+      payload.roles ??
+      payload.Role ??
+      payload.Roles ??
+      payload.vaiTro ??
+      payload.VaiTro ??
+      payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ??
       payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"];
+    console.log("[isNhanVien] Extracted role:", role, typeof role);
     if (role === undefined || role === null) return false;
     // Handle numeric role (1 = nhanvien)
     if (typeof role === "number") return role === 1;
