@@ -1,6 +1,10 @@
 import axiosClient from "./axiosClient";
 
-const API_BASE_URL = "/api";
+// Resolve API base from Vite env when available (VITE_API_URL). Fall back to "/api" for dev proxy.
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE_URL = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 
 // Minimal type for the check-in / using booking list returned by CheckInController
 export interface UsingBooking {
@@ -63,7 +67,10 @@ export const getCheckinById = async (id: string): Promise<any> => {
  */
 export const confirmCheckIn = async (id: string): Promise<any> => {
   // Backend exposes POST for confirm; return server response (may include emailSent flag)
-  const res = await axiosClient.post(`${API_BASE_URL}/CheckIn/confirm/${id}`, {});
+  const res = await axiosClient.post(
+    `${API_BASE_URL}/CheckIn/confirm/${id}`,
+    {}
+  );
   return res.data;
 };
 

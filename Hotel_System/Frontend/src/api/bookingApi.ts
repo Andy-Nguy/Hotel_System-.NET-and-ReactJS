@@ -24,9 +24,11 @@ export interface UpdateBookingRequest {
   trangThaiThanhToan?: number;
 }
 
-// Use relative '/api' so Vite dev proxy forwards calls to the backend (https://localhost:5001)
-// This avoids CORS and TLS dev-certificate issues in dev mode.
-const API_BASE_URL = "/api";
+// Resolve API base from Vite env when available (VITE_API_URL). Fall back to "/api" for dev proxy.
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE_URL = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 
 export const getBookings = async (): Promise<Booking[]> => {
   const response = await axiosClient.get(`${API_BASE_URL}/DatPhong`);
@@ -54,7 +56,9 @@ export const deleteBooking = async (id: string): Promise<void> => {
  * Lấy lịch sử đặt phòng của user hiện tại dựa trên JWT
  */
 export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
-  const response = await axiosClient.get(`${API_BASE_URL}/DatPhong/LichSuDatPhong`);
+  const response = await axiosClient.get(
+    `${API_BASE_URL}/DatPhong/LichSuDatPhong`
+  );
   const raw = response.data || [];
   // backend returns an array of bookings (PascalCase); normalize each
   return (raw as any[]).map(normalizeBookingSummary);
@@ -64,8 +68,8 @@ export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
  * Handles booking operations: get details, history, reschedule, cancel, QR code
  */
 
-const API_BASE = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/api/datphong` 
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api/datphong`
   : "/api/datphong";
 
 // ============================================

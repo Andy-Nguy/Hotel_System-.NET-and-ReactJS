@@ -1,16 +1,20 @@
-import axios from 'axios';
+import axios from "axios";
+
+// Resolve API base from Vite env when available (VITE_API_URL)
+const _VITE_API = import.meta.env.VITE_API_URL || "";
+const API_BASE = _VITE_API ? `${_VITE_API}` : "";
 
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: API_BASE || "/api",
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
 // Add a request interceptor to include the token
 axiosClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('hs_token');
+    const token = localStorage.getItem("hs_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

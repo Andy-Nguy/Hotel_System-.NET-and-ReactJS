@@ -225,10 +225,13 @@ export async function uploadServiceImage(
   fd.append("file", file);
   if (serviceId) fd.append("serviceId", serviceId);
   if (serviceName) fd.append("serviceName", serviceName);
-  const res = await fetch(`/api/dich-vu/tai-anh-len`, {
+  const uploadUrl = API_BASE
+    ? `${API_BASE}/api/dich-vu/tai-anh-len`
+    : `/api/dich-vu/tai-anh-len`;
+  const res = await fetch(uploadUrl, {
     method: "POST",
     body: fd,
-  }); // <= Đã đổi
+  });
   if (!res.ok) {
     const t = await res.text().catch(() => null);
     throw new Error(`Upload failed ${res.status}${t ? `: ${t}` : ""}`);

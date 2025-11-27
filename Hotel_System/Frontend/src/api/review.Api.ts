@@ -1,5 +1,9 @@
 // API client for review/rating operations
 
+// Resolve API base from Vite env when available (VITE_API_URL). Fall back to "" for dev proxy.
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "");
+
 export interface ReviewSubmitPayload {
   IddatPhong: string;
   Rating: number; // 1-5
@@ -26,7 +30,7 @@ export interface ReviewStatus {
   lastSentAt?: string;
 }
 
-const baseUrl = "/api/Review";
+const baseUrl = API_BASE ? `${API_BASE}/api/Review` : "/api/Review";
 
 const reviewApi = {
   /**

@@ -169,7 +169,8 @@ export async function createRoomType(
   payload: Partial<RoomType>
 ): Promise<RoomType> {
   const headers: any = { "Content-Type": "application/json" };
-  const res = await fetch(`/api/LoaiPhong`, {
+  const url = API_BASE ? `${API_BASE}/api/LoaiPhong` : `/api/LoaiPhong`;
+  const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
@@ -189,7 +190,10 @@ export async function updateRoomType(
   payload: Partial<RoomType>
 ): Promise<void> {
   const headers: any = { "Content-Type": "application/json" };
-  const res = await fetch(`/api/LoaiPhong/${id}`, {
+  const url = API_BASE
+    ? `${API_BASE}/api/LoaiPhong/${id}`
+    : `/api/LoaiPhong/${id}`;
+  const res = await fetch(url, {
     method: "PUT",
     headers,
     body: JSON.stringify(payload),
@@ -199,7 +203,10 @@ export async function updateRoomType(
 
 export async function deleteRoomType(id: string): Promise<void> {
   const headers: any = {};
-  const res = await fetch(`/api/LoaiPhong/${id}`, {
+  const url = API_BASE
+    ? `${API_BASE}/api/LoaiPhong/${id}`
+    : `/api/LoaiPhong/${id}`;
+  const res = await fetch(url, {
     method: "DELETE",
     headers,
   });
@@ -209,7 +216,8 @@ export async function deleteRoomType(id: string): Promise<void> {
 // === CRUD for Room ===
 export async function createRoom(payload: Partial<Room>): Promise<Room> {
   const headers: any = { "Content-Type": "application/json" };
-  const res = await fetch(`/api/Phong`, {
+  const url = API_BASE ? `${API_BASE}/api/Phong` : `/api/Phong`;
+  const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
@@ -241,7 +249,8 @@ export async function updateRoom(
   console.log("updateRoom - token:", "removed");
   console.log("updateRoom - headers:", headers);
 
-  const res = await fetch(`/api/Phong/${id}`, {
+  const url = API_BASE ? `${API_BASE}/api/Phong/${id}` : `/api/Phong/${id}`;
+  const res = await fetch(url, {
     method: "PUT",
     headers,
     body: JSON.stringify(payload),
@@ -257,7 +266,8 @@ export async function updateRoom(
 
 export async function deleteRoom(id: string): Promise<void> {
   const headers: any = {};
-  const res = await fetch(`/api/Phong/${id}`, { method: "DELETE", headers });
+  const url = API_BASE ? `${API_BASE}/api/Phong/${id}` : `/api/Phong/${id}`;
+  const res = await fetch(url, { method: "DELETE", headers });
   if (!res.ok) throw new Error(`Failed to delete room: ${res.status}`);
 }
 

@@ -2,7 +2,9 @@
 
 // Resolve API base from Vite env when available (VITE_API_URL). Fall back to "/api" for dev proxy.
 const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "") || "/api";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 
 // ========== AMENITY (TienNghi) CRUD ==========
 
