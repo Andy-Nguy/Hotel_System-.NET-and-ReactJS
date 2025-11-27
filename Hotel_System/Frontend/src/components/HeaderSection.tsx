@@ -49,11 +49,12 @@ const HeaderSection: React.FC = () => {
           });
           if (res.ok) {
             const profile = await res.json();
-            // Map profile to userInfo format
+            console.log("[HeaderSection] Profile from API:", profile);
+            // Map profile to userInfo format - use ?? to handle role=0 correctly
             setUserInfo({
               name: profile.hoTen || profile.HoTen || profile.name || "User",
               email: profile.email || profile.Email,
-              role: profile.vaiTro || profile.VaiTro || profile.role,
+              role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
               phone: profile.soDienThoai || profile.SoDienThoai,
             });
           } else {
@@ -72,17 +73,20 @@ const HeaderSection: React.FC = () => {
 
   // helper to check staff role
   const isNhanVien = () => {
+    console.log("[HeaderSection.isNhanVien] userInfo:", userInfo);
     if (!userInfo) return false;
+    // Use nullish coalescing (??) to handle role=0 correctly (0 is falsy but valid)
     const role =
-      userInfo.role ||
-      userInfo.Role ||
-      userInfo.roles ||
-      userInfo.vaiTro ||
-      userInfo.VaiTro ||
+      userInfo.role ??
+      userInfo.Role ??
+      userInfo.roles ??
+      userInfo.vaiTro ??
+      userInfo.VaiTro ??
       userInfo[
         "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-      ] ||
+      ] ??
       userInfo["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"];
+    console.log("[HeaderSection.isNhanVien] role:", role, typeof role);
     if (role === undefined || role === null) return false;
     // Handle numeric role (1 = nhanvien)
     if (typeof role === "number") return role === 1;
