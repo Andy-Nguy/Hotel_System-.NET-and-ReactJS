@@ -3,6 +3,12 @@ import { Modal, Descriptions, Tag, Table, Empty, Divider, Row, Col } from "antd"
 import dayjs from "dayjs";
 import { Promotion } from "../../api/promotionApi";
 
+// Resolve API base from Vite env
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
+
 interface PromotionModalProps {
   promotion: Promotion;
   visible: boolean;
@@ -98,7 +104,7 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       if ((promotion as any).loaiKhuyenMai !== "service") return;
       try {
         setLoadingServices(true);
-        const resp = await fetch(`/api/KhuyenMai/${promotion.idkhuyenMai}/services`);
+        const resp = await fetch(`${API_BASE}/KhuyenMai/${promotion.idkhuyenMai}/services`);
         if (!resp.ok) {
           setServiceList([]);
           return;

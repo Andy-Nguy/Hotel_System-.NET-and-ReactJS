@@ -1,4 +1,10 @@
 import React, { useState, useEffect } from "react";
+
+// Resolve API base from Vite env
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 import {
   Form,
   Input,
@@ -58,7 +64,7 @@ const ServiceAssignPanel: React.FC<{
       try {
         setLoading(true);
         // backend route is `api/dich-vu/lay-danh-sach`
-        const res = await fetch('/api/dich-vu/lay-danh-sach');
+        const res = await fetch(`${API_BASE}/dich-vu/lay-danh-sach`);
         const data = await res.json();
         setServices(data || []);
       } catch (err) {
@@ -116,7 +122,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
     const loadRooms = async () => {
       try {
         setLoadingRooms(true);
-        const response = await fetch("/api/Phong");
+        const response = await fetch(`${API_BASE}/Phong`);
         const data = await response.json();
         const roomList = data.map((room: any) => ({
           key: room.idphong,

@@ -1,5 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getRoomTypes, getRooms, Room, RoomType } from "../../api/roomsApi";
+
+// Resolve API base from Vite env
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 import RoomTypeSection from "../components/RoomTypeSection";
 import RoomSection from "../components/RoomSection";
 
@@ -164,7 +170,7 @@ const RoomManager: React.FC = () => {
     setRoomLoading((prev) => ({ ...prev, [roomId]: true }));
 
     try {
-      const resp = await fetch(`/api/Phong/${roomId}`, {
+      const resp = await fetch(`${API_BASE}/Phong/${roomId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ TrangThai: target }),

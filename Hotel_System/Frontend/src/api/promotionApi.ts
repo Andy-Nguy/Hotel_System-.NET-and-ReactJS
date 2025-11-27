@@ -1,6 +1,8 @@
 // Use VITE_API_URL when provided in production; otherwise keep relative path for dev proxy
 const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "") || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 
 export interface PromotionRoom {
   id: number;
@@ -77,9 +79,7 @@ export const getAllPromotions = async (
   if (toDate) params.append("toDate", toDate.toISOString());
 
   const query = params.toString() ? `?${params.toString()}` : "";
-  const url = API_BASE
-    ? `${API_BASE}/api/KhuyenMai${query}`
-    : `/api/KhuyenMai${query}`;
+  const url = `${API_BASE}/KhuyenMai${query}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error("Failed to fetch promotions");
   return response.json();
@@ -87,9 +87,7 @@ export const getAllPromotions = async (
 
 // Get promotion by ID
 export const getPromotionById = async (id: string): Promise<Promotion> => {
-  const url = API_BASE
-    ? `${API_BASE}/api/KhuyenMai/${id}`
-    : `/api/KhuyenMai/${id}`;
+  const url = `${API_BASE}/KhuyenMai/${id}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error("Failed to fetch promotion");
   return response.json();
@@ -102,7 +100,7 @@ export const createPromotion = async (
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = API_BASE ? `${API_BASE}/api/KhuyenMai` : `/api/KhuyenMai`;
+  const url = `${API_BASE}/KhuyenMai`;
   const response = await fetch(url, {
     method: "POST",
     headers,
@@ -123,9 +121,7 @@ export const updatePromotion = async (
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = API_BASE
-    ? `${API_BASE}/api/KhuyenMai/${id}`
-    : `/api/KhuyenMai/${id}`;
+  const url = `${API_BASE}/KhuyenMai/${id}`;
   const response = await fetch(url, {
     method: "PUT",
     headers,
@@ -148,9 +144,7 @@ export const assignServiceToPromotion = async (
     ngayKetThuc?: string;
   }
 ): Promise<any> => {
-  const url = API_BASE
-    ? `${API_BASE}/api/KhuyenMai/${promotionId}/assign-service`
-    : `/api/KhuyenMai/${promotionId}/assign-service`;
+  const url = `${API_BASE}/KhuyenMai/${promotionId}/assign-service`;
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -168,9 +162,7 @@ export const togglePromotion = async (id: string): Promise<Promotion> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = API_BASE
-    ? `${API_BASE}/api/KhuyenMai/${id}/toggle`
-    : `/api/KhuyenMai/${id}/toggle`;
+  const url = `${API_BASE}/KhuyenMai/${id}/toggle`;
   const response = await fetch(url, {
     method: "PATCH",
     headers,
@@ -187,9 +179,7 @@ export const deletePromotion = async (id: string): Promise<void> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = API_BASE
-    ? `${API_BASE}/api/KhuyenMai/${id}`
-    : `/api/KhuyenMai/${id}`;
+  const url = `${API_BASE}/KhuyenMai/${id}`;
   const response = await fetch(url, {
     method: "DELETE",
     headers,
@@ -208,9 +198,7 @@ export const updateExpiredStatus = async (): Promise<{
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = API_BASE
-    ? `${API_BASE}/api/KhuyenMai/update-expired-status`
-    : `/api/KhuyenMai/update-expired-status`;
+  const url = `${API_BASE}/KhuyenMai/update-expired-status`;
   const response = await fetch(url, {
     method: "POST",
     headers,
@@ -249,9 +237,7 @@ export const uploadBanner = async (file: File): Promise<UploadResult> => {
   const formData = new FormData();
   formData.append("file", file);
 
-  const url = API_BASE
-    ? `${API_BASE}/api/KhuyenMai/upload-banner`
-    : `/api/KhuyenMai/upload-banner`;
+  const url = `${API_BASE}/KhuyenMai/upload-banner`;
   const response = await fetch(url, {
     method: "POST",
     headers,
@@ -313,11 +299,7 @@ export const getPromotionsForService = async (
     await Promise.all(
       candidates.map(async (p) => {
         try {
-          const url2 = API_BASE
-            ? `${API_BASE}/api/KhuyenMai/${
-                p.idkhuyenMai || p.IdkhuyenMai
-              }/services`
-            : `/api/KhuyenMai/${p.idkhuyenMai || p.IdkhuyenMai}/services`;
+          const url2 = `${API_BASE}/KhuyenMai/${p.idkhuyenMai || p.IdkhuyenMai}/services`;
           const resp = await fetch(url2);
           if (!resp.ok) return;
           const mappingList = await resp.json();

@@ -2,13 +2,15 @@
 // Use Vite env var when provided, otherwise fall back to the backend dev URL.
 // In dev this should match the backend launch URL (see Backend/Hotel_System.API/Properties/launchSettings.json).
 const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "");
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 
 const fetchJson = async (endpoint: string, init?: RequestInit) => {
   const token = localStorage.getItem("hs_token");
   const headers: any = { ...init?.headers };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = API_BASE ? `${API_BASE}${endpoint}` : `${endpoint}`;
+  const url = `${API_BASE}${endpoint}`;
   // helpful debug when requests are routed to the wrong origin (405 from Vite server)
   // open browser console Network tab to inspect the actual outgoing request
   // and adjust Vite proxy or API_BASE accordingly.
@@ -35,7 +37,7 @@ const fetchJson = async (endpoint: string, init?: RequestInit) => {
 
 export const checkoutApi = {
   // 1. Lấy tóm tắt thanh toán (luôn dùng cái này)
-  getSummary: (id: string | number) => fetchJson(`/api/Checkout/summary/${id}`),
+  getSummary: (id: string | number) => fetchJson(`/Checkout/summary/${id}`),
 
   // 2. Tạo hóa đơn + thêm dịch vụ mới (Checkout endpoint)
   createInvoice: (payload: {
@@ -56,7 +58,7 @@ export const checkoutApi = {
     }>;
     ServicesTotal?: number;
   }) =>
-    fetchJson(`/api/Checkout/hoa-don`, {
+    fetchJson(`/Checkout/hoa-don`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -67,7 +69,7 @@ export const checkoutApi = {
     id: string | number,
     payload?: { Amount?: number; HoaDonId?: string; Note?: string }
   ) =>
-    fetchJson(`/api/Checkout/confirm-paid/${id}`, {
+    fetchJson(`/Checkout/confirm-paid/${id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload ?? {}),
@@ -81,7 +83,7 @@ export const checkoutApi = {
     Services?: Array<{ IddichVu: string | number; TienDichVu?: number }>;
     Note?: string;
   }) =>
-    fetchJson(`/api/Checkout/pay-qr`, {
+    fetchJson(`/Checkout/pay-qr`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -89,7 +91,7 @@ export const checkoutApi = {
 
   // 4. Hoàn tất trả phòng
   completeCheckout: (id: string | number) =>
-    fetchJson(`/api/Checkout/complete/${id}`, { method: "POST" }),
+    fetchJson(`/Checkout/complete/${id}`, { method: "POST" }),
 
   // 5. Thêm dịch vụ vào hóa đơn của booking
   // Business rule: always finds THE ONE invoice for the booking by IDDatPhong
@@ -104,7 +106,7 @@ export const checkoutApi = {
       GhiChu?: string;
     }>;
   }) =>
-    fetchJson(`/api/Checkout/add-service-to-invoice`, {
+    fetchJson(`/Checkout/add-service-to-invoice`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

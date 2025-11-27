@@ -1,4 +1,10 @@
 import React, { useEffect, useState } from "react";
+
+// Resolve API base from Vite env
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
@@ -94,7 +100,7 @@ const CheckoutPage: React.FC = () => {
         if (parsed.idDatPhong && parsed.holdExpiresAt) {
           try {
             const res = await fetch(
-              `/api/datphong/${encodeURIComponent(parsed.idDatPhong)}`
+              `${API_BASE}/datphong/${encodeURIComponent(parsed.idDatPhong)}`
             );
             if (res.ok) {
               setHoldExpiresAt(parsed.holdExpiresAt);
@@ -217,7 +223,7 @@ const CheckoutPage: React.FC = () => {
         ghiChu: values.notes,
       };
 
-      const response = await fetch("/api/datphong/create", {
+      const response = await fetch(`${API_BASE}/datphong/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bookingPayload),
@@ -277,7 +283,7 @@ const CheckoutPage: React.FC = () => {
     let mounted = true;
     const fetchServices = async () => {
       try {
-        const res = await fetch("/api/dich-vu/lay-danh-sach");
+        const res = await fetch(`${API_BASE}/dich-vu/lay-danh-sach`);
         if (!res.ok) throw new Error("Failed to load services");
         const data = await res.json();
         if (!mounted) return;

@@ -1,4 +1,10 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
+
+// Resolve API base from Vite env
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 import {
   Layout,
   Card,
@@ -135,7 +141,7 @@ const PaymentPage: React.FC = () => {
     }
     const token = localStorage.getItem("hs_token");
     if (token) {
-      fetch("/api/auth/profile", {
+      fetch(`${API_BASE}/auth/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -267,7 +273,7 @@ const PaymentPage: React.FC = () => {
       };
 
       // Gọi API tạo hóa đơn
-      const response = await fetch("/api/Payment/hoa-don", {
+      const response = await fetch(`${API_BASE}/Payment/hoa-don`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -2,6 +2,12 @@ import React, { useEffect, useState } from 'react';
 import Slidebar from '../components/Slidebar';
 import HeaderSection from '../components/HeaderSection';
 import { Button, Card, Input, Table, message, Space, Modal, Rate, Tag, Spin, Badge } from 'antd';
+
+// Resolve API base from Vite env
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 import { CheckOutlined, DeleteOutlined, EyeOutlined, MailOutlined } from '@ant-design/icons';
 import reviewApi from '../../api/review.Api';
 
@@ -117,7 +123,7 @@ const ReviewManager: React.FC = () => {
   const approveReview = async (id?: number) => {
     if (!id) return;
     try {
-      await fetch(`/api/Review/${id}/approve`, { method: 'PUT' });
+      await fetch(`${API_BASE}/Review/${id}/approve`, { method: 'PUT' });
       message.success('Đánh giá được duyệt');
       await loadReviews();
     } catch (e) {
@@ -132,7 +138,7 @@ const ReviewManager: React.FC = () => {
       content: 'Bạn có chắc chắn muốn xóa đánh giá này?',
       onOk: async () => {
         try {
-          await fetch(`/api/Review/${id}`, { method: 'DELETE' });
+          await fetch(`${API_BASE}/Review/${id}`, { method: 'DELETE' });
           message.success('Đánh giá được xóa');
           await loadReviews();
         } catch (e) {

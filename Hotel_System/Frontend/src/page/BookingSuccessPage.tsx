@@ -1,4 +1,10 @@
 import React, { useEffect, useState } from "react";
+
+// Resolve API base from Vite env
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 import {
   Layout,
   Card,
@@ -112,7 +118,7 @@ const BookingSuccessPage: React.FC = () => {
       }
 
       message.loading({ content: "Đang tải hóa đơn...", key: "download" });
-      const response = await fetch(`/api/Payment/invoice/${idHoaDon}/pdf`);
+      const response = await fetch(`${API_BASE}/Payment/invoice/${idHoaDon}/pdf`);
       if (!response.ok) throw new Error(`Lỗi tải PDF: ${response.status}`);
 
       const blob = await response.blob();

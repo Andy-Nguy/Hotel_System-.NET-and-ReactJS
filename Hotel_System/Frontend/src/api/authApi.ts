@@ -1,5 +1,8 @@
 // Centralized auth API helper
-const API_BASE = import.meta.env.VITE_API_URL || "";
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 
 export type RegisterRequest = {
   Hoten?: string;
@@ -46,7 +49,7 @@ async function handleRes(res: Response) {
 }
 
 export async function register(req: RegisterRequest) {
-  const res = await fetch(`${API_BASE}/api/Auth/register`, {
+  const res = await fetch(`${API_BASE}/Auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -55,7 +58,7 @@ export async function register(req: RegisterRequest) {
 }
 
 export async function verifyOtp(req: VerifyOtpRequest) {
-  const res = await fetch(`${API_BASE}/api/Auth/verify`, {
+  const res = await fetch(`${API_BASE}/Auth/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -64,7 +67,7 @@ export async function verifyOtp(req: VerifyOtpRequest) {
 }
 
 export async function login(req: LoginRequest) {
-  const res = await fetch(`${API_BASE}/api/Auth/login`, {
+  const res = await fetch(`${API_BASE}/Auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),

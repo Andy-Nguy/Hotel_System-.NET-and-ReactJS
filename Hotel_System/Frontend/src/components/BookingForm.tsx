@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import RoomCard from "./Room/RoomCard";
 
+// Resolve API base from Vite env when available (VITE_API_URL)
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
+
 type BookingFormProps = {
   horizontal?: boolean; // compact inline layout to save vertical space
   fullWidth?: boolean; // stretch across the full row with larger inputs (hero/room bar style)
@@ -63,7 +69,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         NumberOfGuests: Number(guests),
       };
 
-      const res = await fetch("/api/Phong/check-available-rooms", {
+      const res = await fetch(`${API_BASE}/Phong/check-available-rooms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

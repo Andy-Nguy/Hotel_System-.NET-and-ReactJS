@@ -3,9 +3,10 @@ import { getAmenitiesForRoom } from "../../api/amenticsApi";
 import ReviewPreview from "./ReviewPreview";
 import ReviewPanel from "./ReviewPanel";
 import ReviewDetailPanel from "./ReviewDetailPanel";
-const BACKEND_BASE =
-  ((import.meta as any).env?.VITE_API_BASE as string) ||
-  "https://localhost:5001";
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const BACKEND_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api`
+  : "/api";
 
 function resolveImageUrl(u?: string | null) {
   if (!u) return undefined;
@@ -97,7 +98,7 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       setLoadingStats(true);
       try {
         setStatsError(null);
-        const res = await fetch(`${BACKEND_BASE}/api/Review/room/${room.idphong}/stats`);
+        const res = await fetch(`${BACKEND_BASE}/Review/room/${room.idphong}/stats`);
         if (!res.ok) {
           const txt = await res.text().catch(() => null);
           console.error("Failed to fetch stats", res.status, txt);
@@ -121,7 +122,7 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       setLoadingReviews(true);
       try {
         setReviewError(null);
-        const res = await fetch(`${BACKEND_BASE}/api/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${pageSize}`);
+        const res = await fetch(`${BACKEND_BASE}/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${pageSize}`);
         if (!res.ok) {
           const txt = await res.text().catch(() => null);
           console.error("Failed to fetch reviews", res.status, txt);
@@ -157,7 +158,7 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       if (!room?.idphong) return;
       setLoadingReviewPanel(true);
       try {
-        const res = await fetch(`${BACKEND_BASE}/api/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${reviewPanelPageSize}`);
+        const res = await fetch(`${BACKEND_BASE}/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${reviewPanelPageSize}`);
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;

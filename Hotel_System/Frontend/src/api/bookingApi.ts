@@ -24,19 +24,16 @@ export interface UpdateBookingRequest {
   trangThaiThanhToan?: number;
 }
 
-// Resolve API base from Vite env when available (VITE_API_URL). Fall back to "/api" for dev proxy.
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE_URL = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api";
+// axiosClient đã có baseURL = /api hoặc VITE_API_URL/api
+// nên chỉ cần dùng đường dẫn tương đối
 
 export const getBookings = async (): Promise<Booking[]> => {
-  const response = await axiosClient.get(`${API_BASE_URL}/DatPhong`);
+  const response = await axiosClient.get(`/DatPhong`);
   return response.data;
 };
 
 export const getBookingById = async (id: string): Promise<Booking> => {
-  const response = await axiosClient.get(`${API_BASE_URL}/DatPhong/${id}`);
+  const response = await axiosClient.get(`/DatPhong/${id}`);
   return response.data;
 };
 
@@ -44,11 +41,11 @@ export const updateBooking = async (
   id: string,
   data: UpdateBookingRequest
 ): Promise<void> => {
-  await axiosClient.put(`${API_BASE_URL}/DatPhong/${id}`, data);
+  await axiosClient.put(`/DatPhong/${id}`, data);
 };
 
 export const deleteBooking = async (id: string): Promise<void> => {
-  await axiosClient.delete(`${API_BASE_URL}/DatPhong/${id}`);
+  await axiosClient.delete(`/DatPhong/${id}`);
 };
 
 /**
@@ -56,9 +53,7 @@ export const deleteBooking = async (id: string): Promise<void> => {
  * Lấy lịch sử đặt phòng của user hiện tại dựa trên JWT
  */
 export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
-  const response = await axiosClient.get(
-    `${API_BASE_URL}/DatPhong/LichSuDatPhong`
-  );
+  const response = await axiosClient.get(`/DatPhong/LichSuDatPhong`);
   const raw = response.data || [];
   // backend returns an array of bookings (PascalCase); normalize each
   return (raw as any[]).map(normalizeBookingSummary);
@@ -68,8 +63,10 @@ export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
  * Handles booking operations: get details, history, reschedule, cancel, QR code
  */
 
-const API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api/datphong`
+// Resolve API base for fetch calls (not using axiosClient)
+const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+const API_BASE = _VITE_API.replace(/\/$/, "")
+  ? `${_VITE_API.replace(/\/$/, "")}/api/datphong`
   : "/api/datphong";
 
 // ============================================
