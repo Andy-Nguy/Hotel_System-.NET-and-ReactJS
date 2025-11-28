@@ -73,7 +73,6 @@ namespace Hotel_System.API.Controllers
             var customer = await _context.KhachHangs.FindAsync(userId);
             if (customer == null) return NotFound(new { error = "Customer not found" });
 
-            // total spent: sum of paid amounts (TienThanhToan) for fully paid invoices belonging to this customer's bookings
             var paidInvoices = await _context.HoaDons
                 .Include(h => h.IddatPhongNavigation)
                 .Where(h => h.IddatPhongNavigation != null && h.IddatPhongNavigation.IdkhachHang == userId && h.TrangThaiThanhToan == 2)
