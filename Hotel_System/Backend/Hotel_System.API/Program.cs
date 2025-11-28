@@ -125,7 +125,7 @@ builder.Services.AddCors(options =>
                 return true;
             }
             // Cho phép domain mới robinsvilla.site
-            if (origin == "https://robinvilla.site" || origin == "https://www.robinvilla.site")
+            if (origin == "https://robinsvilla.site" || origin == "https://www.robinsvilla.site")
             {
                 return true;
             }
