@@ -264,6 +264,9 @@ namespace Hotel_System.API.Controllers
                     .Include(dp => dp.ChiTietDatPhongs)
                         .ThenInclude(ct => ct.Phong)
                             .ThenInclude(p => p!.IdloaiPhongNavigation)
+                    .Include(dp => dp.HoaDons)
+                        .ThenInclude(h => h.Cthddvs)
+                            .ThenInclude(c => c.IddichVuNavigation)
                     .ToListAsync();
 
                 var result = bookings.Select(dp => new
@@ -302,6 +305,24 @@ namespace Hotel_System.API.Controllers
                         ct.GiaPhong,
                         ct.ThanhTien,
                         ct.GhiChu
+                    }).ToList(),
+                    DichVuDaChon = dp.HoaDons.SelectMany(h => h.Cthddvs).Select(c => new
+                    {
+                        c.Idcthddv,
+                        c.IdhoaDon,
+                        c.IddichVu,
+                        TenDichVu = c.IddichVuNavigation?.TenDichVu,
+                        GiaDichVu = c.IddichVuNavigation?.TienDichVu,
+                        HinhDichVu = c.IddichVuNavigation?.HinhDichVu,
+                        ThoiGianBatDauDichVu = c.IddichVuNavigation?.ThoiGianBatDau,
+                        ThoiGianKetThucDichVu = c.IddichVuNavigation?.ThoiGianKetThuc,
+                        TrangThaiDichVu = c.IddichVuNavigation?.TrangThai,
+                        c.TienDichVu,
+                        c.IdkhuyenMai,
+                        c.ThoiGianThucHien,
+                        c.ThoiGianBatDau,
+                        c.ThoiGianKetThuc,
+                        c.TrangThai
                     }).ToList()
                 }).ToList();
 

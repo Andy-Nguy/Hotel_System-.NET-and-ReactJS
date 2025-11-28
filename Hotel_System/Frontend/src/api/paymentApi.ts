@@ -2,10 +2,9 @@
 // Provides typed functions for processing payments, checking status, refunds, invoices, etc.
 
 // Resolve API base from Vite env when available, otherwise keep empty for Vite proxy in dev
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api";
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 // === Types mirrored from backend DTOs (simplified to TS) ===
 export type CreditCardInfo = {

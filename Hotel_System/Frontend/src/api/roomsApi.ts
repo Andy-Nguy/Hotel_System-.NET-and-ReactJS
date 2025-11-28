@@ -63,10 +63,9 @@ export interface RoomType {
 // === 2. LOGIC GỌP API CHUNG ===
 
 // Resolve API base from Vite env when available, otherwise keep empty for Vite proxy in dev
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api"; // include /api in base
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`; // include /api in base
 
 /**
  * Utility function to decode JWT token and get claims
