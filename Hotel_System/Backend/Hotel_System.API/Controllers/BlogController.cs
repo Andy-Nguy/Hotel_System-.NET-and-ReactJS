@@ -46,7 +46,6 @@ namespace Hotel_System.API.Controllers
 
             var ext = Path.GetExtension(file.FileName);
             // Generate filename: Blog_[title].[extension]
-            // If title is not provided or empty, fallback to Guid-based naming
             var fileName = string.IsNullOrWhiteSpace(title) 
                 ? Guid.NewGuid().ToString("N") + ext
                 : $"Blog_{Slugify(title)}{ext}";
