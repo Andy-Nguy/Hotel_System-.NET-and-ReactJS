@@ -42,10 +42,9 @@ const LoginPage: React.FC = () => {
         // Fetch user profile to get role and save to localStorage for immediate access
         let userInfoSaved = false;
         try {
-          const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-          const API_BASE = _VITE_API.replace(/\/$/, "")
-            ? `${_VITE_API.replace(/\/$/, "")}/api`
-            : "/api";
+          const API_BASE = `${
+            (await import("../api/config")).API_CONFIG.CURRENT
+          }/api`;
           const profileRes = await fetch(`${API_BASE}/Auth/profile`, {
             headers: { Authorization: `Bearer ${token}` },
           });
