@@ -6,14 +6,16 @@
 // This will automatically select the correct API URL
 
 export const API_CONFIG = {
-  // Local development API (when running .NET API locally on port 5000)
-  LOCAL: "http://localhost:5000",
+  // Local development API (when running .NET API locally)
+  // Check launchSettings.json for the correct port
+  // Usually: https://localhost:5001 (HTTPS) or http://localhost:5171 (HTTP)
+  LOCAL: "https://localhost:5001",
 
   // Railway production API
   RAILWAY: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
 
   // Environment flag - CHANGE THIS TO SWITCH ENVIRONMENTS
-  IS_PRODUCTION: true, // Set to true for production deployment
+  IS_PRODUCTION: false, // Set to true for production deployment
 
   // Current active API - automatically selected based on IS_PRODUCTION
   get CURRENT() {
