@@ -21,6 +21,8 @@ public partial class DanhGium
 
     public bool? IsAnonym { get; set; }
 
+    public bool IsApproved { get; set; } = false; // Approval status for admin review
+
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

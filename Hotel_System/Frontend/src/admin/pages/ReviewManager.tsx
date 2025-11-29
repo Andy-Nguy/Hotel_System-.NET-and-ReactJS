@@ -29,14 +29,20 @@ import {
 import reviewApi from "../../api/review.Api";
 
 interface Review {
-  IDDanhGia?: number;
-  IddatPhong?: string;
-  Rating?: number;
-  Title?: string;
-  Content?: string;
-  IsAnonym?: number;
-  IsApproved?: number;
-  CreatedAt?: string;
+  id?: number;
+  bookingId?: string;
+  roomId?: string;
+  roomName?: string;
+  roomType?: string;
+  customerId?: number;
+  customerName?: string;
+  rating?: number;
+  title?: string;
+  content?: string;
+  isAnonym?: boolean;
+  isApproved?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 const ReviewManager: React.FC = () => {
@@ -55,11 +61,10 @@ const ReviewManager: React.FC = () => {
   const loadReviews = async () => {
     setLoading(true);
     try {
-      // Since we don't have a GET all reviews endpoint yet, this is a placeholder
-      // In production, add /api/Review endpoint to fetch all reviews
-      message.info(
-        "Tính năng này sẽ được kích hoạt khi backend thêm endpoint /api/Review"
-      );
+      const response = await fetch(`${API_BASE}/Review?page=1&pageSize=50&status=${keyword ? '' : 'pending'}&keyword=${keyword || ''}`);
+      if (!response.ok) throw new Error('Failed to fetch reviews');
+      const data = await response.json();
+      setReviews(data.reviews || []);
     } catch (e: any) {
       message.error(e?.message || "Không thể tải danh sách đánh giá");
     } finally {
@@ -79,27 +84,45 @@ const ReviewManager: React.FC = () => {
   const columns = [
     {
       title: "Mã ĐP",
-      dataIndex: "IddatPhong",
-      key: "IddatPhong",
+      dataIndex: "bookingId",
+      key: "bookingId",
       width: 100,
     },
     {
+      title: "Phòng",
+      dataIndex: "roomName",
+      key: "roomName",
+      width: 120,
+      render: (roomName: string, record: Review) => (
+        <div>
+          <div>{roomName}</div>
+          <small style={{ color: '#666' }}>{record.roomType}</small>
+        </div>
+      ),
+    },
+    {
+      title: "Khách hàng",
+      dataIndex: "customerName",
+      key: "customerName",
+      width: 150,
+    },
+    {
       title: "Đánh giá",
-      dataIndex: "Rating",
-      key: "Rating",
+      dataIndex: "rating",
+      key: "rating",
       width: 120,
       render: (rating: number) => <Rate disabled value={rating} />,
     },
     {
       title: "Tiêu đề",
-      dataIndex: "Title",
-      key: "Title",
+      dataIndex: "title",
+      key: "title",
       width: 200,
     },
     {
       title: "Nội dung",
-      dataIndex: "Content",
-      key: "Content",
+      dataIndex: "content",
+      key: "content",
       render: (text: string) => (
         <span title={text} style={{ maxWidth: 200 }}>
           {text?.substring(0, 50)}...
@@ -108,16 +131,16 @@ const ReviewManager: React.FC = () => {
     },
     {
       title: "Ẩn danh",
-      dataIndex: "IsAnonym",
-      key: "IsAnonym",
-      render: (isAnonym: number) =>
+      dataIndex: "isAnonym",
+      key: "isAnonym",
+      render: (isAnonym: boolean) =>
         isAnonym ? <Tag color="blue">Ẩn danh</Tag> : <Tag>Công khai</Tag>,
     },
     {
       title: "Trạng thái",
-      dataIndex: "IsApproved",
-      key: "IsApproved",
-      render: (isApproved: number) =>
+      dataIndex: "isApproved",
+      key: "isApproved",
+      render: (isApproved: boolean) =>
         isApproved ? (
           <Tag color="green">Đã duyệt</Tag>
         ) : (
@@ -126,8 +149,8 @@ const ReviewManager: React.FC = () => {
     },
     {
       title: "Ngày tạo",
-      dataIndex: "CreatedAt",
-      key: "CreatedAt",
+      dataIndex: "createdAt",
+      key: "createdAt",
       render: (date: string) => new Date(date).toLocaleDateString("vi-VN"),
     },
     {
@@ -148,20 +171,22 @@ const ReviewManager: React.FC = () => {
           >
             Xem
           </Button>
-          <Button
-            type="text"
-            size="small"
-            icon={<CheckOutlined />}
-            onClick={() => approveReview(record.IDDanhGia)}
-          >
-            Duyệt
-          </Button>
+          {!record.isApproved && (
+            <Button
+              type="text"
+              size="small"
+              icon={<CheckOutlined />}
+              onClick={() => approveReview(record.id)}
+            >
+              Duyệt
+            </Button>
+          )}
           <Button
             type="text"
             size="small"
             danger
             icon={<DeleteOutlined />}
-            onClick={() => deleteReview(record.IDDanhGia)}
+            onClick={() => deleteReview(record.id)}
           >
             Xóa
           </Button>
@@ -173,8 +198,9 @@ const ReviewManager: React.FC = () => {
   const approveReview = async (id?: number) => {
     if (!id) return;
     try {
-      await fetch(`${API_BASE}/Review/${id}/approve`, { method: "PUT" });
-      message.success("Đánh giá được duyệt");
+      const response = await fetch(`${API_BASE}/Review/${id}/approve`, { method: "PUT" });
+      if (!response.ok) throw new Error('Failed to approve review');
+      message.success("Đánh giá được duyệt thành công");
       await loadReviews();
     } catch (e) {
       message.error("Duyệt đánh giá thất bại");
@@ -188,8 +214,9 @@ const ReviewManager: React.FC = () => {
       content: "Bạn có chắc chắn muốn xóa đánh giá này?",
       onOk: async () => {
         try {
-          await fetch(`${API_BASE}/Review/${id}`, { method: "DELETE" });
-          message.success("Đánh giá được xóa");
+          const response = await fetch(`${API_BASE}/Review/${id}`, { method: "DELETE" });
+          if (!response.ok) throw new Error('Failed to delete review');
+          message.success("Đánh giá được xóa thành công");
           await loadReviews();
         } catch (e) {
           message.error("Xóa đánh giá thất bại");
@@ -199,9 +226,9 @@ const ReviewManager: React.FC = () => {
   };
 
   const getApprovalStats = () => {
-    if (!stats) return { approved: 0, pending: 0 };
-    const approved = reviews.filter((r) => r.IsApproved).length;
-    const pending = reviews.filter((r) => !r.IsApproved).length;
+    if (!reviews) return { approved: 0, pending: 0 };
+    const approved = reviews.filter((r) => r.isApproved === true).length;
+    const pending = reviews.filter((r) => r.isApproved === false).length;
     return { approved, pending };
   };
 
@@ -347,14 +374,20 @@ const ReviewManager: React.FC = () => {
               {selectedReview && (
                 <div style={{ lineHeight: 1.8 }}>
                   <div style={{ marginBottom: 12 }}>
-                    <strong>Mã đặt phòng:</strong> {selectedReview.IddatPhong}
+                    <strong>Mã đặt phòng:</strong> {selectedReview.bookingId}
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <strong>Phòng:</strong> {selectedReview.roomName} ({selectedReview.roomType})
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <strong>Khách hàng:</strong> {selectedReview.customerName}
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <strong>Đánh giá:</strong>{" "}
-                    <Rate disabled value={selectedReview.Rating} />
+                    <Rate disabled value={selectedReview.rating} />
                   </div>
                   <div style={{ marginBottom: 12 }}>
-                    <strong>Tiêu đề:</strong> {selectedReview.Title}
+                    <strong>Tiêu đề:</strong> {selectedReview.title}
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <strong>Nội dung:</strong>
@@ -366,16 +399,16 @@ const ReviewManager: React.FC = () => {
                         marginTop: 4,
                       }}
                     >
-                      {selectedReview.Content}
+                      {selectedReview.content}
                     </div>
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <strong>Ẩn danh:</strong>{" "}
-                    {selectedReview.IsAnonym ? "Có" : "Không"}
+                    {selectedReview.isAnonym ? "Có" : "Không"}
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <strong>Trạng thái:</strong>{" "}
-                    {selectedReview.IsApproved ? (
+                    {selectedReview.isApproved ? (
                       <Tag color="green">Đã duyệt</Tag>
                     ) : (
                       <Tag color="orange">Chờ duyệt</Tag>
@@ -383,7 +416,7 @@ const ReviewManager: React.FC = () => {
                   </div>
                   <div>
                     <strong>Ngày tạo:</strong>{" "}
-                    {new Date(selectedReview.CreatedAt || "").toLocaleString(
+                    {new Date(selectedReview.createdAt || "").toLocaleString(
                       "vi-VN"
                     )}
                   </div>
