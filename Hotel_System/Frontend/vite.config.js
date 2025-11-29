@@ -25,6 +25,12 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      "/images": {
+        target: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
+        // target: "https://localhost:5001",
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   // Build output goes directly into the backend wwwroot so the .NET app can serve it

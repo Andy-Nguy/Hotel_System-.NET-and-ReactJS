@@ -43,7 +43,7 @@ const Badge: React.FC<{ status?: string | null }> = ({ status }) => {
 const RoomManager: React.FC = () => {
   const [types, setTypes] = useState<RoomType[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // per-room loading state for quick toggle actions
   const [roomLoading, setRoomLoading] = useState<Record<string, boolean>>({});

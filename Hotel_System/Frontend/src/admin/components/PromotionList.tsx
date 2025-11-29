@@ -39,6 +39,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
   const [filterDiscountType, setFilterDiscountType] = useState<string | undefined>();
+  const [filterPromotionType, setFilterPromotionType] = useState<string | undefined>();
 
   const handleDelete = async (id: string) => {
     try {
@@ -87,17 +88,40 @@ const PromotionList: React.FC<PromotionListProps> = ({
     return type === "percent" ? "% Giảm" : "Giảm Tiền";
   };
 
+  const getPromotionTypeLabel = (type?: string) => {
+    switch (type) {
+      case "room":
+        return <Tag color="blue">Phòng</Tag>;
+      case "service":
+        return <Tag color="purple">Dịch Vụ</Tag>;
+      case "combo":
+        return <Tag color="cyan">Combo</Tag>;
+      case "room_service":
+        return <Tag color="magenta">Phòng + Dịch Vụ</Tag>;
+      case "customer":
+        return <Tag color="gold">Khách Hàng</Tag>;
+      default:
+        return <Tag>Không xác định</Tag>;
+    }
+  };
+
   const columns = [
     {
       title: "Tên Khuyến Mãi",
       dataIndex: "tenKhuyenMai",
       key: "tenKhuyenMai",
-      width: 200,
+      width: 180,
+    },
+    {
+      title: "Loại KM",
+      key: "loaiKhuyenMai",
+      width: 130,
+      render: (_: any, record: Promotion) => getPromotionTypeLabel(record.loaiKhuyenMai),
     },
     {
       title: "Banner",
       key: "banner",
-      width: 120,
+      width: 100,
       render: (_: any, record: Promotion) =>
         record.hinhAnhBanner ? (
           <Image
@@ -150,7 +174,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
     {
       title: "Trạng Thái",
       key: "trangThai",
-      width: 150,
+      width: 120,
       render: (_: any, record: Promotion) => getStatusTag(record.trangThai),
     },
     {
@@ -224,6 +248,23 @@ const PromotionList: React.FC<PromotionListProps> = ({
             ]}
           />
         </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Select
+            placeholder="Lọc theo loại khuyến mãi"
+            allowClear
+            value={filterPromotionType}
+            onChange={(value) => {
+              setFilterPromotionType(value);
+            }}
+            options={[
+              { label: "Phòng", value: "room" },
+              { label: "Dịch Vụ", value: "service" },
+              { label: "Combo", value: "combo" },
+              { label: "Phòng + Dịch Vụ", value: "room_service" },
+              { label: "Khách Hàng", value: "customer" },
+            ]}
+          />
+        </Col>
       </Row>
 
       {/* Small inline style to indicate rows are clickable */}
@@ -231,10 +272,12 @@ const PromotionList: React.FC<PromotionListProps> = ({
 
       <Table
         columns={columns}
-        dataSource={promotions.map((p) => ({
-          ...p,
-          key: p.idkhuyenMai,
-        }))}
+        dataSource={promotions
+          .filter((p) => !filterPromotionType || p.loaiKhuyenMai === filterPromotionType)
+          .map((p) => ({
+            ...p,
+            key: p.idkhuyenMai,
+          }))}
         loading={loading}
         pagination={{ pageSize: 10, showSizeChanger: true }}
         scroll={{ x: 1200 }}

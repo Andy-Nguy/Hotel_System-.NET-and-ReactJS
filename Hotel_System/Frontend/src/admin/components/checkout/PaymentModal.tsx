@@ -35,11 +35,15 @@ const deriveServerRowsFromSummary = (s: any) => {
   if (!Array.isArray(raw)) return [];
   return raw.map((r: any) => {
     const id = r.IddichVu ?? r.iddichVu ?? r.IdDichVu ?? r.Id ?? r.id ?? null;
-    const serviceName = r.TenDichVu ?? r.tenDichVu ?? r.serviceName ?? r.Ten ?? r.name ?? r.ten ?? '';
+    const comboId = r.IdkhuyenMaiCombo ?? r.idkhuyenMaiCombo ?? r.IDKhuyenMaiCombo ?? null;
+    
+    // If this is a combo, try to use combo name from API; otherwise use service name
+    let serviceName = r.TenDichVu ?? r.tenDichVu ?? r.serviceName ?? r.Ten ?? r.name ?? r.ten ?? '';
+    
     const qty = Number(r.soLuong ?? r.SoLuong ?? r.quantity ?? r.Quantity ?? 1) || 1;
     const price = Number(r.donGia ?? r.DonGia ?? r.price ?? r.gia ?? r.Gia ?? 0) || 0;
     const amount = Number(r.TienDichVu ?? r.tienDichVu ?? r.ThanhTien ?? r.thanhTien ?? r.amount ?? price * qty) || price * qty;
-    return { serviceName: serviceName || (id ? `Dịch vụ ${id}` : ''), price, amount, qty, raw: r };
+    return { serviceName: serviceName || (comboId ? `Combo` : (id ? `Dịch vụ ${id}` : '')), price, amount, qty, raw: r, comboId };
   });
 };
 
@@ -58,45 +62,91 @@ useEffect(() => {
   }
 }, [summary]);
 
+// Helper function to get combo name from API
+const getComboName = async (comboId: string): Promise<string | null> => {
+  try {
+    const response = await fetch(`/api/KhuyenMaiCombo/${comboId}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.tenCombo || data.TenCombo || null;
+    }
+  } catch (err) {
+    console.debug('[PaymentModal] combo lookup failed for', comboId, err);
+  }
+  return null;
+};
+
 // When dbServices are present, ensure we resolve service names from service API
 useEffect(() => {
   let mounted = true;
   const missingIds = new Set<string>();
+  const missingCombos = new Set<string>();
+  
   (dbServices || []).forEach(d => {
     const raw = d?.raw ?? {};
-    const id = raw?.IddichVu ?? raw?.iddichVu ?? raw?.IDDichVu ?? raw?.IDDichVu ?? raw?.IdDichVu ?? raw?.Id ?? raw?.iddichVu ?? null;
+    const id = raw?.IddichVu ?? raw?.iddichVu ?? raw?.IDDichVu ?? raw?.IdDichVu ?? raw?.Id ?? raw?.iddichvU ?? null;
+    const comboId = raw?.IdkhuyenMaiCombo ?? raw?.idkhuyenMaiCombo ?? raw?.IDKhuyenMaiCombo ?? null;
     const hasName = d && d.serviceName && String(d.serviceName).trim().length > 0;
-    if (id && !hasName && !serviceNameCache.current[String(id)]) missingIds.add(String(id));
+    
+    // If this is a combo service, try to resolve combo name
+    if (comboId && !hasName && !serviceNameCache.current[`combo:${String(comboId)}`]) {
+      missingCombos.add(String(comboId));
+    } else if (id && !hasName && !serviceNameCache.current[String(id)]) {
+      // Otherwise resolve regular service name
+      missingIds.add(String(id));
+    }
   });
-  if (missingIds.size === 0) return;
+  
+  if (missingIds.size === 0 && missingCombos.size === 0) return;
+  
   (async () => {
     try {
       const promises: Array<Promise<void>> = [];
+      
+      // Fetch regular services
       missingIds.forEach(id => {
         const p = getServiceById(id).then(svc => {
           if (!mounted) return;
-          const name = svc?.tenDichVu ?? svc?.tenDichVu ?? svc?.tenDichVu ?? '';
+          const name = svc?.tenDichVu ?? '';
           if (name) serviceNameCache.current[id] = name;
         }).catch(err => {
-          // ignore missing service
-          // eslint-disable-next-line no-console
           console.debug('[PaymentModal] service lookup failed for', id, err?.message ?? err);
         });
         promises.push(p as Promise<void>);
       });
+      
+      // Fetch combos
+      missingCombos.forEach(comboId => {
+        const p = getComboName(comboId).then(name => {
+          if (!mounted) return;
+          if (name) serviceNameCache.current[`combo:${comboId}`] = name;
+        }).catch(err => {
+          console.debug('[PaymentModal] combo lookup failed for', comboId, err?.message ?? err);
+        });
+        promises.push(p as Promise<void>);
+      });
+      
       await Promise.all(promises);
       if (!mounted) return;
-      // update dbServices with cached names
+      
+      // Update dbServices with cached names
       setDbServices(prev => (prev || []).map(d => {
         const raw = d?.raw ?? {};
-        const id = raw?.IddichVu ?? raw?.iddichVu ?? raw?.IDDichVu ?? raw?.IDDichVu ?? raw?.IdDichVu ?? raw?.Id ?? raw?.iddichVu ?? null;
+        const id = raw?.IddichVu ?? raw?.iddichVu ?? raw?.IDDichVu ?? raw?.IdDichVu ?? raw?.Id ?? raw?.iddichVu ?? null;
+        const comboId = raw?.IdkhuyenMaiCombo ?? raw?.idkhuyenMaiCombo ?? raw?.IDKhuyenMaiCombo ?? null;
+        
+        // Try to get combo name first if this is a combo service
+        if (comboId && serviceNameCache.current[`combo:${String(comboId)}`] && (!d.serviceName || String(d.serviceName).trim().length === 0)) {
+          return { ...d, serviceName: serviceNameCache.current[`combo:${String(comboId)}`] };
+        }
+        // Otherwise try regular service name
         if (id && serviceNameCache.current[String(id)] && (!d.serviceName || String(d.serviceName).trim().length === 0)) {
           return { ...d, serviceName: serviceNameCache.current[String(id)] };
         }
         return d;
       }));
     } catch (e) {
-      // ignore
+      console.debug('[PaymentModal] service/combo resolution failed', e);
     }
   })();
   return () => { mounted = false; };
@@ -119,11 +169,12 @@ useEffect(() => {
       const svcRaw = (detailAny?.services ?? detailAny?.chiTietHoaDons ?? detailAny?.CTHDDV ?? detailAny?.cthddv) ?? [];
       if (Array.isArray(svcRaw) && svcRaw.length > 0) {
         setDbServices(svcRaw.map((r: any) => {
+          const comboId = r.IdkhuyenMaiCombo ?? r.idkhuyenMaiCombo ?? r.IDKhuyenMaiCombo ?? null;
           const serviceName = r.tenDichVu ?? r.TenDichVu ?? r.serviceName ?? r.Ten ?? r.ten ?? '';
           const qty = Number(r.soLuong ?? r.SoLuong ?? r.quantity ?? r.Quantity ?? 1) || 1;
           const price = Number(r.donGia ?? r.DonGia ?? r.price ?? r.gia ?? r.Gia ?? 0) || 0;
           const amount = Number(r.TienDichVu ?? r.tienDichVu ?? r.ThanhTien ?? r.thanhTien ?? r.amount ?? price * qty) || price * qty;
-          return { serviceName, price, amount, qty, raw: r };
+          return { serviceName, price, amount, qty, raw: r, comboId };
         }));
       }
     } catch (err) {
@@ -150,11 +201,12 @@ useEffect(() => {
       const svcRaw = (detailAny?.services ?? detailAny?.chiTietHoaDons ?? detailAny?.CTHDDV ?? detailAny?.cthddv) ?? [];
       if (Array.isArray(svcRaw) && svcRaw.length > 0) {
         setDbServices(svcRaw.map((r: any) => {
+          const comboId = r.IdkhuyenMaiCombo ?? r.idkhuyenMaiCombo ?? r.IDKhuyenMaiCombo ?? null;
           const serviceName = r.tenDichVu ?? r.TenDichVu ?? r.serviceName ?? r.Ten ?? r.ten ?? '';
           const qty = Number(r.soLuong ?? r.SoLuong ?? r.quantity ?? r.Quantity ?? 1) || 1;
           const price = Number(r.donGia ?? r.DonGia ?? r.price ?? r.gia ?? r.Gia ?? 0) || 0;
           const amount = Number(r.TienDichVu ?? r.tienDichVu ?? r.ThanhTien ?? r.thanhTien ?? r.amount ?? price * qty) || price * qty;
-          return { serviceName, price, amount, qty, raw: r };
+          return { serviceName, price, amount, qty, raw: r, comboId };
         }));
       }
     } catch (err) {
