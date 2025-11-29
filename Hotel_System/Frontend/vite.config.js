@@ -37,13 +37,9 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      "/admin": {
-        target: "https://localhost:5001",
-        changeOrigin: true,
-        secure: false,
-        rejectUnauthorized: false,
-      },
     },
+    // Enable SPA fallback - redirect all routes to index.html
+    historyApiFallback: true,
   },
   // Build output goes directly into the backend wwwroot so the .NET app can serve it
   build: {
