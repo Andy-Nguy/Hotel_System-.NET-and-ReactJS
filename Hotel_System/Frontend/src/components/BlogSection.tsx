@@ -1,7 +1,64 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import blogPosts from "../data/blogPosts";
 
+interface BlogPost {
+  id: number;
+  title: string;
+  category: string;
+  type: "internal" | "external";
+  externalLink?: string;
+  image: string;
+  date: string;
+  excerpt?: string;
+  author?: string;
+  tags?: string[];
+  content?: string;
+  images?: string[];
+  status?: string;
+}
+
 const BlogSection: React.FC = () => {
+  const [featuredBlogs, setFeaturedBlogs] = useState<BlogPost[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch top 5 featured/published blogs from API
+  useEffect(() => {
+    const fetchBlogs = async () => {
+      try {
+        const res = await fetch('/api/blog?limit=5');
+        if (res.ok) {
+          const data = await res.json();
+          // Map API response to BlogPost format
+          const mapped = (data as any[]).slice(0, 5).map(d => ({
+            id: d.id,
+            title: d.title || '',
+            category: d.category || '',
+            type: (d.type || 'internal') as 'internal' | 'external',
+            image: d.image || '',
+            date: d.date || d.publishedAt || '',
+            excerpt: d.excerpt || '',
+            author: d.author || '',
+            tags: typeof d.tags === 'string' ? d.tags.split(',').map((t: string) => t.trim()) : (d.tags || []),
+            content: d.content || '',
+            images: d.images || [],
+            externalLink: d.externalLink || '',
+            status: d.status || '',
+          } as BlogPost));
+          setFeaturedBlogs(mapped.length > 0 ? mapped : blogPosts.slice(0, 5));
+        } else {
+          // Fallback to local data if API fails
+          setFeaturedBlogs(blogPosts.slice(0, 5));
+        }
+      } catch (e) {
+        console.warn('Blog API not reachable, using local posts');
+        setFeaturedBlogs(blogPosts.slice(0, 5));
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBlogs();
+  }, []);
+
   // Style chung cho lớp phủ (overlay) để làm hình ảnh tối đi và làm nổi bật chữ trắng
   const overlayStyle: React.CSSProperties = {
     position: 'absolute',
@@ -12,6 +69,20 @@ const BlogSection: React.FC = () => {
     backgroundColor: 'rgba(0, 0, 0, 0.3)', // Lớp phủ màu đen 30%
     transition: 'background-color 0.3s ease',
   };
+
+  if (loading) {
+    return (
+      <section className="blog-section spad">
+        <div className="container">
+          <div className="row">
+            <div className="col-lg-12 text-center">
+              <p>Đang tải bài viết...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   // Cấu trúc layout 6+6 / 4+4+4 (hoặc 4+8) đã được thiết lập sẵn trong component
   return (
@@ -34,7 +105,7 @@ const BlogSection: React.FC = () => {
         
         {/* Phần Nội dung Blog - Layout Sang trọng */}
         <div className="row mt-4">
-          {blogPosts.map((post, idx) => {
+          {featuredBlogs.map((post, idx) => {
             // Determine column sizes based on index to preserve original layout
             let colClass = "col-lg-4 col-md-6 mb-4";
             let minHeight = "300px";

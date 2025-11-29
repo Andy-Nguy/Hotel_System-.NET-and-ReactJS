@@ -67,6 +67,8 @@ CREATE TABLE Phong (
 ALTER TABLE Phong
 ALTER COLUMN TenPhong NVARCHAR(50);
 
+select * from Phong;
+
 INSERT INTO LoaiPhong (IDLoaiPhong, TenLoaiPhong, MoTa, UrlAnhLoaiPhong)
 VALUES
 ('LP01', N'Deluxe Room', 
@@ -320,7 +322,7 @@ CREATE TABLE DatPhong (
     TongTien DECIMAL(18,2) NOT NULL,
     TienCoc DECIMAL(18,2) DEFAULT 0,
     TrangThai INT NOT NULL,          -- 1:Chờ XN, 2:Đã XN, 0:Hủy, 3:Đang dùng, 4:Hoàn thành
-    TrangThaiThanhToan INT NOT NULL, -- 1:Chưa TT, 2:Đã TT, 0:Đã cọc,
+    TrangThaiThanhToan INT NOT NULL, -- 1:Chưa TT, 2:Đã TT, 0:Đã cọc
     CONSTRAINT FK_DatPhong_KhachHang FOREIGN KEY (IDKhachHang)
         REFERENCES KhachHang(IDKhachHang)
         ON DELETE SET NULL ON UPDATE CASCADE,
@@ -329,7 +331,34 @@ CREATE TABLE DatPhong (
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- Thêm dữ liệu mẫu cho DatPhong để test
+ALTER TABLE DatPhong;
+ADD SoNguoi int,
+SoLuongPhong int,
+ThoiHan DATETIME2(7)
+
+CREATE TABLE ChiTietDatPhong (
+    IDChiTiet INT IDENTITY(1,1) PRIMARY KEY,
+    IDDatPhong NVARCHAR(50) NOT NULL,
+    IDPhong NVARCHAR(50) NOT NULL,
+    SoDem INT NOT NULL,
+    GiaPhong DECIMAL(18,2) NOT NULL,
+    ThanhTien DECIMAL(18,2) NOT NULL,
+    GhiChu NVARCHAR(MAX),
+    
+    CONSTRAINT FK_ChiTietDatPhong_DatPhong 
+        FOREIGN KEY (IDDatPhong) REFERENCES DatPhong(IDDatPhong)
+        ON DELETE CASCADE ON UPDATE NO ACTION,
+    
+    CONSTRAINT FK_ChiTietDatPhong_Phong 
+        FOREIGN KEY (IDPhong) REFERENCES Phong(IDPhong)
+        ON DELETE NO ACTION ON UPDATE NO ACTION,
+    
+    -- Đảm bảo không đặt trùng phòng trong cùng 1 đơn
+    CONSTRAINT UQ_DatPhong_Phong UNIQUE (IDDatPhong, IDPhong)
+);
+GO
+
+
 INSERT INTO DatPhong (
     IDDatPhong, IDKhachHang, IDPhong, NgayDatPhong,
     NgayNhanPhong, NgayTraPhong, SoDem,
@@ -339,7 +368,7 @@ VALUES
 ('DP003', 1, 'P102', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 4, 2),  -- Hoàn thành (quá khứ)
 ('DP002', 1, 'P301', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 2, 2),  -- Hoàn thành (quá khứ)
 
-('DP004', 2, 'P101', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 2, 1); -- Đã xác nhận (tương lai)
+('DP004', 1, 'P101', '2025-11-11', '2025-11-11', '2025-11-12', 2, 1000000, 200000, 2, 1); -- Đã xác nhận (tương lai)
 
 GO
 
@@ -367,11 +396,16 @@ CREATE TABLE DichVu (
     IDDichVu NVARCHAR(50) PRIMARY KEY,
     TenDichVu NVARCHAR(100) NOT NULL,
     TienDichVu DECIMAL(18,2) DEFAULT 0,
-    HinhDichVu NVARCHAR(255),
-    ThoiGianBatDau TIME NULL,
-    ThoiGianKetThuc TIME NULL,
-    TrangThai NVARCHAR(50) DEFAULT N'Đang hoạt động'
+    HinhDichVu NVARCHAR(255)
 );
+
+ALTER TABLE DichVu
+ADD ThoiGianBatDau TIME NULL,
+    TrangThai NVARCHAR(50),
+    ThoiGianKetThuc TIME NULL;
+
+ALTER TABLE DichVu
+ADD TrangThai NVARCHAR(50);
 
 CREATE TABLE TTDichVu (
     IDTTDichVu NVARCHAR(50) PRIMARY KEY,
@@ -399,6 +433,15 @@ CREATE TABLE CTHDDV (
         REFERENCES DichVu(IDDichVu)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+ALTER TABLE CTHDDV
+ADD IDKhuyenMaiCombo NVARCHAR(50) NULL;
+ALTER TABLE CTHDDV
+ADD CONSTRAINT FK_CTHDDV_KhuyenMaiCombo
+FOREIGN KEY (IDKhuyenMaiCombo)
+REFERENCES KhuyenMaiCombo(IDKhuyenMaiCombo);
+
+select * from CTHDDV
 
 ALTER TABLE CTHDDV
 ADD ThoiGianBatDau DATETIME2 NULL,
@@ -464,6 +507,7 @@ CREATE TABLE DanhGia (
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+select * from DanhGia;
 -------------------------------------------
 -- 8) KHUYẾN MẠI (MỚI)
 -------------------------------------------
@@ -482,6 +526,16 @@ CREATE TABLE KhuyenMai (
     CONSTRAINT CK_KhuyenMai_Ngay CHECK (NgayBatDau <= NgayKetThuc)
 );
 
+ALTER TABLE KhuyenMai
+ADD 
+    HinhAnhBanner NVARCHAR(255) NULL;
+
+ALTER TABLE KhuyenMai
+ADD LoaiKhuyenMai VARCHAR(20) NOT NULL
+CHECK (LoaiKhuyenMai IN ('room','service','combo','room_service', 'customer'))
+DEFAULT 'room';
+
+
 CREATE TABLE KhuyenMaiPhong (
     ID INT IDENTITY(1,1) PRIMARY KEY,
     IDKhuyenMai NVARCHAR(50) NOT NULL,
@@ -499,6 +553,87 @@ CREATE TABLE KhuyenMaiPhong (
     CONSTRAINT FK_KhuyenMaiPhong_Phong
         FOREIGN KEY (IDPhong) REFERENCES Phong(IDPhong)
         ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE KhuyenMaiDichVu (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    IDKhuyenMai NVARCHAR(50) NOT NULL,
+    IDDichVu NVARCHAR(50) NOT NULL,
+    IsActive BIT NOT NULL DEFAULT (0),
+    NgayApDung DATE DEFAULT (CONVERT(date, GETDATE())),
+    NgayKetThuc DATE NULL,
+    created_at DATETIME2 DEFAULT (GETDATE()),
+    updated_at DATETIME2 DEFAULT (GETDATE()),
+    CONSTRAINT FK_KhuyenMaiDichVu_KhuyenMai
+        FOREIGN KEY (IDKhuyenMai) REFERENCES KhuyenMai(IDKhuyenMai)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT FK_KhuyenMaiDichVu_DichVu
+        FOREIGN KEY (IDDichVu) REFERENCES DichVu(IDDichVu)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+GO
+
+CREATE TABLE KhuyenMaiCombo (
+IDKhuyenMaiCombo NVARCHAR(50) PRIMARY KEY,
+IDKhuyenMai NVARCHAR(50) NOT NULL,
+TenCombo NVARCHAR(200) NOT NULL,
+MoTa NVARCHAR(MAX),
+NgayBatDau DATE DEFAULT (CONVERT(date, GETDATE())),
+NgayKetThuc DATE NULL,
+TrangThai VARCHAR(10) DEFAULT 'active' CHECK (TrangThai IN ('active','inactive','expired')),
+created_at DATETIME2 DEFAULT (GETDATE()),
+updated_at DATETIME2 DEFAULT (GETDATE()),
+
+CONSTRAINT FK_KhuyenMaiCombo_KhuyenMai FOREIGN KEY (IDKhuyenMai)
+    REFERENCES KhuyenMai(IDKhuyenMai)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+
+);
+
+CREATE TABLE KhuyenMaiComboDichVu (
+ID INT IDENTITY(1,1) PRIMARY KEY,
+IDKhuyenMaiCombo NVARCHAR(50) NOT NULL,
+IDDichVu NVARCHAR(50) NOT NULL,
+IsActive BIT NOT NULL DEFAULT 0,
+created_at DATETIME2 DEFAULT (GETDATE()),
+updated_at DATETIME2 DEFAULT (GETDATE()),
+
+CONSTRAINT FK_KhuyenMaiComboDichVu_Combo FOREIGN KEY (IDKhuyenMaiCombo)
+    REFERENCES KhuyenMaiCombo(IDKhuyenMaiCombo)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+CONSTRAINT FK_KhuyenMaiComboDichVu_DichVu FOREIGN KEY (IDDichVu)
+    REFERENCES DichVu(IDDichVu)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+
+);
+
+CREATE TABLE KhuyenMaiPhongDichVu (
+ID INT IDENTITY(1,1) PRIMARY KEY,
+IDKhuyenMai NVARCHAR(50) NOT NULL,
+IDPhong NVARCHAR(50) NOT NULL,
+IDDichVu NVARCHAR(50) NOT NULL,
+IsActive BIT NOT NULL DEFAULT 0,
+NgayApDung DATE DEFAULT (CONVERT(date, GETDATE())),
+NgayKetThuc DATE NULL,
+created_at DATETIME2 DEFAULT (GETDATE()),
+updated_at DATETIME2 DEFAULT (GETDATE()),
+
+CONSTRAINT FK_KhuyenMaiPhongDichVu_KhuyenMai FOREIGN KEY (IDKhuyenMai)
+    REFERENCES KhuyenMai(IDKhuyenMai)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+CONSTRAINT FK_KhuyenMaiPhongDichVu_Phong FOREIGN KEY (IDPhong)
+    REFERENCES Phong(IDPhong)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+CONSTRAINT FK_KhuyenMaiPhongDichVu_DichVu FOREIGN KEY (IDDichVu)
+    REFERENCES DichVu(IDDichVu)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+
 );
 
 CREATE PROCEDURE sp_CapNhatTrangThaiKhuyenMai
@@ -524,36 +659,6 @@ BEGIN
 END;
 GO
 
-INSERT INTO KhuyenMai
-    (IDKhuyenMai, TenKhuyenMai, MoTa, LoaiGiamGia, GiaTriGiam, NgayBatDau, NgayKetThuc, TrangThai)
-VALUES
-('KM001', N'Giảm 20% dịch vụ Spa mùa hè 2025', 
- N'Áp dụng cho khách đặt phòng Deluxe hoặc Executive từ 01/06 đến 31/08/2025.', 
- 'percent', 20.00, '2025-06-01', '2025-08-31', 'active'),
-
-('KM002', N'Giảm 300.000đ khi thuê xe Limousine Hà Nội', 
- N'Khách đặt Tour Hà Nội 3 giờ bằng Limousine nhận giảm 300.000đ mỗi lượt.', 
- 'amount', 300000.00, '2025-07-01', '2025-09-30', 'active'),
-
-('KM003', N'Combo Buffet sáng & In-room Dining', 
- N'Giảm 15% khi kết hợp Buffet sáng tại JW Café và ăn tại phòng vào cuối tuần.', 
- 'percent', 15.00, '2025-01-01', '2025-12-31', 'active');
-
-INSERT INTO KhuyenMaiPhong
-    (IDKhuyenMai, IDPhong, IsActive, NgayApDung, NgayKetThuc)
-VALUES
--- Spa mùa hè áp dụng cho Deluxe & Executive
-('KM001', 'P101', 1, '2025-06-01', '2025-08-31'),
-('KM001', 'P102', 1, '2025-06-01', '2025-08-31'),
-('KM001', 'P201', 1, '2025-06-01', '2025-08-31'),
-
--- Thuê xe Limousine áp dụng cho Executive Suite
-('KM002', 'P301', 1, '2025-07-01', '2025-09-30'),
-
--- Combo Buffet sáng + In-room Dining áp dụng cho các phòng cao cấp
-('KM003', 'P401', 1, '2025-01-01', '2025-12-31'),
-('KM003', 'P501', 1, '2025-01-01', '2025-12-31'),
-('KM003', 'P601', 1, '2025-01-01', '2025-12-31');
 /* =========================================
    9) THỐNG KÊ DOANH THU KHÁCH SẠN (LIÊN KẾT TRỰC TIẾP)
 ========================================= */
@@ -587,7 +692,6 @@ CREATE TABLE ThongKeDoanhThuKhachSan (
         ON DELETE NO ACTION ON UPDATE NO ACTION
 );
 GO
-
 
 CREATE PROCEDURE sp_TopPhong2025
     @Top INT = 5  -- Số lượng phòng muốn lấy

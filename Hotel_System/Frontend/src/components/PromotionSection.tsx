@@ -389,7 +389,7 @@ const PromotionSection: React.FC = () => {
         }
         onCancel={() => setModalVisible(false)}
   width={820}
-  bodyStyle={{ maxHeight: "70vh", overflowY: "auto" }}
+  styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
       >
         {modalLoading || !selectedPromo ? (
           <div style={{ textAlign: "center", padding: 40 }}>
