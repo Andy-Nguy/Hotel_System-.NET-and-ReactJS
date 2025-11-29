@@ -20,8 +20,10 @@ QuestPDF.Settings.License = LicenseType.Community;
 builder.Services.AddControllers()
     .AddJsonOptions(opts =>
     {
-        // Use camelCase for JSON
+        // Use camelCase for JSON output
         opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        // Allow deserialization from snake_case or other casing conventions
+        opts.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>

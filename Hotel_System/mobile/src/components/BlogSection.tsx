@@ -26,6 +26,7 @@ interface BlogData {
   content?: string;
   images?: string[];
   status?: string;
+  displayOrder?: number;
 }
 const getCategoryColor = (category: string): string => {
   const colors: { [key: string]: string } = {
@@ -79,7 +80,9 @@ const BlogSection: React.FC = () => {
             continue;
           }
 
-          const mapped: BlogData[] = (data as any[]).slice(0, 5).map((d) => ({
+          const mapped: BlogData[] = (data as any[])
+            .filter(d => (d.status || d.Status || '').toString().toUpperCase() === 'PUBLISHED' && (d.displayOrder !== undefined && d.displayOrder !== null))
+            .map((d) => ({
             id: d.id || d.Id,
             title: d.title || d.Title || "",
             category: d.category || d.Category || "Blog",
@@ -93,8 +96,11 @@ const BlogSection: React.FC = () => {
             content: d.content || d.Content || "",
             images: d.images || d.Images || [],
             status: d.status || d.Status || "published",
+            displayOrder: typeof d.displayOrder === 'number' ? d.displayOrder : (typeof d.displayOrder === 'string' && !isNaN(parseInt(d.displayOrder)) ? parseInt(d.displayOrder) : undefined),
           }));
-          setBlogsData(mapped);
+          // Sort by displayOrder ascending and take up to 5
+          mapped.sort((a, b) => (typeof a.displayOrder === 'number' ? a.displayOrder! : 999) - (typeof b.displayOrder === 'number' ? b.displayOrder! : 999));
+          setBlogsData(mapped.slice(0, 5));
           setLoading(false);
           console.log(`✅ Blog data loaded from ${endpoint}`);
           return;

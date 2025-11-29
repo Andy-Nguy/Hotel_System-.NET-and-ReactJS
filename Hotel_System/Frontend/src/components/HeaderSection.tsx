@@ -191,10 +191,10 @@ const HeaderSection: React.FC = () => {
               <div className="col-lg-6">
                 <ul className="tn-left">
                   <li>
-                    <i className="fa fa-phone"></i> (12) 345 67890
+                    <i className="fa fa-phone"></i> 0123 456 789
                   </li>
                   <li>
-                    <i className="fa fa-envelope"></i> info.colorlib@gmail.com
+                    <i className="fa fa-envelope"></i> info.robinsvilla@gmail.com
                   </li>
                 </ul>
               </div>
@@ -207,9 +207,7 @@ const HeaderSection: React.FC = () => {
                     <a href="#">
                       <i className="fa fa-twitter"></i>
                     </a>
-                    <a href="#">
-                      <i className="fa fa-tripadvisor"></i>
-                    </a>
+                    
                     <a href="#">
                       <i className="fa fa-instagram"></i>
                     </a>
@@ -217,22 +215,7 @@ const HeaderSection: React.FC = () => {
                   <a href="/rooms" className="bk-btn">
                     Booking Now
                   </a>
-                  <div className="language-option">
-                    <img src="/img/flag.jpg" alt="" />
-                    <span>
-                      EN <i className="fa fa-angle-down"></i>
-                    </span>
-                    <div className="flag-dropdown">
-                      <ul>
-                        <li>
-                          <a href="#">Zi</a>
-                        </li>
-                        <li>
-                          <a href="#">Fr</a>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
+                
                 </div>
               </div>
             </div>
@@ -545,9 +528,7 @@ const HeaderSection: React.FC = () => {
                       </li>
                     </ul>
                   </nav>
-                  <div className="nav-right search-switch">
-                    <i className="icon_search"></i>
-                  </div>
+                  
                 </div>
               </div>
             </div>

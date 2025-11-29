@@ -35,29 +35,45 @@ namespace Hotel_System.API.Controllers
 
         // Admin image upload endpoint: saves file to wwwroot/images/blog and returns public URL
         [HttpPost("/admin/blogs/upload-image")]
-        public async Task<IActionResult> UploadImage(IFormFile file, [FromQuery] string title = "")
+        public async Task<IActionResult> UploadImage(IFormFile file, [FromQuery] string title = "", [FromQuery] string type = "gallery")
         {
             if (file == null || file.Length == 0) return BadRequest("No file uploaded.");
 
             var webRoot = _env.WebRootPath;
             if (string.IsNullOrEmpty(webRoot)) webRoot = Path.Combine(_env.ContentRootPath, "wwwroot");
-            var imagesDir = Path.Combine(webRoot, "images", "blog");
+            var imagesDir = Path.Combine(webRoot, "img", "blog");
             if (!Directory.Exists(imagesDir)) Directory.CreateDirectory(imagesDir);
 
             var ext = Path.GetExtension(file.FileName);
-            // Generate filename: Blog_[title].[extension]
+            // Generate filename based on type: BlogBanner_[title] or Blog_[title]
             var fileName = string.IsNullOrWhiteSpace(title) 
                 ? Guid.NewGuid().ToString("N") + ext
-                : $"Blog_{Slugify(title)}{ext}";
+                : type == "banner" 
+                    ? $"BlogBanner_{Slugify(title)}{ext}"
+                    : $"Blog_{Slugify(title)}{ext}";
             
             var filePath = Path.Combine(imagesDir, fileName);
+            Console.WriteLine($"[UploadImage] type={type}, title={title}, fileName={fileName}, filePath={filePath}");
+            
             using (var stream = System.IO.File.Create(filePath))
             {
                 await file.CopyToAsync(stream);
             }
 
-            var publicUrl = $"/images/blog/{fileName}";
+            var publicUrl = $"/img/blog/{fileName}";
+            Console.WriteLine($"[UploadImage] Success: {publicUrl}");
             return Ok(new { url = publicUrl });
+        }
+
+        // Delete image file endpoint
+        [HttpDelete("delete-image")]
+        public IActionResult DeleteImage([FromQuery] string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return BadRequest("Image path is required.");
+
+            DeleteImageFile(path);
+            return Ok(new { message = "Image deleted successfully" });
         }
 
         // Admin create endpoint: POST /admin/blogs
@@ -76,6 +92,8 @@ namespace Hotel_System.API.Controllers
             public string ExternalLink { get; set; } = string.Empty;
             public string Slug { get; set; } = string.Empty;
             public string Status { get; set; } = "DRAFT";
+            // Optional display order when creating as PUBLISHED
+            public int? DisplayOrder { get; set; } = null;
         }
 
         /// <summary>
@@ -246,6 +264,19 @@ namespace Hotel_System.API.Controllers
                 PublishedAt = (status == "PUBLISHED") ? (DateTime?)DateTime.UtcNow : null,
             };
 
+            // Handle DisplayOrder if provided in admin creation
+            if (dto.DisplayOrder.HasValue)
+            {
+                if (status != "PUBLISHED")
+                    return BadRequest(new { error = "DisplayOrder can only be set when creating a PUBLISHED post" });
+                if (dto.DisplayOrder < 1 || dto.DisplayOrder > 5)
+                    return BadRequest(new { error = "DisplayOrder must be between 1 and 5" });
+                var conflict = posts.FirstOrDefault(p => string.Equals(p.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && p.DisplayOrder == dto.DisplayOrder);
+                if (conflict != null)
+                    conflict.DisplayOrder = null;
+                post.DisplayOrder = dto.DisplayOrder;
+            }
+
             // ===== SAVE TO FILE =====
             posts.Add(post);
             SaveToFile(posts);
@@ -261,9 +292,12 @@ namespace Hotel_System.API.Controllers
             var posts = LoadFromFile();
             if (!admin)
             {
-                var published = posts.Where(b => string.Equals(b.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase))
-                                     .OrderByDescending(b => b.PublishedAt ?? b.CreatedAt)
+                var published = posts.Where(b => string.Equals(b.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && b.DisplayOrder.HasValue)
+                                     .OrderBy(b => b.DisplayOrder)
+                                     .Take(5)
                                      .ToList();
+                // Debug log: show which IDs and orders are being returned for public API
+                try { Console.WriteLine($"[BlogController] Serving public blogs: {string.Join(',', published.Select(p => p.Id + ":" + p.DisplayOrder))}"); } catch {}
                 return Ok(published);
             }
             return Ok(posts.OrderByDescending(b => b.CreatedAt));
@@ -292,13 +326,34 @@ namespace Hotel_System.API.Controllers
         [HttpPost]
         public IActionResult Create([FromBody] BlogPost model)
         {
-            if (string.IsNullOrWhiteSpace(model.Title) || string.IsNullOrWhiteSpace(model.Category) || string.IsNullOrWhiteSpace(model.Content))
-                return BadRequest("Title, Category and Content are required.");
+            if (string.IsNullOrWhiteSpace(model.Title) || string.IsNullOrWhiteSpace(model.Category))
+                return BadRequest("Title and Category are required.");
+            
+            // For internal blogs, content is required
+            if (model.Type == "internal" && string.IsNullOrWhiteSpace(model.Content))
+                return BadRequest("Content is required for internal blogs.");
+            
+            // For external blogs, external link is required
+            if (model.Type == "external" && string.IsNullOrWhiteSpace(model.ExternalLink))
+                return BadRequest("External link is required for external blogs.");
 
             // slug uniqueness
             if (string.IsNullOrWhiteSpace(model.Slug)) model.Slug = Slugify(model.Title);
             var posts = LoadFromFile();
             if (posts.Any(b => string.Equals(b.Slug, model.Slug, StringComparison.OrdinalIgnoreCase))) return BadRequest("Slug already exists.");
+
+            // Validate DisplayOrder
+            if (model.DisplayOrder.HasValue)
+            {
+                if (!string.Equals(model.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase))
+                    return BadRequest("DisplayOrder can only be set for PUBLISHED blogs");
+                if (model.DisplayOrder < 1 || model.DisplayOrder > 5)
+                    return BadRequest("DisplayOrder must be between 1 and 5");
+                // Check for conflicts
+                var conflict = posts.FirstOrDefault(p => string.Equals(p.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && p.DisplayOrder == model.DisplayOrder);
+                if (conflict != null)
+                    conflict.DisplayOrder = null;
+            }
 
             model.CreatedAt = DateTime.UtcNow;
             model.UpdatedAt = DateTime.UtcNow;
@@ -314,73 +369,145 @@ namespace Hotel_System.API.Controllers
         [HttpPut("{id}")]
             public IActionResult Update(int id, [FromBody] BlogPost model)
             {
-                var posts = LoadFromFile();
-                var existing = posts.FirstOrDefault(p => p.Id == id);
-                if (existing == null) return NotFound();
+                try
+                {
+                    Console.WriteLine($"[PUT /api/blog/{id}] Starting update with model: Title={model.Title}, Status={model.Status}, DisplayOrder={model.DisplayOrder}");
+                    var posts = LoadFromFile();
+                    var existing = posts.FirstOrDefault(p => p.Id == id);
+                    if (existing == null) {
+                        Console.WriteLine($"[PUT /api/blog/{id}] Blog not found");
+                        return NotFound();
+                    }
 
-                if (!string.IsNullOrWhiteSpace(model.Slug) && !string.Equals(model.Slug, existing.Slug, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (posts.Any(b => string.Equals(b.Slug, model.Slug, StringComparison.OrdinalIgnoreCase) && b.Id != id)) return BadRequest("Slug already exists.");
-                    existing.Slug = model.Slug;
-                }
+                    if (!string.IsNullOrWhiteSpace(model.Slug) && !string.Equals(model.Slug, existing.Slug, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (posts.Any(b => string.Equals(b.Slug, model.Slug, StringComparison.OrdinalIgnoreCase) && b.Id != id)) {
+                            Console.WriteLine($"[PUT /api/blog/{id}] Slug already exists: {model.Slug}");
+                            return BadRequest("Slug already exists.");
+                        }
+                        existing.Slug = model.Slug;
+                    }
 
-                // Update all fields that are provided
-                if (!string.IsNullOrWhiteSpace(model.Title)) existing.Title = model.Title;
-                if (!string.IsNullOrWhiteSpace(model.Excerpt)) existing.Excerpt = model.Excerpt;
-                if (!string.IsNullOrWhiteSpace(model.Content)) existing.Content = model.Content;
-                if (!string.IsNullOrWhiteSpace(model.Category)) existing.Category = model.Category;
-                if (!string.IsNullOrWhiteSpace(model.Author)) existing.Author = model.Author;
-                if (!string.IsNullOrWhiteSpace(model.Status)) existing.Status = model.Status;
-                if (!string.IsNullOrWhiteSpace(model.Type)) existing.Type = model.Type;
-                if (!string.IsNullOrWhiteSpace(model.Date)) existing.Date = model.Date;
-                if (!string.IsNullOrWhiteSpace(model.ExternalLink)) existing.ExternalLink = model.ExternalLink;
-                if (!string.IsNullOrWhiteSpace(model.Tags)) existing.Tags = model.Tags;
-                
-                // Update images array
-                if (model.Images != null && model.Images.Count > 0)
-                {
-                    existing.Images = model.Images;
-                }
-                
-                // ===== IF IMAGE CHANGED, DELETE OLD IMAGE AND RENAME NEW IMAGE =====
-                if (model.Image != null && !string.Equals(model.Image, existing.Image, StringComparison.OrdinalIgnoreCase))
-                {
-                    // Delete old image file
-                    DeleteImageFile(existing.Image);
+                    // Update all fields that are provided
+                    if (!string.IsNullOrWhiteSpace(model.Title)) existing.Title = model.Title;
+                    if (!string.IsNullOrWhiteSpace(model.Excerpt)) existing.Excerpt = model.Excerpt;
+                    if (!string.IsNullOrWhiteSpace(model.Content)) existing.Content = model.Content;
+                    if (!string.IsNullOrWhiteSpace(model.Category)) existing.Category = model.Category;
+                    if (!string.IsNullOrWhiteSpace(model.Author)) existing.Author = model.Author;
+                    if (!string.IsNullOrWhiteSpace(model.Status)) existing.Status = model.Status;
+                    if (!string.IsNullOrWhiteSpace(model.Type)) existing.Type = model.Type;
+                    if (!string.IsNullOrWhiteSpace(model.Date)) existing.Date = model.Date;
+                    if (!string.IsNullOrWhiteSpace(model.ExternalLink)) existing.ExternalLink = model.ExternalLink;
+                    if (!string.IsNullOrWhiteSpace(model.Tags)) existing.Tags = model.Tags;
                     
-                    // Rename new image to Blog_[title] format
-                    var newImagePath = RenameImageToBlogPattern(model.Image, model.Title ?? existing.Title);
-                    existing.Image = newImagePath;
-                }
-                else if (!string.IsNullOrWhiteSpace(model.Image))
-                {
-                    existing.Image = model.Image;
-                }
-                
-                existing.UpdatedAt = DateTime.UtcNow;
-                if (string.Equals(existing.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && existing.PublishedAt == null) existing.PublishedAt = DateTime.UtcNow;
+                    // Update images array
+                    if (model.Images != null && model.Images.Count > 0)
+                    {
+                        existing.Images = model.Images;
+                    }
+                    
+                    // ===== IF IMAGE CHANGED, DELETE OLD IMAGE AND RENAME NEW IMAGE =====
+                    if (model.Image != null && !string.Equals(model.Image, existing.Image, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Delete old image file
+                        DeleteImageFile(existing.Image);
+                        
+                        // Rename new image to Blog_[title] format
+                        var newImagePath = RenameImageToBlogPattern(model.Image, model.Title ?? existing.Title);
+                        existing.Image = newImagePath;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(model.Image))
+                    {
+                        existing.Image = model.Image;
+                    }
 
-                SaveToFile(posts);
-                return Ok(existing);
+                    // Determine the target status after this update
+                    var newStatus = string.IsNullOrWhiteSpace(model.Status) ? existing.Status : model.Status;
+                    Console.WriteLine($"[PUT /api/blog/{id}] New status: {newStatus}");
+
+                    // Handle DisplayOrder: only process if it's being explicitly set
+                    if (model.DisplayOrder.HasValue && model.DisplayOrder.Value != 0)
+                    {
+                        Console.WriteLine($"[PUT /api/blog/{id}] Processing DisplayOrder: {model.DisplayOrder.Value}");
+                        // Can only set displayOrder when target status is PUBLISHED
+                        if (!string.Equals(newStatus, "PUBLISHED", StringComparison.OrdinalIgnoreCase))
+                            return BadRequest("DisplayOrder can only be set for PUBLISHED blogs");
+                        if (model.DisplayOrder < 1 || model.DisplayOrder > 5)
+                            return BadRequest("DisplayOrder must be between 1 and 5");
+                        // Check for conflicts and clear them
+                        var conflict = posts.FirstOrDefault(p => p.Id != id && string.Equals(p.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && p.DisplayOrder == model.DisplayOrder);
+                        if (conflict != null)
+                            conflict.DisplayOrder = null;
+                        existing.DisplayOrder = model.DisplayOrder;
+                    }
+                    else if (!string.Equals(newStatus, "PUBLISHED", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"[PUT /api/blog/{id}] Clearing DisplayOrder for non-PUBLISHED status");
+                        // If changing to non-PUBLISHED status, always clear displayOrder
+                        existing.DisplayOrder = null;
+                    }
+
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    if (string.Equals(newStatus, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && existing.PublishedAt == null) 
+                        existing.PublishedAt = DateTime.UtcNow;
+
+                    Console.WriteLine($"[PUT /api/blog/{id}] Saving to file...");
+                    SaveToFile(posts);
+                    Console.WriteLine($"[PUT /api/blog/{id}] Update successful");
+                    return Ok(existing);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[PUT /api/blog/{id}] Exception: {ex.Message}\n{ex.StackTrace}");
+                    return BadRequest(new { error = $"Internal error: {ex.Message}", stack = ex.StackTrace });
+                }
             }
 
         // DELETE api/blog/{id}
         [HttpDelete("{id}")]
-        public IActionResult Delete(int id, [FromQuery] bool hard = false)
+        public IActionResult Delete(int id)
         {
             var posts = LoadFromFile();
             var existing = posts.FirstOrDefault(p => p.Id == id);
             if (existing == null) return NotFound();
-            if (hard)
+            
+            Console.WriteLine($"[DELETE /api/blog/{id}] Deleting blog: {existing.Title}");
+            
+            // Delete cover image
+            if (!string.IsNullOrWhiteSpace(existing.Image))
             {
-                posts = posts.Where(p => p.Id != id).ToList();
+                Console.WriteLine($"[DELETE /api/blog/{id}] Deleting cover image: {existing.Image}");
+                DeleteImageFile(existing.Image);
             }
-            else
+            
+            // Delete gallery images
+            if (existing.Images != null && existing.Images.Any())
             {
-                existing.Status = "DELETED";
-                existing.UpdatedAt = DateTime.UtcNow;
+                Console.WriteLine($"[DELETE /api/blog/{id}] Deleting {existing.Images.Count} gallery images");
+                foreach (var imagePath in existing.Images)
+                {
+                    DeleteImageFile(imagePath);
+                }
             }
+            
+            // Always hard delete - remove completely from data
+            posts = posts.Where(p => p.Id != id).ToList();
+            
+            // Re-index DisplayOrder to prevent gaps (e.g., 1, 3, 4 → 1, 2, 3)
+            var publishedBlogs = posts.Where(p => string.Equals(p.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase))
+                                      .OrderBy(p => p.DisplayOrder ?? int.MaxValue)
+                                      .ToList();
+            
+            for (int i = 0; i < publishedBlogs.Count; i++)
+            {
+                if (publishedBlogs[i].DisplayOrder.HasValue)
+                {
+                    publishedBlogs[i].DisplayOrder = i + 1; // Renumber: 1, 2, 3, ...
+                }
+            }
+            
             SaveToFile(posts);
+            Console.WriteLine($"[DELETE /api/blog/{id}] Blog deleted successfully. Remaining posts: {posts.Count}");
             return NoContent();
         }
 
@@ -405,6 +532,40 @@ namespace Hotel_System.API.Controllers
             existing.RejectionReason = string.Empty; // Clear rejection reason
             existing.RejectedAt = null;
             existing.UpdatedAt = DateTime.UtcNow;
+
+            SaveToFile(posts);
+            return Ok(existing);
+        }
+
+        // POST api/blog/{id}/thu-tu-hien-thi
+        [HttpPost("{id}/thu-tu-hien-thi")]
+        public IActionResult SetDisplayOrder(int id, [FromBody] int? displayOrder)
+        {
+            var posts = LoadFromFile();
+            var existing = posts.FirstOrDefault(p => p.Id == id);
+            if (existing == null) return NotFound();
+
+            // If trying to set a displayOrder on a non-PUBLISHED blog, reject
+            if (displayOrder.HasValue && !string.Equals(existing.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = "DisplayOrder can only be set for PUBLISHED blogs" });
+
+            if (displayOrder.HasValue)
+            {
+                if (displayOrder < 1 || displayOrder > 5)
+                    return BadRequest(new { error = "DisplayOrder must be between 1 and 5" });
+
+                // Check for conflicts and clear them
+                var conflict = posts.FirstOrDefault(p => p.Id != id && string.Equals(p.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && p.DisplayOrder == displayOrder);
+                if (conflict != null)
+                    conflict.DisplayOrder = null;
+
+                existing.DisplayOrder = displayOrder;
+            }
+            else
+            {
+                // Clear display order
+                existing.DisplayOrder = null;
+            }
 
             SaveToFile(posts);
             return Ok(existing);
@@ -447,9 +608,10 @@ namespace Hotel_System.API.Controllers
             var existing = posts.FirstOrDefault(p => p.Id == id);
             if (existing == null) return NotFound();
 
-            if (existing.Status != "APPROVED")
+            // Allow admin to publish drafts or archived posts directly.
+            if (existing.Status == "DELETED")
             {
-                return BadRequest(new { error = $"Can only publish APPROVED blogs. Current status: {existing.Status}" });
+                return BadRequest(new { error = $"Cannot publish a deleted blog. Current status: {existing.Status}" });
             }
 
             // Check if already 5 published blogs - if so, ask admin to unlist one
@@ -483,7 +645,8 @@ namespace Hotel_System.API.Controllers
                 return BadRequest(new { error = $"Can only hide PUBLISHED blogs. Current status: {existing.Status}" });
             }
 
-            existing.Status = "HIDDEN";
+            // Use ARCHIVED as the canonical 'hidden' state per admin UX rules
+            existing.Status = "ARCHIVED";
             existing.UpdatedAt = DateTime.UtcNow;
 
             SaveToFile(posts);
@@ -553,7 +716,7 @@ namespace Hotel_System.API.Controllers
         }
 
         /// <summary>
-        /// Delete image file from wwwroot/images/blog directory
+        /// Delete image file from wwwroot/img/blog directory
         /// </summary>
         private void DeleteImageFile(string imagePath)
         {
@@ -564,11 +727,11 @@ namespace Hotel_System.API.Controllers
                 var webRoot = _env.WebRootPath;
                 if (string.IsNullOrEmpty(webRoot)) webRoot = Path.Combine(_env.ContentRootPath, "wwwroot");
                 
-                // Extract filename from URL path (e.g., "/images/blog/Blog_title.jpg" -> "Blog_title.jpg")
+                // Extract filename from URL path (e.g., "/img/blog/Blog_title.jpg" -> "Blog_title.jpg")
                 var fileName = Path.GetFileName(imagePath);
                 if (string.IsNullOrWhiteSpace(fileName)) return;
 
-                var filePath = Path.Combine(webRoot, "images", "blog", fileName);
+                var filePath = Path.Combine(webRoot, "img", "blog", fileName);
                 if (System.IO.File.Exists(filePath))
                 {
                     System.IO.File.Delete(filePath);
