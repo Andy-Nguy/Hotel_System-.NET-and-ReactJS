@@ -1,5 +1,16 @@
 import axiosClient from "./axiosClient";
 
+export interface DichVuDaChon {
+  idcthddv: number;
+  idhoaDon: string;
+  iddichVu: string;
+  tenDichVu?: string;
+  giaDichVu?: number;
+  soLuong?: number;
+  thanhTien?: number;
+  ghiChu?: string;
+}
+
 export interface Booking {
   iddatPhong: string;
   idkhachHang?: number;
@@ -17,6 +28,7 @@ export interface Booking {
   trangThai: number;
   trangThaiThanhToan: number;
   chiTietDatPhongs: BookingDetail[];
+  dichVuDaChon?: DichVuDaChon[];
 }
 
 export interface UpdateBookingRequest {
