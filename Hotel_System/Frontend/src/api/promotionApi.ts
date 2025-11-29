@@ -14,28 +14,17 @@ export interface PromotionRoom {
 
 export interface Promotion {
   idkhuyenMai: string;
-  IdkhuyenMai?: string;
   tenKhuyenMai: string;
-  TenKhuyenMai?: string;
   loaiKhuyenMai?: string; // 'room' | 'service' | 'customer'
-  LoaiKhuyenMai?: string;
   moTa?: string;
-  MoTa?: string;
   loaiGiamGia: string; // "percent" | "amount"
-  LoaiGiamGia?: string;
   giaTriGiam?: number;
-  GiaTriGiam?: number;
   ngayBatDau: string; // DateOnly format YYYY-MM-DD
-  NgayBatDau?: string;
   ngayKetThuc: string; // DateOnly format YYYY-MM-DD
-  NgayKetThuc?: string;
   trangThai?: string; // "active", "inactive", "expired"
   hinhAnhBanner?: string;
-  HinhAnhBanner?: string;
   createdAt?: string;
-  CreatedAt?: string;
   updatedAt?: string;
-  UpdatedAt?: string;
   khuyenMaiPhongs: PromotionRoom[];
   khuyenMaiDichVus?: Array<{
     id: number;
@@ -377,28 +366,20 @@ export const getPromotionsForService = async (
     if (!promotions || promotions.length === 0) return [];
 
     const today = new Date();
-    const candidates = promotions.filter(
-      (p) => (p.loaiKhuyenMai || p.LoaiKhuyenMai) === "service"
-    );
+    const candidates = promotions.filter((p) => p.loaiKhuyenMai === "service");
 
     const results: any[] = [];
     // For each candidate promotion, fetch mapping list
     await Promise.all(
       candidates.map(async (p) => {
         try {
-          const url2 = `${API_BASE}/KhuyenMai/${
-            p.idkhuyenMai || p.IdkhuyenMai
-          }/services`;
+          // backend route for promo service mappings is '/khuyenmai/{id}/dich-vu'
+          const url2 = `${API_BASE}/khuyenmai/${p.idkhuyenMai}/dich-vu`;
           const resp = await fetch(url2);
           if (!resp.ok) return;
           const mappingList = await resp.json();
           if (!Array.isArray(mappingList)) return;
-          const found = mappingList.find(
-            (m: any) =>
-              (m.iddichVu ?? m.IddichVu ?? m.iddichVu) === serviceId &&
-              m.isActive !== false &&
-              m.IsActive !== false
-          );
+          const found = mappingList.find((m: any) => (m.iddichVu ?? m.IddichVu) === serviceId && (m.isActive ?? m.IsActive) !== false);
           if (!found) return;
 
           // Basic date checks (if mapping has dates)
@@ -409,14 +390,14 @@ export const getPromotionsForService = async (
           if (!startsOk || !endsOk) return;
 
           results.push({
-            promotionId: p.idkhuyenMai || p.IdkhuyenMai,
-            promotionName: p.tenKhuyenMai || p.TenKhuyenMai || p.tenKhuyenMai,
-            loaiGiamGia: p.loaiGiamGia || p.LoaiGiamGia || p.loaiGiamGia,
-            giaTriGiam: p.giaTriGiam ?? p.GiaTriGiam ?? null,
-            moTa: p.moTa || p.MoTa || null,
-            ngayBatDau: p.ngayBatDau || p.NgayBatDau || null,
-            ngayKetThuc: p.ngayKetThuc || p.NgayKetThuc || null,
-            hinhAnhBanner: p.hinhAnhBanner || p.HinhAnhBanner || null,
+            promotionId: p.idkhuyenMai,
+            promotionName: p.tenKhuyenMai,
+            loaiGiamGia: p.loaiGiamGia,
+            giaTriGiam: p.giaTriGiam ?? null,
+            moTa: p.moTa ?? null,
+            ngayBatDau: p.ngayBatDau ?? null,
+            ngayKetThuc: p.ngayKetThuc ?? null,
+            hinhAnhBanner: p.hinhAnhBanner ?? null,
             mapping: found,
           });
         } catch (err) {

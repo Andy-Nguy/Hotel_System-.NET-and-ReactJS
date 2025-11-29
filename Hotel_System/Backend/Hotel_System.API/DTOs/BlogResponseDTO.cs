@@ -89,4 +89,9 @@ public class BlogResponseDTO
     /// Publication timestamp (nullable)
     /// </summary>
     public DateTime? PublishedAt { get; set; }
+
+    /// <summary>
+    /// Display order for published blogs (1-5, unique, null for others)
+    /// </summary>
+    public int? DisplayOrder { get; set; }
 }

@@ -41,10 +41,7 @@ interface PromotionFormProps {
   onSuccess: () => void;
 }
 
-interface Room {
-  key: string;
-  title: string;
-}
+
 
 interface Service {
   iddichVu: string;
@@ -126,7 +123,6 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
   // Track promotion ID to avoid re-fetching on object reference change
   const promotionIdRef = useRef<string | undefined>(undefined);
@@ -154,11 +150,6 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
         // const response = await fetch("/api/Phong", { signal: controller.signal });
         if (!response.ok) throw new Error('Failed to fetch rooms');
         const data = await response.json();
-        const roomList = data.map((room: any) => ({
-          key: room.idphong,
-          title: `${room.tenPhong} (${room.idphong})`,
-        }));
-        setRooms(roomList);
         setRoomObjects(data);
         roomsLoadedRef.current = true;
       } catch (error: any) {
@@ -507,7 +498,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                     { label: 'Phòng + Dịch Vụ', value: 'room_service' },
                     { label: 'Khách Hàng', value: 'customer' },
                   ]}
-                  onChange={(value) => {
+                  onChange={() => {
                     // Only reset when creating new promotion, not when editing
                     if (!promotion) {
                       setSelectedRooms([]);

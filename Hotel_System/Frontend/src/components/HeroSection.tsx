@@ -93,7 +93,7 @@ const HeroSection: React.FC = () => {
           className="hs-item"
           style={{
             backgroundImage:
-              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/hero/hero1.png)",
+              "linear-gradient(rgba(0,0,0,0.20), rgba(0,0,0,0.20)), url(/img/hero/hero.jpeg)",
             backgroundSize: "cover",
             backgroundPosition: "center",
             zIndex: 1,

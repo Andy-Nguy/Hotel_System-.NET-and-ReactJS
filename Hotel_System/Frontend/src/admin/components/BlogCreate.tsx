@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import Slidebar from './Slidebar';
 import HeaderSection from './HeaderSection';
-import { Card, Form, Input, Button, Select, Upload, Spin, Modal, message, Space } from 'antd';
+import { Card, Form, Input, Button, Select, Upload, Spin, message, Space, Modal } from 'antd';
 import { UploadOutlined, EyeOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 
 interface BlogFormData {
   title: string;
@@ -38,7 +37,7 @@ const BlogCreate: React.FC = () => {
 
   // ===== IMAGE UPLOAD HANDLERS =====
   
-  // Handle cover image upload
+  // Handle cover image upload (banner)
   const handleCoverImageUpload = async (file: any) => {
     if (!file) return;
     setUploading(true);
@@ -46,7 +45,8 @@ const BlogCreate: React.FC = () => {
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
 
-      const res = await fetch('/admin/blogs/upload-image', {
+      const title = formData.title || 'blog';
+      const res = await fetch(`/admin/blogs/upload-image?title=${encodeURIComponent(title)}&type=banner`, {
         method: 'POST',
         body: formDataUpload,
       });
@@ -75,7 +75,8 @@ const BlogCreate: React.FC = () => {
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
 
-      const res = await fetch('/admin/blogs/upload-image', {
+      const title = formData.title || 'blog';
+      const res = await fetch(`/admin/blogs/upload-image?title=${encodeURIComponent(title)}&type=gallery`, {
         method: 'POST',
         body: formDataUpload,
       });
@@ -183,7 +184,7 @@ const BlogCreate: React.FC = () => {
   // ===== FORM SUBMISSION =====
   
   // Submit form
-  const handleSubmit = async () => {
+  const handleSubmit = async (publish: boolean = false) => {
     // Comprehensive validation
     const titleError = validateField('title', formData.title || '');
     if (titleError) {
@@ -235,7 +236,8 @@ const BlogCreate: React.FC = () => {
         content: formData.content?.trim() || '',
         images: formData.images || [],
         externalLink: formData.externalLink?.trim() || '',
-        status: formData.status || 'DRAFT',
+        // If publish=true, create as PUBLISHED, otherwise create as DRAFT
+        status: publish ? 'PUBLISHED' : (formData.status || 'DRAFT'),
       };
 
       const res = await fetch('/admin/blogs', {
@@ -245,7 +247,8 @@ const BlogCreate: React.FC = () => {
       });
 
       if (res.ok) {
-        message.success('✔️ Tạo bài viết thành công!');
+        if (publish) message.success('✔️ Tạo và xuất bản thành công!');
+        else message.success('✔️ Tạo bài viết thành công!');
         // Navigate back to BlogManager
         setTimeout(() => {
           try {
@@ -457,27 +460,24 @@ const BlogCreate: React.FC = () => {
                     </>
                   )}
 
-                  {/* Status */}
-                  <Form.Item label="Trạng thái">
-                    <Select
-                      value={formData.status || 'DRAFT'}
-                      onChange={(val) => setFormData(prev => ({ ...prev, status: val as 'DRAFT' | 'PUBLISHED' }))}
-                    >
-                      <Select.Option value="DRAFT">Bản nháp</Select.Option>
-                      <Select.Option value="PUBLISHED">Xuất bản</Select.Option>
-                    </Select>
-                  </Form.Item>
-
-                  {/* Action Buttons */}
+                  {/* Action Buttons (Save as DRAFT or Save & Publish) */}
                   <Form.Item>
                     <Space>
                       <Button
-                        type="primary"
-                        onClick={handleSubmit}
+                        type="default"
+                        onClick={() => handleSubmit(false)}
                         loading={submitting}
                         disabled={uploading}
                       >
-                        💾 Lưu Bài Viết
+                        💾 Lưu (DRAFT)
+                      </Button>
+                      <Button
+                        type="primary"
+                        onClick={() => handleSubmit(true)}
+                        loading={submitting}
+                        disabled={uploading}
+                      >
+                        🚀 Lưu & Xuất bản
                       </Button>
                       <Button 
                         icon={<EyeOutlined />} 

@@ -115,6 +115,11 @@ public class BlogPost
     public DateTime? PublishedAt { get; set; }
 
     /// <summary>
+    /// Display order for published blogs (1-5, unique, null for others)
+    /// </summary>
+    public int? DisplayOrder { get; set; }
+
+    /// <summary>
     /// Foreign key to the author user (optional, for future DB integration)
     /// </summary>
     public string AuthorId { get; set; } = string.Empty;
