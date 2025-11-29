@@ -152,9 +152,13 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.Idphong)
                 .HasMaxLength(50)
                 .HasColumnName("IDPhong");
-            entity.Property(e => e.IddatPhong)
-                .HasMaxLength(50)
-                .HasColumnName("IDDatPhong");
+            // The database currently does not include an IDDatPhong column on DanhGia
+            // (backwards compatibility). Keep the model property for application-level
+            // use but do NOT map it to the database to avoid SQL errors.
+            entity.Ignore(e => e.IddatPhong);
+            // The IsApproved column is not present in the current DB schema.
+            // Ignore it to prevent EF Core from generating SQL that references it.
+            entity.Ignore(e => e.IsApproved);
             entity.Property(e => e.IsAnonym).HasDefaultValue(false);
             entity.Property(e => e.NoiDung).HasColumnType("text");
             entity.Property(e => e.SoSao).HasColumnName("SoSao");
