@@ -1,10 +1,9 @@
 // src/api/checkoutApi.ts
 // Use Vite env var when provided, otherwise fall back to the backend dev URL.
 // In dev this should match the backend launch URL (see Backend/Hotel_System.API/Properties/launchSettings.json).
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api";
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 const fetchJson = async (endpoint: string, init?: RequestInit) => {
   const token = localStorage.getItem("hs_token");

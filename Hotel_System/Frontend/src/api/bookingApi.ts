@@ -64,10 +64,9 @@ export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
  */
 
 // Resolve API base for fetch calls (not using axiosClient)
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api/datphong`
-  : "/api/datphong";
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api/datphong`;
 
 // ============================================
 // Type Definitions

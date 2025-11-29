@@ -35,10 +35,9 @@ export interface ServiceUsage {
 
 // Resolve API base from Vite env when available. Use empty string to keep relative paths
 // in local dev (Vite proxy). Use a safe any-cast to avoid TS issues when types not picked up.
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api";
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 async function fetchApi(endpoint: string, options?: RequestInit) {
   try {
