@@ -28,8 +28,10 @@ namespace Hotel_System.API.Controllers
         {
             try
             {
+                // Defensive: ensure service returns only employees/admins
                 var danhSach = await _nhanVienService.LayDanhSachNhanVien();
-                return Ok(new { success = true, data = danhSach, total = danhSach.Count });
+                var filtered = danhSach.Where(nv => nv.VaiTro == 1 || nv.VaiTro == 2).ToList();
+                return Ok(new { success = true, data = filtered, total = filtered.Count });
             }
             catch (Exception ex)
             {
