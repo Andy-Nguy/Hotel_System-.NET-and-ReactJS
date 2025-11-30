@@ -3,6 +3,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Hotel_System.API.Models;
@@ -128,6 +129,102 @@ namespace Hotel_System.API.Services
             };
 
             return Task.FromResult<(bool, string?, UserProfileResponse?)>((true, null, profile));
+        }
+
+        public async Task SendOtpEmailAsync(string email, string otp)
+        {
+            // Implement email sending logic here
+            // For now, just log it
+            _logger.LogInformation($"Sending OTP {otp} to {email}");
+            // You can integrate with an email service like SendGrid, MailKit, etc.
+        }
+
+        public async Task<(bool success, string? error)> ForgotPasswordAsync(ForgotPasswordRequest req)
+        {
+            var user = await _db.KhachHangs.FirstOrDefaultAsync(k => k.Email == req.Email);
+            if (user == null) return (false, "Email không tồn tại trong hệ thống");
+
+            var otp = GenerateOtp();
+            var expiredAt = DateTime.UtcNow.AddMinutes(10);
+
+            // Remove any existing pending record for this email (case-insensitive)
+            var existingPending = await _db.PendingUsers.FirstOrDefaultAsync(p => p.Email.ToLower() == req.Email.ToLowerInvariant());
+            if (existingPending != null)
+            {
+                _db.PendingUsers.Remove(existingPending);
+            }
+
+            var pending = new PendingUser
+            {
+                Hoten = user.HoTen,
+                Email = req.Email.ToLowerInvariant(), // Store email in lowercase for consistency
+                Password = "", // not used
+                Sodienthoai = user.SoDienThoai,
+                Ngaysinh = user.NgaySinh,
+                Otp = otp,
+                OtpExpiredAt = expiredAt,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _logger.LogInformation("Inserting pending record: Email='{Email}' (length: {EmailLength}), OTP='{Otp}' (length: {OtpLength})", 
+                pending.Email, pending.Email?.Length ?? 0, pending.Otp, pending.Otp?.Length ?? 0);
+
+            _db.PendingUsers.Add(pending);
+            await _db.SaveChangesAsync();
+
+            await SendOtpAsync(req.Email, otp, "Password Reset OTP");
+
+            return (true, null);
+        }
+
+        public async Task<(bool success, string? error)> ResetPasswordAsync(ResetPasswordRequest req)
+        {
+            // Normalize email to lowercase for case-insensitive comparison
+            var normalizedEmail = req.Email.ToLowerInvariant();
+            var normalizedOtp = req.Otp.Trim(); // Remove any whitespace
+
+            _logger.LogInformation("Reset password attempt for email: {Email} (normalized: {NormalizedEmail}), OTP: {Otp}", req.Email, normalizedEmail, req.Otp);
+
+            // First find the pending record without time check
+            var pendingCandidates = await _db.PendingUsers
+                .Where(p => p.Email.ToLower() == normalizedEmail && p.Otp == normalizedOtp)
+                .ToListAsync();
+            
+            _logger.LogInformation("Found {Count} OTP matching records for email {Email}", pendingCandidates.Count, normalizedEmail);
+            foreach (var p in pendingCandidates)
+            {
+                _logger.LogInformation("Candidate: OTP='{Otp}' (length: {OtpLength}), Expired={Expired}, Now={Now}, IsExpired={IsExpired}", 
+                    p.Otp, p.Otp?.Length ?? 0, p.OtpExpiredAt, DateTimeOffset.UtcNow, p.OtpExpiredAt <= DateTimeOffset.UtcNow);
+            }
+            _logger.LogInformation("Searching for OTP: '{NormalizedOtp}' (length: {OtpLength})", normalizedOtp, normalizedOtp.Length);
+            
+            var pending = pendingCandidates.FirstOrDefault(p => p.OtpExpiredAt > DateTimeOffset.UtcNow);
+            
+            if (pending == null)
+            {
+                // Debug: check what records exist for this email
+                var allPendingForEmail = await _db.PendingUsers.Where(p => p.Email.ToLower() == normalizedEmail).ToListAsync();
+                _logger.LogInformation("Found {Count} pending records for email {Email} (normalized)", allPendingForEmail.Count, normalizedEmail);
+                foreach (var p in allPendingForEmail)
+                {
+                    _logger.LogInformation("Pending record: OTP={Otp}, Expired={Expired}, Now={Now}", p.Otp, p.OtpExpiredAt, DateTimeOffset.UtcNow);
+                }
+                return (false, "Mã OTP không hợp lệ hoặc đã hết hạn");
+            }
+
+            var user = await _db.KhachHangs.FirstOrDefaultAsync(k => k.Email.ToLower() == normalizedEmail);
+            if (user == null) return (false, "Không tìm thấy người dùng");
+
+            var account = await _db.TaiKhoanNguoiDungs.FirstOrDefaultAsync(t => t.IdkhachHang == user.IdkhachHang);
+            if (account == null) return (false, "Không tìm thấy tài khoản");
+
+            account.MatKhau = HashPassword(req.NewPassword);
+            await _db.SaveChangesAsync();
+
+            _db.PendingUsers.Remove(pending);
+            await _db.SaveChangesAsync();
+
+            return (true, null);
         }
 
         private string GenerateJwtToken(KhachHang kh, TaiKhoanNguoiDung acc)

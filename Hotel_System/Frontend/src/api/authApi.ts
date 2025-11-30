@@ -74,4 +74,26 @@ export async function login(req: LoginRequest) {
   return handleRes(res);
 }
 
-export default { register, verifyOtp, login };
+export async function forgotPassword(email: string) {
+  const res = await fetch(`${API_BASE}/Auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ Email: email }),
+  });
+  return handleRes(res);
+}
+
+export async function resetPassword(
+  email: string,
+  otp: string,
+  newPassword: string
+) {
+  const res = await fetch(`${API_BASE}/Auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ Email: email, Otp: otp, NewPassword: newPassword }),
+  });
+  return handleRes(res);
+}
+
+export default { register, verifyOtp, login, forgotPassword, resetPassword };
