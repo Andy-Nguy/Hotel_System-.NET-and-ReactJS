@@ -140,40 +140,46 @@ public partial class HotelSystemContext : DbContext
 
         modelBuilder.Entity<DanhGium>(entity =>
         {
-            entity.HasKey(e => e.IddanhGia).HasName("PK__DanhGia__C216E48D8ACD96EC");
+            entity.HasKey(e => e.IddanhGia);
 
-            entity.ToTable("DanhGia");
+            entity.ToTable("danhgia");
 
-            entity.Property(e => e.IddanhGia).HasColumnName("IDDanhGia");
+            entity.Property(e => e.IddanhGia).HasColumnName("iddanhgia");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
-            entity.Property(e => e.IdkhachHang).HasColumnName("IDKhachHang");
+            entity.Property(e => e.IdkhachHang).HasColumnName("idkhachhang");
             entity.Property(e => e.Idphong)
                 .HasMaxLength(50)
-                .HasColumnName("IDPhong");
-            // The database currently does not include an IDDatPhong column on DanhGia
-            // (backwards compatibility). Keep the model property for application-level
-            // use but do NOT map it to the database to avoid SQL errors.
-            entity.Ignore(e => e.IddatPhong);
-            // The IsApproved column is not present in the current DB schema.
-            // Ignore it to prevent EF Core from generating SQL that references it.
-            entity.Ignore(e => e.IsApproved);
-            entity.Property(e => e.IsAnonym).HasDefaultValue(false);
-            entity.Property(e => e.NoiDung).HasColumnType("text");
-            entity.Property(e => e.SoSao).HasColumnName("SoSao");
-            entity.Property(e => e.TieuDe).HasMaxLength(200);
+                .HasColumnName("idphong");
+            entity.Property(e => e.IddatPhong)
+                .HasMaxLength(50)
+                .HasColumnName("iddatphong");
+            entity.Property(e => e.IsApproved)
+                .HasDefaultValue(false)
+                .HasColumnName("isapproved");
+            entity.Property(e => e.IsResponded)
+                .HasDefaultValue(false)
+                .HasColumnName("isresponded");
+            entity.Property(e => e.IsAnonym)
+                .HasDefaultValue(false)
+                .HasColumnName("isanonym");
+            entity.Property(e => e.NoiDung)
+                .HasColumnType("text")
+                .HasColumnName("noidung");
+            entity.Property(e => e.SoSao).HasColumnName("sosao");
+            entity.Property(e => e.TieuDe)
+                .HasMaxLength(200)
+                .HasColumnName("tieude");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
 
             entity.HasOne(d => d.IdkhachHangNavigation).WithMany(p => p.DanhGia)
-                .HasForeignKey(d => d.IdkhachHang)
-                .HasConstraintName("FK_DanhGia_KhachHang");
+                .HasForeignKey(d => d.IdkhachHang);
 
             entity.HasOne(d => d.IdphongNavigation).WithMany(p => p.DanhGia)
-                .HasForeignKey(d => d.Idphong)
-                .HasConstraintName("FK_DanhGia_Phong");
+                .HasForeignKey(d => d.Idphong);
         });
 
         modelBuilder.Entity<BlogPost>(entity =>
