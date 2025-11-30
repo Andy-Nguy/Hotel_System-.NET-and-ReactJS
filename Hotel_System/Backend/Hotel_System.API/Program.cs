@@ -61,6 +61,8 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<RoomService>();
 // Email service
 builder.Services.AddScoped<IEmailService, EmailService>();
+// Nhân viên service (quản lý nhân viên cho admin)
+builder.Services.AddScoped<INhanVienService, NhanVienService>();
 
 // Template renderer for email HTML/text templates
 builder.Services.AddSingleton<Hotel_System.API.Services.EmailTemplateRenderer>();

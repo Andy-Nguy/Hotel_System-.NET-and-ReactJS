@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { getUserInfo, checkIsNhanVien } from "../context/UserContext";
 
 const OffcanvasMenu: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<string>("");
@@ -16,66 +17,42 @@ const OffcanvasMenu: React.FC = () => {
   const refreshAuth = async () => {
     const token = localStorage.getItem("hs_token");
     setIsLoggedIn(!!token);
+
     if (token) {
-      // Check if token is JWT (has 3 parts separated by dots)
-      const parts = token.split(".");
-      if (parts.length === 3) {
-        // JWT token - decode payload
-        try {
-          const base64Payload = parts[1];
-          const decodedPayload = decodeURIComponent(
-            atob(base64Payload)
-              .split("")
-              .map(function (c) {
-                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-              })
-              .join("")
-          );
-          const payload = JSON.parse(decodedPayload);
-          setUserInfo(payload);
-          // Save to localStorage for other components to read
-          localStorage.setItem("hs_userInfo", JSON.stringify(payload));
-        } catch (e) {
-          console.warn("[OffcanvasMenu] Could not decode JWT token:", e);
-          setUserInfo(null);
-          localStorage.removeItem("hs_userInfo");
-        }
-      } else {
-        // GUID token - need to fetch user profile from API
-        try {
-          const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-          const API_BASE = _VITE_API.replace(/\/$/, "")
-            ? `${_VITE_API.replace(/\/$/, "")}/api`
-            : "/api";
-          const res = await fetch(`${API_BASE}/Auth/profile`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            const profile = await res.json();
-            console.log("[OffcanvasMenu] Profile from API:", profile);
-            // Map profile to userInfo format - use ?? to handle role=0 correctly
-            const mappedUserInfo = {
-              name: profile.hoTen || profile.HoTen || profile.name || "User",
-              email: profile.email || profile.Email,
-              role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
-              phone: profile.soDienThoai || profile.SoDienThoai,
-            };
-            setUserInfo(mappedUserInfo);
-            // Save to localStorage for other components to read
-            localStorage.setItem("hs_userInfo", JSON.stringify(mappedUserInfo));
-          } else {
-            console.warn(
-              "[OffcanvasMenu] Could not fetch profile:",
-              res.status
-            );
-            setUserInfo({ name: "User" });
-            localStorage.removeItem("hs_userInfo");
-          }
-        } catch (e) {
-          console.warn("[OffcanvasMenu] Could not fetch user profile:", e);
+      // Sử dụng hàm getUserInfo thống nhất
+      const info = getUserInfo();
+      if (info) {
+        console.log("[OffcanvasMenu] Using getUserInfo:", info);
+        setUserInfo(info);
+        return;
+      }
+
+      // Fallback: gọi API profile
+      try {
+        const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+        const API_BASE = _VITE_API.replace(/\/$/, "")
+          ? `${_VITE_API.replace(/\/$/, "")}/api`
+          : "/api";
+        const res = await fetch(`${API_BASE}/Auth/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const profile = await res.json();
+          console.log("[OffcanvasMenu] Profile from API:", profile);
+          const mappedUserInfo = {
+            name: profile.hoTen || profile.HoTen || profile.name || "User",
+            email: profile.email || profile.Email,
+            role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
+            phone: profile.soDienThoai || profile.SoDienThoai,
+          };
+          setUserInfo(mappedUserInfo);
+          localStorage.setItem("hs_userInfo", JSON.stringify(mappedUserInfo));
+        } else {
           setUserInfo({ name: "User" });
-          localStorage.removeItem("hs_userInfo");
         }
+      } catch (e) {
+        console.warn("[OffcanvasMenu] Could not fetch user profile:", e);
+        setUserInfo({ name: "User" });
       }
     } else {
       setUserInfo(null);
@@ -85,11 +62,9 @@ const OffcanvasMenu: React.FC = () => {
 
   useEffect(() => {
     setCurrentRoute(resolveRoute());
-    // ensure auth state is read on mount
     refreshAuth();
     const onLocationChange = () => {
       setCurrentRoute(resolveRoute());
-      // also refresh auth when route changes via pushState/popstate
       refreshAuth();
     };
     window.addEventListener("hashchange", onLocationChange);
@@ -101,45 +76,20 @@ const OffcanvasMenu: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // initialize auth and listen for storage changes (other tabs)
     refreshAuth();
     const handleStorageChange = () => refreshAuth();
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
+  // Sử dụng hàm thống nhất
   const isNhanVien = () => {
-    console.log("[OffcanvasMenu.isNhanVien] userInfo:", userInfo);
-    if (!userInfo) return false;
-    // Use nullish coalescing (??) to handle role=0 correctly
-    const role =
-      userInfo.role ??
-      userInfo.roles ??
-      userInfo[
-        "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-      ] ??
-      userInfo["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ??
-      userInfo.VaiTro ??
-      userInfo.vaiTro;
-    console.log("[OffcanvasMenu.isNhanVien] role:", role, typeof role);
-    if (role === undefined || role === null) return false;
-    // Handle numeric role (1 = nhanvien)
-    if (typeof role === "number") return role === 1;
-    if (Array.isArray(role))
-      return role.some(
-        (r) => String(r).toLowerCase() === "nhanvien" || String(r) === "1"
-      );
-    const roleStr = String(role).toLowerCase().trim();
-    return (
-      roleStr === "nhanvien" ||
-      roleStr === "admin" ||
-      roleStr === "staff" ||
-      roleStr === "1"
-    );
+    return checkIsNhanVien(userInfo);
   };
 
   const handleLogout = () => {
     localStorage.removeItem("hs_token");
+    localStorage.removeItem("hs_userInfo");
     setIsLoggedIn(false);
     setUserInfo(null);
     // Redirect to home page and remove hash from URL

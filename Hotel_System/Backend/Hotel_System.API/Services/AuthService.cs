@@ -244,8 +244,13 @@ namespace Hotel_System.API.Services
                 }
 
                 // Convert numeric VaiTro (tinyint) to meaningful role strings
-                // 0 => khachhang, 1 => nhanvien
-                var roleStr = acc.VaiTro == 1 ? "nhanvien" : "khachhang";
+                // 0 => khachhang, 1 => nhanvien, 2 => admin
+                var roleStr = acc.VaiTro switch
+                {
+                    2 => "admin",
+                    1 => "nhanvien",
+                    _ => "khachhang"
+                };
 
                 var claims = new[]
                 {

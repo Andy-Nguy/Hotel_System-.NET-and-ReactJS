@@ -259,6 +259,7 @@ namespace Hotel_System.API.Controllers
             try
             {
                 var bookings = await _context.DatPhongs
+                    .Where(dp => dp.ThoiHan == null)
                     .Include(dp => dp.IdkhachHangNavigation)
                     .Include(dp => dp.IdphongNavigation)
                     .Include(dp => dp.ChiTietDatPhongs)
