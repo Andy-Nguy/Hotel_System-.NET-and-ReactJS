@@ -210,7 +210,7 @@ const ReviewManager: React.FC = () => {
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
       <Slidebar />
-      <div style={{ marginLeft: 240 }}>
+      <div style={{ marginLeft: 280 }}>
         <HeaderSection showStats={false} />
         <main style={{ padding: "0px 60px" }}>
           <div
@@ -308,7 +308,7 @@ const ReviewManager: React.FC = () => {
             <Card style={{ marginBottom: 12 }}>
               <Space wrap>
                 <Input.Search
-                  placeholder="Tìm mã đặt phòng..."
+                  placeholder="Tìm kiếm mã đặt phòng..."
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   style={{ width: 200 }}

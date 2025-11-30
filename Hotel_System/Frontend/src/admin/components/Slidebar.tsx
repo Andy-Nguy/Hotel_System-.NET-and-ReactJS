@@ -1,4 +1,11 @@
-import React, { useEffect, useState } from "react";
+// Slidebar improvements:
+// - Scroll container with smooth scroll and custom thin scrollbar
+// - Top/bottom shadow gradients to indicate more content
+// - Auto-scroll active menu into view when route changes
+// - Keyboard navigation (Enter/Space to activate, ArrowUp/ArrowDown to focus items)
+// - Accessibility improvements: aria-label and aria-current for active item
+import React, { useEffect, useState, useRef } from "react";
+import "./Slidebar.css";
 import { getUserInfo } from "../../context/UserContext";
 
 // Helper to get user role from localStorage using getUserInfo
@@ -128,7 +135,36 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
   };
 
   return (
-    <div onClick={handleClick} style={active ? activeStyle : baseStyle}>
+    <div
+      onClick={handleClick}
+      style={active ? activeStyle : baseStyle}
+      tabIndex={0}
+      role="button"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick();
+        }
+        // Support arrow key navigation within the sidebar
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          const next =
+            (e.currentTarget.nextElementSibling as HTMLElement) || null;
+          if (next) next.focus();
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          const prev =
+            (e.currentTarget.previousElementSibling as HTMLElement) || null;
+          if (prev) prev.focus();
+        }
+      }}
+      data-route={routeFragment}
+      data-active={active}
+      aria-current={active ? "page" : undefined}
+      aria-label={label}
+      className={active ? "nav-item nav-item-active" : "nav-item"}
+    >
       <div
         style={{
           width: 36,
@@ -154,6 +190,9 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
 
 const Slidebar: React.FC = () => {
   const [userRole, setUserRole] = useState<number | null>(getUserRole());
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [showTopShadow, setShowTopShadow] = useState(false);
+  const [showBottomShadow, setShowBottomShadow] = useState(false);
 
   // Listen for storage changes and route changes (in case user logs in/out)
   useEffect(() => {
@@ -196,23 +235,61 @@ const Slidebar: React.FC = () => {
     );
   }, [isAdmin, userRole]);
 
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+
+    const checkShadow = () => {
+      const { scrollTop, clientHeight, scrollHeight } = scroller;
+      setShowTopShadow(scrollTop > 2);
+      setShowBottomShadow(scrollTop + clientHeight < scrollHeight - 2);
+    };
+
+    checkShadow();
+    scroller.addEventListener("scroll", checkShadow, { passive: true });
+    window.addEventListener("resize", checkShadow);
+    return () => {
+      scroller.removeEventListener("scroll", checkShadow);
+      window.removeEventListener("resize", checkShadow);
+    };
+  }, [scrollRef]);
+
+  // Scroll to active item when route changes (popstate/hashchange)
+  useEffect(() => {
+    const onRouteChange = () => {
+      const scroller = scrollRef.current;
+      if (!scroller) return;
+      const activeEl = scroller.querySelector(
+        '[data-active="true"]'
+      ) as HTMLElement | null;
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    };
+    window.addEventListener("popstate", onRouteChange);
+    window.addEventListener("hashchange", onRouteChange);
+    return () => {
+      window.removeEventListener("popstate", onRouteChange);
+      window.removeEventListener("hashchange", onRouteChange);
+    };
+  }, []);
+
+  // Scroll active item into view when route or role changes
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const activeEl = scroller.querySelector(
+      '[data-active="true"]'
+    ) as HTMLElement | null;
+    if (activeEl) {
+      // Smooth scroll but keep the item within the viewport of the scroller
+      activeEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [userRole]);
+
   return (
-    <aside
-      style={{
-        width: 280,
-        padding: 20,
-        background: "#fff",
-        borderRight: "1px solid rgba(15,23,42,0.04)",
-        height: "100vh",
-        boxSizing: "border-box",
-        position: "fixed",
-        left: 0,
-        top: 0,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div style={{ marginBottom: 12, flexShrink: 0 }}>
+    <aside className="slidebar-aside">
+      <div className="slidebar-header">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div
             style={{
@@ -236,15 +313,12 @@ const Slidebar: React.FC = () => {
         </div>
       </div>
 
-      <nav
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          overflowY: "auto",
-          flex: 1,
-          paddingBottom: 20,
-        }}
+      <div
+        ref={scrollRef}
+        className="slidebar-scroll"
+        tabIndex={0}
+        role="navigation"
+        aria-label="Admin navigation"
       >
         {/* Chỉ hiển thị menu Quản lý nhân viên khi role = 2 (Admin) - ĐẶT LÊN ĐẦU */}
         {isAdmin && (
@@ -325,7 +399,20 @@ const Slidebar: React.FC = () => {
         />
 
         <NavItem key="blog" routeFragment="admin/blog" label="Quản lý Blog" />
-      </nav>
+      </div>
+
+      <div
+        className={`slidebar-shadow-top ${
+          showTopShadow ? "slidebar-shadow-visible" : ""
+        }`}
+        aria-hidden="true"
+      />
+      <div
+        className={`slidebar-shadow-bottom ${
+          showBottomShadow ? "slidebar-shadow-visible" : ""
+        }`}
+        aria-hidden="true"
+      />
     </aside>
   );
 };

@@ -132,8 +132,8 @@ const BookingTable: React.FC<BookingTableProps> = ({
                 title="Xác nhận đặt phòng?"
                 description="Gửi mail xác nhận cho khách?"
                 onConfirm={() => onConfirm(record.iddatPhong)}
-                okText="Có"
-                cancelText="Không"
+                okText="Xác nhận"
+                cancelText="Hủy"
               >
                 <Button
                   size="small"
@@ -156,8 +156,8 @@ const BookingTable: React.FC<BookingTableProps> = ({
                   title="Hủy đặt phòng?"
                   description="Bạn có chắc muốn hủy?"
                   onConfirm={() => onCancel(record.iddatPhong)}
-                  okText="Có"
-                  cancelText="Không"
+                  okText="Xác nhận"
+                  cancelText="Hủy"
                 >
                   <Button
                     size="small"

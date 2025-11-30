@@ -1,0 +1,57 @@
+.admin-modal-fix * {
+  box-sizing: border-box;
+}
+/* Hide stray 2px solid borders on manually created overlays */
+div[style*="position: fixed"][style*="inset: 0"] > div,
+div[style*="position: fixed"][style*="inset:0"] > div {
+  border: none !important;
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.1) !important;
+  border-radius: 16px !important;
+}
+
+/* AntD modal content should be borderless to avoid double-border look */
+.ant-modal-content {
+  border: none !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+/* Make ant modal mask slightly darker and blur a bit for emphasis */
+.ant-modal-mask {
+  background: rgba(0, 0, 0, 0.52) !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+/* Also remove border from any element that may explicitly set a 2px border for modal */
+.admin-modal-fix .modal-inner,
+.admin-modal-fix .modal-wrapper,
+.admin-modal-fix .modal-content {
+  border: none !important;
+}
+
+/* Increase default modal width for admin pages so dialogs aren't too small */
+.admin-modal-fix .ant-modal {
+  width: 90% !important;
+  max-width: 1400px !important;
+  min-width: 800px !important;
+}
+
+/* Ensure larger modals and responsive behavior are handled */
+.admin-modal-fix .ant-modal .ant-modal-content {
+  border-radius: 12px !important;
+}
+
+@media (max-width: 992px) {
+  .admin-modal-fix .ant-modal {
+    width: 94% !important;
+    max-width: 1000px !important;
+    min-width: unset !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-modal-fix .ant-modal {
+    width: 96% !important;
+    max-width: 420px !important;
+  }
+}

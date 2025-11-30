@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import authApi from "../api/authApi";
+import { EyeInvisibleOutlined, EyeTwoTone } from "@ant-design/icons";
 
 type PageMode = "login" | "forgot-email" | "forgot-otp";
 
@@ -644,7 +645,13 @@ const LoginPage: React.FC = () => {
                           onClick={() => setShowPassword(!showPassword)}
                           style={passwordToggleStyle}
                         >
-                          {showPassword ? "🙈" : "👁️"}
+                          {showPassword ? (
+                            <EyeInvisibleOutlined
+                              style={{ color: "#000000" }}
+                            />
+                          ) : (
+                            <EyeTwoTone twoToneColor="#000000" />
+                          )}
                         </button>
                       </div>
                     </div>

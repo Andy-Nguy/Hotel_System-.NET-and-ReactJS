@@ -14,9 +14,17 @@ import {
   Tooltip,
   Image,
 } from "antd";
-import { EditOutlined, DeleteOutlined, PoweroffOutlined } from "@ant-design/icons";
+import {
+  EditOutlined,
+  DeleteOutlined,
+  PoweroffOutlined,
+} from "@ant-design/icons";
 import dayjs from "dayjs";
-import { Promotion, deletePromotion, togglePromotion } from "../../api/promotionApi";
+import {
+  Promotion,
+  deletePromotion,
+  togglePromotion,
+} from "../../api/promotionApi";
 import PromotionModal from "./PromotionModal";
 
 interface PromotionListProps {
@@ -34,12 +42,18 @@ const PromotionList: React.FC<PromotionListProps> = ({
   onFilterChange,
   onCreateNew,
 }) => {
-  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
+  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(
+    null
+  );
   const [showDetail, setShowDetail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
-  const [filterDiscountType, setFilterDiscountType] = useState<string | undefined>();
-  const [filterPromotionType, setFilterPromotionType] = useState<string | undefined>();
+  const [filterDiscountType, setFilterDiscountType] = useState<
+    string | undefined
+  >();
+  const [filterPromotionType, setFilterPromotionType] = useState<
+    string | undefined
+  >();
 
   const handleDelete = async (id: string) => {
     try {
@@ -49,7 +63,9 @@ const PromotionList: React.FC<PromotionListProps> = ({
       onRefresh();
     } catch (error) {
       console.error("[PROMOTION_LIST] Error deleting:", error);
-      message.error(`Lỗi: ${error instanceof Error ? error.message : "Xóa thất bại"}`);
+      message.error(
+        `Lỗi: ${error instanceof Error ? error.message : "Xóa thất bại"}`
+      );
     } finally {
       setLoading(false);
     }
@@ -65,7 +81,9 @@ const PromotionList: React.FC<PromotionListProps> = ({
       onRefresh();
     } catch (error) {
       console.error("[PROMOTION_LIST] Error toggling:", error);
-      message.error(`Lỗi: ${error instanceof Error ? error.message : "Thay đổi thất bại"}`);
+      message.error(
+        `Lỗi: ${error instanceof Error ? error.message : "Thay đổi thất bại"}`
+      );
     } finally {
       setLoading(false);
     }
@@ -116,7 +134,8 @@ const PromotionList: React.FC<PromotionListProps> = ({
       title: "Loại KM",
       key: "loaiKhuyenMai",
       width: 130,
-      render: (_: any, record: Promotion) => getPromotionTypeLabel(record.loaiKhuyenMai),
+      render: (_: any, record: Promotion) =>
+        getPromotionTypeLabel(record.loaiKhuyenMai),
     },
     {
       title: "Banner",
@@ -128,12 +147,18 @@ const PromotionList: React.FC<PromotionListProps> = ({
             // If backend returns a full relative path (starts with '/'), use it directly.
             // Otherwise assume it's a filename and prepend the folder.
             src={
-              record.hinhAnhBanner.startsWith("/") || record.hinhAnhBanner.includes("/img/promotion")
+              record.hinhAnhBanner.startsWith("/") ||
+              record.hinhAnhBanner.includes("/img/promotion")
                 ? record.hinhAnhBanner
                 : `/img/promotion/${record.hinhAnhBanner}`
             }
             alt="Banner"
-            style={{ width: 80, height: 40, objectFit: "cover", borderRadius: 4 }}
+            style={{
+              width: 80,
+              height: 40,
+              objectFit: "cover",
+              borderRadius: 4,
+            }}
             fallback="/img/placeholder.png"
           />
         ) : (
@@ -144,7 +169,8 @@ const PromotionList: React.FC<PromotionListProps> = ({
       title: "Loại Giảm Giá",
       key: "loaiGiamGia",
       width: 120,
-      render: (_: any, record: Promotion) => getDiscountTypeLabel(record.loaiGiamGia),
+      render: (_: any, record: Promotion) =>
+        getDiscountTypeLabel(record.loaiGiamGia),
     },
     {
       title: "Giá Trị Giảm",
@@ -152,8 +178,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
       width: 100,
       render: (_: any, record: Promotion) => (
         <>
-          {record.giaTriGiam}{" "}
-          {record.loaiGiamGia === "percent" ? "%" : "đ"}
+          {record.giaTriGiam} {record.loaiGiamGia === "percent" ? "%" : "đ"}
         </>
       ),
     },
@@ -183,7 +208,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
       width: 200,
       render: (_: any, record: Promotion) => (
         <Space>
-          <Tooltip title="Chỉnh Sửa">
+          <Tooltip title="Sửa">
             <Button
               type="text"
               icon={<EditOutlined />}
@@ -191,11 +216,17 @@ const PromotionList: React.FC<PromotionListProps> = ({
               disabled={record.trangThai === "expired"}
             />
           </Tooltip>
-          <Tooltip title={record.trangThai === "active" ? "Ngưng Hoạt Động" : "Kích Hoạt"}>
+          <Tooltip
+            title={
+              record.trangThai === "active" ? "Ngưng Hoạt Động" : "Kích Hoạt"
+            }
+          >
             <Button
               type="text"
               icon={<PoweroffOutlined />}
-              onClick={() => handleToggle(record.idkhuyenMai, record.trangThai || "active")}
+              onClick={() =>
+                handleToggle(record.idkhuyenMai, record.trangThai || "active")
+              }
               danger={record.trangThai === "active"}
               disabled={record.trangThai === "expired"}
             />
@@ -207,7 +238,12 @@ const PromotionList: React.FC<PromotionListProps> = ({
             okText="Xóa"
             cancelText="Hủy"
           >
-            <Button type="text" danger icon={<DeleteOutlined />} loading={loading} />
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              loading={loading}
+            />
           </Popconfirm>
         </Space>
       ),
@@ -273,7 +309,10 @@ const PromotionList: React.FC<PromotionListProps> = ({
       <Table
         columns={columns}
         dataSource={promotions
-          .filter((p) => !filterPromotionType || p.loaiKhuyenMai === filterPromotionType)
+          .filter(
+            (p) =>
+              !filterPromotionType || p.loaiKhuyenMai === filterPromotionType
+          )
           .map((p) => ({
             ...p,
             key: p.idkhuyenMai,
@@ -285,7 +324,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
         onRow={(record: Promotion) => ({
           onClick: (event) => {
             // Prevent opening detail when clicking action buttons inside the row
-            if ((event.target as HTMLElement).closest('.ant-btn')) return;
+            if ((event.target as HTMLElement).closest(".ant-btn")) return;
             setSelectedPromotion(record);
             setShowDetail(true);
           },
