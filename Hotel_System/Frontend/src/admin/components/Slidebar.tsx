@@ -1,4 +1,28 @@
 import React, { useEffect, useState } from "react";
+import { getUserInfo } from "../../context/UserContext";
+
+// Helper to get user role from localStorage using getUserInfo
+const getUserRole = (): number | null => {
+  try {
+    const info = getUserInfo();
+    if (info) {
+      const role = info.role ?? info.vaiTro ?? null;
+      console.log("[Slidebar] getUserRole:", role, typeof role);
+      // Ensure it's a number
+      if (typeof role === "number") return role;
+      if (typeof role === "string") {
+        const num = parseInt(role, 10);
+        if (!isNaN(num)) return num;
+        // Handle string roles
+        if (role.toLowerCase() === "admin") return 2;
+        if (role.toLowerCase() === "nhanvien") return 1;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not get userRole:", e);
+  }
+  return null;
+};
 
 const MenuItem: React.FC<{
   icon?: React.ReactNode;
@@ -113,7 +137,7 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
           background: active ? "#e6f0ff" : "transparent",
           display: "flex",
           alignItems: "center",
-justifyContent: "center",
+          justifyContent: "center",
         }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -129,6 +153,49 @@ justifyContent: "center",
 };
 
 const Slidebar: React.FC = () => {
+  const [userRole, setUserRole] = useState<number | null>(getUserRole());
+
+  // Listen for storage changes and route changes (in case user logs in/out)
+  useEffect(() => {
+    const handleChange = () => {
+      const newRole = getUserRole();
+      console.log("[Slidebar] Role changed:", newRole);
+      setUserRole(newRole);
+    };
+
+    // Check on mount
+    handleChange();
+
+    // Listen for various events
+    window.addEventListener("storage", handleChange);
+    window.addEventListener("popstate", handleChange);
+    window.addEventListener("hashchange", handleChange);
+
+    // Also set an interval to check periodically (in case localStorage is updated without event)
+    const interval = setInterval(handleChange, 3000); // Reduced frequency
+
+    return () => {
+      window.removeEventListener("storage", handleChange);
+      window.removeEventListener("popstate", handleChange);
+      window.removeEventListener("hashchange", handleChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const isAdmin = userRole === 2;
+
+  // Log isAdmin every render
+  useEffect(() => {
+    console.log(
+      "[Slidebar] RENDER - isAdmin:",
+      isAdmin,
+      "userRole:",
+      userRole,
+      "type:",
+      typeof userRole
+    );
+  }, [isAdmin, userRole]);
+
   return (
     <aside
       style={{
@@ -141,9 +208,11 @@ const Slidebar: React.FC = () => {
         position: "fixed",
         left: 0,
         top: 0,
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div
             style={{
@@ -167,9 +236,24 @@ const Slidebar: React.FC = () => {
         </div>
       </div>
 
-      <nav style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {/* determine active state from current location (pathname or hash) */}
-        {/* local state to trigger re-render when route changes */}
+      <nav
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          overflowY: "auto",
+          flex: 1,
+          paddingBottom: 20,
+        }}
+      >
+        {/* Chỉ hiển thị menu Quản lý nhân viên khi role = 2 (Admin) - ĐẶT LÊN ĐẦU */}
+        {isAdmin && (
+          <NavItem
+            key="nhanvien"
+            routeFragment="admin/nhanvien"
+            label="Quản lý Nhân viên"
+          />
+        )}
 
         {/* Dashboard link */}
         <NavItem
@@ -240,14 +324,8 @@ const Slidebar: React.FC = () => {
           label="Quản lý đánh giá"
         />
 
-        <NavItem
-          key="blog"
-          routeFragment="admin/blog"
-          label="Quản lý Blog"
-        />
-
+        <NavItem key="blog" routeFragment="admin/blog" label="Quản lý Blog" />
       </nav>
-      
     </aside>
   );
 };

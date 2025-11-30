@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { getUserInfo, checkIsNhanVien } from "../context/UserContext";
 
 const HeaderSection: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -16,63 +17,42 @@ const HeaderSection: React.FC = () => {
   const refreshAuth = async () => {
     const token = localStorage.getItem("hs_token");
     setIsLoggedIn(!!token);
+
     if (token) {
-      // Check if token is JWT (has 3 parts separated by dots)
-      const parts = token.split(".");
-      if (parts.length === 3) {
-        // JWT token - decode payload
-        try {
-          const base64Payload = parts[1];
-          const decodedPayload = decodeURIComponent(
-            atob(base64Payload)
-              .split("")
-              .map(function (c) {
-                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-              })
-              .join("")
-          );
-          const payload = JSON.parse(decodedPayload);
-          setUserInfo(payload);
-          // Save to localStorage for other components to read
-          localStorage.setItem("hs_userInfo", JSON.stringify(payload));
-        } catch (e) {
-          console.warn("Could not decode JWT token:", e);
-          setUserInfo(null);
-          localStorage.removeItem("hs_userInfo");
-        }
-      } else {
-        // GUID token - need to fetch user profile from API
-        try {
-          const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-          const API_BASE = _VITE_API.replace(/\/$/, "")
-            ? `${_VITE_API.replace(/\/$/, "")}/api`
-            : "/api";
-          const res = await fetch(`${API_BASE}/Auth/profile`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            const profile = await res.json();
-            console.log("[HeaderSection] Profile from API:", profile);
-            // Map profile to userInfo format - use ?? to handle role=0 correctly
-            const mappedUserInfo = {
-              name: profile.hoTen || profile.HoTen || profile.name || "User",
-              email: profile.email || profile.Email,
-              role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
-              phone: profile.soDienThoai || profile.SoDienThoai,
-            };
-            setUserInfo(mappedUserInfo);
-            // Save to localStorage for other components to read
-            localStorage.setItem("hs_userInfo", JSON.stringify(mappedUserInfo));
-          } else {
-            console.warn("Could not fetch profile:", res.status);
-            setUserInfo({ name: "User" });
-            localStorage.removeItem("hs_userInfo");
-          }
-        } catch (e) {
-          console.warn("Could not fetch user profile:", e);
+      // Sử dụng hàm getUserInfo thống nhất
+      const info = getUserInfo();
+      if (info) {
+        console.log("[HeaderSection] Using getUserInfo:", info);
+        setUserInfo(info);
+        return;
+      }
+
+      // Fallback: gọi API profile nếu getUserInfo không có dữ liệu
+      try {
+        const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
+        const API_BASE = _VITE_API.replace(/\/$/, "")
+          ? `${_VITE_API.replace(/\/$/, "")}/api`
+          : "/api";
+        const res = await fetch(`${API_BASE}/Auth/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const profile = await res.json();
+          console.log("[HeaderSection] Profile from API:", profile);
+          const mappedUserInfo = {
+            name: profile.hoTen || profile.HoTen || profile.name || "User",
+            email: profile.email || profile.Email,
+            role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
+            phone: profile.soDienThoai || profile.SoDienThoai,
+          };
+          setUserInfo(mappedUserInfo);
+          localStorage.setItem("hs_userInfo", JSON.stringify(mappedUserInfo));
+        } else {
           setUserInfo({ name: "User" });
-          localStorage.removeItem("hs_userInfo");
         }
+      } catch (e) {
+        console.warn("Could not fetch user profile:", e);
+        setUserInfo({ name: "User" });
       }
     } else {
       setUserInfo(null);
@@ -80,36 +60,9 @@ const HeaderSection: React.FC = () => {
     }
   };
 
-  // helper to check staff role
+  // helper to check staff/admin role - sử dụng hàm thống nhất
   const isNhanVien = () => {
-    console.log("[HeaderSection.isNhanVien] userInfo:", userInfo);
-    if (!userInfo) return false;
-    // Use nullish coalescing (??) to handle role=0 correctly (0 is falsy but valid)
-    const role =
-      userInfo.role ??
-      userInfo.Role ??
-      userInfo.roles ??
-      userInfo.vaiTro ??
-      userInfo.VaiTro ??
-      userInfo[
-        "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-      ] ??
-      userInfo["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"];
-    console.log("[HeaderSection.isNhanVien] role:", role, typeof role);
-    if (role === undefined || role === null) return false;
-    // Handle numeric role (1 = nhanvien)
-    if (typeof role === "number") return role === 1;
-    if (Array.isArray(role))
-      return role.some(
-        (r) => String(r).toLowerCase() === "nhanvien" || String(r) === "1"
-      );
-    const roleStr = String(role).toLowerCase().trim();
-    return (
-      roleStr === "nhanvien" ||
-      roleStr === "admin" ||
-      roleStr === "staff" ||
-      roleStr === "1"
-    );
+    return checkIsNhanVien(userInfo);
   };
 
   const headerRef = useRef<HTMLElement | null>(null);
@@ -194,7 +147,8 @@ const HeaderSection: React.FC = () => {
                     <i className="fa fa-phone"></i> 0123 456 789
                   </li>
                   <li>
-                    <i className="fa fa-envelope"></i> info.robinsvilla@gmail.com
+                    <i className="fa fa-envelope"></i>{" "}
+                    info.robinsvilla@gmail.com
                   </li>
                 </ul>
               </div>
@@ -207,7 +161,7 @@ const HeaderSection: React.FC = () => {
                     <a href="#">
                       <i className="fa fa-twitter"></i>
                     </a>
-                    
+
                     <a href="#">
                       <i className="fa fa-instagram"></i>
                     </a>
@@ -215,7 +169,6 @@ const HeaderSection: React.FC = () => {
                   <a href="/rooms" className="bk-btn">
                     Booking Now
                   </a>
-                
                 </div>
               </div>
             </div>
@@ -528,7 +481,6 @@ const HeaderSection: React.FC = () => {
                       </li>
                     </ul>
                   </nav>
-                  
                 </div>
               </div>
             </div>
