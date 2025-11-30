@@ -329,12 +329,20 @@ namespace Hotel_System.API.Controllers
                         .ThenInclude(p => p.IdloaiPhongNavigation)
                     .AsQueryable();
 
-                // Note: approval state is not stored in the current DB schema,
-                // so we cannot filter at the database level. We'll fetch results
-                // and apply any desired filtering in-memory (currently all reviews
-                // are treated as pending / not approved).
+                // Filter by approval status if specified
+                if (!string.IsNullOrEmpty(status))
+                {
+                    if (status.ToLower() == "pending")
+                    {
+                        query = query.Where(r => !r.IsApproved);
+                    }
+                    else if (status.ToLower() == "approved")
+                    {
+                        query = query.Where(r => r.IsApproved);
+                    }
+                }
 
-                // Search by customer name or title (booking id not stored in DB schema)
+                // Search by customer name or title
                 if (!string.IsNullOrEmpty(keyword))
                 {
                     query = query.Where(r =>
@@ -351,7 +359,7 @@ namespace Hotel_System.API.Controllers
                     .Select(r => new
                     {
                         id = r.IddanhGia,
-                        bookingId = (string?)null,
+                        bookingId = r.IddatPhong,
                         roomId = r.Idphong,
                         roomName = r.IdphongNavigation != null ? r.IdphongNavigation.TenPhong : null,
                         roomType = r.IdphongNavigation != null && r.IdphongNavigation.IdloaiPhongNavigation != null 
@@ -362,12 +370,15 @@ namespace Hotel_System.API.Controllers
                         title = r.TieuDe,
                         content = r.NoiDung,
                         isAnonym = r.IsAnonym,
-                        // The DB does not have IsApproved column; treat as false
-                        isApproved = false,
+                        isApproved = r.IsApproved,
+                        isResponded = r.IsResponded,
                         createdAt = r.CreatedAt,
                         updatedAt = r.UpdatedAt
                     })
                     .ToListAsync();
+                
+                _logger.LogInformation("GetAllReviews returning {Count} reviews. First review IsApproved: {IsApproved}", 
+                    reviews.Count, reviews.Count > 0 ? reviews[0].isApproved : null);
 
                 return Ok(new
                 {
@@ -379,8 +390,12 @@ namespace Hotel_System.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching all reviews");
-                return StatusCode(500, new { error = "Lỗi khi lấy danh sách đánh giá" });
+                _logger.LogError(ex, "Error fetching all reviews: {Message}", ex.Message);
+                return StatusCode(500, new { 
+                    error = "Lỗi khi lấy danh sách đánh giá", 
+                    detail = ex.Message,
+                    innerError = ex.InnerException?.Message 
+                });
             }
         }
 
@@ -406,9 +421,11 @@ namespace Hotel_System.API.Controllers
                 review.IsApproved = true;
                 review.UpdatedAt = DateTime.Now;
 
+                _logger.LogInformation("Review {ReviewId} before save - IsApproved: {IsApproved}", id, review.IsApproved);
+                
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Review {ReviewId} approved by admin", id);
+                _logger.LogInformation("Review {ReviewId} approved by admin - IsApproved: {IsApproved}", id, review.IsApproved);
 
                 // TODO: Send notification to customer about approval
                 // TODO: If rating <= 3, send urgent notification to CSM
@@ -452,6 +469,143 @@ namespace Hotel_System.API.Controllers
             {
                 _logger.LogError(ex, "Error deleting review {ReviewId}", id);
                 return StatusCode(500, new { error = "Lỗi khi xóa đánh giá" });
+            }
+        }
+
+        /// <summary>
+        /// POST /api/Review/{id}/respond - Send apology/response email to customer
+        /// </summary>
+        [HttpPost("{id}/respond")]
+        public async Task<IActionResult> RespondToReview(int id, [FromBody] ReviewResponseRequest request)
+        {
+            try
+            {
+                // Get review with customer and booking info
+                var review = await _context.DanhGia
+                    .Include(r => r.IdkhachHangNavigation)
+                    .Include(r => r.IdphongNavigation)
+                        .ThenInclude(p => p.IdloaiPhongNavigation)
+                    .FirstOrDefaultAsync(r => r.IddanhGia == id);
+
+                if (review == null)
+                {
+                    return NotFound(new { error = "Không tìm thấy đánh giá" });
+                }
+
+                // Check if already responded
+                if (review.IsResponded)
+                {
+                    return BadRequest(new { error = "Đánh giá này đã được phản hồi rồi" });
+                }
+
+                // Only allow response for reviews with rating < 4 stars
+                if (review.SoSao >= 4)
+                {
+                    return BadRequest(new { error = "Chỉ cho phép phản hồi đánh giá dưới 4 sao" });
+                }
+
+                var customer = review.IdkhachHangNavigation;
+                if (customer == null || string.IsNullOrEmpty(customer.Email))
+                {
+                    return BadRequest(new { error = "Không tìm thấy email khách hàng" });
+                }
+
+                // Get booking info if available
+                DatPhong? booking = null;
+                if (!string.IsNullOrEmpty(review.IddatPhong))
+                {
+                    booking = await _context.DatPhongs.FirstOrDefaultAsync(b => b.IddatPhong == review.IddatPhong);
+                }
+
+                // Load email template
+                string templatePath = Path.Combine(Directory.GetCurrentDirectory(), "EmailTemplates", "apology-review.html");
+                if (!System.IO.File.Exists(templatePath))
+                {
+                    _logger.LogWarning($"Apology email template not found at {templatePath}");
+                    return StatusCode(500, new { error = "Email template không tìm thấy" });
+                }
+
+                string emailBody = System.IO.File.ReadAllText(templatePath);
+
+                // Generate star display
+                string stars = "";
+                for (int i = 0; i < review.SoSao; i++) stars += "⭐";
+
+                // Convert compensation text to HTML list items
+                var compensationItems = request.Compensation?
+                    .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => $"<li>{s.Trim()}</li>")
+                    .ToList() ?? new List<string>();
+                string compensationHtml = string.Join("\n", compensationItems);
+
+                var roomName = review.IdphongNavigation?.TenPhong ?? "Phòng";
+                var roomType = review.IdphongNavigation?.IdloaiPhongNavigation?.TenLoaiPhong ?? "";
+
+                // Replace placeholders
+                emailBody = emailBody
+                    .Replace("{{CustomerName}}", customer.HoTen ?? "Quý khách")
+                    .Replace("{{ReviewStars}}", stars)
+                    .Replace("{{ReviewTitle}}", review.TieuDe ?? "")
+                    .Replace("{{ReviewContent}}", review.NoiDung ?? "")
+                    .Replace("{{IssueDescription}}", request.IssueDescription ?? "")
+                    .Replace("{{ActionTaken}}", request.ActionTaken ?? "")
+                    .Replace("{{CompensationList}}", compensationHtml)
+                    .Replace("{{BookingId}}", review.IddatPhong ?? "N/A")
+                    .Replace("{{RoomName}}", $"{roomName} {roomType}".Trim())
+                    .Replace("{{CheckInDate}}", booking?.NgayNhanPhong.ToString("dd/MM/yyyy") ?? "N/A")
+                    .Replace("{{CheckOutDate}}", booking?.NgayTraPhong.ToString("dd/MM/yyyy") ?? "N/A")
+                    .Replace("{{SenderName}}", request.SenderName ?? "Quản lý Chăm sóc Khách hàng")
+                    .Replace("{{BookingLink}}", _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173")
+                    .Replace("{{HotelPhone}}", _configuration["Hotel:Phone"] ?? "1900 xxxx")
+                    .Replace("{{HotelEmail}}", _configuration["Hotel:Email"] ?? "support@robinsvilla.com")
+                    .Replace("{{HotelAddress}}", _configuration["Hotel:Address"] ?? "Robins Villa")
+                    .Replace("{{CurrentYear}}", DateTime.Now.Year.ToString());
+
+                // Send email
+                var smtpHost = _configuration["SMTP:Host"] ?? "smtp.gmail.com";
+                var smtpPort = int.Parse(_configuration["SMTP:Port"] ?? "587");
+                var smtpUser = _configuration["SMTP:User"];
+                var smtpPass = _configuration["SMTP:Password"];
+                var fromEmail = _configuration["SMTP:FromEmail"] ?? smtpUser;
+                var fromName = _configuration["SMTP:FromName"] ?? "Robins Villa";
+
+                if (string.IsNullOrEmpty(smtpUser) || string.IsNullOrEmpty(smtpPass))
+                {
+                    _logger.LogWarning("SMTP credentials not configured");
+                    return StatusCode(500, new { error = "Cấu hình email chưa được thiết lập" });
+                }
+
+                using var client = new SmtpClient(smtpHost, smtpPort)
+                {
+                    EnableSsl = true,
+                    Credentials = new NetworkCredential(smtpUser, smtpPass)
+                };
+
+                var mailMessage = new MailMessage
+                {
+                    From = new MailAddress(fromEmail!, fromName),
+                    Subject = $"[Robins Villa] – Phản hồi về đánh giá của Quý khách",
+                    Body = emailBody,
+                    IsBodyHtml = true
+                };
+                mailMessage.To.Add(customer.Email);
+
+                await client.SendMailAsync(mailMessage);
+
+                // Update IsResponded = true after successful email send
+                review.IsResponded = true;
+                review.UpdatedAt = DateTime.Now;
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Apology email sent to {Email} for review {ReviewId}. IsResponded set to true.", customer.Email, id);
+
+                return Ok(new { message = "Email phản hồi đã được gửi thành công", isResponded = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending response email for review {ReviewId}", id);
+                return StatusCode(500, new { error = "Lỗi khi gửi email phản hồi", detail = ex.Message });
             }
         }
 
@@ -670,6 +824,32 @@ namespace Hotel_System.API.Controllers
     {
         public string? IddatPhong { get; set; }
         public string? Email { get; set; }
+    }
+
+    /// <summary>
+    /// Request model for responding to a review (apology email)
+    /// </summary>
+    public class ReviewResponseRequest
+    {
+        /// <summary>
+        /// Mô tả vấn đề đã ghi nhận từ đánh giá của khách
+        /// </summary>
+        public string? IssueDescription { get; set; }
+        
+        /// <summary>
+        /// Hành động khắc phục đã thực hiện
+        /// </summary>
+        public string? ActionTaken { get; set; }
+        
+        /// <summary>
+        /// Danh sách ưu đãi bồi thường (mỗi dòng là một ưu đãi)
+        /// </summary>
+        public string? Compensation { get; set; }
+        
+        /// <summary>
+        /// Tên người gửi (Quản lý CSKH)
+        /// </summary>
+        public string? SenderName { get; set; }
     }
     
 }
