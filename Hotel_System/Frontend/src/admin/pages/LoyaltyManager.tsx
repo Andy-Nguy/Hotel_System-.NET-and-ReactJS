@@ -301,7 +301,7 @@ const LoyaltyManager: React.FC = () => {
                     <Card style={{ marginBottom: 16 }}>
                       <Space wrap>
                         <Input.Search
-                          placeholder="Tìm khách hàng (tên, email, SĐT, mã)"
+                          placeholder="Tìm kiếm khách hàng (tên, email, SĐT, mã)"
                           style={{ width: 350 }}
                           value={keyword}
                           onChange={(e) => setKeyword(e.target.value)}

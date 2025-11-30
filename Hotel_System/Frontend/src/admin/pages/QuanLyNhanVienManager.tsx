@@ -1,5 +1,26 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { API_CONFIG } from "../../api/config";
+import {
+  Table,
+  Button,
+  Input,
+  Space,
+  Tag,
+  Popconfirm,
+  Tooltip,
+  Modal,
+  Form,
+  DatePicker,
+  Select,
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
+import dayjs from "dayjs";
+import {
+  EditOutlined,
+  DeleteOutlined,
+  KeyOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
 
 const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
@@ -26,17 +47,13 @@ const QuanLyNhanVienManager: React.FC = () => {
   const [thongKe, setThongKe] = useState<ThongKe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingNhanVien, setEditingNhanVien] = useState<NhanVien | null>(null);
-  const [formData, setFormData] = useState({
-    hoTen: "",
-    email: "",
-    matKhau: "",
-    soDienThoai: "",
-    ngaySinh: "",
-    vaiTro: 1,
-  });
+  const [form] = Form.useForm();
+  // AntD Form handles form state for create/edit, remove legacy formData
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordForm] = Form.useForm();
   const [passwordData, setPasswordData] = useState({
     idNguoiDung: 0,
     matKhauMoi: "",
@@ -93,45 +110,45 @@ const QuanLyNhanVienManager: React.FC = () => {
     fetchThongKe();
   }, []);
 
-  // Mở modal tạo mới
+  // Mở modal tạo mới (AntD Form)
   const handleOpenCreate = () => {
     setEditingNhanVien(null);
-    setFormData({
-      hoTen: "",
-      email: "",
-      matKhau: "",
-      soDienThoai: "",
-      ngaySinh: "",
-      vaiTro: 1,
-    });
+    form.resetFields();
+    // keep password field present for creation
+    form.setFieldsValue({ vaiTro: 1 });
     setShowModal(true);
   };
 
-  // Mở modal sửa
+  // Mở modal sửa (AntD Form)
   const handleOpenEdit = (nv: NhanVien) => {
     setEditingNhanVien(nv);
-    setFormData({
+    form.setFieldsValue({
       hoTen: nv.hoTen || "",
       email: nv.email || "",
-      matKhau: "",
       soDienThoai: nv.soDienThoai || "",
-      ngaySinh: nv.ngaySinh ? nv.ngaySinh.split("T")[0] : "",
+      ngaySinh: nv.ngaySinh ? dayjs(nv.ngaySinh) : undefined,
       vaiTro: nv.vaiTro,
     });
     setShowModal(true);
   };
 
-  // Submit form tạo/sửa
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Form submit handler (AntD Form)
+  const handleFormFinish = async (values: any) => {
     setSubmitting(true);
     setMessage(null);
-
     try {
       const token = getToken();
-
+      const payload = {
+        hoTen: values.hoTen,
+        email: values.email,
+        soDienThoai: values.soDienThoai,
+        ngaySinh: values.ngaySinh
+          ? dayjs(values.ngaySinh).format("YYYY-MM-DD")
+          : null,
+        vaiTro: Number(values.vaiTro),
+      };
       if (editingNhanVien) {
-        // Cập nhật
+        // update
         const res = await fetch(
           `${API_BASE}/QuanLyNhanVien/${editingNhanVien.idNguoiDung}`,
           {
@@ -140,13 +157,7 @@ const QuanLyNhanVienManager: React.FC = () => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({
-              hoTen: formData.hoTen,
-              email: formData.email,
-              soDienThoai: formData.soDienThoai,
-              ngaySinh: formData.ngaySinh || null,
-              vaiTro: formData.vaiTro,
-            }),
+            body: JSON.stringify(payload),
           }
         );
         const data = await res.json();
@@ -165,8 +176,8 @@ const QuanLyNhanVienManager: React.FC = () => {
           });
         }
       } else {
-        // Tạo mới
-        if (!formData.matKhau || formData.matKhau.length < 6) {
+        // create
+        if (!values.matKhau || values.matKhau.length < 6) {
           setMessage({
             type: "error",
             text: "Mật khẩu phải có ít nhất 6 ký tự",
@@ -180,14 +191,7 @@ const QuanLyNhanVienManager: React.FC = () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            hoTen: formData.hoTen,
-            email: formData.email,
-            matKhau: formData.matKhau,
-            soDienThoai: formData.soDienThoai,
-            ngaySinh: formData.ngaySinh || null,
-            vaiTro: formData.vaiTro,
-          }),
+          body: JSON.stringify({ ...payload, matKhau: values.matKhau }),
         });
         const data = await res.json();
         if (data.success) {
@@ -209,11 +213,10 @@ const QuanLyNhanVienManager: React.FC = () => {
     }
   };
 
+  // Form submission is handled by AntD Form via handleFormFinish
+
   // Xóa nhân viên
   const handleDelete = async (id: number, hoTen: string) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa nhân viên "${hoTen}"?`))
-      return;
-
     try {
       const token = getToken();
       const res = await fetch(`${API_BASE}/QuanLyNhanVien/${id}`, {
@@ -240,17 +243,17 @@ const QuanLyNhanVienManager: React.FC = () => {
       matKhauMoi: "",
       xacNhanMatKhau: "",
     });
+    passwordForm.resetFields();
     setShowPasswordModal(true);
   };
 
-  // Submit đổi mật khẩu
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passwordData.matKhauMoi !== passwordData.xacNhanMatKhau) {
+  // Submit đổi mật khẩu (AntD Form)
+  const handleChangePassword = async (values: any) => {
+    if (values.matKhauMoi !== values.xacNhanMatKhau) {
       setMessage({ type: "error", text: "Mật khẩu xác nhận không khớp" });
       return;
     }
-    if (passwordData.matKhauMoi.length < 6) {
+    if (values.matKhauMoi.length < 6) {
       setMessage({ type: "error", text: "Mật khẩu phải có ít nhất 6 ký tự" });
       return;
     }
@@ -266,7 +269,7 @@ const QuanLyNhanVienManager: React.FC = () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ matKhauMoi: passwordData.matKhauMoi }),
+          body: JSON.stringify({ matKhauMoi: values.matKhauMoi }),
         }
       );
       const data = await res.json();
@@ -295,6 +298,98 @@ const QuanLyNhanVienManager: React.FC = () => {
     }
   };
 
+  // Filters
+  const filteredNhanViens = useMemo(() => {
+    if (!searchQuery) return nhanViens;
+    const q = searchQuery.trim().toLowerCase();
+    return nhanViens.filter((nv) => {
+      return (
+        `${nv.hoTen} ${nv.email || ""} ${nv.soDienThoai || ""} ${
+          nv.idNguoiDung
+        }`
+          .toLowerCase()
+          .indexOf(q) >= 0
+      );
+    });
+  }, [nhanViens, searchQuery]);
+
+  const columns: ColumnsType<NhanVien> = [
+    {
+      title: "ID",
+      dataIndex: "idNguoiDung",
+      key: "idNguoiDung",
+      width: 100,
+    },
+    {
+      title: "Họ tên",
+      dataIndex: "hoTen",
+      key: "hoTen",
+      render: (text?: string | null, record?: NhanVien) => (
+        <strong>{text}</strong>
+      ),
+    },
+    {
+      title: "Email",
+      dataIndex: "email",
+      key: "email",
+      render: (email?: string | null) => email || "-",
+    },
+    {
+      title: "SĐT",
+      dataIndex: "soDienThoai",
+      key: "soDienThoai",
+      render: (sdt?: string | null) => sdt || "-",
+    },
+    {
+      title: "Ngày sinh",
+      dataIndex: "ngaySinh",
+      key: "ngaySinh",
+      render: (ns: string) => formatDate(ns),
+    },
+    {
+      title: "Vai trò",
+      dataIndex: "tenVaiTro",
+      key: "tenVaiTro",
+      render: (_: string | null, record: NhanVien) => (
+        <Tag color={record.vaiTro === 2 ? "volcano" : "geekblue"}>
+          {record.tenVaiTro}
+        </Tag>
+      ),
+    },
+    {
+      title: "Thao tác",
+      key: "action",
+      align: "center",
+      render: (_: any, record: NhanVien) => (
+        <Space>
+          <Tooltip title="Sửa">
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleOpenEdit(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Đổi mật khẩu">
+            <Button
+              size="small"
+              icon={<KeyOutlined />}
+              onClick={() => handleOpenPasswordModal(record)}
+            />
+          </Tooltip>
+          <Popconfirm
+            title="Xóa nhân viên?"
+            description={`Bạn có chắc muốn xóa nhân viên "${record.hoTen}"?`}
+            onConfirm={() => handleDelete(record.idNguoiDung, record.hoTen)}
+            okText="Xóa"
+            cancelText="Hủy"
+          >
+            <Button size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
   return (
     <div style={{ padding: "24px" }}>
       {/* Header */}
@@ -321,23 +416,13 @@ const QuanLyNhanVienManager: React.FC = () => {
             Quản lý danh sách nhân viên và admin trong hệ thống
           </p>
         </div>
-        <button
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
           onClick={handleOpenCreate}
-          style={{
-            background: "#3b82f6",
-            color: "#fff",
-            border: "none",
-            padding: "10px 20px",
-            borderRadius: "8px",
-            fontWeight: "600",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
         >
-          <span style={{ fontSize: "18px" }}>+</span> Thêm nhân viên
-        </button>
+          Thêm nhân viên
+        </Button>
       </div>
 
       {/* Thống kê */}
@@ -449,633 +534,168 @@ const QuanLyNhanVienManager: React.FC = () => {
             overflow: "hidden",
           }}
         >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr
-                style={{
-                  background: "#f8fafc",
-                  borderBottom: "1px solid #e2e8f0",
-                }}
-              >
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  ID
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  Họ tên
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  Email
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  SĐT
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  Ngày sinh
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  Vai trò
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    textAlign: "center",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  Thao tác
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {nhanViens.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    style={{
-                      padding: "40px",
-                      textAlign: "center",
-                      color: "#64748b",
-                    }}
-                  >
-                    Chưa có nhân viên nào
-                  </td>
-                </tr>
-              ) : (
-                nhanViens.map((nv) => (
-                  <tr
-                    key={nv.idNguoiDung}
-                    style={{ borderBottom: "1px solid #e2e8f0" }}
-                  >
-                    <td style={{ padding: "12px 16px", color: "#64748b" }}>
-                      {nv.idNguoiDung}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 16px",
-                        fontWeight: "500",
-                        color: "#1e293b",
-                      }}
-                    >
-                      {nv.hoTen}
-                    </td>
-                    <td style={{ padding: "12px 16px", color: "#64748b" }}>
-                      {nv.email || "-"}
-                    </td>
-                    <td style={{ padding: "12px 16px", color: "#64748b" }}>
-                      {nv.soDienThoai || "-"}
-                    </td>
-                    <td style={{ padding: "12px 16px", color: "#64748b" }}>
-                      {formatDate(nv.ngaySinh)}
-                    </td>
-                    <td style={{ padding: "12px 16px" }}>
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          borderRadius: "20px",
-                          fontSize: "12px",
-                          fontWeight: "600",
-                          background: nv.vaiTro === 2 ? "#fef2f2" : "#eff6ff",
-                          color: nv.vaiTro === 2 ? "#dc2626" : "#2563eb",
-                        }}
-                      >
-                        {nv.tenVaiTro}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "8px",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <button
-                          onClick={() => handleOpenEdit(nv)}
-                          style={{
-                            background: "#eef2ff",
-                            color: "#4f46e5",
-                            border: "none",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontWeight: "500",
-                            fontSize: "13px",
-                          }}
-                        >
-                          Sửa
-                        </button>
-                        <button
-                          onClick={() => handleOpenPasswordModal(nv)}
-                          style={{
-                            background: "#fef3c7",
-                            color: "#d97706",
-                            border: "none",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontWeight: "500",
-                            fontSize: "13px",
-                          }}
-                        >
-                          Đổi MK
-                        </button>
-                        <button
-                          onClick={() => handleDelete(nv.idNguoiDung, nv.hoTen)}
-                          style={{
-                            background: "#fee2e2",
-                            color: "#dc2626",
-                            border: "none",
-                            padding: "6px 12px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontWeight: "500",
-                            fontSize: "13px",
-                          }}
-                        >
-                          Xóa
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Modal Tạo/Sửa nhân viên */}
-      {showModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "16px",
-              padding: "24px",
-              width: "100%",
-              maxWidth: "500px",
-              maxHeight: "90vh",
-              overflow: "auto",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2
-              style={{
-                margin: "0 0 20px 0",
-                fontSize: "20px",
-                fontWeight: "700",
-                color: "#1e293b",
-              }}
-            >
-              {editingNhanVien ? "Cập nhật nhân viên" : "Thêm nhân viên mới"}
-            </h2>
-
-            <form onSubmit={handleSubmit}>
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  Họ tên <span style={{ color: "#ef4444" }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.hoTen}
-                  onChange={(e) =>
-                    setFormData({ ...formData, hoTen: e.target.value })
-                  }
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
+          <div style={{ padding: 16, borderBottom: "1px solid #f1f5f9" }}>
+            <Space style={{ width: "100%", justifyContent: "space-between" }}>
+              <Input.Search
+                placeholder="Tìm kiếm nhân viên (tên, email, SĐT, ID)"
+                style={{ width: 360 }}
+                allowClear
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button onClick={() => fetchNhanViens()}>Làm mới</Button>
               </div>
-
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  Email <span style={{ color: "#ef4444" }}>*</span>
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-
-              {!editingNhanVien && (
-                <div style={{ marginBottom: "16px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "6px",
-                      fontWeight: "500",
-                      color: "#374151",
-                    }}
-                  >
-                    Mật khẩu <span style={{ color: "#ef4444" }}>*</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.matKhau}
-                    onChange={(e) =>
-                      setFormData({ ...formData, matKhau: e.target.value })
-                    }
-                    required={!editingNhanVien}
-                    minLength={6}
-                    placeholder="Tối thiểu 6 ký tự"
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-              )}
-
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  Số điện thoại
-                </label>
-                <input
-                  type="tel"
-                  value={formData.soDienThoai}
-                  onChange={(e) =>
-                    setFormData({ ...formData, soDienThoai: e.target.value })
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  Ngày sinh
-                </label>
-                <input
-                  type="date"
-                  value={formData.ngaySinh}
-                  onChange={(e) =>
-                    setFormData({ ...formData, ngaySinh: e.target.value })
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: "24px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  Vai trò <span style={{ color: "#ef4444" }}>*</span>
-                </label>
-                <select
-                  value={formData.vaiTro}
-                  onChange={(e) =>
-                    setFormData({ ...formData, vaiTro: Number(e.target.value) })
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                    background: "#fff",
-                  }}
-                >
-                  <option value={1}>Nhân viên</option>
-                  <option value={2}>Admin</option>
-                </select>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: "12px",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  style={{
-                    padding: "10px 20px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    background: "#fff",
-                    color: "#374151",
-                    fontWeight: "500",
-                    cursor: "pointer",
-                  }}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  style={{
-                    padding: "10px 20px",
-                    border: "none",
-                    borderRadius: "8px",
-                    background: "#3b82f6",
-                    color: "#fff",
-                    fontWeight: "500",
-                    cursor: submitting ? "not-allowed" : "pointer",
-                    opacity: submitting ? 0.7 : 1,
-                  }}
-                >
-                  {submitting
-                    ? "Đang xử lý..."
-                    : editingNhanVien
-                    ? "Cập nhật"
-                    : "Tạo mới"}
-                </button>
-              </div>
-            </form>
+            </Space>
           </div>
+          <Table
+            columns={columns}
+            dataSource={filteredNhanViens.map((nv) => ({
+              ...nv,
+              key: nv.idNguoiDung,
+            }))}
+            loading={loading}
+            pagination={{ pageSize: 10, showSizeChanger: true }}
+            rowKey="idNguoiDung"
+          />
         </div>
       )}
 
-      {/* Modal Đổi mật khẩu */}
-      {showPasswordModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-          onClick={() => setShowPasswordModal(false)}
+      {/* Modal Tạo/Sửa nhân viên - AntD Modal + Form */}
+      <Modal
+        open={showModal}
+        title={editingNhanVien ? "Cập nhật nhân viên" : "Thêm nhân viên"}
+        onCancel={() => setShowModal(false)}
+        footer={null}
+        destroyOnClose
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleFormFinish}
+          preserve={false}
         >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "16px",
-              padding: "24px",
-              width: "100%",
-              maxWidth: "400px",
-            }}
-            onClick={(e) => e.stopPropagation()}
+          <Form.Item
+            label="Họ tên"
+            name="hoTen"
+            rules={[{ required: true, message: "Vui lòng nhập họ tên" }]}
           >
-            <h2
-              style={{
-                margin: "0 0 20px 0",
-                fontSize: "20px",
-                fontWeight: "700",
-                color: "#1e293b",
-              }}
+            <Input placeholder="Họ tên" />
+          </Form.Item>
+
+          <Form.Item
+            label="Email"
+            name="email"
+            rules={[
+              {
+                type: "email",
+                required: true,
+                message: "Vui lòng nhập email hợp lệ",
+              },
+            ]}
+          >
+            <Input placeholder="Email" />
+          </Form.Item>
+
+          {!editingNhanVien && (
+            <Form.Item
+              label="Mật khẩu"
+              name="matKhau"
+              rules={[
+                { required: true, message: "Vui lòng nhập mật khẩu" },
+                { min: 6, message: "Mật khẩu phải có ít nhất 6 ký tự" },
+              ]}
             >
-              Đổi mật khẩu nhân viên
-            </h2>
+              <Input.Password placeholder="Tối thiểu 6 ký tự" />
+            </Form.Item>
+          )}
 
-            <form onSubmit={handleChangePassword}>
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  Mật khẩu mới <span style={{ color: "#ef4444" }}>*</span>
-                </label>
-                <input
-                  type="password"
-                  value={passwordData.matKhauMoi}
-                  onChange={(e) =>
-                    setPasswordData({
-                      ...passwordData,
-                      matKhauMoi: e.target.value,
-                    })
-                  }
-                  required
-                  minLength={6}
-                  placeholder="Tối thiểu 6 ký tự"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
+          <Form.Item label="Số điện thoại" name="soDienThoai">
+            <Input placeholder="Số điện thoại" />
+          </Form.Item>
 
-              <div style={{ marginBottom: "24px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "6px",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  Xác nhận mật khẩu <span style={{ color: "#ef4444" }}>*</span>
-                </label>
-                <input
-                  type="password"
-                  value={passwordData.xacNhanMatKhau}
-                  onChange={(e) =>
-                    setPasswordData({
-                      ...passwordData,
-                      xacNhanMatKhau: e.target.value,
-                    })
-                  }
-                  required
-                  placeholder="Nhập lại mật khẩu"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
-                {passwordData.xacNhanMatKhau &&
-                  passwordData.matKhauMoi !== passwordData.xacNhanMatKhau && (
-                    <small
-                      style={{
-                        color: "#ef4444",
-                        marginTop: "4px",
-                        display: "block",
-                      }}
-                    >
-                      Mật khẩu không khớp
-                    </small>
-                  )}
-              </div>
+          <Form.Item label="Ngày sinh" name="ngaySinh">
+            <DatePicker style={{ width: "100%" }} format={"YYYY-MM-DD"} />
+          </Form.Item>
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: "12px",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  style={{
-                    padding: "10px 20px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
-                    background: "#fff",
-                    color: "#374151",
-                    fontWeight: "500",
-                    cursor: "pointer",
-                  }}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    submitting ||
-                    passwordData.matKhauMoi !== passwordData.xacNhanMatKhau
+          <Form.Item
+            label="Vai trò"
+            name="vaiTro"
+            rules={[{ required: true, message: "Vui lòng chọn vai trò" }]}
+          >
+            <Select>
+              <Select.Option value={1}>Nhân viên</Select.Option>
+              <Select.Option value={2}>Admin</Select.Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item style={{ textAlign: "right" }}>
+            <Space>
+              <Button onClick={() => setShowModal(false)}>Hủy</Button>
+              <Button type="primary" htmlType="submit" loading={submitting}>
+                {editingNhanVien ? "Cập nhật" : "Tạo mới"}
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Modal Đổi mật khẩu - AntD Modal + Form */}
+      <Modal
+        open={showPasswordModal}
+        title="Đổi mật khẩu nhân viên"
+        onCancel={() => setShowPasswordModal(false)}
+        footer={null}
+        destroyOnClose
+      >
+        <Form
+          form={passwordForm}
+          layout="vertical"
+          onFinish={handleChangePassword}
+          preserve={false}
+        >
+          <Form.Item
+            label="Mật khẩu mới"
+            name="matKhauMoi"
+            rules={[
+              { required: true, message: "Vui lòng nhập mật khẩu" },
+              { min: 6, message: "Mật khẩu phải có ít nhất 6 ký tự" },
+            ]}
+          >
+            <Input.Password placeholder="Tối thiểu 6 ký tự" />
+          </Form.Item>
+
+          <Form.Item
+            label="Xác nhận mật khẩu"
+            name="xacNhanMatKhau"
+            dependencies={["matKhauMoi"]}
+            rules={[
+              { required: true, message: "Vui lòng xác nhận mật khẩu" },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue("matKhauMoi") === value) {
+                    return Promise.resolve();
                   }
-                  style={{
-                    padding: "10px 20px",
-                    border: "none",
-                    borderRadius: "8px",
-                    background: "#f59e0b",
-                    color: "#fff",
-                    fontWeight: "500",
-                    cursor: submitting ? "not-allowed" : "pointer",
-                    opacity:
-                      submitting ||
-                      passwordData.matKhauMoi !== passwordData.xacNhanMatKhau
-                        ? 0.7
-                        : 1,
-                  }}
-                >
-                  {submitting ? "Đang xử lý..." : "Đổi mật khẩu"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                  return Promise.reject(
+                    new Error("Mật khẩu xác nhận không khớp")
+                  );
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="Nhập lại mật khẩu" />
+          </Form.Item>
+
+          <Form.Item style={{ textAlign: "right" }}>
+            <Space>
+              <Button onClick={() => setShowPasswordModal(false)}>Hủy</Button>
+              <Button type="primary" htmlType="submit" loading={submitting}>
+                Đổi mật khẩu
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

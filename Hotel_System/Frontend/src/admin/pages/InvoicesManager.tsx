@@ -430,7 +430,7 @@ const InvoicesManager: React.FC = () => {
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
       <Slidebar />
-      <div style={{ marginLeft: 240 }}>
+      <div style={{ marginLeft: 280 }}>
         <HeaderSection showStats={false} />
         <main style={{ padding: "0px 60px" }}>
           <div
@@ -474,7 +474,7 @@ const InvoicesManager: React.FC = () => {
                   style={{ width: 160 }}
                 />
                 <Input.Search
-                  placeholder="Tìm HĐ / ĐP / KH"
+                  placeholder="Tìm kiếm HĐ / ĐP / KH"
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   onSearch={() => load()}

@@ -75,7 +75,7 @@ const ServiceManager: React.FC = () => {
     });
     setImageUrlInput(s.hinhDichVu ?? "");
     setModalFile(null);
-    
+
     // Fetch merged service data (includes TTDichVu fields) and populate modal details
     serviceApi.getServiceById(s.iddichVu).then((d) => {
       if (d) {
@@ -88,7 +88,7 @@ const ServiceManager: React.FC = () => {
         setModalDetails({ thongTinDv: "", thoiLuongUocTinh: 60, ghiChu: "" });
       }
     });
-    
+
     setShowModal(true);
   }
 
@@ -113,23 +113,35 @@ const ServiceManager: React.FC = () => {
       const freshService = await serviceApi.getServiceById(s.iddichVu);
       console.log("[DEBUG] Fresh service fetched:", freshService);
       setDetailService(freshService);
-      
-      console.log("[DEBUG] Fetch merged service data from getServiceById for id:", s.iddichVu);
+
+      console.log(
+        "[DEBUG] Fetch merged service data from getServiceById for id:",
+        s.iddichVu
+      );
       const merged = await serviceApi.getServiceById(s.iddichVu);
       console.log("[DEBUG] ✅ Merged service response:", merged);
-      
-      console.log("[DEBUG] Fetching usage from endpoint: /api/dich-vu/lich-su/" + s.iddichVu);
+
+      console.log(
+        "[DEBUG] Fetching usage from endpoint: /api/dich-vu/lich-su/" +
+          s.iddichVu
+      );
       let usage = await serviceApi.getServiceUsage(s.iddichVu);
       console.log("[DEBUG] Service Usage API response (per-service):", usage);
 
       if (!usage || (Array.isArray(usage) && usage.length === 0)) {
-        console.log("[DEBUG] Per-service usage empty, fetching all usages as fallback");
+        console.log(
+          "[DEBUG] Per-service usage empty, fetching all usages as fallback"
+        );
         const all = await serviceApi.getAllUsage();
-        usage = Array.isArray(all) ? all.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu) : [];
+        usage = Array.isArray(all)
+          ? all.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu)
+          : [];
         console.log("[DEBUG] Fallback filtered usages:", usage);
       } else {
         // Ensure returned array only contains this service's entries (defensive)
-        usage = Array.isArray(usage) ? usage.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu) : [];
+        usage = Array.isArray(usage)
+          ? usage.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu)
+          : [];
       }
 
       // Service details are now included in 'merged' (single object). For compatibility
@@ -152,7 +164,7 @@ const ServiceManager: React.FC = () => {
       // Fetch fresh service data to ensure latest trangThai
       const freshService = await serviceApi.getServiceById(s.iddichVu);
       setDetailService(freshService);
-      
+
       const [merged, perServiceUsage] = await Promise.all([
         serviceApi.getServiceById(s.iddichVu),
         serviceApi.getServiceUsage(s.iddichVu),
@@ -162,12 +174,18 @@ const ServiceManager: React.FC = () => {
 
       let usage = perServiceUsage;
       if (!usage || (Array.isArray(usage) && usage.length === 0)) {
-        console.log("Per-service usage empty, fetching all usages as fallback (edit)");
+        console.log(
+          "Per-service usage empty, fetching all usages as fallback (edit)"
+        );
         const all = await serviceApi.getAllUsage();
-        usage = Array.isArray(all) ? all.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu) : [];
+        usage = Array.isArray(all)
+          ? all.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu)
+          : [];
         console.log("Fallback filtered usages (edit):", usage);
       } else {
-        usage = Array.isArray(usage) ? usage.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu) : [];
+        usage = Array.isArray(usage)
+          ? usage.filter((u) => (u.iddichVu ?? s.iddichVu) === s.iddichVu)
+          : [];
       }
 
       setServiceDetails(merged ? [merged as any] : []);
@@ -195,13 +213,13 @@ const ServiceManager: React.FC = () => {
         ghiChu: updatedService.ghiChu,
       };
       await serviceApi.updateService(updatedService.iddichVu, payload);
-      
+
       // Reload services and get fresh data
       setLoading(true);
       try {
         const freshServices = await serviceApi.getServices();
         setServices(freshServices);
-        
+
         // Update detailService with fresh data
         const updatedDetailService = freshServices.find(
           (s) => s.iddichVu === updatedService.iddichVu
@@ -212,7 +230,7 @@ const ServiceManager: React.FC = () => {
       } finally {
         setLoading(false);
       }
-      
+
       await loadUsages();
       alert("Cập nhật dịch vụ thành công");
       setDetailVisible(false);
@@ -233,7 +251,11 @@ const ServiceManager: React.FC = () => {
     try {
       let imageUrl = modalForm.hinhDichVu ?? "";
       if (modalFile) {
-        const res = await serviceApi.uploadServiceImage(modalFile, editing?.iddichVu, modalForm.tenDichVu);
+        const res = await serviceApi.uploadServiceImage(
+          modalFile,
+          editing?.iddichVu,
+          modalForm.tenDichVu
+        );
         // Store only the fileName (e.g., "DV_Spa L'Occitane.jpg"), not the full URL path
         imageUrl = res.fileName;
       }
@@ -263,7 +285,7 @@ const ServiceManager: React.FC = () => {
         thoiLuongUocTinh: modalDetails.thoiLuongUocTinh,
         ghiChu: modalDetails.ghiChu,
       };
-      
+
       try {
         // The API now stores detail fields on the main service. Update the service with
         // the detail payload to persist thongTinDv / thoiLuongUocTinh / ghiChu.
@@ -272,12 +294,19 @@ const ServiceManager: React.FC = () => {
           thoiLuongUocTinh: detailPayload.thoiLuongUocTinh,
           ghiChu: detailPayload.ghiChu,
         });
-        console.log('Updated merged service with detail payload');
+        console.log("Updated merged service with detail payload");
       } catch (detailErr) {
-        console.error('Error saving service detail (merged):', detailErr);
+        console.error("Error saving service detail (merged):", detailErr);
       }
 
-      setModalForm({ tenDichVu: "", tienDichVu: 0, hinhDichVu: "", thoiGianBatDau: "08:00:00", thoiGianKetThuc: "22:00:00", trangThai: "Đang hoạt động" });
+      setModalForm({
+        tenDichVu: "",
+        tienDichVu: 0,
+        hinhDichVu: "",
+        thoiGianBatDau: "08:00:00",
+        thoiGianKetThuc: "22:00:00",
+        trangThai: "Đang hoạt động",
+      });
       setModalDetails({ thongTinDv: "", thoiLuongUocTinh: 60, ghiChu: "" });
       setModalFile(null);
       setShowModal(false);
@@ -311,7 +340,7 @@ const ServiceManager: React.FC = () => {
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
       <Slidebar />
-      <div style={{ marginLeft: 240 }}>
+      <div style={{ marginLeft: 280 }}>
         <HeaderSection showStats={false} />
 
         <main style={{ padding: "0px 60px" }}>
@@ -346,7 +375,11 @@ const ServiceManager: React.FC = () => {
                         trangThai: "Đang hoạt động",
                       });
                       setImageUrlInput("");
-                      setModalDetails({ thongTinDv: "", thoiLuongUocTinh: 60, ghiChu: "" });
+                      setModalDetails({
+                        thongTinDv: "",
+                        thoiLuongUocTinh: 60,
+                        ghiChu: "",
+                      });
                       setModalFile(null);
                       setShowModal(true);
                     }}
@@ -490,7 +523,6 @@ const ServiceManager: React.FC = () => {
                   {/* Header */}
                   <div
                     style={{
-                      
                       color: "white",
                       padding: "20px 24px",
                       borderTopLeftRadius: 14,
@@ -505,235 +537,6 @@ const ServiceManager: React.FC = () => {
                   {/* Content */}
                   <div style={{ padding: 24 }}>
                     <form onSubmit={handleModalSubmit}>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 16,
-                      }}
-                    >
-                      <div>
-                        <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                          Tên dịch vụ
-                        </label>
-                        <input
-                          value={modalForm.tenDichVu ?? ""}
-                          onChange={(e) =>
-                            setModalForm({
-                              ...modalForm,
-                              tenDichVu: e.target.value,
-                            })
-                          }
-                          style={{
-                            width: "100%",
-                            padding: 8,
-                            borderRadius: 8,
-                            border: "1px solid #e5e7eb",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                          Giá (VNĐ)
-                        </label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={modalForm.tienDichVu ?? 0}
-                          onChange={(e) =>
-                            setModalForm({
-                              ...modalForm,
-                              tienDichVu: Number(e.target.value),
-                            })
-                          }
-                          style={{
-                            width: "100%",
-                            padding: 8,
-                            borderRadius: 8,
-                            border: "1px solid #e5e7eb",
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 16 }}>
-                      <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                        🖼️ Ảnh dịch vụ
-                      </label>
-                      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                        <div
-                          style={{
-                            width: 160,
-                            height: 100,
-                            borderRadius: 8,
-                            overflow: "hidden",
-                            background: "#f3f4f6",
-                            flex: "0 0 160px",
-                            border: "1px solid #e5e7eb",
-                          }}
-                        >
-                          <img
-                            src={modalForm.hinhDichVu ?? "/img/service/default.webp"}
-                            alt="preview"
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                            }}
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                            }}
-                          />
-                          {!modalForm.hinhDichVu && (
-                            <div
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: 48,
-                                color: "#9ca3af",
-                              }}
-                            >
-                              🖼️
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                              setModalFile(file);
-                              // Create preview URL for the selected file
-                              if (file) {
-                                const previewUrl = URL.createObjectURL(file);
-                                setModalForm({ ...modalForm, hinhDichVu: previewUrl });
-                              }
-                            }}
-                            style={{ marginBottom: 8, display: "block" }}
-                          />
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <input
-                              placeholder="Hoặc dán URL ảnh"
-                              value={imageUrlInput}
-                              onChange={(e) => setImageUrlInput(e.target.value)}
-                              style={{
-                                flex: 1,
-                                padding: 8,
-                                borderRadius: 8,
-                                border: "1px solid #d1d5db",
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setModalForm((prev) => ({
-                                  ...prev,
-                                  hinhDichVu: imageUrlInput,
-                                }))
-                              }
-                              style={{
-                                padding: "8px 12px",
-                                borderRadius: 8,
-                                background: "#1e40af",
-                                color: "#fff",
-                                border: "none",
-                                cursor: "pointer",
-                                fontWeight: 600,
-                              }}
-                            >
-                              Dùng URL
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Time and Status Fields */}
-                    <div
-                      style={{
-                        marginTop: 16,
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr",
-                        gap: 16,
-                      }}
-                    >
-                      <div>
-                        <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                          ⏰ Giờ bắt đầu
-                        </label>
-                        <input
-                          type="time"
-                          value={modalForm.thoiGianBatDau ?? "08:00:00"}
-                          onChange={(e) =>
-                            setModalForm({
-                              ...modalForm,
-                              thoiGianBatDau: e.target.value,
-                            })
-                          }
-                          style={{
-                            width: "100%",
-                            padding: 8,
-                            borderRadius: 8,
-                            border: "1px solid #e5e7eb",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                          ⏰ Giờ kết thúc
-                        </label>
-                        <input
-                          type="time"
-                          value={modalForm.thoiGianKetThuc ?? "22:00:00"}
-                          onChange={(e) =>
-                            setModalForm({
-                              ...modalForm,
-                              thoiGianKetThuc: e.target.value,
-                            })
-                          }
-                          style={{
-                            width: "100%",
-                            padding: 8,
-                            borderRadius: 8,
-                            border: "1px solid #e5e7eb",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                          ⏳ Trạng thái
-                        </label>
-                        <select
-                          value={modalForm.trangThai ?? "Đang hoạt động"}
-                          onChange={(e) =>
-                            setModalForm({
-                              ...modalForm,
-                              trangThai: e.target.value,
-                            })
-                          }
-                          style={{
-                            width: "100%",
-                            padding: 8,
-                            borderRadius: 8,
-                            border: "1px solid #e5e7eb",
-                          }}
-                        >
-                          <option value="Đang hoạt động">✅ Đang hoạt động</option>
-                          <option value="Ngưng hoạt động">🛑 Ngưng hoạt động</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* TTDichVu Details Section */}
-                    <div style={{ marginTop: 24, paddingTop: 20, borderTop: "2px solid #e5e7eb" }}>
-                      <h4 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#1f2937" }}>
-                        📋 Thông tin chi tiết dịch vụ
-                      </h4>
-
                       <div
                         style={{
                           display: "grid",
@@ -741,42 +544,50 @@ const ServiceManager: React.FC = () => {
                           gap: 16,
                         }}
                       >
-                        <div style={{ gridColumn: "1 / -1" }}>
-                          <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                            Mô tả dịch vụ
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              marginBottom: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Tên dịch vụ
                           </label>
-                          <textarea
-                            value={modalDetails.thongTinDv ?? ""}
+                          <input
+                            value={modalForm.tenDichVu ?? ""}
                             onChange={(e) =>
-                              setModalDetails({
-                                ...modalDetails,
-                                thongTinDv: e.target.value,
+                              setModalForm({
+                                ...modalForm,
+                                tenDichVu: e.target.value,
                               })
                             }
-                            placeholder="Nhập mô tả chi tiết về dịch vụ..."
                             style={{
                               width: "100%",
                               padding: 8,
                               borderRadius: 8,
                               border: "1px solid #e5e7eb",
-                              minHeight: 100,
-                              fontFamily: "inherit",
                             }}
                           />
                         </div>
-
                         <div>
-                          <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                            ⏱️ Thời lượng ước tính (phút)
+                          <label
+                            style={{
+                              display: "block",
+                              marginBottom: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Giá (VNĐ)
                           </label>
                           <input
                             type="number"
-                            min="1"
-                            value={modalDetails.thoiLuongUocTinh ?? 60}
+                            step="1"
+                            value={modalForm.tienDichVu ?? 0}
                             onChange={(e) =>
-                              setModalDetails({
-                                ...modalDetails,
-                                thoiLuongUocTinh: Number(e.target.value),
+                              setModalForm({
+                                ...modalForm,
+                                tienDichVu: Number(e.target.value),
                               })
                             }
                             style={{
@@ -784,85 +595,395 @@ const ServiceManager: React.FC = () => {
                               padding: 8,
                               borderRadius: 8,
                               border: "1px solid #e5e7eb",
-                            }}
-                          />
-                        </div>
-
-                        <div>
-                          <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-                            📝 Ghi chú
-                          </label>
-                          <textarea
-                            value={modalDetails.ghiChu ?? ""}
-                            onChange={(e) =>
-                              setModalDetails({
-                                ...modalDetails,
-                                ghiChu: e.target.value,
-                              })
-                            }
-                            placeholder="Nhập ghi chú thêm (nếu có)..."
-                            style={{
-                              width: "100%",
-                              padding: 8,
-                              borderRadius: 8,
-                              border: "1px solid #e5e7eb",
-                              minHeight: 80,
-                              fontFamily: "inherit",
                             }}
                           />
                         </div>
                       </div>
-                    </div>
 
-                    {/* Action Buttons */}
-                    <div
-                      style={{
-                        marginTop: 24,
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: 12,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowModal(false);
-                          setModalFile(null);
-                          setEditing(null);
-                        }}
+                      <div style={{ marginTop: 16 }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: 6,
+                            fontWeight: 600,
+                          }}
+                        >
+                          🖼️ Ảnh dịch vụ
+                        </label>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 12,
+                            alignItems: "flex-start",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 160,
+                              height: 100,
+                              borderRadius: 8,
+                              overflow: "hidden",
+                              background: "#f3f4f6",
+                              flex: "0 0 160px",
+                              border: "1px solid #e5e7eb",
+                            }}
+                          >
+                            <img
+                              src={
+                                modalForm.hinhDichVu ??
+                                "/img/service/default.webp"
+                              }
+                              alt="preview"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                            {!modalForm.hinhDichVu && (
+                              <div
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 48,
+                                  color: "#9ca3af",
+                                }}
+                              >
+                                🖼️
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file =
+                                  e.target.files && e.target.files[0]
+                                    ? e.target.files[0]
+                                    : null;
+                                setModalFile(file);
+                                // Create preview URL for the selected file
+                                if (file) {
+                                  const previewUrl = URL.createObjectURL(file);
+                                  setModalForm({
+                                    ...modalForm,
+                                    hinhDichVu: previewUrl,
+                                  });
+                                }
+                              }}
+                              style={{ marginBottom: 8, display: "block" }}
+                            />
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <input
+                                placeholder="Hoặc dán URL ảnh"
+                                value={imageUrlInput}
+                                onChange={(e) =>
+                                  setImageUrlInput(e.target.value)
+                                }
+                                style={{
+                                  flex: 1,
+                                  padding: 8,
+                                  borderRadius: 8,
+                                  border: "1px solid #d1d5db",
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setModalForm((prev) => ({
+                                    ...prev,
+                                    hinhDichVu: imageUrlInput,
+                                  }))
+                                }
+                                style={{
+                                  padding: "8px 12px",
+                                  borderRadius: 8,
+                                  background: "#1e40af",
+                                  color: "#fff",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Dùng URL
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Time and Status Fields */}
+                      <div
                         style={{
-                          padding: "10px 20px",
-                          borderRadius: 8,
-                          border: "1px solid #d1d5db",
-                          background: "#fff",
-                          color: "#6b7280",
-                          fontWeight: 600,
-                          cursor: "pointer",
+                          marginTop: 16,
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr 1fr",
+                          gap: 16,
                         }}
                       >
-                        ✕ Hủy
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={modalLoading}
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              marginBottom: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            ⏰ Giờ bắt đầu
+                          </label>
+                          <input
+                            type="time"
+                            value={modalForm.thoiGianBatDau ?? "08:00:00"}
+                            onChange={(e) =>
+                              setModalForm({
+                                ...modalForm,
+                                thoiGianBatDau: e.target.value,
+                              })
+                            }
+                            style={{
+                              width: "100%",
+                              padding: 8,
+                              borderRadius: 8,
+                              border: "1px solid #e5e7eb",
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              marginBottom: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            ⏰ Giờ kết thúc
+                          </label>
+                          <input
+                            type="time"
+                            value={modalForm.thoiGianKetThuc ?? "22:00:00"}
+                            onChange={(e) =>
+                              setModalForm({
+                                ...modalForm,
+                                thoiGianKetThuc: e.target.value,
+                              })
+                            }
+                            style={{
+                              width: "100%",
+                              padding: 8,
+                              borderRadius: 8,
+                              border: "1px solid #e5e7eb",
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              marginBottom: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            ⏳ Trạng thái
+                          </label>
+                          <select
+                            value={modalForm.trangThai ?? "Đang hoạt động"}
+                            onChange={(e) =>
+                              setModalForm({
+                                ...modalForm,
+                                trangThai: e.target.value,
+                              })
+                            }
+                            style={{
+                              width: "100%",
+                              padding: 8,
+                              borderRadius: 8,
+                              border: "1px solid #e5e7eb",
+                            }}
+                          >
+                            <option value="Đang hoạt động">
+                              ✅ Đang hoạt động
+                            </option>
+                            <option value="Ngưng hoạt động">
+                              🛑 Ngưng hoạt động
+                            </option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* TTDichVu Details Section */}
+                      <div
                         style={{
-                          padding: "10px 24px",
-                          borderRadius: 8,
-                          background: "linear-gradient(135deg,#059669,#10b981)",
-                          color: "#fff",
-                          border: "none",
-                          fontWeight: 700,
-                          cursor: modalLoading ? "not-allowed" : "pointer",
-                          opacity: modalLoading ? 0.7 : 1,
+                          marginTop: 24,
+                          paddingTop: 20,
+                          borderTop: "2px solid #e5e7eb",
                         }}
                       >
-                        {modalLoading
-                          ? "⏳ Đang lưu..."
-                          : editing
-                          ? "💾 Cập nhật"
-                          : "➕ Tạo mới"}
-                      </button>
-                    </div>
+                        <h4
+                          style={{
+                            margin: "0 0 16px",
+                            fontSize: 16,
+                            fontWeight: 600,
+                            color: "#1f2937",
+                          }}
+                        >
+                          📋 Thông tin chi tiết dịch vụ
+                        </h4>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: 16,
+                          }}
+                        >
+                          <div style={{ gridColumn: "1 / -1" }}>
+                            <label
+                              style={{
+                                display: "block",
+                                marginBottom: 6,
+                                fontWeight: 600,
+                              }}
+                            >
+                              Mô tả dịch vụ
+                            </label>
+                            <textarea
+                              value={modalDetails.thongTinDv ?? ""}
+                              onChange={(e) =>
+                                setModalDetails({
+                                  ...modalDetails,
+                                  thongTinDv: e.target.value,
+                                })
+                              }
+                              placeholder="Nhập mô tả chi tiết về dịch vụ..."
+                              style={{
+                                width: "100%",
+                                padding: 8,
+                                borderRadius: 8,
+                                border: "1px solid #e5e7eb",
+                                minHeight: 100,
+                                fontFamily: "inherit",
+                              }}
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              style={{
+                                display: "block",
+                                marginBottom: 6,
+                                fontWeight: 600,
+                              }}
+                            >
+                              ⏱️ Thời lượng ước tính (phút)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={modalDetails.thoiLuongUocTinh ?? 60}
+                              onChange={(e) =>
+                                setModalDetails({
+                                  ...modalDetails,
+                                  thoiLuongUocTinh: Number(e.target.value),
+                                })
+                              }
+                              style={{
+                                width: "100%",
+                                padding: 8,
+                                borderRadius: 8,
+                                border: "1px solid #e5e7eb",
+                              }}
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              style={{
+                                display: "block",
+                                marginBottom: 6,
+                                fontWeight: 600,
+                              }}
+                            >
+                              📝 Ghi chú
+                            </label>
+                            <textarea
+                              value={modalDetails.ghiChu ?? ""}
+                              onChange={(e) =>
+                                setModalDetails({
+                                  ...modalDetails,
+                                  ghiChu: e.target.value,
+                                })
+                              }
+                              placeholder="Nhập ghi chú thêm (nếu có)..."
+                              style={{
+                                width: "100%",
+                                padding: 8,
+                                borderRadius: 8,
+                                border: "1px solid #e5e7eb",
+                                minHeight: 80,
+                                fontFamily: "inherit",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div
+                        style={{
+                          marginTop: 24,
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: 12,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowModal(false);
+                            setModalFile(null);
+                            setEditing(null);
+                          }}
+                          style={{
+                            padding: "10px 20px",
+                            borderRadius: 8,
+                            border: "1px solid #d1d5db",
+                            background: "#fff",
+                            color: "#6b7280",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          ✕ Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={modalLoading}
+                          style={{
+                            padding: "10px 24px",
+                            borderRadius: 8,
+                            background:
+                              "linear-gradient(135deg,#059669,#10b981)",
+                            color: "#fff",
+                            border: "none",
+                            fontWeight: 700,
+                            cursor: modalLoading ? "not-allowed" : "pointer",
+                            opacity: modalLoading ? 0.7 : 1,
+                          }}
+                        >
+                          {modalLoading
+                            ? "⏳ Đang lưu..."
+                            : editing
+                            ? "💾 Cập nhật"
+                            : "➕ Tạo mới"}
+                        </button>
+                      </div>
                     </form>
                   </div>
                 </div>
@@ -1217,7 +1338,12 @@ const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
                   ) : (
                     <>
                       {/* Details from TTDichVu */}
-                      {console.log("[RENDER] Details tab - details array:", details, "length:", details.length)}
+                      {console.log(
+                        "[RENDER] Details tab - details array:",
+                        details,
+                        "length:",
+                        details.length
+                      )}
                       {details.length > 0 ? (
                         <div style={{ marginBottom: 20 }}>
                           <h4
@@ -1394,7 +1520,8 @@ const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
                               Trạng thái
                             </div>
                             <div style={{ fontSize: 20 }}>
-                              {service.trangThai && service.trangThai !== "Ngưng hoạt động"
+                              {service.trangThai &&
+                              service.trangThai !== "Ngưng hoạt động"
                                 ? "✅ Đang hoạt động"
                                 : "🛑 Ngưng hoạt động"}
                             </div>
@@ -2053,24 +2180,40 @@ const ServiceDetailModal: React.FC<ServiceDetailModalProps> = ({
                       try {
                         // If user selected a file, upload it first and use returned fileName
                         if (imageFile) {
-                          const uploadRes = await serviceApi.uploadServiceImage(imageFile, form.iddichVu, form.tenDichVu);
-                          const fileName = uploadRes?.fileName ?? imageFile.name;
-                          setForm((prev) => ({ ...prev, hinhDichVu: fileName }));
+                          const uploadRes = await serviceApi.uploadServiceImage(
+                            imageFile,
+                            form.iddichVu,
+                            form.tenDichVu
+                          );
+                          const fileName =
+                            uploadRes?.fileName ?? imageFile.name;
+                          setForm((prev) => ({
+                            ...prev,
+                            hinhDichVu: fileName,
+                          }));
                           // ensure updated form is passed
-                          await onEdit({ ...form, hinhDichVu: fileName }, isActive);
+                          await onEdit(
+                            { ...form, hinhDichVu: fileName },
+                            isActive
+                          );
                         } else {
                           // If hinhDichVu is a data URL, we should not send it — try to detect
                           const v = form.hinhDichVu ?? "";
                           if (v.startsWith("data:") || v.startsWith("blob:")) {
                             // No file object but data URL present — attempt to strip and warn
-                            alert('Vui lòng chọn ảnh rồi nhấn Lưu để tải ảnh lên.');
+                            alert(
+                              "Vui lòng chọn ảnh rồi nhấn Lưu để tải ảnh lên."
+                            );
                           } else {
                             await onEdit(form, isActive);
                           }
                         }
                       } catch (err) {
-                        console.error('Error uploading image in detail modal', err);
-                        alert('Lỗi khi tải ảnh lên');
+                        console.error(
+                          "Error uploading image in detail modal",
+                          err
+                        );
+                        alert("Lỗi khi tải ảnh lên");
                       } finally {
                         setIsEditing(false);
                         setImageFile(null);
