@@ -30,7 +30,6 @@ const BlogEdit: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
-  const [oldImageUrl, setOldImageUrl] = useState('');
   const [originalData, setOriginalData] = useState<Partial<BlogFormData> | null>(null); // Track original data
 
   const categories = ['Ẩm thực', 'Check-in', 'Tin tức', 'Địa điểm Xanh', 'Lưu trú Nghệ thuật', 'Khách sạn Sang Trọng', 'Cảnh báo khẩn cấp'];
@@ -66,7 +65,6 @@ const BlogEdit: React.FC = () => {
           return;
         }
         const data = await res.json();
-        setOldImageUrl(data.image || '');
         const initialData = {
           id: data.id,
           title: data.title || '',
@@ -103,11 +101,22 @@ const BlogEdit: React.FC = () => {
     if (!file || !formData) return;
     setUploading(true);
     try {
+      // Delete old image first if it exists and is a local path
+      if (formData.image && formData.image.startsWith('/img/blog/')) {
+        try {
+          await fetch(`/api/blog/delete-image?path=${encodeURIComponent(formData.image)}`, {
+            method: 'DELETE',
+          });
+        } catch (e) {
+          console.warn('Failed to delete old image:', e);
+        }
+      }
+
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
-      formDataUpload.append('title', formData.title || '');
 
-      const res = await fetch('/admin/blogs/upload-image?title=' + encodeURIComponent(formData.title || ''), {
+      const title = formData.title || '';
+      const res = await fetch(`/admin/blogs/upload-image?title=${encodeURIComponent(title)}&type=banner`, {
         method: 'POST',
         body: formDataUpload,
       });
@@ -135,7 +144,8 @@ const BlogEdit: React.FC = () => {
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
 
-      const res = await fetch('/admin/blogs/upload-image', {
+      const title = formData.title || 'blog';
+      const res = await fetch(`/admin/blogs/upload-image?title=${encodeURIComponent(title)}&type=gallery`, {
         method: 'POST',
         body: formDataUpload,
       });
@@ -343,6 +353,31 @@ const BlogEdit: React.FC = () => {
     } catch (e) {
       console.error('Submit error:', e);
       message.error('❌ Lỗi cập nhật bài viết. Vui lòng thử lại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Change only status via PUT (server will update existing.Status when provided)
+  const changeStatus = async (newStatus: string) => {
+    if (!formData || !formData.id) return;
+    setSubmitting(true);
+    try {
+      const payload: any = { id: formData.id, status: newStatus };
+      const res = await fetch(`/api/blog/${formData.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        message.success('Cập nhật trạng thái thành công');
+        setFormData(prev => prev ? { ...prev, status: newStatus as any } : prev);
+        return;
+      }
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || 'Lỗi cập nhật trạng thái');
+    } catch (e: any) {
+      message.error(`Lỗi: ${e.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -595,6 +630,62 @@ const BlogEdit: React.FC = () => {
                       >
                         💾 Lưu Thay Đổi
                       </Button>
+
+                      {/* Publish / Hide toggle according to current status */}
+                      {formData.status === 'PUBLISHED' && (
+                        <Button
+                          onClick={() => changeStatus('ARCHIVED')}
+                          disabled={submitting}
+                        >
+                          🔕 Ẩn bài
+                        </Button>
+                      )}
+
+                      {(formData.status === 'DRAFT' || formData.status === 'ARCHIVED') && (
+                        <Button
+                          type="primary"
+                          onClick={() => changeStatus('PUBLISHED')}
+                          disabled={submitting}
+                        >
+                          🚀 Xuất bản
+                        </Button>
+                      )}
+
+                      {/* Soft delete */}
+                      {formData.status !== 'DELETED' && (
+                        <Button
+                          danger
+                          onClick={() => changeStatus('DELETED')}
+                          disabled={submitting}
+                        >
+                          🗑️ Xóa
+                        </Button>
+                      )}
+
+                      {/* When DELETED show Restore + Hard Delete */}
+                      {formData.status === 'DELETED' && (
+                        <>
+                          <Button onClick={() => changeStatus('ARCHIVED')}>↩️ Khôi phục</Button>
+                          <Button danger onClick={async () => {
+                            // Hard delete: call delete endpoint
+                            if (!formData?.id) return;
+                            if (!window.confirm('Xóa vĩnh viễn? Hành động không thể hoàn tác.')) return;
+                            setSubmitting(true);
+                            try {
+                              const res = await fetch(`/api/blog/${formData.id}?hard=true`, { method: 'DELETE' });
+                              if (res.ok) {
+                                message.success('Đã xóa vĩnh viễn');
+                                navigateToManager();
+                                return;
+                              }
+                              throw new Error('Xóa vĩnh viễn thất bại');
+                            } catch (e: any) {
+                              message.error(e.message || 'Lỗi xóa vĩnh viễn');
+                            } finally { setSubmitting(false); }
+                          }}>🗑️ Xóa vĩnh viễn</Button>
+                        </>
+                      )}
+
                       <Button 
                         icon={<EyeOutlined />} 
                         onClick={handlePreview}

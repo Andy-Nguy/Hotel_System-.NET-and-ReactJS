@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { API_CONFIG } from "../api/config";
 
-// Resolve API base from Vite env
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api";
+// Use centralized API config
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 import {
   Layout,
   Card,
@@ -245,16 +243,24 @@ const PaymentPage: React.FC = () => {
       }
 
       // Validate selectedServices before sending
-      const validServices = (bookingInfo.selectedServices || []).filter((svc: any) => svc.serviceId && svc.price);
-      if (bookingInfo.selectedServices && bookingInfo.selectedServices.length > 0 && validServices.length === 0) {
-        throw new Error("Dữ liệu dịch vụ không hợp lệ. Vui lòng quay lại và chọn dịch vụ lại.");
+      const validServices = (bookingInfo.selectedServices || []).filter(
+        (svc: any) => svc.serviceId && svc.price
+      );
+      if (
+        bookingInfo.selectedServices &&
+        bookingInfo.selectedServices.length > 0 &&
+        validServices.length === 0
+      ) {
+        throw new Error(
+          "Dữ liệu dịch vụ không hợp lệ. Vui lòng quay lại và chọn dịch vụ lại."
+        );
       }
 
       console.log("Selected Services Debug:", {
         raw: bookingInfo.selectedServices,
         valid: validServices,
         count: bookingInfo.selectedServices?.length,
-        validCount: validServices.length
+        validCount: validServices.length,
       });
 
       // Tạo payload để gọi API tạo hóa đơn

@@ -283,26 +283,7 @@ const ContactPage: React.FC = () => {
         </div>
       </section>
 
-      {/* === PHẦN 3: BẢN ĐỒ === */}
-      <section style={{ padding: "0 0 80px 0" }}>
-        <div className="container">
-          <div className="row">
-            <div className="col-12">
-              <div style={{ borderRadius: "16px", overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", height: "450px" }}>
-                <iframe
-                  src="https://www.google.com/maps?q=20+Tran+Binh+Trong+Ward+5+Da+Lat+Viet+Nam&output=embed"
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0 }}
-                  allowFullScreen={true}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                ></iframe>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      
     </main>
   );
 };

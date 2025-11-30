@@ -134,6 +134,22 @@ namespace Hotel_System.API.Controllers
             });
         }
 
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest req)
+        {
+            var (success, error) = await _auth.ForgotPasswordAsync(req);
+            if (!success) return BadRequest(new { error });
+            return Ok(new { message = "OTP sent to email" });
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req)
+        {
+            var (success, error) = await _auth.ResetPasswordAsync(req);
+            if (!success) return BadRequest(new { error });
+            return Ok(new { message = "Password reset successfully" });
+        }
+
     // login-OTP endpoints removed to keep a simpler register + password login flow
     }
 }

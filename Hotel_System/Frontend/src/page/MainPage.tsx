@@ -117,10 +117,9 @@ const MainPage: React.FC = () => {
         // GUID token - fetch profile from API (but only if we don't have cached data)
         if (!existingCached) {
           try {
-            const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-            const API_BASE = _VITE_API.replace(/\/$/, "")
-              ? `${_VITE_API.replace(/\/$/, "")}/api`
-              : "/api";
+            const API_BASE = `${
+              (await import("../api/config")).API_CONFIG.CURRENT
+            }/api`;
             const res = await fetch(`${API_BASE}/Auth/profile`, {
               headers: { Authorization: `Bearer ${token}` },
             });
@@ -760,8 +759,6 @@ const MainPage: React.FC = () => {
       </>
     );
   }
-
-  
 
   // Admin loyalty / points management route (accessible at /admin/loyalty or #admin/loyalty)
   if (
