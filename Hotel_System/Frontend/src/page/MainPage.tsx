@@ -778,18 +778,26 @@ const MainPage: React.FC = () => {
     route === "#/admin/nhanvien"
   ) {
     // Kiểm tra quyền admin
-    const isAdmin = () => {
+    const checkAdmin = () => {
       try {
         const userInfo = localStorage.getItem("hs_userInfo");
         if (userInfo) {
           const parsed = JSON.parse(userInfo);
-          return parsed.role === 2 || parsed.vaiTro === 2;
+          const role = parsed.role ?? parsed.vaiTro;
+          // Check cả number và string
+          if (typeof role === "number") return role === 2;
+          if (typeof role === "string") {
+            const roleStr = role.toLowerCase().trim();
+            return roleStr === "admin" || roleStr === "2";
+          }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error("[MainPage] Error checking admin:", e);
+      }
       return false;
     };
 
-    if (!isAdmin()) {
+    if (!checkAdmin()) {
       redirectToNoAccess();
       return null;
     }
