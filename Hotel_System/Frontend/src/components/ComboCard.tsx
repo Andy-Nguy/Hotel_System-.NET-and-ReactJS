@@ -39,8 +39,8 @@ const ComboCard: React.FC<Props> = ({ combo, onView }) => {
   
   if (combo.comboPrice !== undefined) {
     // If comboPrice is provided, use it
-    finalPrice = combo.comboPrice;
-    saving = originalPrice - finalPrice;
+    saving = combo.comboPrice;
+    finalPrice = originalPrice - saving;
     savingPercent = originalPrice > 0 ? Math.round((saving / originalPrice) * 100) : 0;
   } else if (combo.loaiGiamGia && combo.giaTriGiam !== undefined && combo.giaTriGiam !== null) {
     // Calculate from discount type and value
@@ -100,8 +100,7 @@ const ComboCard: React.FC<Props> = ({ combo, onView }) => {
         </div>
 
         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-          <button onClick={() => onView?.(combo)} className="btn btn-light">Xem chi tiết</button>
-          <button onClick={() => { /* placeholder: selecting combo action handled elsewhere */ }} className="btn btn-primary">Chọn combo</button>
+          <button onClick={() => onView?.(combo)} className="btn btn-primary">Xem chi tiết</button>
         </div>
 
       </div>

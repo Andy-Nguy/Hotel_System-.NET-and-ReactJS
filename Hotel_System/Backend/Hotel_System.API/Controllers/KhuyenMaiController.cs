@@ -394,8 +394,9 @@ public class KhuyenMaiController : ControllerBase
             }
             else
             {
-                // same type: remove only if client specified replacements
-                if (dto.PhongIds != null && dto.PhongIds.Count > 0)
+                // same type: remove only if client explicitly provided replacements
+                // For room type: only clear rooms if phongIds is explicitly provided (not null)
+                if (newType == "room" && dto.PhongIds != null)
                 {
                     _context.KhuyenMaiPhongs.RemoveRange(promotion.KhuyenMaiPhongs);
                 }
@@ -416,9 +417,9 @@ public class KhuyenMaiController : ControllerBase
 
             await _context.SaveChangesAsync();
 
-            // Thêm mapping mới theo loại (sử dụng newType). When rebuilding room_service pairs, if the client
-            // omitted one of the lists, fall back to the existing values we loaded earlier.
-            if (newType == "room" && dto.PhongIds != null && dto.PhongIds.Count > 0)
+            // Thêm mapping mới theo loại (sử dụng newType)
+            // For room type: only add rooms if client explicitly provided phongIds (not null)
+            if (newType == "room" && dto.PhongIds != null)
             {
                 // Thêm phòng mới cho loại 'room'
                 foreach (var phongId in dto.PhongIds)

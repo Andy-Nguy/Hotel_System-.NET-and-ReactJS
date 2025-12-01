@@ -27,22 +27,39 @@ const DetailComboCard: React.FC<Props> = ({ visible, combo, onClose }) => {
   const giaTri = Number(combo.giaTriGiam ?? combo.GiaTriGiam ?? 0);
   
   // Match PromotionSection.tsx logic
-  const discountPercent = loai === 'percent' ? giaTri : 0;
-  const discountAmount = loai === 'amount' ? giaTri : 0;
+  let giaCombo = 0;
+  let tietKiem = 0;
+  let savingPercent = 0;
 
-  let giaCombo: number;
-  if (typeof combo.comboPrice === 'number') {
-    giaCombo = combo.comboPrice;
-  } else if (discountPercent > 0) {
-    giaCombo = Math.round(originalPrice * (1 - discountPercent / 100));
-  } else if (discountAmount > 0) {
-    giaCombo = Math.max(0, Math.round(originalPrice - discountAmount));
+  if (combo.comboPrice !== undefined) {
+    // If comboPrice is provided, use it as saving amount
+    tietKiem = combo.comboPrice;
+    giaCombo = originalPrice - tietKiem;
+    savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
+  } else if (combo.loaiGiamGia && combo.giaTriGiam !== undefined && combo.giaTriGiam !== null) {
+    // Calculate from discount type and value
+    const discountValue = Number(combo.giaTriGiam);
+    const discountPercent = loai === 'percent' ? discountValue : 0;
+    const discountAmount = loai === 'amount' ? discountValue : 0;
+    
+    if (discountPercent > 0) {
+      giaCombo = Math.round(originalPrice * (1 - discountPercent / 100));
+      tietKiem = originalPrice - giaCombo;
+      savingPercent = discountPercent;
+    } else if (discountAmount > 0) {
+      giaCombo = Math.max(0, Math.round(originalPrice - discountAmount));
+      tietKiem = Math.min(discountAmount, originalPrice);
+      savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
+    } else {
+      giaCombo = originalPrice;
+      tietKiem = 0;
+      savingPercent = 0;
+    }
   } else {
     giaCombo = originalPrice;
+    tietKiem = 0;
+    savingPercent = 0;
   }
-
-  const tietKiem = Math.max(0, originalPrice - giaCombo);
-  const savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
   // KẾT THÚC LOGIC TÍNH GIÁ
 
   // --- THIẾT KẾ SANG TRỌNG ---
@@ -163,7 +180,7 @@ const DetailComboCard: React.FC<Props> = ({ visible, combo, onClose }) => {
             </div>
             <div>
               <div style={{ color: LIGHT_TEXT_COLOR, fontSize: 13 }}>Giá trị áp dụng</div>
-              <div style={{ fontWeight: FONT_WEIGHT_BOLD, color: TEXT_COLOR }}>{loai === 'percent' ? `${giaTri}%` : currency.format(giaTri)}</div>
+              <div style={{ fontWeight: FONT_WEIGHT_BOLD, color: TEXT_COLOR }}>{currency.format(tietKiem)}</div>
             </div>
           </div>
 
