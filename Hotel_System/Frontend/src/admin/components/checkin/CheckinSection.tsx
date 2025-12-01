@@ -43,7 +43,14 @@ const CheckinSection: React.FC = () => {
       alert("Đã xác nhận và gửi mail (nếu cấu hình SMTP).");
     } catch (error) {
       console.error("Failed to BookingBooking", error);
-      alert("Lỗi khi xác nhận đặt phòng.");
+      // extract server message if axios-style error
+      const serverMsg = (error as any)?.response?.data?.message || (error as any)?.message || null;
+      if (typeof serverMsg === 'string' && serverMsg.toLowerCase().includes('quá hạn')) {
+        alert(serverMsg);
+        try { await loadBookings(); } catch (_) {}
+        return;
+      }
+      alert(serverMsg || "Lỗi khi xác nhận đặt phòng.");
     }
   };
 

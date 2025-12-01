@@ -19,13 +19,14 @@ interface Props {
   loading: boolean;
   onPay: (row: BookingRow) => void;
   onComplete: (row: BookingRow) => void;
+  onPayOverdue?: (row: BookingRow) => void;
   // When in checkout view, parent can request the payment form to open (same as 'using' view)
   onOpenPaymentForm?: (row: BookingRow) => void;
   onAddService?: (row: BookingRow) => void;
   onViewInvoice?: (row: BookingRow) => void;
   viewInvoiceIds?: string[];
-  viewMode?: "using" | "checkout";
-  onViewChange?: (mode: "using" | "checkout") => void;
+  viewMode?: "using" | "checkout" | "overdue";
+  onViewChange?: (mode: "using" | "checkout" | "overdue") => void;
 }
 
 const CheckoutTable: React.FC<Props> = ({
@@ -33,6 +34,7 @@ const CheckoutTable: React.FC<Props> = ({
   loading,
   onPay,
   onComplete,
+  onPayOverdue,
   onOpenPaymentForm,
   onAddService,
   onViewInvoice,
@@ -40,53 +42,27 @@ const CheckoutTable: React.FC<Props> = ({
   viewMode = "using",
   onViewChange,
 }) => {
+  // track disabled state per booking id to prevent repeated clicks
+  const [disabledMap, setDisabledMap] = React.useState<Record<string, boolean>>({});
+  // track when overdue fee has been paid for a booking (local UX state)
+  const [overduePaidMap, setOverduePaidMap] = React.useState<Record<string, boolean>>({});
   const columns: ColumnsType<BookingRow> = [
+    { title: 'Mã đặt phòng', dataIndex: 'IddatPhong', key: 'IddatPhong', width: 160 },
+    { title: 'Khách hàng', key: 'customer', render: (_, r) => (<div>{r.TenKhachHang}<div style={{fontSize:12,color:'#64748b'}}>{r.EmailKhachHang}</div></div>) },
+    { title: 'Nhận', dataIndex: 'NgayNhanPhong', key: 'NgayNhanPhong', width: 120 },
+    { title: 'Trả', dataIndex: 'NgayTraPhong', key: 'NgayTraPhong', width: 120 },
+    { title: 'Tổng tiền', dataIndex: 'TongTien', key: 'TongTien', align: 'right', render: (v) => Number(v).toLocaleString() + ' đ' },
+    { title: 'Trạng thái TT', dataIndex: 'TrangThaiThanhToan', key: 'tt', render: (s) => <Tag color={s===2?'green':'orange'}>{s===2? 'Đã thanh toán' : 'Chưa thanh toán'}</Tag> },
     {
-      title: "Mã đặt phòng",
-      dataIndex: "IddatPhong",
-      key: "IddatPhong",
-      width: 160,
-    },
-    {
-      title: "Khách hàng",
-      key: "customer",
-      render: (_, r) => (
-        <div>
-          {r.TenKhachHang}
-          <div style={{ fontSize: 12, color: "#64748b" }}>
-            {r.EmailKhachHang}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: "Nhận",
-      dataIndex: "NgayNhanPhong",
-      key: "NgayNhanPhong",
-      width: 120,
-    },
-    {
-      title: "Trả",
-      dataIndex: "NgayTraPhong",
-      key: "NgayTraPhong",
-      width: 120,
-    },
-    {
-      title: "Tổng tiền",
-      dataIndex: "TongTien",
-      key: "TongTien",
-      align: "right",
-      render: (v) => Number(v).toLocaleString() + " đ",
-    },
-    {
-      title: "Trạng thái TT",
-      dataIndex: "TrangThaiThanhToan",
-      key: "tt",
-      render: (s) => (
-        <Tag color={s === 2 ? "green" : "orange"}>
-          {s === 2 ? "Đã thanh toán" : "Chưa/Chờ"}
-        </Tag>
-      ),
+      title: 'Tình trạng',
+      key: 'status',
+      render: (_, r) => {
+        const st = r.TrangThai ?? 0;
+        if (st === 5) return <Tag color="red">Quá hạn</Tag>;
+        if (st === 3) return <Tag color="blue">Đang sử dụng</Tag>;
+        if (st === 4) return <Tag color="default">Đã hoàn tất</Tag>;
+        return <Tag>{String(st)}</Tag>;
+      }
     },
     {
       title: "Hành động",
@@ -96,8 +72,38 @@ const CheckoutTable: React.FC<Props> = ({
         const isPaid = (r.TrangThaiThanhToan ?? 0) === 2;
         const isCompleted = (r.TrangThai ?? 0) === 4;
 
-        // Chế độ trả phòng hôm nay: chỉ cho "Xác nhận trả phòng"
-        if (viewMode === "checkout") {
+        // For checkout view show normal actions. For overdue view show ONLY the
+        // 'Thanh toán phí quá hạn' button per product owner request.
+        if (viewMode === 'overdue') {
+          return (
+            <Space>
+              <Button
+                type="default"
+                style={{ background: '#fb923c', borderColor: '#fb923c', color: '#fff' }}
+                disabled={!!disabledMap[r.IddatPhong]}
+                onClick={async () => {
+                  setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
+                  try {
+                    const opener = typeof onOpenPaymentForm === 'function' ? onOpenPaymentForm :
+                                   (typeof onPayOverdue === 'function' ? onPayOverdue : (typeof onPay === 'function' ? onPay : undefined));
+                    if (!opener) return;
+                    const res: any = opener(r);
+                    if (res && typeof res.then === 'function') {
+                      const ok = await res;
+                      if (ok) setOverduePaidMap(prev => ({ ...prev, [r.IddatPhong]: true }));
+                    }
+                  } finally {
+                    setTimeout(() => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })), 5000);
+                  }
+                }}
+              >
+                Thanh toán phí quá hạn
+              </Button>
+            </Space>
+          );
+        }
+
+        if (viewMode === 'checkout') {
           return (
             <Space>
               {isCompleted ? (
@@ -108,9 +114,13 @@ const CheckoutTable: React.FC<Props> = ({
                   {isPaid && (
                     <Button
                       type="primary"
-                      onClick={() =>
-                        onViewInvoice ? onViewInvoice(r) : onComplete(r)
-                      }
+                      style={{ background: '#22c55e', borderColor: '#22c55e' }}
+                      disabled={!!disabledMap[r.IddatPhong]}
+                      onClick={() => {
+                        setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
+                        setTimeout(() => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })), 5000);
+                        (onViewInvoice ? onViewInvoice(r) : onComplete(r));
+                      }}
                     >
                       Xác nhận trả phòng
                     </Button>
@@ -121,13 +131,12 @@ const CheckoutTable: React.FC<Props> = ({
                     <Button
                       type="primary"
                       danger={false}
-                      onClick={() =>
-                        typeof (
-                          /* istanbul ignore next */ onOpenPaymentForm
-                        ) === "function"
-                          ? onOpenPaymentForm!(r)
-                          : onPay?.(r)
-                      }
+                      disabled={!!disabledMap[r.IddatPhong]}
+                      onClick={() => {
+                        setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
+                        setTimeout(() => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })), 5000);
+                        (typeof (onOpenPaymentForm) === 'function' ? onOpenPaymentForm!(r) : onPay?.(r));
+                      }}
                     >
                       Xác nhận thanh toán
                     </Button>
@@ -147,8 +156,11 @@ const CheckoutTable: React.FC<Props> = ({
       <div style={{ marginBottom: 12 }}>
         <Segmented
           value={viewMode}
-          onChange={(v) => onViewChange?.(v as "using" | "checkout")}
-          options={[{ label: "Trả phòng hôm nay", value: "checkout" }]}
+          onChange={(v) => onViewChange?.(v as "using" | "checkout" | "overdue")}
+          options={[
+            { label: "Trả phòng hôm nay", value: "checkout" },
+            { label: "Quá hạn", value: "overdue" }
+          ]}
         />
       </div>
 

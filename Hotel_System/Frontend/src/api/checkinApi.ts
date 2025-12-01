@@ -83,6 +83,17 @@ export const completePayment = async (id: string): Promise<any> => {
   return res.data;
 };
 
+
+/**
+ * POST /api/NhanPhong/reassign-room/{id}
+ * Body: { newRoomId }
+ */
+export const reassignRoom = async (id: string, newRoomId: string): Promise<any> => {
+  // Use axiosClient (baseURL + auth handled centrally)
+  const res = await axiosClient.post(`/CheckIn/reassign-room/${encodeURIComponent(id)}`, { NewRoomId: newRoomId });
+  return res.data;
+};
+
 // (default export will be declared at EOF to include booking helpers as well)
 
 // --- Booking management helpers (mirror some BookingApi endpoints)
@@ -144,6 +155,7 @@ const _default = {
   updatePaymentStatus,
   rescheduleBooking,
   completePayment,
+  reassignRoom
 };
 
 export default _default;

@@ -30,7 +30,13 @@ const CheckinSection_NEW: React.FC = () => {
       await checkinApi.confirmCheckIn(id);
       await load();
     } catch (err: any) {
-      alert(err?.message || "Xác nhận thất bại");
+      const serverMsg = err?.response?.data?.message || err?.message || null;
+      if (typeof serverMsg === 'string' && serverMsg.toLowerCase().includes('quá hạn')) {
+        alert(serverMsg);
+        try { await load(); } catch (_) {}
+        return;
+      }
+      alert(serverMsg || "Xác nhận thất bại");
     }
   };
 
