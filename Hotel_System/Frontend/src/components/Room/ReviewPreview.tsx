@@ -1,4 +1,5 @@
 import React from "react";
+import { Modal } from "antd";
 
 interface ReviewPreviewProps {
   stats: any | null;
@@ -21,6 +22,13 @@ const ReviewPreview: React.FC<ReviewPreviewProps> = ({
   onViewAll,
   onSelectReview,
 }) => {
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
+  const [allModalVisible, setAllModalVisible] = React.useState(false);
+
+  const toggleExpanded = (id: any) => {
+    const key = String(id ?? "");
+    setExpanded((s) => ({ ...s, [key]: !s[key] }));
+  };
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
       {/* Left: Stats Summary */}
@@ -84,8 +92,11 @@ const ReviewPreview: React.FC<ReviewPreviewProps> = ({
           <div>
             {reviews && reviews.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {reviews.map((r) => (
-                  <div key={r.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+                {reviews.map((r) => {
+                  const rid = String(r.id ?? "");
+                  const isExpanded = !!expanded[rid];
+                  return (
+                    <div key={rid} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                       <div style={{ fontWeight: 700 }}>{r.customerName}</div>
                       <div style={{ color: "#C9A043", fontWeight: 700 }}>
@@ -104,7 +115,15 @@ const ReviewPreview: React.FC<ReviewPreviewProps> = ({
                       <div style={{ color: "#999", fontSize: 12 }}>{new Date(r.createdAt).toLocaleDateString()}</div>
                       <div>
                         <button
-                          onClick={() => onSelectReview(r)}
+                          onClick={() => {
+                            toggleExpanded(rid);
+                            // still notify parent if they want to handle selection
+                            try {
+                              onSelectReview && onSelectReview(r);
+                            } catch (e) {
+                              // ignore
+                            }
+                          }}
                           style={{
                             border: "none",
                             background: "none",
@@ -113,32 +132,96 @@ const ReviewPreview: React.FC<ReviewPreviewProps> = ({
                             fontWeight: 600,
                           }}
                         >
-                          Xem chi tiết
+                          {isExpanded ? "Rút gọn" : "Xem chi tiết"}
                         </button>
                       </div>
                     </div>
+                    {isExpanded && (
+                      <div style={{ marginTop: 10, padding: 12, background: "#fafafa", borderRadius: 8, color: "#333" }}>
+                        <div style={{ marginBottom: 8, fontWeight: 600 }}>{r.title || "(Không có tiêu đề)"}</div>
+                        <div style={{ marginBottom: 8, whiteSpace: "pre-wrap" }}>{r.content || "—"}</div>
+                        <div style={{ color: "#666", fontSize: 12 }}>
+                          Đăng bởi <strong>{r.customerName || "Khách"}</strong> • {new Date(r.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                );
+                })}
               </div>
             ) : (
               <div style={{ color: "#666" }}>Chưa có đánh giá cho phòng này.</div>
             )}
 
             <div style={{ marginTop: 12, textAlign: "center" }}>
-              {totalReviews > (reviews?.length ?? 0) ? (
-                <button
-                  onClick={onViewAll}
-                  style={{
-                    background: "#C9A043",
-                    color: "#fff",
-                    padding: "8px 12px",
-                    borderRadius: 6,
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  Xem tất cả đánh giá
-                </button>
+              {totalReviews > 3 ? (
+                <>
+                  <button
+                    onClick={() => setAllModalVisible(true)}
+                    style={{
+                      background: "#C9A043",
+                      color: "#fff",
+                      padding: "8px 12px",
+                      borderRadius: 6,
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Xem tất cả đánh giá
+                  </button>
+                  <Modal
+                    title={`Tất cả đánh giá (${totalReviews})`}
+                    open={allModalVisible}
+                    onCancel={() => setAllModalVisible(false)}
+                    footer={null}
+                    width={800}
+                  >
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {(reviews && reviews.length > 0) ? (
+                        reviews.map((r) => (
+                          <div key={String(r.id ?? Math.random())} style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                              <div style={{ fontWeight: 700 }}>{r.customerName}</div>
+                              <div style={{ color: "#C9A043", fontWeight: 700 }}>
+                                {"★".repeat(Math.max(0, Math.min(5, r.rating)))}
+                              </div>
+                            </div>
+                            <div style={{ fontWeight: 600, marginBottom: 6 }}>{r.title}</div>
+                            <div style={{ color: "#444", fontSize: 14, marginBottom: 8, whiteSpace: "pre-wrap" }}>{r.content || "—"}</div>
+                            <div style={{ color: "#999", fontSize: 12 }}>{new Date(r.createdAt).toLocaleString()}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ color: "#666" }}>Chưa có đánh giá để hiển thị.</div>
+                      )}
+
+                      {reviews && reviews.length < totalReviews && (
+                        <div style={{ marginTop: 12, textAlign: "center" }}>
+                          <button
+                            onClick={() => {
+                              // If parent provided onViewAll, let it handle loading full list or navigation
+                              try {
+                                onViewAll && onViewAll();
+                              } catch (e) {
+                                // ignore
+                              }
+                            }}
+                            style={{
+                              background: "#f3f4f6",
+                              color: "#111827",
+                              padding: "8px 12px",
+                              borderRadius: 6,
+                              border: "none",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Tải thêm / Xem trang đầy đủ
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </Modal>
+                </>
               ) : null}
             </div>
           </div>

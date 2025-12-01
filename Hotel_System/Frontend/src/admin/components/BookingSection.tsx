@@ -497,19 +497,16 @@ const BookingSection: React.FC = () => {
                           >
                             <div>
                               <div style={{ fontWeight: 700, fontSize: 15 }}>
-                                {item.tenDichVu || item.idDichVu}
+                                {item.tenDichVu || item.iddichVu}
                               </div>
                               <div style={{ color: "#6b7280", fontSize: 13 }}>
                                 {item.soLuong || 1} x{" "}
-                                {item.giaDichVu?.toLocaleString() ||
-                                  item.donGia?.toLocaleString() ||
-                                  "N/A"}
+                                {item.giaDichVu?.toLocaleString() || "N/A"}
                               </div>
                             </div>
                             <div style={{ fontWeight: 700, color: "#059669" }}>
                               {(
                                 item.thanhTien ||
-                                item.tongTien ||
                                 (item.giaDichVu && item.soLuong
                                   ? item.giaDichVu * item.soLuong
                                   : item.giaDichVu)
