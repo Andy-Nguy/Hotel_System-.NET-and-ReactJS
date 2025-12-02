@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 const StatCard: React.FC<{ title: string; value: string; accent?: string }> = ({
   title,
@@ -59,8 +59,78 @@ const StatCard: React.FC<{ title: string; value: string; accent?: string }> = ({
 };
 
 const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) => {
+  const [firstName, setFirstName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        // Prefer explicit cached user info
+        const raw = localStorage.getItem("hs_userInfo");
+        if (raw) {
+          const u = JSON.parse(raw);
+          const full = u?.name || u?.hoTen || u?.HoTen || u?.ten || u?.fullName;
+          if (full) {
+            setFirstName(String(full).trim().split(" ")[0]);
+            return;
+          }
+        }
+
+        // Fallback: try to decode JWT token stored as hs_token
+        const token = localStorage.getItem("hs_token");
+        if (token) {
+          const parts = token.split(".");
+          if (parts.length === 3) {
+            try {
+              const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+              const json = decodeURIComponent(
+                atob(base64)
+                  .split("")
+                  .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+                  .join("")
+              );
+              const payload = JSON.parse(json);
+              const full = payload?.name || payload?.hoTen || payload?.fullName || payload?.given_name;
+              if (full) {
+                setFirstName(String(full).trim().split(" ")[0]);
+                return;
+              }
+            } catch {
+              // ignore decode errors
+            }
+          }
+
+          // If we couldn't decode or there was no name, try fetching profile from API (handles GUID tokens)
+          try {
+            const API_BASE = (import.meta as any).env?.VITE_API_URL
+              ? `${(import.meta as any).env.VITE_API_URL.replace(/\/$/, "")}/api`
+              : "/api";
+            const res = await fetch(`${API_BASE}/Auth/profile`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+              const profile = await res.json();
+              const full = profile.hoTen || profile.HoTen || profile.name || profile.fullName;
+              if (full) {
+                setFirstName(String(full).trim().split(" ")[0]);
+                try {
+                  localStorage.setItem("hs_userInfo", JSON.stringify({ name: full }));
+                } catch {}
+              }
+            }
+          } catch {
+            // ignore network errors here
+          }
+        }
+      } catch {
+        // swallow any errors; header should not crash the admin UI
+      }
+    };
+
+    load();
+  }, []);
+
   return (
-    <header style={{ padding: "28px 36px", marginLeft: "20" }}>
+    <header style={{ padding: "28px 36px", marginLeft: "20", position: "relative" }}>
       <div
         style={{
           display: "flex",
@@ -78,58 +148,53 @@ const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) 
               color: "#0f172a",
             }}
           >
-            Hi, Welcome back 👋
+            {firstName ? `Hi, ${firstName} 👋` : "Hi, Welcome back 👋"}
           </h1>
           <div style={{ marginTop: 8, color: "#6b7280" }}>
-            (overview of the system)
+            Bạn có thể theo dõi đặt phòng, khách đến và báo cáo hôm nay.
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <input
-            placeholder="Search..."
+          {/* Search removed as requested; only the power button remains at top-right */}
+
+          {/* Power button (home) placed at the top-right corner */}
+          <a
+            href="/"
+            title="Trang chủ"
+            aria-label="Trang chủ"
             style={{
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: "1px solid rgba(15,23,42,0.06)",
-              width: 220,
+              position: "absolute",
+              right: 36,
+              top: 28,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              overflow: "hidden",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 6px 18px rgba(2,6,23,0.04)",
+              background: "#fff",
+              textDecoration: "none",
             }}
-          />
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                background: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 6px 18px rgba(2,6,23,0.04)",
-              }}
+          >
+            {/* Power button SVG */}
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+              focusable="false"
+              style={{ cursor: "pointer" }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" fill="#dbeafe" />
-              </svg>
-            </div>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                overflow: "hidden",
-              }}
-            >
-              <img
-                src="/img/logo.webp"
-                alt="avatar"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-            </div>
-          </div>
+              <title>Trang chủ</title>
+              <path d="M12 2v10" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5.05 6.05a9 9 0 1 0 13.9 0" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
         </div>
       </div>
     </header>

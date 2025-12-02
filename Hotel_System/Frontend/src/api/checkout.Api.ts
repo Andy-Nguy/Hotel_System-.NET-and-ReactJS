@@ -66,7 +66,7 @@ export const checkoutApi = {
   // 3. Xác nhận đã thanh toán (tiền mặt / QR)
   confirmPaid: (
     id: string | number,
-    payload?: { Amount?: number; HoaDonId?: string; Note?: string }
+    payload?: { Amount?: number; HoaDonId?: string; Note?: string; IsOnline?: boolean; IsOverdue?: boolean }
   ) =>
     fetchJson(`/Checkout/confirm-paid/${id}`, {
       method: "POST",
@@ -106,6 +106,28 @@ export const checkoutApi = {
     }>;
   }) =>
     fetchJson(`/Checkout/add-service-to-invoice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+
+  // ================== GIA HẠN PHÒNG (EXTEND STAY) ==================
+
+  // 6. Kiểm tra khả năng gia hạn
+  checkExtendAvailability: (idDatPhong: string) =>
+    fetchJson(`/Checkout/extend/check/${idDatPhong}`),
+
+  // 7. Thực hiện gia hạn
+  extendStay: (payload: {
+    IddatPhong: string;
+    ExtendType: 1 | 2; // 1 = SameDay, 2 = ExtraNight
+    NewCheckoutHour?: number; // 15, 18, 24
+    ExtraNights?: number;
+    NewRoomId?: string;
+    PaymentMethod: 1 | 2; // 1 = Tiền mặt, 2 = QR
+    Note?: string;
+  }) =>
+    fetchJson(`/Checkout/extend`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

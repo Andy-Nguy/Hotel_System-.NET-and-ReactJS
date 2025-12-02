@@ -198,7 +198,7 @@ const CheckoutPage: React.FC = () => {
       };
 
       // GỌI API TẠO BOOKING THẬT
-      // Build rooms payload robustly: support different possible id/price field names
+     
       const roomsPayload = (bookingInfo.selectedRooms || []).map((sr) => {
         const r = sr.room || {};
         const idPhong =
