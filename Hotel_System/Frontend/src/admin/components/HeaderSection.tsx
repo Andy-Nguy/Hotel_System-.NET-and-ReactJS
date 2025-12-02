@@ -58,7 +58,9 @@ const StatCard: React.FC<{ title: string; value: string; accent?: string }> = ({
   );
 };
 
-const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) => {
+const HeaderSection: React.FC<{ showStats?: boolean }> = ({
+  showStats = true,
+}) => {
   const [firstName, setFirstName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,11 +87,17 @@ const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) 
               const json = decodeURIComponent(
                 atob(base64)
                   .split("")
-                  .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+                  .map(
+                    (c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+                  )
                   .join("")
               );
               const payload = JSON.parse(json);
-              const full = payload?.name || payload?.hoTen || payload?.fullName || payload?.given_name;
+              const full =
+                payload?.name ||
+                payload?.hoTen ||
+                payload?.fullName ||
+                payload?.given_name;
               if (full) {
                 setFirstName(String(full).trim().split(" ")[0]);
                 return;
@@ -101,19 +109,25 @@ const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) 
 
           // If we couldn't decode or there was no name, try fetching profile from API (handles GUID tokens)
           try {
-            const API_BASE = (import.meta as any).env?.VITE_API_URL
-              ? `${(import.meta as any).env.VITE_API_URL.replace(/\/$/, "")}/api`
-              : "/api";
+            const { API_CONFIG } = await import("../../api/config");
+            const API_BASE = `${API_CONFIG.CURRENT}/api`;
             const res = await fetch(`${API_BASE}/Auth/profile`, {
               headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) {
               const profile = await res.json();
-              const full = profile.hoTen || profile.HoTen || profile.name || profile.fullName;
+              const full =
+                profile.hoTen ||
+                profile.HoTen ||
+                profile.name ||
+                profile.fullName;
               if (full) {
                 setFirstName(String(full).trim().split(" ")[0]);
                 try {
-                  localStorage.setItem("hs_userInfo", JSON.stringify({ name: full }));
+                  localStorage.setItem(
+                    "hs_userInfo",
+                    JSON.stringify({ name: full })
+                  );
                 } catch {}
               }
             }
@@ -130,7 +144,9 @@ const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) 
   }, []);
 
   return (
-    <header style={{ padding: "28px 36px", marginLeft: "20", position: "relative" }}>
+    <header
+      style={{ padding: "28px 36px", marginLeft: "20", position: "relative" }}
+    >
       <div
         style={{
           display: "flex",
@@ -191,8 +207,20 @@ const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) 
               style={{ cursor: "pointer" }}
             >
               <title>Trang chủ</title>
-              <path d="M12 2v10" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M5.05 6.05a9 9 0 1 0 13.9 0" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M12 2v10"
+                stroke="#0f172a"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M5.05 6.05a9 9 0 1 0 13.9 0"
+                stroke="#0f172a"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </a>
         </div>

@@ -1,9 +1,9 @@
 // API client for review/rating operations
+// Uses axiosClient for centralized API configuration (local/prod switching via config.ts)
+import axiosClient from "./axiosClient";
 
-// Resolve API base from Vite env when available (VITE_API_URL). Fall back to "/api" for dev proxy.
-import { API_CONFIG } from "./config";
-
-const API_BASE = `${API_CONFIG.CURRENT}/api`;
+// axiosClient đã có baseURL = API_CONFIG.CURRENT/api
+// và tự động thêm Authorization header từ localStorage
 
 export interface ReviewSubmitPayload {
   IddatPhong: string;
@@ -31,8 +31,6 @@ export interface ReviewStatus {
   lastSentAt?: string;
 }
 
-const baseUrl = `${API_BASE}/Review`;
-
 const reviewApi = {
   /**
    * Submit a review for a booking
@@ -41,60 +39,33 @@ const reviewApi = {
     payload: ReviewSubmitPayload
   ): Promise<ReviewResponse> => {
     console.log("[reviewApi] Submitting review to backend:", payload);
-    const res = await fetch(`${baseUrl}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      console.error(
-        "[reviewApi] Review submission failed with status",
-        res.status,
-        data
-      );
-      throw new Error(
-        data?.message || data?.error || `Failed to submit review: ${res.status}`
-      );
-    }
-    console.log("[reviewApi] Review submitted successfully:", data);
-    return data;
+    const res = await axiosClient.post(`/Review`, payload);
+    console.log("[reviewApi] Review submitted successfully:", res.data);
+    return res.data;
   },
 
   /**
    * Get review status for a booking (has it been reviewed, was email sent, etc)
    */
   getReviewStatus: async (IddatPhong: string): Promise<ReviewStatus> => {
-    const res = await fetch(`${baseUrl}/status/${IddatPhong}`);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data?.message || "Failed to fetch review status");
-    }
-    return data;
+    const res = await axiosClient.get(`/Review/status/${IddatPhong}`);
+    return res.data;
   },
 
   /**
    * Get reviews for a specific booking
    */
   getBookingReviews: async (IddatPhong: string): Promise<ReviewResponse[]> => {
-    const res = await fetch(`${baseUrl}/booking/${IddatPhong}`);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data?.message || "Failed to fetch reviews");
-    }
-    return Array.isArray(data) ? data : [];
+    const res = await axiosClient.get(`/Review/booking/${IddatPhong}`);
+    return Array.isArray(res.data) ? res.data : [];
   },
 
   /**
    * Get rating statistics (average, count, distribution)
    */
   getRatingStats: async (): Promise<any> => {
-    const res = await fetch(`${baseUrl}/stats`);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data?.message || "Failed to fetch rating stats");
-    }
-    return data;
+    const res = await axiosClient.get(`/Review/stats`);
+    return res.data;
   },
 
   /**
@@ -102,19 +73,63 @@ const reviewApi = {
    * (Normally called automatically after checkout, but exposed for admin override)
    */
   sendReviewEmail: async (IddatPhong: string, email: string): Promise<any> => {
-    const token = localStorage.getItem("hs_token");
-    const headers: any = { "Content-Type": "application/json" };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(`${baseUrl}/send-email`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ IddatPhong, Email: email }),
+    const res = await axiosClient.post(`/Review/send-email`, {
+      IddatPhong,
+      Email: email,
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data?.message || "Failed to send review email");
+    return res.data;
+  },
+
+  // ================== ADMIN REVIEW MANAGEMENT ==================
+
+  /**
+   * Get all reviews for admin management (paginated)
+   */
+  getAllReviews: async (params: {
+    page?: number;
+    pageSize?: number;
+    status?: string;
+    keyword?: string;
+  }): Promise<{
+    total: number;
+    page: number;
+    pageSize: number;
+    reviews: any[];
+  }> => {
+    const res = await axiosClient.get(`/Review`, { params });
+    return res.data;
+  },
+
+  /**
+   * Approve a review
+   */
+  approveReview: async (id: number): Promise<any> => {
+    const res = await axiosClient.put(`/Review/${id}/approve`);
+    return res.data;
+  },
+
+  /**
+   * Delete a review
+   */
+  deleteReview: async (id: number): Promise<any> => {
+    const res = await axiosClient.delete(`/Review/${id}`);
+    return res.data;
+  },
+
+  /**
+   * Send response email for a review (for negative reviews)
+   */
+  respondToReview: async (
+    id: number,
+    payload: {
+      issueDescription: string;
+      actionTaken: string;
+      compensation?: string;
+      senderName: string;
     }
-    return data;
+  ): Promise<any> => {
+    const res = await axiosClient.post(`/Review/${id}/respond`, payload);
+    return res.data;
   },
 };
 

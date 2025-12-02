@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { getAmenitiesForRoom } from "../../api/amenticsApi";
 import ReviewPreview from "./ReviewPreview";
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const BACKEND_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api";
+import { API_CONFIG } from "../../api/config";
+const BACKEND_BASE = `${API_CONFIG.CURRENT}/api`;
 
 function resolveImageUrl(u?: string | null) {
   if (!u) return undefined;
@@ -294,7 +292,6 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
             <h3 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>
               {room.tenPhong}
             </h3>
-            
           </div>
 
           {room.moTa && (
@@ -338,35 +335,57 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
               <div>
                 <div style={{ color: "#666", marginBottom: 6 }}>Giá: </div>
                 {room.giaCoBanMotDem != null ? (
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-                    <div style={{ fontSize: 26, fontWeight: 800, color: "rgb(216, 152, 96)", lineHeight: 1 }}>
+                  <div
+                    style={{ display: "flex", alignItems: "baseline", gap: 12 }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 26,
+                        fontWeight: 800,
+                        color: "rgb(216, 152, 96)",
+                        lineHeight: 1,
+                      }}
+                    >
                       {room.giaCoBanMotDem.toLocaleString("vi-VN")}
-                      <span style={{ fontSize: 14, fontWeight: 600, marginLeft: 8 }}>₫/đêm</span>
+                      <span
+                        style={{ fontSize: 14, fontWeight: 600, marginLeft: 8 }}
+                      >
+                        ₫/đêm
+                      </span>
                     </div>
                     {promotion && room.giaCoBanMotDem != null && (
-                      <div style={{ marginLeft: 4, color: "#6b7280", fontWeight: 600 }}>
-                        Giá sau khuyến mãi: {(
-                          promotion.loaiGiamGia === "percent"
-                            ? Math.max(
-                                0,
-                                Math.round(
-                                  (room.giaCoBanMotDem || 0) *
-                                    (1 - (promotion.giaTriGiam || 0) / 100)
-                                )
+                      <div
+                        style={{
+                          marginLeft: 4,
+                          color: "#6b7280",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Giá sau khuyến mãi:{" "}
+                        {(promotion.loaiGiamGia === "percent"
+                          ? Math.max(
+                              0,
+                              Math.round(
+                                (room.giaCoBanMotDem || 0) *
+                                  (1 - (promotion.giaTriGiam || 0) / 100)
                               )
-                            : Math.max(
-                                0,
-                                Math.round(
-                                  (room.giaCoBanMotDem || 0) -
-                                    (promotion.giaTriGiam || 0)
-                                )
+                            )
+                          : Math.max(
+                              0,
+                              Math.round(
+                                (room.giaCoBanMotDem || 0) -
+                                  (promotion.giaTriGiam || 0)
                               )
-                        ).toLocaleString("vi-VN")}₫/đêm
+                            )
+                        ).toLocaleString("vi-VN")}
+                        ₫/đêm
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div style={{ color: "#111827", fontWeight: 700 }}>Liên hệ</div>
+                  <div style={{ color: "#111827", fontWeight: 700 }}>
+                    Liên hệ
+                  </div>
                 )}
               </div>
             </div>
@@ -403,8 +422,6 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
           />
         </div>
       </div>
-
-
     </Modal>
   );
 };

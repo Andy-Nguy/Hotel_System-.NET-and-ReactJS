@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
+import { API_CONFIG } from "../../api/config";
 
-// Resolve API base from Vite env
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api";
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 import {
   Form,
   Input,

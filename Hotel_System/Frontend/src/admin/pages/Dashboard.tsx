@@ -21,11 +21,9 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { Dayjs } from "dayjs";
 
-// Resolve API base from Vite env when available (VITE_API_URL)
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api";
+// Use centralized API configuration
+import { API_CONFIG } from "../../api/config";
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 const fetchJson = async (url: string, init?: RequestInit) => {
   // Prepend API_BASE if url starts with /api
