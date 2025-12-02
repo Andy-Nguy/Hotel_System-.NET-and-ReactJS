@@ -241,7 +241,7 @@ export const updateExpiredStatus = async (): Promise<{
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/khuyenmai/cap-nhat-trang-thai-het-han`, {
+  const response = await fetch('/api/khuyenmai/cap-nhat-trang-thai-het-han', {
     method: "POST",
     headers,
   });
