@@ -21,6 +21,10 @@ public partial class DanhGium
 
     public bool? IsAnonym { get; set; }
 
+    public bool IsApproved { get; set; } = false; // Approval status for admin review
+
+    public bool IsResponded { get; set; } = false; // Response status: true = đã phản hồi qua email
+
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

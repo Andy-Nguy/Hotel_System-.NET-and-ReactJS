@@ -92,7 +92,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
   const getStatusTag = (status?: string) => {
     switch (status) {
       case "active":
-        return <Tag color="green">Đang Hoạt Động</Tag>;
+        return <Tag color="green">Đang Áp Dụng</Tag>;
       case "inactive":
         return <Tag color="orange">Tạm Ngưng</Tag>;
       case "expired":
@@ -114,8 +114,6 @@ const PromotionList: React.FC<PromotionListProps> = ({
         return <Tag color="purple">Dịch Vụ</Tag>;
       case "combo":
         return <Tag color="cyan">Combo</Tag>;
-      case "room_service":
-        return <Tag color="magenta">Phòng + Dịch Vụ</Tag>;
       case "customer":
         return <Tag color="gold">Khách Hàng</Tag>;
       default:
@@ -296,7 +294,6 @@ const PromotionList: React.FC<PromotionListProps> = ({
               { label: "Phòng", value: "room" },
               { label: "Dịch Vụ", value: "service" },
               { label: "Combo", value: "combo" },
-              { label: "Phòng + Dịch Vụ", value: "room_service" },
               { label: "Khách Hàng", value: "customer" },
             ]}
           />

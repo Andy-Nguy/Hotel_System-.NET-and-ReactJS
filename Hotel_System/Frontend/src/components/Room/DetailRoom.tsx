@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getAmenitiesForRoom } from "../../api/amenticsApi";
 import ReviewPreview from "./ReviewPreview";
-import ReviewPanel from "./ReviewPanel";
-import ReviewDetailPanel from "./ReviewDetailPanel";
 const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
 const BACKEND_BASE = _VITE_API.replace(/\/$/, "")
   ? `${_VITE_API.replace(/\/$/, "")}/api`
@@ -296,34 +294,7 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
             <h3 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>
               {room.tenPhong}
             </h3>
-            <Button
-              type="default"
-              onClick={() => {
-                if (isSoldOut) return;
-                try {
-                  if (promotion) {
-                    sessionStorage.setItem(
-                      "pendingPromotion",
-                      JSON.stringify(promotion)
-                    );
-                  }
-                } catch (e) {
-                  /* ignore */
-                }
-                onBook(room);
-              }}
-              disabled={isSoldOut}
-              style={{
-                borderRadius: 6,
-                background: isSoldOut ? "#cfcfcf" : "#4a5a4a",
-                color: "#fff",
-                borderColor: isSoldOut ? "#cfcfcf" : "#4a5a4a",
-                padding: "8px 20px",
-                height: "auto",
-              }}
-            >
-              {isSoldOut ? "Hết phòng" : "Đặt ngay"}
-            </Button>
+            
           </div>
 
           {room.moTa && (
@@ -364,42 +335,38 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
                 </div>
               )}
 
-              <div style={{ color: "#666" }}>
-                Giá:{" "}
+              <div>
+                <div style={{ color: "#666", marginBottom: 6 }}>Giá: </div>
                 {room.giaCoBanMotDem != null ? (
-                  <>
-                    {room.giaCoBanMotDem.toLocaleString("vi-VN")}₫/đêm
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: "rgb(216, 152, 96)", lineHeight: 1 }}>
+                      {room.giaCoBanMotDem.toLocaleString("vi-VN")}
+                      <span style={{ fontSize: 14, fontWeight: 600, marginLeft: 8 }}>₫/đêm</span>
+                    </div>
                     {promotion && room.giaCoBanMotDem != null && (
-                      <div
-                        style={{
-                          marginTop: 6,
-                          color: "#d83737",
-                          fontWeight: 700,
-                        }}
-                      >
-                        Giá sau khuyến mãi:{" "}
-                        {(promotion.loaiGiamGia === "percent"
-                          ? Math.max(
-                              0,
-                              Math.round(
-                                (room.giaCoBanMotDem || 0) *
-                                  (1 - (promotion.giaTriGiam || 0) / 100)
+                      <div style={{ marginLeft: 4, color: "#6b7280", fontWeight: 600 }}>
+                        Giá sau khuyến mãi: {(
+                          promotion.loaiGiamGia === "percent"
+                            ? Math.max(
+                                0,
+                                Math.round(
+                                  (room.giaCoBanMotDem || 0) *
+                                    (1 - (promotion.giaTriGiam || 0) / 100)
+                                )
                               )
-                            )
-                          : Math.max(
-                              0,
-                              Math.round(
-                                (room.giaCoBanMotDem || 0) -
-                                  (promotion.giaTriGiam || 0)
+                            : Math.max(
+                                0,
+                                Math.round(
+                                  (room.giaCoBanMotDem || 0) -
+                                    (promotion.giaTriGiam || 0)
+                                )
                               )
-                            )
-                        ).toLocaleString("vi-VN")}
-                        ₫/đêm
+                        ).toLocaleString("vi-VN")}₫/đêm
                       </div>
                     )}
-                  </>
+                  </div>
                 ) : (
-                  "Liên hệ"
+                  <div style={{ color: "#111827", fontWeight: 700 }}>Liên hệ</div>
                 )}
               </div>
             </div>
@@ -436,37 +403,8 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
           />
         </div>
       </div>
-      {/* Review Panel (full-screen overlay) */}
-      <ReviewPanel
-        visible={showReviewPanel}
-        room={room}
-        stats={stats}
-        totalReviews={totalReviews}
-        reviewPanelReviews={reviewPanelReviews}
-        reviewPanelPage={reviewPanelPage}
-        reviewPanelPageSize={reviewPanelPageSize}
-        loadingReviewPanel={loadingReviewPanel}
-        onClose={() => {
-          setShowReviewPanel(false);
-          setShowReviewDetailPanel(false);
-        }}
-        onSelectReview={(review) => {
-          setSelectedReview(review);
-          setShowReviewDetailPanel(true);
-        }}
-        onPageChange={setReviewPanelPage}
-      />
 
-      {/* Review Detail Panel (layer above ReviewPanel) */}
-      <ReviewDetailPanel
-        visible={showReviewDetailPanel}
-        selectedReview={selectedReview}
-        onClose={() => {
-          setShowReviewDetailPanel(false);
-          setShowReviewPanel(false);
-        }}
-        onBackToList={() => setShowReviewDetailPanel(false)}
-      />
+
     </Modal>
   );
 };

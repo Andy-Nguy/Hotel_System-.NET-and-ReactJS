@@ -13,8 +13,8 @@ type Combo = {
   banner?: string | null;
   services: ComboService[];
   originalPrice?: number | null; // sum of service prices
-  comboPrice: number;
-  loaiGiamGia?: string | null; // 'percent' or 'fixed'
+  comboPrice?: number; // Make optional - can be calculated from loaiGiamGia and giaTriGiam
+  loaiGiamGia?: string | null; // 'percent' or 'amount'
   giaTriGiam?: number | null;
   ngayBatDau?: string | null;
   ngayKetThuc?: string | null;
@@ -33,20 +33,41 @@ const ComboCard: React.FC<Props> = ({ combo, onView }) => {
   const originalPrice = combo.originalPrice ?? combo.services.reduce((s, it) => s + (it.tienDichVu ?? 0), 0);
   
   // Calculate final combo price based on discount type
-  let finalPrice = combo.comboPrice;
+  let finalPrice = 0;
   let saving = 0;
   let savingPercent = 0;
   
-  if (combo.loaiGiamGia?.toLowerCase() === 'percent') {
-    // comboPrice is the percentage discount
-    finalPrice = Math.round(originalPrice * (1 - combo.comboPrice / 100));
-    saving = originalPrice - finalPrice;
-    savingPercent = combo.comboPrice;
-  } else {
-    // comboPrice is the discounted amount (fixed discount)
-    finalPrice = Math.round(Math.max(0, originalPrice - combo.comboPrice));
+  if (combo.comboPrice !== undefined) {
+    // If comboPrice is provided, use it
     saving = combo.comboPrice;
+    finalPrice = originalPrice - saving;
     savingPercent = originalPrice > 0 ? Math.round((saving / originalPrice) * 100) : 0;
+  } else if (combo.loaiGiamGia && combo.giaTriGiam !== undefined && combo.giaTriGiam !== null) {
+    // Calculate from discount type and value
+    const discountValue = Number(combo.giaTriGiam);
+    const discountPercent = combo.loaiGiamGia.toLowerCase() === 'percent' ? discountValue : 0;
+    const discountAmount = combo.loaiGiamGia.toLowerCase() === 'amount' ? discountValue : 0;
+    
+    // Match PromotionSection.tsx logic
+    if (discountPercent > 0) {
+      finalPrice = Math.round(originalPrice * (1 - discountPercent / 100));
+      saving = originalPrice - finalPrice;
+      savingPercent = discountPercent;
+    } else if (discountAmount > 0) {
+      finalPrice = Math.max(0, Math.round(originalPrice - discountAmount));
+      saving = Math.min(discountAmount, originalPrice);
+      savingPercent = originalPrice > 0 ? Math.round((saving / originalPrice) * 100) : 0;
+    } else {
+      // No valid discount
+      finalPrice = originalPrice;
+      saving = 0;
+      savingPercent = 0;
+    }
+  } else {
+    // No discount info available
+    finalPrice = originalPrice;
+    saving = 0;
+    savingPercent = 0;
   }
 
   if (combo.isActive === false) return null;
@@ -79,8 +100,7 @@ const ComboCard: React.FC<Props> = ({ combo, onView }) => {
         </div>
 
         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-          <button onClick={() => onView?.(combo)} className="btn btn-light">Xem chi tiết</button>
-          <button onClick={() => { /* placeholder: selecting combo action handled elsewhere */ }} className="btn btn-primary">Chọn combo</button>
+          <button onClick={() => onView?.(combo)} className="btn btn-primary">Xem chi tiết</button>
         </div>
 
       </div>
