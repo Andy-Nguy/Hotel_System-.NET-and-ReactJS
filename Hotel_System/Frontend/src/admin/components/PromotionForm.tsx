@@ -264,7 +264,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
             setSelectedServiceIds(allComboItems.map((x) => x.id));
             setComboServices(allComboItems);
-          } 
+          }
           // Set banner image from canonical data
           setBannerImage(full.hinhAnhBanner || null);
         } catch (err) {
@@ -331,7 +331,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
             setSelectedRooms(selectedPhongIds);
             setSelectedServiceIds(allComboItems.map((x) => x.id));
             setComboServices(allComboItems);
-          } 
+          }
           setBannerImage(promotion.hinhAnhBanner || null);
         }
       })();
@@ -368,8 +368,8 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
       if (promoType === "service") {
         // Loại 'service': selectedRooms đang chứa ID Dịch vụ
-        payload.dichVuIds = selectedRooms; 
-      } else if (promoType === 'combo') {
+        payload.dichVuIds = selectedRooms;
+      } else if (promoType === "combo") {
         // Loại 'combo': gửi cả phòng và dịch vụ
         payload.phongIds = selectedRooms;
         payload.dichVuIds = selectedServiceIds;
@@ -487,10 +487,10 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               >
                 <Select
                   options={[
-                    { label: 'Phòng', value: 'room' },
-                    { label: 'Dịch Vụ', value: 'service' },
-                    { label: 'Combo Dịch Vụ', value: 'combo' }, 
-                    { label: 'Khách Hàng', value: 'customer' },
+                    { label: "Phòng", value: "room" },
+                    { label: "Dịch Vụ", value: "service" },
+                    { label: "Combo Dịch Vụ", value: "combo" },
+                    { label: "Khách Hàng", value: "customer" },
                   ]}
                   onChange={() => {
                     // Only reset when creating new promotion, not when editing
@@ -511,14 +511,15 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                 }
               >
                 {({ getFieldValue }) => {
-                  const loai = getFieldValue('loaiKhuyenMai');
-                  let helpText = '';
-                  if (loai === 'combo') {
-                    helpText = '💡 Combo: Khách mua TẤT CẢ các dịch vụ trong combo mới được giảm giá';
-                  }  else if (loai === 'service') {
-                    helpText = '💡 Dịch vụ: Giảm giá cho từng dịch vụ đơn lẻ';
-                  } else if (loai === 'room') {
-                    helpText = '💡 Phòng: Giảm giá cho từng phòng riêng lẻ';
+                  const loai = getFieldValue("loaiKhuyenMai");
+                  let helpText = "";
+                  if (loai === "combo") {
+                    helpText =
+                      "💡 Combo: Khách mua TẤT CẢ các dịch vụ trong combo mới được giảm giá";
+                  } else if (loai === "service") {
+                    helpText = "💡 Dịch vụ: Giảm giá cho từng dịch vụ đơn lẻ";
+                  } else if (loai === "room") {
+                    helpText = "💡 Phòng: Giảm giá cho từng phòng riêng lẻ";
                   }
                   return helpText ? (
                     <div
@@ -674,10 +675,14 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                   const promoType = getFieldValue("loaiKhuyenMai");
                   return (
                     <div>
-                      {promoType === 'service' ? (
-                        <Button onClick={() => setAssignModalVisible(true)}>Gán Dịch Vụ</Button>
-                      ) : promoType === 'combo' ? (
-                        <Button onClick={() => setAssignModalVisible(true)}>Gán Combo Dịch Vụ</Button>
+                      {promoType === "service" ? (
+                        <Button onClick={() => setAssignModalVisible(true)}>
+                          Gán Dịch Vụ
+                        </Button>
+                      ) : promoType === "combo" ? (
+                        <Button onClick={() => setAssignModalVisible(true)}>
+                          Gán Combo Dịch Vụ
+                        </Button>
                       ) : (
                         <Button onClick={() => setAssignModalVisible(true)}>
                           Gán Phòng
@@ -772,23 +777,198 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                               </div>
                             )}
 
-                            {(promoType === 'combo') && selectedServiceIds.length > 0 && (
-                              <div>
-                                <div style={{ fontWeight: 600, marginBottom: 4, color: '#666' }}>
-                                  {promoType === 'combo' ? 'Dịch vụ trong Combo:' : 'Dịch vụ đã chọn (trong gói):'}
-                                </div>
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                                  {selectedServiceIds.map((id) => {
-                                    const service = comboServices.find(s => s.id === id);
-                                    return (
-                                      <div key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: '1px solid #1890ff', borderRadius: 20, background: '#e6f7ff' }}>
-                                        <div style={{ fontWeight: 700, color: '#1890ff' }}>
-                                          {service?.name || id}
-                                          {service && promoType === 'combo' && (
-                                            <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 400 }}>
-                                              ({service.price.toLocaleString('vi-VN')} ₫)
-                                            </span>
-                                          )}
+                            {promoType === "combo" &&
+                              selectedServiceIds.length > 0 && (
+                                <div>
+                                  <div
+                                    style={{
+                                      fontWeight: 600,
+                                      marginBottom: 4,
+                                      color: "#666",
+                                    }}
+                                  >
+                                    {promoType === "combo"
+                                      ? "Dịch vụ trong Combo:"
+                                      : "Dịch vụ đã chọn (trong gói):"}
+                                  </div>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      gap: 8,
+                                      flexWrap: "wrap",
+                                      alignItems: "center",
+                                    }}
+                                  >
+                                    {selectedServiceIds.map((id) => {
+                                      const service = comboServices.find(
+                                        (s) => s.id === id
+                                      );
+                                      return (
+                                        <div
+                                          key={id}
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 8,
+                                            padding: "6px 10px",
+                                            border: "1px solid #1890ff",
+                                            borderRadius: 20,
+                                            background: "#e6f7ff",
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              fontWeight: 700,
+                                              color: "#1890ff",
+                                            }}
+                                          >
+                                            {service?.name || id}
+                                            {service &&
+                                              promoType === "combo" && (
+                                                <span
+                                                  style={{
+                                                    marginLeft: 6,
+                                                    fontSize: 12,
+                                                    fontWeight: 400,
+                                                  }}
+                                                >
+                                                  (
+                                                  {service.price.toLocaleString(
+                                                    "vi-VN"
+                                                  )}{" "}
+                                                  ₫)
+                                                </span>
+                                              )}
+                                          </div>
+                                          <Button
+                                            size="small"
+                                            danger
+                                            onClick={() => {
+                                              setSelectedServiceIds((s) =>
+                                                s.filter((x) => x !== id)
+                                              );
+                                              setComboServices((prev) =>
+                                                prev.filter((x) => x.id !== id)
+                                              );
+                                            }}
+                                          >
+                                            X
+                                          </Button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  {promoType === "combo" &&
+                                    comboServices.length > 0 && (
+                                      <div>
+                                        <div
+                                          style={{
+                                            marginTop: 12,
+                                            padding: 12,
+                                            background: "#f0f7ff",
+                                            borderRadius: 8,
+                                            fontSize: 14,
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              fontWeight: 700,
+                                              color: "#0066cc",
+                                            }}
+                                          >
+                                            {(() => {
+                                              const total =
+                                                comboServices.reduce(
+                                                  (sum, s) => sum + s.price,
+                                                  0
+                                                );
+                                              const discount =
+                                                form.getFieldValue(
+                                                  "giaTriGiam"
+                                                ) || 0;
+                                              const type =
+                                                form.getFieldValue(
+                                                  "loaiGiamGia"
+                                                );
+                                              const final =
+                                                type === "percent"
+                                                  ? total * (1 - discount / 100)
+                                                  : total - discount;
+                                              return `💰 Tổng tiền combo: ${Math.max(
+                                                0,
+                                                Math.round(final)
+                                              ).toLocaleString("vi-VN")} ₫`;
+                                            })()}
+                                          </div>
+                                        </div>
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            gap: 8,
+                                            flexWrap: "wrap",
+                                            alignItems: "center",
+                                          }}
+                                        >
+                                          {selectedServiceIds.map((id) => {
+                                            const service = comboServices.find(
+                                              (s) => s.id === id
+                                            );
+                                            return (
+                                              <div
+                                                key={id}
+                                                style={{
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  gap: 8,
+                                                  padding: "6px 10px",
+                                                  border: "1px solid #1890ff",
+                                                  borderRadius: 20,
+                                                  background: "#e6f7ff",
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    fontWeight: 700,
+                                                    color: "#1890ff",
+                                                  }}
+                                                >
+                                                  {service?.name || id}
+                                                  {service &&
+                                                    promoType === "combo" && (
+                                                      <span
+                                                        style={{
+                                                          marginLeft: 6,
+                                                          fontSize: 12,
+                                                          fontWeight: 400,
+                                                        }}
+                                                      >
+                                                        (
+                                                        {service.price.toLocaleString(
+                                                          "vi-VN"
+                                                        )}{" "}
+                                                        ₫)
+                                                      </span>
+                                                    )}
+                                                </div>
+                                                <Button
+                                                  size="small"
+                                                  danger
+                                                  onClick={() => {
+                                                    setSelectedServiceIds((s) =>
+                                                      s.filter((x) => x !== id)
+                                                    );
+                                                    setComboServices((prev) =>
+                                                      prev.filter(
+                                                        (x) => x.id !== id
+                                                      )
+                                                    );
+                                                  }}
+                                                >
+                                                  X
+                                                </Button>
+                                              </div>
+                                            );
+                                          })}
                                         </div>
                                       </div>
                                     )}
@@ -806,7 +986,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                 title={
                   form.getFieldValue("loaiKhuyenMai") === "service"
                     ? "Gán Dịch Vụ cho Khuyến Mãi"
-                    : form.getFieldValue('loaiKhuyenMai') === 'combo'
+                    : form.getFieldValue("loaiKhuyenMai") === "combo"
                     ? "Gán Phòng & Dịch Vụ cho Combo/Gói"
                     : "Gán Phòng cho Khuyến Mãi"
                 }
