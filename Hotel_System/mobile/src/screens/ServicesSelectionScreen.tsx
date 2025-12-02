@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -112,10 +113,7 @@ const ServicesSelectionScreen: React.FC = () => {
     }
   };
 
-  const handleQuantityChange = (
-    service: Service,
-    change: number
-  ) => {
+  const handleQuantityChange = (service: Service, change: number) => {
     const existing = selectedServices.find(
       (s) => s.serviceId === service.iddichVu
     );
@@ -148,10 +146,7 @@ const ServicesSelectionScreen: React.FC = () => {
   };
 
   const calculateTotal = () => {
-    return selectedServices.reduce(
-      (sum, s) => sum + s.price * s.quantity,
-      0
-    );
+    return selectedServices.reduce((sum, s) => sum + s.price * s.quantity, 0);
   };
 
   const handleProceed = () => {
@@ -176,7 +171,9 @@ const ServicesSelectionScreen: React.FC = () => {
   };
 
   const renderServiceItem = ({ item }: { item: Service }) => {
-    const selected = selectedServices.find((s) => s.serviceId === item.iddichVu);
+    const selected = selectedServices.find(
+      (s) => s.serviceId === item.iddichVu
+    );
     const quantity = selected ? selected.quantity : 0;
 
     return (
@@ -270,15 +267,16 @@ const ServicesSelectionScreen: React.FC = () => {
         selectedRoomNumbers={selectedRooms.map((sr: any) => sr.roomNumber)}
       />
 
-      <ScrollView 
-        style={styles.scrollContent} 
+      <ScrollView
+        style={styles.scrollContent}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.introSection}>
           <Text style={styles.introTitle}>Trải nghiệm trọn vẹn</Text>
           <Text style={styles.introText}>
-            Chọn thêm các dịch vụ tiện ích để kỳ nghỉ của bạn thêm phần hoàn hảo.
+            Chọn thêm các dịch vụ tiện ích để kỳ nghỉ của bạn thêm phần hoàn
+            hảo.
           </Text>
         </View>
 
@@ -351,7 +349,8 @@ const ServicesSelectionScreen: React.FC = () => {
 
                   <Text style={styles.modalSectionTitle}>Mô tả</Text>
                   <Text style={styles.modalDescription}>
-                    {selectedServiceDetail.thongTinDv || "Chưa có mô tả chi tiết."}
+                    {selectedServiceDetail.thongTinDv ||
+                      "Chưa có mô tả chi tiết."}
                   </Text>
 
                   {selectedServiceDetail.ghiChu && (
@@ -510,7 +509,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 34,
+    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,

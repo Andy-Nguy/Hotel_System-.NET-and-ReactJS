@@ -66,16 +66,8 @@ const defaultTiers: MembershipTier[] = [
   },
 ];
 
-const fetchJson = async (url: string, init?: RequestInit) => {
-  const res = await fetch(url, init);
-  const txt = await res.text().catch(() => "");
-  const data = txt ? JSON.parse(txt) : null;
-  if (!res.ok)
-    throw new Error(
-      (data && (data.message || data.error)) || `HTTP ${res.status}`
-    );
-  return data;
-};
+// Import axiosClient for centralized API configuration (local/prod switching via config.ts)
+import axiosClient from "../../api/axiosClient";
 
 const getTier = (points: number, tiers: MembershipTier[]) => {
   const sorted = [...tiers].sort((a, b) => b.minPoints - a.minPoints);
@@ -102,8 +94,9 @@ const LoyaltyManager: React.FC = () => {
   const loadCustomers = async () => {
     setLoading(true);
     try {
-      // Giả sử backend có endpoint GET /api/KhachHang trả về danh sách khách hàng
-      const data = await fetchJson(`/api/KhachHang`);
+      // GET /api/KhachHang trả về danh sách khách hàng
+      const res = await axiosClient.get(`/KhachHang`);
+      const data = res.data;
       const list: CustomerLoyalty[] = (
         Array.isArray(data) ? data : data.data || []
       ).map((c: any) => ({
@@ -157,14 +150,13 @@ const LoyaltyManager: React.FC = () => {
         return;
       }
       // PUT /api/KhachHang/{id}/points
-      await fetchJson(`/api/KhachHang/${selectedCustomer.idKhachHang}/points`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await axiosClient.put(
+        `/KhachHang/${selectedCustomer.idKhachHang}/points`,
+        {
           Points: pointsToAdd,
           Reason: v.reason || "Điều chỉnh thủ công",
-        }),
-      });
+        }
+      );
       message.success(
         `Đã ${pointsToAdd > 0 ? "cộng" : "trừ"} ${Math.abs(
           pointsToAdd
@@ -293,7 +285,7 @@ const LoyaltyManager: React.FC = () => {
                     <Card style={{ marginBottom: 16 }}>
                       <Space wrap>
                         <Input.Search
-                          placeholder="Tìm khách hàng (tên, email, SĐT, mã)"
+                          placeholder="Tìm kiếm khách hàng (tên, email, SĐT, mã)"
                           style={{ width: 350 }}
                           value={keyword}
                           onChange={(e) => setKeyword(e.target.value)}

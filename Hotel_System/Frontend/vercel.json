@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "builds": [{ "src": "package.json", "use": "@vercel/static-build" }],
+  "outputDirectory": "dist",
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "https://hotelsystem-net-and-reactjs-production.up.railway.app/api/$1"
+    },
+    {
+      "src": "/uploads/(.*)",
+      "dest": "https://hotelsystem-net-and-reactjs-production.up.railway.app/uploads/$1"
+    },
+    { "handle": "filesystem" },
+    {
+      "src": "/img/(.*)",
+      "dest": "https://hotelsystem-net-and-reactjs-production.up.railway.app/img/$1"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "https://hotelsystem-net-and-reactjs-production.up.railway.app/assets/$1"
+    },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}

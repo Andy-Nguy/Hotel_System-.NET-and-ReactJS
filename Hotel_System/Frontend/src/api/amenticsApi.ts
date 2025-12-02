@@ -1,7 +1,9 @@
 // Frontend API client for amenities (TienNghi) and room-amenity assignments (TienNghiPhong)
 
-// Allow overriding API base from Vite env (development) e.g. VITE_API_BASE=https://localhost:5001
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || "/api";
+// Resolve API base from Vite env when available (VITE_API_URL). Fall back to "/api" for dev proxy.
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 // ========== AMENITY (TienNghi) CRUD ==========
 

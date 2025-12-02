@@ -241,7 +241,7 @@ const CheckoutScreen: React.FC = () => {
           {/* Booking Summary Card */}
           <View style={styles.summaryCard}>
             <Text style={styles.cardTitle}>Tóm tắt đặt phòng</Text>
-            
+
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Nhận phòng</Text>
@@ -271,7 +271,7 @@ const CheckoutScreen: React.FC = () => {
                 {bookingInfo.totalRooms} phòng
               </Text>
               <View style={styles.dot} />
-              <AppIcon name="moon" size={16} color={COLORS.gray} />
+              <AppIcon name="moon-o" size={16} color={COLORS.gray} />
               <Text style={styles.summaryDetailText}>
                 {calculateNights()} đêm
               </Text>
@@ -281,7 +281,7 @@ const CheckoutScreen: React.FC = () => {
           {/* Customer Info Form */}
           <View style={styles.formSection}>
             <Text style={styles.sectionTitle}>Thông tin liên hệ</Text>
-            
+
             <View style={styles.inputContainer}>
               <View style={styles.inputIcon}>
                 <AppIcon name="user" size={20} color={COLORS.gray} />
@@ -321,7 +321,7 @@ const CheckoutScreen: React.FC = () => {
 
             <View style={styles.inputContainer}>
               <View style={styles.inputIcon}>
-                <AppIcon name="mail" size={20} color={COLORS.gray} />
+                <AppIcon name="envelope" size={20} color={COLORS.gray} />
               </View>
               <View style={styles.inputContent}>
                 <Text style={styles.inputLabel}>Email *</Text>
@@ -357,14 +357,22 @@ const CheckoutScreen: React.FC = () => {
               </View>
             </View>
 
-            <View style={[styles.inputContainer, { alignItems: 'flex-start', paddingVertical: 12 }]}>
+            <View
+              style={[
+                styles.inputContainer,
+                { alignItems: "flex-start", paddingVertical: 12 },
+              ]}
+            >
               <View style={[styles.inputIcon, { marginTop: 4 }]}>
                 <AppIcon name="edit" size={20} color={COLORS.gray} />
               </View>
               <View style={styles.inputContent}>
                 <Text style={styles.inputLabel}>Ghi chú</Text>
                 <TextInput
-                  style={[styles.input, { height: 60, textAlignVertical: 'top' }]}
+                  style={[
+                    styles.input,
+                    { height: 60, textAlignVertical: "top" },
+                  ]}
                   value={customerInfo.notes}
                   onChangeText={(text) =>
                     setCustomerInfo({ ...customerInfo, notes: text })
@@ -380,16 +388,22 @@ const CheckoutScreen: React.FC = () => {
           {/* Price Breakdown */}
           <View style={styles.priceSection}>
             <Text style={styles.sectionTitle}>Chi tiết thanh toán</Text>
-            
+
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Tiền phòng ({calculateNights()} đêm)</Text>
-              <Text style={styles.priceValue}>{roomTotal.toLocaleString()}đ</Text>
+              <Text style={styles.priceLabel}>
+                Tiền phòng ({calculateNights()} đêm)
+              </Text>
+              <Text style={styles.priceValue}>
+                {roomTotal.toLocaleString()}đ
+              </Text>
             </View>
 
             {serviceTotal > 0 && (
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Dịch vụ thêm</Text>
-                <Text style={styles.priceValue}>{serviceTotal.toLocaleString()}đ</Text>
+                <Text style={styles.priceValue}>
+                  {serviceTotal.toLocaleString()}đ
+                </Text>
               </View>
             )}
 
@@ -402,7 +416,9 @@ const CheckoutScreen: React.FC = () => {
 
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Tổng thanh toán</Text>
-              <Text style={styles.totalValue}>{totalAmount.toLocaleString()}đ</Text>
+              <Text style={styles.totalValue}>
+                {totalAmount.toLocaleString()}đ
+              </Text>
             </View>
           </View>
         </ScrollView>
@@ -596,7 +612,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 34,
+    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,

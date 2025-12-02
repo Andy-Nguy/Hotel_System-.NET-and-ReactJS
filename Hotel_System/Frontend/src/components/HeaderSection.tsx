@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { getUserInfo, checkIsNhanVien } from "../context/UserContext";
+import { API_CONFIG } from "../api/config";
 
 const HeaderSection: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -13,45 +15,52 @@ const HeaderSection: React.FC = () => {
     return "/";
   };
 
-  const refreshAuth = () => {
+  const refreshAuth = async () => {
     const token = localStorage.getItem("hs_token");
     setIsLoggedIn(!!token);
+
     if (token) {
+      // Sử dụng hàm getUserInfo thống nhất
+      const info = getUserInfo();
+      if (info) {
+        console.log("[HeaderSection] Using getUserInfo:", info);
+        setUserInfo(info);
+        return;
+      }
+
+      // Fallback: gọi API profile nếu getUserInfo không có dữ liệu
       try {
-        const base64Payload = token.split(".")[1];
-        const decodedPayload = decodeURIComponent(
-          atob(base64Payload)
-            .split("")
-            .map(function (c) {
-              return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-            })
-            .join("")
-        );
-        const payload = JSON.parse(decodedPayload);
-        setUserInfo(payload);
+        const API_BASE = `${API_CONFIG.CURRENT}/api`;
+        const res = await fetch(`${API_BASE}/Auth/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const profile = await res.json();
+          console.log("[HeaderSection] Profile from API:", profile);
+          const mappedUserInfo = {
+            name: profile.hoTen || profile.HoTen || profile.name || "User",
+            email: profile.email || profile.Email,
+            role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
+            phone: profile.soDienThoai || profile.SoDienThoai,
+          };
+          setUserInfo(mappedUserInfo);
+          localStorage.setItem("hs_userInfo", JSON.stringify(mappedUserInfo));
+        } else {
+          setUserInfo({ name: "User" });
+        }
       } catch (e) {
-        console.warn("Could not decode token:", e);
-        setUserInfo(null);
+        console.warn("Could not fetch user profile:", e);
+        setUserInfo({ name: "User" });
       }
     } else {
       setUserInfo(null);
+      localStorage.removeItem("hs_userInfo");
     }
   };
 
-  // helper to check staff role
+  // helper to check staff/admin role - sử dụng hàm thống nhất
   const isNhanVien = () => {
-    if (!userInfo) return false;
-    const role =
-      userInfo.role ||
-      userInfo.roles ||
-      userInfo[
-        "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-      ] ||
-      userInfo["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ||
-      userInfo.VaiTro;
-    if (!role) return false;
-    if (Array.isArray(role)) return role.includes("nhanvien");
-    return String(role).toLowerCase() === "nhanvien" || String(role) === "1";
+    return checkIsNhanVien(userInfo);
   };
 
   const headerRef = useRef<HTMLElement | null>(null);
@@ -133,10 +142,11 @@ const HeaderSection: React.FC = () => {
               <div className="col-lg-6">
                 <ul className="tn-left">
                   <li>
-                    <i className="fa fa-phone"></i> (12) 345 67890
+                    <i className="fa fa-phone"></i> 0123 456 789
                   </li>
                   <li>
-                    <i className="fa fa-envelope"></i> info.colorlib@gmail.com
+                    <i className="fa fa-envelope"></i>{" "}
+                    info.robinsvilla@gmail.com
                   </li>
                 </ul>
               </div>
@@ -149,9 +159,7 @@ const HeaderSection: React.FC = () => {
                     <a href="#">
                       <i className="fa fa-twitter"></i>
                     </a>
-                    <a href="#">
-                      <i className="fa fa-tripadvisor"></i>
-                    </a>
+
                     <a href="#">
                       <i className="fa fa-instagram"></i>
                     </a>
@@ -159,22 +167,6 @@ const HeaderSection: React.FC = () => {
                   <a href="/rooms" className="bk-btn">
                     Booking Now
                   </a>
-                  <div className="language-option">
-                    <img src="/img/flag.jpg" alt="" />
-                    <span>
-                      EN <i className="fa fa-angle-down"></i>
-                    </span>
-                    <div className="flag-dropdown">
-                      <ul>
-                        <li>
-                          <a href="#">Zi</a>
-                        </li>
-                        <li>
-                          <a href="#">Fr</a>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -334,10 +326,12 @@ const HeaderSection: React.FC = () => {
                             ? (() => {
                                 try {
                                   const fullName =
+                                    userInfo?.name ||
+                                    userInfo?.hoTen ||
+                                    userInfo?.HoTen ||
                                     userInfo?.[
                                       "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
                                     ] ||
-                                    userInfo?.name ||
                                     "User";
                                   const firstName =
                                     String(fullName).trim().split(" ")[0] ||
@@ -485,9 +479,6 @@ const HeaderSection: React.FC = () => {
                       </li>
                     </ul>
                   </nav>
-                  <div className="nav-right search-switch">
-                    <i className="icon_search"></i>
-                  </div>
                 </div>
               </div>
             </div>

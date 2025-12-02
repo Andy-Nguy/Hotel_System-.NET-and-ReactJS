@@ -1,4 +1,8 @@
 import React, { useEffect, useState } from "react";
+import { API_CONFIG } from "../api/config";
+
+// Use centralized API config
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 import {
   Layout,
   Card,
@@ -112,7 +116,9 @@ const BookingSuccessPage: React.FC = () => {
       }
 
       message.loading({ content: "Đang tải hóa đơn...", key: "download" });
-      const response = await fetch(`/api/Payment/invoice/${idHoaDon}/pdf`);
+      const response = await fetch(
+        `${API_BASE}/Payment/invoice/${idHoaDon}/pdf`
+      );
       if (!response.ok) throw new Error(`Lỗi tải PDF: ${response.status}`);
 
       const blob = await response.blob();

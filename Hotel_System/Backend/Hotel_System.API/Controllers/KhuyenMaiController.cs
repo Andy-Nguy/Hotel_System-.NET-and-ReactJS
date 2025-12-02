@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
 using Hotel_System.API.DTOs;
@@ -10,7 +10,7 @@ using System.IO;
 namespace Hotel_System.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/khuyenmai")]
 public class KhuyenMaiController : ControllerBase
 {
     private readonly HotelSystemContext _context;
@@ -39,6 +39,12 @@ public class KhuyenMaiController : ControllerBase
             var query = _context.KhuyenMais
                 .Include(k => k.KhuyenMaiPhongs)
                     .ThenInclude(kp => kp.IdphongNavigation)
+                .Include(k => k.KhuyenMaiDichVus)
+                    .ThenInclude(kdv => kdv.IddichVuNavigation)
+                .Include(k => k.KhuyenMaiCombos)
+                    .ThenInclude(c => c.KhuyenMaiComboDichVus)
+                        .ThenInclude(cd => cd.IddichVuNavigation)
+                            .ThenInclude(d => d.TtdichVus)
                 .AsQueryable();
 
             // Filter by status
@@ -79,9 +85,13 @@ public class KhuyenMaiController : ControllerBase
         {
             var promotion = await _context.KhuyenMais
                 .Include(k => k.KhuyenMaiPhongs)
-                .ThenInclude(kp => kp.IdphongNavigation)
+                    .ThenInclude(kp => kp.IdphongNavigation)
                 .Include(k => k.KhuyenMaiDichVus)
                     .ThenInclude(kdv => kdv.IddichVuNavigation)
+                .Include(k => k.KhuyenMaiCombos)
+                    .ThenInclude(c => c.KhuyenMaiComboDichVus)
+                        .ThenInclude(cd => cd.IddichVuNavigation)
+                            .ThenInclude(d => d.TtdichVus)
                 .FirstOrDefaultAsync(k => k.IdkhuyenMai == id);
 
             if (promotion == null)
@@ -96,10 +106,9 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // POST: api/KhuyenMai/upload-banner
+    // POST: api/khuyenmai/tai-banner
     // Upload hình ảnh banner cho khuyến mãi
-    [HttpPost("upload-banner")]
-    // [Authorize(Roles = "nhanvien")]
+    [HttpPost("tai-banner")]
     public async Task<ActionResult<UploadResultDto>> UploadBanner(IFormFile file)
     {
         try
@@ -161,6 +170,9 @@ public class KhuyenMaiController : ControllerBase
     {
         try
         {
+            // Debug logging
+            _logger.LogInformation($"Creating promotion: Type={dto.LoaiKhuyenMai}, PhongIds={dto.PhongIds.Count}, DichVuIds={dto.DichVuIds.Count}");
+            
             // Validate
             if (string.IsNullOrWhiteSpace(dto.TenKhuyenMai))
                 return BadRequest(new { message = "Tên khuyến mãi không được để trống" });
@@ -224,9 +236,12 @@ public class KhuyenMaiController : ControllerBase
                 await _context.SaveChangesAsync();
             }
 
-            // Thêm khuyến mãi vào các dịch vụ nếu loại là 'service' và có danh sách dịch vụ
-            if (string.Equals(promotion.LoaiKhuyenMai, "service", StringComparison.OrdinalIgnoreCase) && dto.DichVuIds != null && dto.DichVuIds.Count > 0)
+            // Xử lý theo loại khuyến mãi
+            var promoType = promotion.LoaiKhuyenMai?.ToLower() ?? "room";
+            
+            if (promoType == "service" && dto.DichVuIds != null && dto.DichVuIds.Count > 0)
             {
+                // Loại 'service': Chỉ khuyến mãi cho dịch vụ đơn lẻ
                 foreach (var dvId in dto.DichVuIds)
                 {
                     var svc = await _context.DichVus.FirstOrDefaultAsync(d => d.IddichVu == dvId);
@@ -247,12 +262,63 @@ public class KhuyenMaiController : ControllerBase
                 }
                 await _context.SaveChangesAsync();
             }
+            else if (promoType == "combo" && dto.DichVuIds != null && dto.DichVuIds.Count >= 2)
+            {
+                _logger.LogInformation($"Creating combo with {dto.DichVuIds.Count} services");
+                // Loại 'combo': Tạo KhuyenMaiCombo -> KhuyenMaiComboDichVu
+                // Bước 1: Tạo bản ghi KhuyenMaiCombo
+                var comboId = $"COMBO_{Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper()}";
+                var combo = new KhuyenMaiCombo
+                {
+                    IdkhuyenMaiCombo = comboId,
+                    IdkhuyenMai = id,
+                    TenCombo = dto.TenKhuyenMai + " - Combo",
+                    MoTa = dto.MoTa,
+                    NgayBatDau = dto.NgayBatDau,
+                    NgayKetThuc = dto.NgayKetThuc,
+                    TrangThai = "active",
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now
+                };
+                _context.KhuyenMaiCombos.Add(combo);
+                await _context.SaveChangesAsync();
+
+                // Bước 2: Thêm các dịch vụ vào combo
+                foreach (var dvId in dto.DichVuIds)
+                {
+                    _logger.LogInformation($"Adding service {dvId} to combo {comboId}");
+                    var svc = await _context.DichVus.FirstOrDefaultAsync(d => d.IddichVu == dvId);
+                    if (svc != null)
+                    {
+                        var comboDv = new KhuyenMaiComboDichVu
+                        {
+                            IdkhuyenMaiCombo = comboId,
+                            IddichVu = dvId,
+                            IsActive = true,
+                            CreatedAt = DateTime.Now,
+                            UpdatedAt = DateTime.Now
+                        };
+                        _context.KhuyenMaiComboDichVus.Add(comboDv);
+                        _logger.LogInformation($"Successfully added service {dvId} to combo");
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"Service {dvId} not found!");
+                    }
+                }
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Saved combo {comboId} with services to database");
+            }
 
             promotion = await _context.KhuyenMais
                 .Include(k => k.KhuyenMaiPhongs)
-                .ThenInclude(kp => kp.IdphongNavigation)
+                    .ThenInclude(kp => kp.IdphongNavigation)
                 .Include(k => k.KhuyenMaiDichVus)
                     .ThenInclude(kdv => kdv.IddichVuNavigation)
+                .Include(k => k.KhuyenMaiCombos)
+                    .ThenInclude(c => c.KhuyenMaiComboDichVus)
+                        .ThenInclude(cd => cd.IddichVuNavigation)
+                            .ThenInclude(d => d.TtdichVus)
                 .FirstAsync(k => k.IdkhuyenMai == id);
 
             return CreatedAtAction(nameof(GetById), new { id = id }, MapToDto(promotion));
@@ -302,17 +368,60 @@ public class KhuyenMaiController : ControllerBase
             promotion.HinhAnhBanner = finalBannerPath;
             promotion.UpdatedAt = DateTime.Now;
 
-            // Cập nhật danh sách phòng
-            // Xóa các phòng cũ
-            _context.KhuyenMaiPhongs.RemoveRange(promotion.KhuyenMaiPhongs);
-            // Xóa các dịch vụ cũ (nếu có)
+            // Determine original and new promotion type
+            var originalType = promotion.LoaiKhuyenMai?.ToLower() ?? "room";
+            var newType = string.IsNullOrWhiteSpace(dto.LoaiKhuyenMai) ? originalType : dto.LoaiKhuyenMai.ToLower();
+
+            // Load existing mappings so we can preserve them if update omitted lists
             var oldServiceMappings = await _context.KhuyenMaiDichVus.Where(m => m.IdkhuyenMai == id).ToListAsync();
-            if (oldServiceMappings.Any()) _context.KhuyenMaiDichVus.RemoveRange(oldServiceMappings);
+            var oldCombos = await _context.KhuyenMaiCombos.Where(c => c.IdkhuyenMai == id).Include(c => c.KhuyenMaiComboDichVus).ToListAsync();
+
+            // If the type changed, remove all old mappings. If type stayed the same, only remove categories
+            // for which the client explicitly provided lists (dto.PhongIds or dto.DichVuIds != null).
+            if (newType != originalType)
+            {
+                // remove all
+                _context.KhuyenMaiPhongs.RemoveRange(promotion.KhuyenMaiPhongs);
+                if (oldServiceMappings.Any()) _context.KhuyenMaiDichVus.RemoveRange(oldServiceMappings);
+                if (oldCombos.Any())
+                {
+                    foreach (var combo in oldCombos)
+                    {
+                        _context.KhuyenMaiComboDichVus.RemoveRange(combo.KhuyenMaiComboDichVus);
+                    }
+                    _context.KhuyenMaiCombos.RemoveRange(oldCombos);
+                }
+            }
+            else
+            {
+                // same type: remove only if client explicitly provided replacements
+                // For room type: only clear rooms if phongIds is explicitly provided (not null)
+                if (newType == "room" && dto.PhongIds != null)
+                {
+                    _context.KhuyenMaiPhongs.RemoveRange(promotion.KhuyenMaiPhongs);
+                }
+
+                if (dto.DichVuIds != null && dto.DichVuIds.Count > 0)
+                {
+                    if (oldServiceMappings.Any()) _context.KhuyenMaiDichVus.RemoveRange(oldServiceMappings);
+                    if (oldCombos.Any())
+                    {
+                        foreach (var combo in oldCombos)
+                        {
+                            _context.KhuyenMaiComboDichVus.RemoveRange(combo.KhuyenMaiComboDichVus);
+                        }
+                        _context.KhuyenMaiCombos.RemoveRange(oldCombos);
+                    }
+                }
+            }
+
             await _context.SaveChangesAsync();
 
-            // Thêm phòng mới
-            if (dto.PhongIds.Count > 0)
+            // Thêm mapping mới theo loại (sử dụng newType)
+            // For room type: only add rooms if client explicitly provided phongIds (not null)
+            if (newType == "room" && dto.PhongIds != null)
             {
+                // Thêm phòng mới cho loại 'room'
                 foreach (var phongId in dto.PhongIds)
                 {
                     var room = await _context.Phongs.FirstOrDefaultAsync(p => p.Idphong == phongId);
@@ -331,11 +440,11 @@ public class KhuyenMaiController : ControllerBase
                         _context.KhuyenMaiPhongs.Add(khuyenMaiPhong);
                     }
                 }
+                await _context.SaveChangesAsync();
             }
-
-            // Thêm dịch vụ mới nếu có
-            if (string.Equals(promotion.LoaiKhuyenMai, "service", StringComparison.OrdinalIgnoreCase) && dto.DichVuIds != null && dto.DichVuIds.Count > 0)
+            else if (newType == "service" && dto.DichVuIds != null && dto.DichVuIds.Count > 0)
             {
+                // Thêm dịch vụ đơn lẻ cho loại 'service'
                 foreach (var dvId in dto.DichVuIds)
                 {
                     var svc = await _context.DichVus.FirstOrDefaultAsync(d => d.IddichVu == dvId);
@@ -354,6 +463,44 @@ public class KhuyenMaiController : ControllerBase
                         _context.KhuyenMaiDichVus.Add(mapping);
                     }
                 }
+                await _context.SaveChangesAsync();
+            }
+            else if (newType == "combo" && dto.DichVuIds != null && dto.DichVuIds.Count >= 2)
+            {
+                // Tạo combo mới
+                var comboId = $"COMBO_{Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper()}";
+                var combo = new KhuyenMaiCombo
+                {
+                    IdkhuyenMaiCombo = comboId,
+                    IdkhuyenMai = id,
+                    TenCombo = dto.TenKhuyenMai + " - Combo",
+                    MoTa = dto.MoTa,
+                    NgayBatDau = dto.NgayBatDau,
+                    NgayKetThuc = dto.NgayKetThuc,
+                    TrangThai = "active",
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now
+                };
+                _context.KhuyenMaiCombos.Add(combo);
+                await _context.SaveChangesAsync();
+
+                foreach (var dvId in dto.DichVuIds)
+                {
+                    var svc = await _context.DichVus.FirstOrDefaultAsync(d => d.IddichVu == dvId);
+                    if (svc != null)
+                    {
+                        var comboDv = new KhuyenMaiComboDichVu
+                        {
+                            IdkhuyenMaiCombo = comboId,
+                            IddichVu = dvId,
+                            IsActive = true,
+                            CreatedAt = DateTime.Now,
+                            UpdatedAt = DateTime.Now
+                        };
+                        _context.KhuyenMaiComboDichVus.Add(comboDv);
+                    }
+                }
+                await _context.SaveChangesAsync();
             }
 
             _context.KhuyenMais.Update(promotion);
@@ -361,9 +508,13 @@ public class KhuyenMaiController : ControllerBase
 
             promotion = await _context.KhuyenMais
                 .Include(k => k.KhuyenMaiPhongs)
-                .ThenInclude(kp => kp.IdphongNavigation)
+                    .ThenInclude(kp => kp.IdphongNavigation)
                 .Include(k => k.KhuyenMaiDichVus)
                     .ThenInclude(kdv => kdv.IddichVuNavigation)
+                .Include(k => k.KhuyenMaiCombos)
+                    .ThenInclude(c => c.KhuyenMaiComboDichVus)
+                        .ThenInclude(cd => cd.IddichVuNavigation)
+                            .ThenInclude(d => d.TtdichVus)
                 .FirstAsync(k => k.IdkhuyenMai == id);
 
             return Ok(MapToDto(promotion));
@@ -375,10 +526,9 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // PATCH: api/KhuyenMai/{id}/toggle
+    // PATCH: api/khuyenmai/{id}/bat-tat
     // Bật/tắt khuyến mãi
-    [HttpPatch("{id}/toggle")]
-    // [Authorize(Roles = "nhanvien")]
+    [HttpPatch("{id}/bat-tat")]
     public async Task<ActionResult<KhuyenMaiDto>> Toggle(string id)
     {
         try
@@ -418,7 +568,13 @@ public class KhuyenMaiController : ControllerBase
 
             promotion = await _context.KhuyenMais
                 .Include(k => k.KhuyenMaiPhongs)
-                .ThenInclude(kp => kp.IdphongNavigation)
+                    .ThenInclude(kp => kp.IdphongNavigation)
+                .Include(k => k.KhuyenMaiDichVus)
+                    .ThenInclude(kdv => kdv.IddichVuNavigation)
+                .Include(k => k.KhuyenMaiCombos)
+                    .ThenInclude(c => c.KhuyenMaiComboDichVus)
+                        .ThenInclude(cd => cd.IddichVuNavigation)
+                            .ThenInclude(d => d.TtdichVus)
                 .FirstAsync(k => k.IdkhuyenMai == id);
 
             return Ok(MapToDto(promotion));
@@ -461,9 +617,9 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // POST: api/KhuyenMai/{id}/assign-service
+    // POST: api/khuyenmai/{id}/gan-dich-vu
     // Gán dịch vụ vào chương trình khuyến mãi
-    [HttpPost("{id}/assign-service")]
+    [HttpPost("{id}/gan-dich-vu")]
     public async Task<IActionResult> AssignService(string id, [FromBody] CreateKhuyenMaiDichVuDto dto)
     {
         try
@@ -513,8 +669,8 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // GET: api/KhuyenMai/{id}/services
-    [HttpGet("{id}/services")]
+    // GET: api/khuyenmai/{id}/dich-vu
+    [HttpGet("{id}/dich-vu")]
     public async Task<IActionResult> GetServicesForPromotion(string id)
     {
         try
@@ -561,8 +717,8 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // PATCH: api/KhuyenMai/service/{mappingId}/toggle
-    [HttpPatch("service/{mappingId}/toggle")]
+    // PATCH: api/khuyenmai/dich-vu/{mappingId}/bat-tat
+    [HttpPatch("dich-vu/{mappingId}/bat-tat")]
     public async Task<IActionResult> ToggleServiceMapping(int mappingId)
     {
         try
@@ -584,8 +740,8 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // DELETE: api/KhuyenMai/service/{mappingId}
-    [HttpDelete("service/{mappingId}")]
+    // DELETE: api/khuyenmai/dich-vu/{mappingId}
+    [HttpDelete("dich-vu/{mappingId}")]
     public async Task<IActionResult> DeleteServiceMapping(int mappingId)
     {
         try
@@ -605,10 +761,9 @@ public class KhuyenMaiController : ControllerBase
         }
     }
 
-    // POST: api/KhuyenMai/update-expired-status
+    // POST: api/khuyenmai/cap-nhat-trang-thai-het-han
     // Cập nhật trạng thái expired cho các khuyến mãi hết hạn
-    [HttpPost("update-expired-status")]
-    // [Authorize(Roles = "nhanvien")]
+    [HttpPost("cap-nhat-trang-thai-het-han")]
     public async Task<IActionResult> UpdateExpiredStatus()
     {
         try
@@ -782,6 +937,33 @@ public class KhuyenMaiController : ControllerBase
                     TenDichVu = m.IddichVuNavigation?.TenDichVu ?? m.IddichVu
                 };
             }).ToList() ?? new List<KhuyenMaiDichVuDto>()
+            ,
+            KhuyenMaiCombos = promotion.KhuyenMaiCombos?.Select(c => new DTOs.Promotions.KhuyenMaiComboDto
+            {
+                IdkhuyenMaiCombo = c.IdkhuyenMaiCombo,
+                TenCombo = c.TenCombo,
+                MoTa = c.MoTa,
+                NgayBatDau = c.NgayBatDau,
+                NgayKetThuc = c.NgayKetThuc,
+                TrangThai = c.TrangThai,
+                KhuyenMaiComboDichVus = c.KhuyenMaiComboDichVus?.Select(cd =>
+                {
+                    var dichVu = cd.IddichVuNavigation;
+                    var details = dichVu?.TtdichVus?.FirstOrDefault();
+                    return new DTOs.Promotions.KhuyenMaiComboDichVuDto
+                    {
+                        Id = cd.Id,
+                        IdkhuyenMaiCombo = cd.IdkhuyenMaiCombo,
+                        IddichVu = cd.IddichVu,
+                        TenDichVu = dichVu?.TenDichVu ?? cd.IddichVu,
+                        TienDichVu = dichVu?.TienDichVu,
+                        HinhDichVu = dichVu?.HinhDichVu,
+                        ThongTinDv = details?.ThongTinDv,
+                        ThoiLuongUocTinh = details?.ThoiLuongUocTinh,
+                        IsActive = cd.IsActive
+                    };
+                }).ToList() ?? new List<DTOs.Promotions.KhuyenMaiComboDichVuDto>()
+            }).ToList() ?? new List<DTOs.Promotions.KhuyenMaiComboDto>()
         };
     }
 }

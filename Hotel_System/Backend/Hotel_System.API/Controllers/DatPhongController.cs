@@ -178,7 +178,7 @@ namespace Hotel_System.API.Controllers
                     SoLuongPhong = request.Rooms?.Count ?? 0,
                     TongTien = tongCong,
                     TienCoc = 0,
-                    TrangThai = 0, // 0 = Chờ xác nhận (giữ phòng bằng ThoiHan)
+                    TrangThai = 1, // 1 = Chờ xác nhận
                     TrangThaiThanhToan = 0, // 0 = Chưa thanh toán
                     ThoiHan = holdExpiresAt
                 };
@@ -259,11 +259,15 @@ namespace Hotel_System.API.Controllers
             try
             {
                 var bookings = await _context.DatPhongs
+                    .Where(dp => dp.ThoiHan == null)
                     .Include(dp => dp.IdkhachHangNavigation)
                     .Include(dp => dp.IdphongNavigation)
                     .Include(dp => dp.ChiTietDatPhongs)
                         .ThenInclude(ct => ct.Phong)
                             .ThenInclude(p => p!.IdloaiPhongNavigation)
+                    .Include(dp => dp.HoaDons)
+                        .ThenInclude(h => h.Cthddvs)
+                            .ThenInclude(c => c.IddichVuNavigation)
                     .ToListAsync();
 
                 var result = bookings.Select(dp => new
@@ -302,6 +306,24 @@ namespace Hotel_System.API.Controllers
                         ct.GiaPhong,
                         ct.ThanhTien,
                         ct.GhiChu
+                    }).ToList(),
+                    DichVuDaChon = dp.HoaDons.SelectMany(h => h.Cthddvs).Select(c => new
+                    {
+                        c.Idcthddv,
+                        c.IdhoaDon,
+                        c.IddichVu,
+                        TenDichVu = c.IddichVuNavigation?.TenDichVu,
+                        GiaDichVu = c.IddichVuNavigation?.TienDichVu,
+                        HinhDichVu = c.IddichVuNavigation?.HinhDichVu,
+                        ThoiGianBatDauDichVu = c.IddichVuNavigation?.ThoiGianBatDau,
+                        ThoiGianKetThucDichVu = c.IddichVuNavigation?.ThoiGianKetThuc,
+                        TrangThaiDichVu = c.IddichVuNavigation?.TrangThai,
+                        c.TienDichVu,
+                        c.IdkhuyenMai,
+                        c.ThoiGianThucHien,
+                        c.ThoiGianBatDau,
+                        c.ThoiGianKetThuc,
+                        c.TrangThai
                     }).ToList()
                 }).ToList();
 

@@ -1,10 +1,13 @@
 // Lightweight invoice API helper
 import { Room, RoomType } from "./roomsApi";
+import { API_CONFIG } from "./config";
 
-const API_BASE = "";
+// Resolve API base from Vite env when available, otherwise keep empty for dev proxy
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 async function fetchJson(url: string, init?: RequestInit) {
-  const res = await fetch(`${API_BASE}${url}`, init);
+  const reqUrl = `${API_BASE}${url}`;
+  const res = await fetch(reqUrl, init);
   const txt = await res.text().catch(() => "");
   const data = txt ? JSON.parse(txt) : null;
   if (!res.ok)
@@ -82,7 +85,7 @@ export async function getInvoices(params?: {
   if (params?.customer) qs.set("customer", params.customer);
   if (params?.roomType) qs.set("roomType", params.roomType);
   if (params?.staff) qs.set("staff", params.staff);
-  const res = await fetchJson(`/api/Invoices/invoices?${qs.toString()}`, {
+  const res = await fetchJson(`/Invoices/invoices?${qs.toString()}`, {
     headers,
   });
   // backend returns { data: [...] }
@@ -107,7 +110,7 @@ export async function getSummary(params?: {
   if (params?.customer) qs.set("customer", params.customer);
   if (params?.roomType) qs.set("roomType", params.roomType);
   if (params?.staff) qs.set("staff", params.staff);
-  const res = await fetchJson(`/api/Invoices/summary?${qs.toString()}`, {
+  const res = await fetchJson(`/Invoices/summary?${qs.toString()}`, {
     headers,
   });
   return (res && res.data) || null;
@@ -120,7 +123,7 @@ export async function getInvoiceDetail(
   const token = localStorage.getItem("hs_token");
   const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetchJson(`/api/Invoices/${encodeURIComponent(id)}`, {
+  const res = await fetchJson(`/Invoices/${encodeURIComponent(id)}`, {
     headers,
   });
   // The backend returns an object shaped like the InvoiceDetail directly; wrap into { data }

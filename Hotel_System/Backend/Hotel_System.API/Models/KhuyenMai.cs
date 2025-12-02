@@ -32,4 +32,5 @@ public partial class KhuyenMai
 
     public virtual ICollection<KhuyenMaiPhong> KhuyenMaiPhongs { get; set; } = new List<KhuyenMaiPhong>();
     public virtual ICollection<KhuyenMaiDichVu> KhuyenMaiDichVus { get; set; } = new List<KhuyenMaiDichVu>();
+    public virtual ICollection<KhuyenMaiCombo> KhuyenMaiCombos { get; set; } = new List<KhuyenMaiCombo>();
 }

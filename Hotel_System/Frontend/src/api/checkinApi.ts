@@ -1,6 +1,7 @@
 import axiosClient from "./axiosClient";
 
-const API_BASE_URL = "/api";
+// axiosClient đã có baseURL = /api hoặc VITE_API_URL/api
+// nên chỉ cần dùng đường dẫn tương đối
 
 // Minimal type for the check-in / using booking list returned by CheckInController
 export interface UsingBooking {
@@ -35,7 +36,7 @@ export const calculateRemainingBalance = (booking: UsingBooking): number => {
  * Return bookings that are currently 'Đang sử dụng' (TrangThai == 3)
  */
 export const getUsingBookings = async (): Promise<UsingBooking[]> => {
-  const res = await axiosClient.get(`${API_BASE_URL}/CheckIn`);
+  const res = await axiosClient.get(`/CheckIn`);
   return res.data;
 };
 
@@ -44,7 +45,7 @@ export const getUsingBookings = async (): Promise<UsingBooking[]> => {
  * Return bookings that have NgayNhanPhong == today and are not cancelled/completed
  */
 export const getTodayBookings = async (): Promise<UsingBooking[]> => {
-  const res = await axiosClient.get(`${API_BASE_URL}/CheckIn/today`);
+  const res = await axiosClient.get(`/CheckIn/today`);
   return res.data;
 };
 
@@ -53,7 +54,7 @@ export const getTodayBookings = async (): Promise<UsingBooking[]> => {
  * Return detailed booking (including services/invoices)
  */
 export const getCheckinById = async (id: string): Promise<any> => {
-  const res = await axiosClient.get(`${API_BASE_URL}/CheckIn/${id}`);
+  const res = await axiosClient.get(`/CheckIn/${id}`);
   return res.data;
 };
 
@@ -63,7 +64,7 @@ export const getCheckinById = async (id: string): Promise<any> => {
  */
 export const confirmCheckIn = async (id: string): Promise<any> => {
   // Backend exposes POST for confirm; return server response (may include emailSent flag)
-  const res = await axiosClient.post(`${API_BASE_URL}/CheckIn/confirm/${id}`, {});
+  const res = await axiosClient.post(`/CheckIn/confirm/${id}`, {});
   return res.data;
 };
 
@@ -73,15 +74,23 @@ export const confirmCheckIn = async (id: string): Promise<any> => {
  */
 export const cancelCheckIn = async (id: string): Promise<void> => {
   // Use PUT by default; server accepts PUT or POST
-  await axiosClient.put(`${API_BASE_URL}/CheckIn/cancel/${id}`, {});
+  await axiosClient.put(`/CheckIn/cancel/${id}`, {});
 };
 
 /** POST /api/CheckIn/complete-payment/{id} - mark booking as paid but keep status as 'Đang sử dụng' */
 export const completePayment = async (id: string): Promise<any> => {
-  const res = await axiosClient.post(
-    `${API_BASE_URL}/CheckIn/complete-payment/${id}`,
-    {}
-  );
+  const res = await axiosClient.post(`/CheckIn/complete-payment/${id}`, {});
+  return res.data;
+};
+
+
+/**
+ * POST /api/NhanPhong/reassign-room/{id}
+ * Body: { newRoomId }
+ */
+export const reassignRoom = async (id: string, newRoomId: string): Promise<any> => {
+  // Use axiosClient (baseURL + auth handled centrally)
+  const res = await axiosClient.post(`/CheckIn/reassign-room/${encodeURIComponent(id)}`, { NewRoomId: newRoomId });
   return res.data;
 };
 
@@ -93,24 +102,24 @@ export const completePayment = async (id: string): Promise<any> => {
 
 /** GET /api/DatPhong - list all bookings */
 export const getBookings = async (): Promise<any[]> => {
-  const res = await axiosClient.get(`${API_BASE_URL}/DatPhong`);
+  const res = await axiosClient.get(`/DatPhong`);
   return res.data;
 };
 
 /** GET /api/DatPhong/{id} - get booking detail (alias) */
 export const getBookingById = async (id: string): Promise<any> => {
-  const res = await axiosClient.get(`${API_BASE_URL}/DatPhong/${id}`);
+  const res = await axiosClient.get(`/DatPhong/${id}`);
   return res.data;
 };
 
 /** PUT /api/DatPhong/{id} - update booking fields (trangThai, trangThaiThanhToan, etc.) */
 export const updateBooking = async (id: string, data: any): Promise<void> => {
-  await axiosClient.put(`${API_BASE_URL}/DatPhong/${id}`, data);
+  await axiosClient.put(`/DatPhong/${id}`, data);
 };
 
 /** DELETE /api/DatPhong/{id} - remove a booking */
 export const deleteBooking = async (id: string): Promise<void> => {
-  await axiosClient.delete(`${API_BASE_URL}/DatPhong/${id}`);
+  await axiosClient.delete(`/DatPhong/${id}`);
 };
 
 /** Helper: update payment status */
@@ -126,10 +135,7 @@ export const rescheduleBooking = async (
   id: string,
   body: { ngayNhanPhong: string; ngayTraPhong: string }
 ): Promise<any> => {
-  const res = await axiosClient.put(
-    `${API_BASE_URL}/DatPhong/${id}/reschedule`,
-    body
-  );
+  const res = await axiosClient.put(`/DatPhong/${id}/reschedule`, body);
   return res.data;
 };
 
@@ -149,6 +155,7 @@ const _default = {
   updatePaymentStatus,
   rescheduleBooking,
   completePayment,
+  reassignRoom
 };
 
 export default _default;

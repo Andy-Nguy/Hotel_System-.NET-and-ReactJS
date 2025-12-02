@@ -1,16 +1,20 @@
-import axios from 'axios';
+import axios from "axios";
+import { API_CONFIG } from "./config";
+
+// Use centralized API configuration
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: API_BASE,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
 // Add a request interceptor to include the token
 axiosClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('hs_token');
+    const token = localStorage.getItem("hs_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

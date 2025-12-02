@@ -1,4 +1,8 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { API_CONFIG } from "../api/config";
+
+// Use centralized API config
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 import {
   Layout,
   Card,
@@ -135,7 +139,7 @@ const PaymentPage: React.FC = () => {
     }
     const token = localStorage.getItem("hs_token");
     if (token) {
-      fetch("/api/auth/profile", {
+      fetch(`${API_BASE}/auth/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -238,6 +242,27 @@ const PaymentPage: React.FC = () => {
         throw new Error("Không tìm thấy thông tin booking");
       }
 
+      // Validate selectedServices before sending
+      const validServices = (bookingInfo.selectedServices || []).filter(
+        (svc: any) => svc.serviceId && svc.price
+      );
+      if (
+        bookingInfo.selectedServices &&
+        bookingInfo.selectedServices.length > 0 &&
+        validServices.length === 0
+      ) {
+        throw new Error(
+          "Dữ liệu dịch vụ không hợp lệ. Vui lòng quay lại và chọn dịch vụ lại."
+        );
+      }
+
+      console.log("Selected Services Debug:", {
+        raw: bookingInfo.selectedServices,
+        valid: validServices,
+        count: bookingInfo.selectedServices?.length,
+        validCount: validServices.length,
+      });
+
       // Tạo payload để gọi API tạo hóa đơn
       const invoicePayload = {
         IDDatPhong: invoiceInfo.idDatPhong,
@@ -258,16 +283,18 @@ const PaymentPage: React.FC = () => {
         }${paymentRef ? ` | Mã GD: ${paymentRef}` : ""}`,
         PaymentGateway:
           selectedMethod === "bank-transfer" ? "VietQR" : selectedMethod,
-        Services: (bookingInfo.selectedServices || []).map((svc: any) => ({
-          IddichVu: svc.serviceId,
-          SoLuong: svc.quantity || 1,
-          DonGia: svc.price,
-          TienDichVu: svc.price * (svc.quantity || 1),
-        })),
+        Services: (bookingInfo.selectedServices || [])
+          .filter((svc: any) => svc && svc.serviceId && svc.price) // Ensure object exists and has required fields
+          .map((svc: any) => ({
+            IddichVu: String(svc.serviceId).trim(), // Ensure string and trim whitespace
+            SoLuong: Math.max(1, svc.quantity || 1),
+            DonGia: svc.price,
+            TienDichVu: svc.price * Math.max(1, svc.quantity || 1),
+          })),
       };
 
       // Gọi API tạo hóa đơn
-      const response = await fetch("/api/Payment/hoa-don", {
+      const response = await fetch(`${API_BASE}/Payment/hoa-don`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

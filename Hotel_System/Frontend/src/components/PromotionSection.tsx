@@ -8,6 +8,8 @@ import { getAllPromotions, getPromotionById, Promotion } from "../api/promotionA
 import { getServiceById } from "../api/serviceApi";
 import { postCheckAvailableRooms } from "../api/roomsApi";
 import { getAmenitiesForRoom } from "../api/amenticsApi";
+import ComboCard from "./ComboCard";
+import DetailComboCard from "./DetailComboCard";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -29,6 +31,10 @@ const PromotionSection: React.FC = () => {
   const [expandedRoom, setExpandedRoom] = useState<string | null>(null);
   const [hasCheckedAvailability, setHasCheckedAvailability] = useState(false);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
+  
+  // Detail combo modal state
+  const [detailComboVisible, setDetailComboVisible] = useState(false);
+  const [selectedComboDetail, setSelectedComboDetail] = useState<any | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -46,7 +52,7 @@ const PromotionSection: React.FC = () => {
             return false;
           }
         });
-        setPromotions(valid.slice(0, 2));
+        setPromotions(valid); // Show all active promotions instead of just 2
       } catch (err) {
         console.error("[PromotionSection] Failed to load promotions", err);
       } finally {
@@ -389,7 +395,7 @@ const PromotionSection: React.FC = () => {
         }
         onCancel={() => setModalVisible(false)}
   width={820}
-  bodyStyle={{ maxHeight: "70vh", overflowY: "auto" }}
+  styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
       >
         {modalLoading || !selectedPromo ? (
           <div style={{ textAlign: "center", padding: 40 }}>
@@ -487,227 +493,329 @@ const PromotionSection: React.FC = () => {
 
             <Divider />
 
-            {/* If the promotion includes services, render service list and CTA. Otherwise show availability check + room list (existing behavior) */}
+            {/* If the promotion includes services or combos, render accordingly. Otherwise show availability check + room list (existing behavior) */}
             <div style={{ marginTop: 24 }}>
-              {promoServices !== null ? (
-                <div style={{ padding: 16 }}>
-                  <Title level={5} style={{ marginBottom: 12 }}>🎯 Dịch vụ áp dụng</Title>
-                  {loadingPromoServices ? (
-                    <div style={{ padding: 24, textAlign: 'center' }}>Đang tải dịch vụ…</div>
-                  ) : promoServices.length === 0 ? (
-                    <div style={{ padding: 16, background: '#fff7e6', borderRadius: 8 }}>Không có dịch vụ nào áp dụng khuyến mãi này.</div>
-                  ) : (
-                    <div style={{ display: 'grid', gap: 12 }}>
-                      {promoServices.map((entry: any, idx: number) => {
-                        const mapping = entry.mapping || {};
-                        const svc = entry.service || null;
-                        const original = Number((svc && (svc.tienDichVu ?? svc.TienDichVu)) || 0);
-                        const discountPercent = selectedPromo?.loaiGiamGia === 'percent' ? Number((selectedPromo as any)?.giaTriGiam ?? (selectedPromo as any)?.GiaTriGiam ?? 0) : 0;
-                        const discountAmount = selectedPromo?.loaiGiamGia === 'amount' ? Number((selectedPromo as any)?.giaTriGiam ?? (selectedPromo as any)?.GiaTriGiam ?? 0) : 0;
-                        const discounted = discountPercent > 0 ? Math.round(original * (1 - discountPercent / 100)) : Math.max(0, Math.round(original - discountAmount));
+              {(() => {
+                // Check if this promotion has combo services
+                const combos = (selectedPromo as any)?.khuyenMaiCombos || [];
+                const isComboPromotion = combos.length > 0;
 
-                        return (
-                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #eee' }}>
-                            <div style={{ width: 88, height: 64, borderRadius: 6, overflow: 'hidden', background: '#fafafa', flex: '0 0 88px' }}>
-                              <img src={(svc && (svc.hinhDichVu || svc.HinhDichVu)) || '/img/services/default.png'} alt={svc?.tenDichVu || mapping.tenDichVu || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 700 }}>{svc?.tenDichVu || mapping.tenDichVu || 'Dịch vụ'}</div>
-                              <div style={{ color: '#666', fontSize: 13, marginTop: 6 }}>
-                                {original ? <span style={{ textDecoration: discounted < original ? 'line-through' : 'none', color: '#999', marginRight: 8 }}>{original.toLocaleString('vi-VN')} ₫</span> : <span>Liên hệ</span>}
-                                {discounted < original && <span style={{ color: '#ff4d4f', fontWeight: 700 }}>{discounted.toLocaleString('vi-VN')} ₫</span>}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                    <button
-                      onClick={() => {
-                        // store promotion info so room page / checkout can apply it if needed
-                        const bookingInfo = { selectedRooms: [], promotion: selectedPromo ? { idkhuyenMai: selectedPromo.idkhuyenMai, tenKhuyenMai: selectedPromo.tenKhuyenMai, loaiGiamGia: selectedPromo.loaiGiamGia, giaTriGiam: selectedPromo.giaTriGiam } : null };
-                        try { sessionStorage.setItem('bookingInfo', JSON.stringify(bookingInfo)); } catch (_) {}
-                        window.location.href = '/rooms';
-                      }}
-                      style={{ padding: '10px 16px', borderRadius: 8, background: 'linear-gradient(135deg,#dfa974 0%,#c8956d 100%)', color: '#fff', border: 'none', fontWeight: 700 }}
-                    >
-                      Tiến hành đặt phòng ngay
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                // Existing room availability & room list UI (unchanged)
-                <>
-                  <Title level={5} style={{ marginBottom: 16 }}>
-                    🔍 Kiểm Tra Phòng Trống Trong Khuyến Mãi
-                  </Title>
-
-                  {/* Controls */}
-                  <div style={{ padding: '24px', borderBottom: '1px solid #eee' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 24 }}>
-                      <div style={{ padding: '0', background: 'transparent' }}>
-                        <div style={{ display: 'grid', gap: 12 }}>
-                          {/* Check-in */}
-                          <div>
-                            <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, color: '#333' }}>📅 Ngày nhận phòng</label>
-                            <input type="date" value={checkIn} onChange={(e) => handleCheckinChange(e.target.value)} min={getMinDate()} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #ddd' }} />
-                            <div style={{ marginTop: 6, color: '#888', fontSize: 12 }}>{checkIn ? formatToDisplay(checkIn) : 'dd/mm/yyyy'}</div>
-                          </div>
-
-                          {/* Check-out */}
-                          <div>
-                            <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, color: '#333' }}>📅 Ngày trả phòng</label>
-                            <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} min={checkIn ? new Date(new Date(checkIn).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] : getMinDate()} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #ddd' }} />
-                            <div style={{ marginTop: 6, color: '#888', fontSize: 12 }}>{checkOut ? formatToDisplay(checkOut) : 'dd/mm/yyyy'}</div>
-                          </div>
-
-                          {/* Guests */}
-                          <div>
-                            <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, color: '#333' }}>👥 Số người</label>
-                            <select value={guests} onChange={(e) => setGuests(parseInt(e.target.value))} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #ddd' }}>
-                              {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n} người</option>)}
-                            </select>
-                          </div>
-
-                          {validationError && (
-                            <div style={{ padding: 10, background: '#fdecea', borderRadius: 6, color: '#c0392b', fontSize: 13 }}>{'⚠️ ' + validationError}</div>
-                          )}
-
-                          <button onClick={handleCheckAvailability} disabled={loadingAvailability || !checkIn || !checkOut || !!validationError} style={{ width: '100%', padding: '12px 14px', borderRadius: 6, border: 'none', background: loadingAvailability || validationError ? '#ccc' : 'linear-gradient(135deg,#dfa974 0%,#c8956d 100%)', color: '#fff', fontWeight: 600, cursor: validationError ? 'not-allowed' : 'pointer' }}>{loadingAvailability ? '⏳ Đang kiểm tra...' : '🔍 Kiểm tra phòng trống'}</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Room List Section */}
-                  <div style={{ padding: '24px' }}>
-                    <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600 }}>Danh sách phòng khuyến mãi</h3>
-
-                    {!hasCheckedAvailability ? (
-                      <div style={{ padding: 16, background: '#f0f8ff', borderRadius: 8, color: '#1890ff', textAlign: 'center', fontSize: '16px', fontWeight: 500 }}>
-                        📅 Vui lòng chọn ngày nhận/trả phòng và kiểm tra phòng trống để xem danh sách phòng khả dụng
-                      </div>
-                    ) : availableRooms.length === 0 && !loadingAvailability && checkIn && checkOut ? (
-                      <div style={{ padding: 16, background: '#fdecea', borderRadius: 8, color: '#c0392b', textAlign: 'center', fontSize: '16px', fontWeight: 500 }}>
-                        ❌ Không có phòng trống cho khoảng thời gian đã chọn
-                      </div>
-                    ) : (
+                if (isComboPromotion) {
+                  // Render combo list using ComboCard
+                  return (
+                    <div style={{ padding: 16 }}>
+                      <Title level={5} style={{ marginBottom: 12 }}>🎁 Danh sách Combo Dịch Vụ</Title>
+                      
                       <div style={{ display: 'grid', gap: 16 }}>
-                        {availableRooms.map((room) => {
-                          const originalPrice = Number(room.giaCoBanMotDem || 0);
-                          const discountPercent = selectedPromo?.loaiGiamGia === "percent" ? Number(selectedPromo.giaTriGiam || 0) : 0;
-                          const discountedPrice = Math.round(originalPrice * (1 - discountPercent / 100));
-
+                        {combos.map((combo: any) => {
+                          const services = combo.khuyenMaiComboDichVus || combo.KhuyenMaiComboDichVus || [];
+                          const originalPrice = services.reduce((sum: number, s: any) => sum + Number(s.tienDichVu || s.TienDichVu || 0), 0);
+                          
                           return (
-                            <div key={room.idphong} style={{ border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden', background: '#fff', transition: 'all 0.3s ease', boxShadow: expandedRoom === room.idphong ? '0 4px 12px rgba(0,0,0,0.1)' : 'none' }}>
-                              {/* Room Header */}
-                              <div style={{ display: 'flex', alignItems: 'center', padding: '16px', gap: 16, background: '#fafafa' }}>
-                                {/* Thumbnail */}
-                                <div style={{ width: 180, height: 120, flex: '0 0 180px', overflow: 'hidden', borderRadius: 8, background: '#fff', border: '1px solid #f0f0f0' }}>
-                                  <img src={room.urlAnhPhong ?? '/img/room/default.webp'} alt={room.tenPhong ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                                </div>
-
-                                {/* Basic info */}
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                    <div style={{ fontWeight: 700, fontSize: '16px', color: '#333' }}>{room.tenPhong} {room.soPhong ? `- ${room.soPhong}` : ''}</div>
-                                  </div>
-                                  <div style={{ color: '#666', fontSize: '13px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <span>{room.soNguoiToiDa ? `👥 Tối đa ${room.soNguoiToiDa} người` : '—'}</span>
-                                    <span>•</span>
-                                    <span>💰 Giá gốc: {originalPrice ? originalPrice.toLocaleString() + ' ₫/đêm' : 'Liên hệ'}</span>
-                                    {discountPercent > 0 && (
-                                      <>
-                                        <span>•</span>
-                                        <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>🎉 Giá KM: {discountedPrice.toLocaleString()} ₫/đêm</span>
-                                      </>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Actions */}
-                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                  <button 
-                                    onClick={() => toggleExpand(room.idphong)} 
-                                    style={{ padding: '8px 14px', borderRadius: 6, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 500, transition: 'all 0.2s' }}
-                                  >
-                                    {expandedRoom === room.idphong ? '▼ Ẩn chi tiết' : '▶ Xem chi tiết'}
-                                  </button>
-                                  <button
-                                    onClick={() => handleQuickBook(room)}
-                                    disabled={!checkIn || !checkOut}
-                                    style={{ padding: '8px 14px', borderRadius: 6, background: (checkIn && checkOut) ? 'linear-gradient(135deg,#dfa974 0%,#c8956d 100%)' : '#ccc', color: '#fff', border: 'none', cursor: (checkIn && checkOut) ? 'pointer' : 'not-allowed', fontSize: '13px', fontWeight: 500, transition: 'all 0.2s' }}
-                                    onMouseEnter={(e) => { if (checkIn && checkOut) e.currentTarget.style.transform = 'scale(1.05)'; }}
-                                    onMouseLeave={(e) => { if (checkIn && checkOut) e.currentTarget.style.transform = 'scale(1)'; }}
-                                  >
-                                    Đặt ngay
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Room Details */}
-                              {expandedRoom === room.idphong && (
-                                <div style={{ padding: 16, borderTop: '1px solid #e0e0e0', background: '#fff' }}>
-                                  {/* Image full-width */}
-                                  <div style={{ width: '100%', height: 360, overflow: 'hidden', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa' }}>
-                                    <img src={room.urlAnhPhong ?? '/img/room/default.webp'} alt={room.tenPhong ?? ''} style={{ width: '100%', height: 360, objectFit: 'contain', display: 'block', borderRadius: 8, background: '#f7f7f7' }} />
-                                  </div>
-
-                                  {/* Info below image */}
-                                  <div>
-                                    {room.moTa && <div style={{ marginBottom: 12, color: '#555', fontSize: '14px', lineHeight: 1.5 }}>{room.moTa}</div>}
-
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                                      {/* Info Box 1 */}
-                                      <div style={{ padding: 12, background: '#f5f7fa', borderRadius: 8, border: '1px solid #e8eff7' }}>
-                                        <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '13px', color: '#333' }}>📊 Thông tin</div>
-                                        <div style={{ color: '#666', fontSize: '13px', lineHeight: 1.8 }}>
-                                          <div>Sức chứa: <strong>{room.soNguoiToiDa ?? '—'} người</strong></div>
-                                          {room.soPhong && <div>Số phòng: <strong>{room.soPhong}</strong></div>}
-                                          <div>Giá gốc: <strong>{originalPrice ? originalPrice.toLocaleString('vi-VN') + ' ₫' : 'Liên hệ'}</strong></div>
-                                          {discountPercent > 0 && (
-                                            <div style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-                                              Giá khuyến mãi: <strong>{discountedPrice.toLocaleString('vi-VN')} ₫</strong>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Info Box 2 */}
-                                      <div style={{ padding: 12, background: '#f5f7fa', borderRadius: 8, border: '1px solid #e8eff7' }}>
-                                        <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '13px', color: '#333' }}>✨ Tiện ích</div>
-                                        <AmenitiesForRoom roomId={room.idphong} />
-                                      </div>
-                                    </div>
-
-                                    {/* Book Button */}
-                                    <button
-                                      onClick={() => handleQuickBook(room)}
-                                      disabled={!checkIn || !checkOut}
-                                      style={{ width: '100%', padding: '10px 12px', borderRadius: 6, background: (checkIn && checkOut) ? 'linear-gradient(135deg,#dfa974 0%,#c8956d 100%)' : '#ccc', color: '#fff', border: 'none', cursor: (checkIn && checkOut) ? 'pointer' : 'not-allowed', fontSize: '14px', fontWeight: 600, transition: 'all 0.2s' }}
-                                      onMouseEnter={(e) => { if (checkIn && checkOut) e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                                      onMouseLeave={(e) => { if (checkIn && checkOut) e.currentTarget.style.transform = 'translateY(0)'; }}
-                                    >
-                                      💳 Đặt phòng ngay
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+                            <ComboCard
+                              key={combo.idkhuyenMaiCombo || combo.IdkhuyenMaiCombo}
+                              combo={{
+                                comboId: combo.idkhuyenMaiCombo || combo.IdkhuyenMaiCombo,
+                                name: combo.tenCombo || combo.TenCombo || 'Combo',
+                                description: combo.moTa || combo.MoTa,
+                                banner: selectedPromo?.hinhAnhBanner,
+                                services: services.map((s: any) => ({
+                                  iddichVu: s.iddichVu || s.IddichVu,
+                                  tenDichVu: s.tenDichVu || s.TenDichVu,
+                                  tienDichVu: s.tienDichVu || s.TienDichVu,
+                                })),
+                                originalPrice: originalPrice,
+                                // Pass discount info from promotion with case handling
+                                loaiGiamGia: (selectedPromo as any)?.loaiGiamGia || (selectedPromo as any)?.LoaiGiamGia || 'percent',
+                                giaTriGiam: Number((selectedPromo as any)?.giaTriGiam ?? (selectedPromo as any)?.GiaTriGiam ?? 0),
+                                ngayBatDau: combo.ngayBatDau || combo.NgayBatDau,
+                                ngayKetThuc: combo.ngayKetThuc || combo.NgayKetThuc,
+                                isActive: combo.trangThai !== 'inactive',
+                              }}
+                              onView={(comboData) => {
+                                // Open detail modal with full combo data
+                                const fullComboData = {
+                                  ...comboData,
+                                  serviceDetails: services.map((s: any) => ({
+                                    iddichVu: s.iddichVu || s.IddichVu,
+                                    tenDichVu: s.tenDichVu || s.TenDichVu,
+                                    TenDichVu: s.tenDichVu || s.TenDichVu,
+                                    tienDichVu: s.tienDichVu || s.TienDichVu,
+                                    TienDichVu: s.tienDichVu || s.TienDichVu,
+                                    hinhDichVu: s.hinhDichVu || s.HinhDichVu,
+                                    HinhDichVu: s.hinhDichVu || s.HinhDichVu,
+                                    thongTinDv: s.thongTinDv || s.ThongTinDV,
+                                    ThongTinDV: s.thongTinDv || s.ThongTinDV,
+                                    thoiLuongUocTinh: s.thoiLuongUocTinh || s.ThoiLuongUocTinh,
+                                    ThoiLuongUocTinh: s.thoiLuongUocTinh || s.ThoiLuongUocTinh,
+                                    isActive: s.isActive !== false,
+                                    IsActive: s.isActive !== false,
+                                  })),
+                                  hinhAnhBanner: selectedPromo?.hinhAnhBanner,
+                                  // Ensure discount values are passed with case handling
+                                  loaiGiamGia: (selectedPromo as any)?.loaiGiamGia || (selectedPromo as any)?.LoaiGiamGia,
+                                  LoaiGiamGia: (selectedPromo as any)?.loaiGiamGia || (selectedPromo as any)?.LoaiGiamGia,
+                                  giaTriGiam: Number((selectedPromo as any)?.giaTriGiam ?? (selectedPromo as any)?.GiaTriGiam ?? 0),
+                                  GiaTriGiam: Number((selectedPromo as any)?.giaTriGiam ?? (selectedPromo as any)?.GiaTriGiam ?? 0),
+                                };
+                                setSelectedComboDetail(fullComboData);
+                                setDetailComboVisible(true);
+                              }}
+                            />
                           );
                         })}
                       </div>
-                    )}
-                  </div>
-                </>
-              )}
+
+                      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                        <button
+                          onClick={() => {
+                            // store promotion info so room page / checkout can apply it if needed
+                            const bookingInfo = { selectedRooms: [], promotion: selectedPromo ? { idkhuyenMai: selectedPromo.idkhuyenMai, tenKhuyenMai: selectedPromo.tenKhuyenMai, loaiGiamGia: selectedPromo.loaiGiamGia, giaTriGiam: selectedPromo.giaTriGiam } : null };
+                            try { sessionStorage.setItem('bookingInfo', JSON.stringify(bookingInfo)); } catch (_) {}
+                            window.location.href = '/rooms';
+                          }}
+                          style={{ padding: '10px 16px', borderRadius: 8, background: 'linear-gradient(135deg,#dfa974 0%,#c8956d 100%)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          Tiến hành đặt phòng ngay
+                        </button>
+                      </div>
+                    </div>
+                  );
+                } else if (promoServices !== null) {
+                  // Render regular service list (non-combo)
+                  return (
+                    <div style={{ padding: 16 }}>
+                      <Title level={5} style={{ marginBottom: 12 }}>🎯 Dịch vụ áp dụng</Title>
+                      {loadingPromoServices ? (
+                        <div style={{ padding: 24, textAlign: 'center' }}>Đang tải dịch vụ…</div>
+                      ) : promoServices.length === 0 ? (
+                        <div style={{ padding: 16, background: '#fff7e6', borderRadius: 8 }}>Không có dịch vụ nào áp dụng khuyến mãi này.</div>
+                      ) : (
+                        <div style={{ display: 'grid', gap: 12 }}>
+                          {promoServices.map((entry: any, idx: number) => {
+                            const mapping = entry.mapping || {};
+                            const svc = entry.service || null;
+                            const original = Number((svc && (svc.tienDichVu ?? svc.TienDichVu)) || 0);
+                            const discountPercent = selectedPromo?.loaiGiamGia === 'percent' ? Number((selectedPromo as any)?.giaTriGiam ?? (selectedPromo as any)?.GiaTriGiam ?? 0) : 0;
+                            const discountAmount = selectedPromo?.loaiGiamGia === 'amount' ? Number((selectedPromo as any)?.giaTriGiam ?? (selectedPromo as any)?.GiaTriGiam ?? 0) : 0;
+                            const discounted = discountPercent > 0 ? Math.round(original * (1 - discountPercent / 100)) : Math.max(0, Math.round(original - discountAmount));
+
+                            return (
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8, background: '#fff', border: '1px solid #eee' }}>
+                                <div style={{ width: 88, height: 64, borderRadius: 6, overflow: 'hidden', background: '#fafafa', flex: '0 0 88px' }}>
+                                  <img src={(svc && (svc.hinhDichVu || svc.HinhDichVu)) || '/img/services/default.png'} alt={svc?.tenDichVu || mapping.tenDichVu || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 700 }}>{svc?.tenDichVu || mapping.tenDichVu || 'Dịch vụ'}</div>
+                                  <div style={{ color: '#666', fontSize: 13, marginTop: 6 }}>
+                                    {original ? <span style={{ textDecoration: discounted < original ? 'line-through' : 'none', color: '#999', marginRight: 8 }}>{original.toLocaleString('vi-VN')} ₫</span> : <span>Liên hệ</span>}
+                                    {discounted < original && <span style={{ color: '#ff4d4f', fontWeight: 700 }}>{discounted.toLocaleString('vi-VN')} ₫</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                        <button
+                          onClick={() => {
+                            // store promotion info so room page / checkout can apply it if needed
+                            const bookingInfo = { selectedRooms: [], promotion: selectedPromo ? { idkhuyenMai: selectedPromo.idkhuyenMai, tenKhuyenMai: selectedPromo.tenKhuyenMai, loaiGiamGia: selectedPromo.loaiGiamGia, giaTriGiam: selectedPromo.giaTriGiam } : null };
+                            try { sessionStorage.setItem('bookingInfo', JSON.stringify(bookingInfo)); } catch (_) {}
+                            window.location.href = '/rooms';
+                          }}
+                          style={{ padding: '10px 16px', borderRadius: 8, background: 'linear-gradient(135deg,#dfa974 0%,#c8956d 100%)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          Tiến hành đặt phòng ngay
+                        </button>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // Render room availability check (existing behavior)
+                  return (
+                    <>
+                      <Title level={5} style={{ marginBottom: 16 }}>
+                        🔍 Kiểm Tra Phòng Trống Trong Khuyến Mãi
+                      </Title>
+
+                      {/* Controls */}
+                      <div style={{ padding: '24px', borderBottom: '1px solid #eee' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 24 }}>
+                          <div style={{ padding: '0', background: 'transparent' }}>
+                            <div style={{ display: 'grid', gap: 12 }}>
+                              {/* Check-in */}
+                              <div>
+                                <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, color: '#333' }}>📅 Ngày nhận phòng</label>
+                                <input type="date" value={checkIn} onChange={(e) => handleCheckinChange(e.target.value)} min={getMinDate()} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #ddd' }} />
+                                <div style={{ marginTop: 6, color: '#888', fontSize: 12 }}>{checkIn ? formatToDisplay(checkIn) : 'dd/mm/yyyy'}</div>
+                              </div>
+
+                              {/* Check-out */}
+                              <div>
+                                <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, color: '#333' }}>📅 Ngày trả phòng</label>
+                                <input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} min={checkIn ? new Date(new Date(checkIn).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] : getMinDate()} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #ddd' }} />
+                                <div style={{ marginTop: 6, color: '#888', fontSize: 12 }}>{checkOut ? formatToDisplay(checkOut) : 'dd/mm/yyyy'}</div>
+                              </div>
+
+                              {/* Guests */}
+                              <div>
+                                <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, color: '#333' }}>👥 Số người</label>
+                                <select value={guests} onChange={(e) => setGuests(parseInt(e.target.value))} style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #ddd' }}>
+                                  {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n} người</option>)}
+                                </select>
+                              </div>
+
+                              {validationError && (
+                                <div style={{ padding: 10, background: '#fdecea', borderRadius: 6, color: '#c0392b', fontSize: 13 }}>{'⚠️ ' + validationError}</div>
+                              )}
+
+                              <button onClick={handleCheckAvailability} disabled={loadingAvailability || !checkIn || !checkOut || !!validationError} style={{ width: '100%', padding: '12px 14px', borderRadius: 6, border: 'none', background: loadingAvailability || validationError ? '#ccc' : 'linear-gradient(135deg,#dfa974 0%,#c8956d 100%)', color: '#fff', fontWeight: 600, cursor: validationError ? 'not-allowed' : 'pointer' }}>{loadingAvailability ? '⏳ Đang kiểm tra...' : '🔍 Kiểm tra phòng trống'}</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Room List Section */}
+                      <div style={{ padding: '24px' }}>
+                        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600 }}>Danh sách phòng khuyến mãi</h3>
+
+                        {!hasCheckedAvailability ? (
+                          <div style={{ padding: 16, background: '#f0f8ff', borderRadius: 8, color: '#1890ff', textAlign: 'center', fontSize: '16px', fontWeight: 500 }}>
+                            📅 Vui lòng chọn ngày nhận/trả phòng và kiểm tra phòng trống để xem danh sách phòng khả dụng
+                          </div>
+                        ) : availableRooms.length === 0 && !loadingAvailability && checkIn && checkOut ? (
+                          <div style={{ padding: 16, background: '#fdecea', borderRadius: 8, color: '#c0392b', textAlign: 'center', fontSize: '16px', fontWeight: 500 }}>
+                            ❌ Không có phòng trống cho khoảng thời gian đã chọn
+                          </div>
+                        ) : (
+                          <div style={{ display: 'grid', gap: 16 }}>
+                            {availableRooms.map((room) => {
+                              const originalPrice = Number(room.giaCoBanMotDem || 0);
+                              const discountPercent = selectedPromo?.loaiGiamGia === "percent" ? Number(selectedPromo.giaTriGiam || 0) : 0;
+                              const discountedPrice = Math.round(originalPrice * (1 - discountPercent / 100));
+
+                              return (
+                                <div key={room.idphong} style={{ border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden', background: '#fff', transition: 'all 0.3s ease', boxShadow: expandedRoom === room.idphong ? '0 4px 12px rgba(0,0,0,0.1)' : 'none' }}>
+                                  {/* Room Header */}
+                                  <div style={{ display: 'flex', alignItems: 'center', padding: '16px', gap: 16, background: '#fafafa' }}>
+                                    {/* Thumbnail */}
+                                    <div style={{ width: 180, height: 120, flex: '0 0 180px', overflow: 'hidden', borderRadius: 8, background: '#fff', border: '1px solid #f0f0f0' }}>
+                                      <img src={room.urlAnhPhong ?? '/img/room/default.webp'} alt={room.tenPhong ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                    </div>
+
+                                    {/* Basic info */}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <div style={{ fontWeight: 700, fontSize: '16px', color: '#333' }}>{room.tenPhong} {room.soPhong ? `- ${room.soPhong}` : ''}</div>
+                                      </div>
+                                      <div style={{ color: '#666', fontSize: '13px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <span>{room.soNguoiToiDa ? `👥 Tối đa ${room.soNguoiToiDa} người` : '—'}</span>
+                                        <span>•</span>
+                                        <span>💰 Giá gốc: {originalPrice ? originalPrice.toLocaleString() + ' ₫/đêm' : 'Liên hệ'}</span>
+                                        {discountPercent > 0 && (
+                                          <>
+                                            <span>•</span>
+                                            <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>🎉 Giá KM: {discountedPrice.toLocaleString()} ₫/đêm</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                      <button 
+                                        onClick={() => toggleExpand(room.idphong)} 
+                                        style={{ padding: '8px 14px', borderRadius: 6, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 500, transition: 'all 0.2s' }}
+                                      >
+                                        {expandedRoom === room.idphong ? '▼ Ẩn chi tiết' : '▶ Xem chi tiết'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleQuickBook(room)}
+                                        disabled={!checkIn || !checkOut}
+                                        style={{ padding: '8px 14px', borderRadius: 6, background: (checkIn && checkOut) ? 'linear-gradient(135deg,#dfa974 0%,#c8956d 100%)' : '#ccc', color: '#fff', border: 'none', cursor: (checkIn && checkOut) ? 'pointer' : 'not-allowed', fontSize: '13px', fontWeight: 500, transition: 'all 0.2s' }}
+                                        onMouseEnter={(e) => { if (checkIn && checkOut) e.currentTarget.style.transform = 'scale(1.05)'; }}
+                                        onMouseLeave={(e) => { if (checkIn && checkOut) e.currentTarget.style.transform = 'scale(1)'; }}
+                                      >
+                                        Đặt ngay
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Room Details */}
+                                  {expandedRoom === room.idphong && (
+                                    <div style={{ padding: 16, borderTop: '1px solid #e0e0e0', background: '#fff' }}>
+                                      {/* Image full-width */}
+                                      <div style={{ width: '100%', height: 360, overflow: 'hidden', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa' }}>
+                                        <img src={room.urlAnhPhong ?? '/img/room/default.webp'} alt={room.tenPhong ?? ''} style={{ width: '100%', height: 360, objectFit: 'contain', display: 'block', borderRadius: 8, background: '#f7f7f7' }} />
+                                      </div>
+
+                                      {/* Info below image */}
+                                      <div>
+                                        {room.moTa && <div style={{ marginBottom: 12, color: '#555', fontSize: '14px', lineHeight: 1.5 }}>{room.moTa}</div>}
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                                          {/* Info Box 1 */}
+                                          <div style={{ padding: 12, background: '#f5f7fa', borderRadius: 8, border: '1px solid #e8eff7' }}>
+                                            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '13px', color: '#333' }}>📊 Thông tin</div>
+                                            <div style={{ color: '#666', fontSize: '13px', lineHeight: 1.8 }}>
+                                              <div>Sức chứa: <strong>{room.soNguoiToiDa ?? '—'} người</strong></div>
+                                              {room.soPhong && <div>Số phòng: <strong>{room.soPhong}</strong></div>}
+                                              <div>Giá gốc: <strong>{originalPrice ? originalPrice.toLocaleString('vi-VN') + ' ₫' : 'Liên hệ'}</strong></div>
+                                              {discountPercent > 0 && (
+                                                <div style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                                                  Giá khuyến mãi: <strong>{discountedPrice.toLocaleString('vi-VN')} ₫</strong>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          {/* Info Box 2 */}
+                                          <div style={{ padding: 12, background: '#f5f7fa', borderRadius: 8, border: '1px solid #e8eff7' }}>
+                                            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '13px', color: '#333' }}>✨ Tiện ích</div>
+                                            <AmenitiesForRoom roomId={room.idphong} />
+                                          </div>
+                                        </div>
+
+                                        {/* Book Button */}
+                                        <button
+                                          onClick={() => handleQuickBook(room)}
+                                          disabled={!checkIn || !checkOut}
+                                          style={{ width: '100%', padding: '10px 12px', borderRadius: 6, background: (checkIn && checkOut) ? 'linear-gradient(135deg,#dfa974 0%,#c8956d 100%)' : '#ccc', color: '#fff', border: 'none', cursor: (checkIn && checkOut) ? 'pointer' : 'not-allowed', fontSize: '14px', fontWeight: 600, transition: 'all 0.2s' }}
+                                          onMouseEnter={(e) => { if (checkIn && checkOut) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                                          onMouseLeave={(e) => { if (checkIn && checkOut) e.currentTarget.style.transform = 'translateY(0)'; }}
+                                        >
+                                          💳 Đặt phòng ngay
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                }
+              })()}
             </div>
           </div>
         )}
       </Modal>
+
+      {/* Detail Combo Modal */}
+      <DetailComboCard
+        visible={detailComboVisible}
+        combo={selectedComboDetail}
+        onClose={() => {
+          setDetailComboVisible(false);
+          setSelectedComboDetail(null);
+        }}
+      />
     </div>
   );
 };

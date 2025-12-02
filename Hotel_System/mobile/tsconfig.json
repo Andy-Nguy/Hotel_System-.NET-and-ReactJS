@@ -17,5 +17,6 @@
     "metro.config.js",
     "jest.config.js"
   ],
+
   "extends": "./node_modules/expo/tsconfig.base"
 }

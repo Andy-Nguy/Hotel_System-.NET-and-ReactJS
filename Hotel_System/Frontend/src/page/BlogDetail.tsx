@@ -36,12 +36,105 @@ const BlogDetail: React.FC = () => {
   };
 
   const id = resolveId();
-  const post = id ? (blogPosts as BlogPost[]).find((p) => p.id === id) : undefined;
-  const [mainImage, setMainImage] = React.useState<string | undefined>(post?.images?.[0] || post?.image);
+  const [post, setPost] = React.useState<BlogPost | undefined>(undefined);
+  const [relatedPosts, setRelatedPosts] = React.useState<BlogPost[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [mainImage, setMainImage] = React.useState<string | undefined>(undefined);
 
+  const readingTime = React.useMemo(() => {
+    if (!post) return 0;
+    const words = (post.content || "").split(/\s+/).filter(Boolean).length;
+    return Math.max(1, Math.round(words / 200));
+  }, [post]);
+
+  // Fetch blog from API
   React.useEffect(() => {
-    setMainImage(post?.images?.[0] || post?.image);
-  }, [id, post]);
+    if (!id) return;
+    
+    const fetchBlog = async () => {
+      try {
+        const res = await fetch(`/api/blog/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          const mapped: BlogPost = {
+            id: data.id,
+            title: data.title || '',
+            category: data.category || '',
+            type: (data.type || 'internal') as 'internal' | 'external',
+            image: data.image || '',
+            date: data.date || data.publishedAt || '',
+            excerpt: data.excerpt || '',
+            author: data.author || '',
+            tags: typeof data.tags === 'string' ? data.tags.split(',').map((t: string) => t.trim()) : (data.tags || []),
+            content: data.content || '',
+            images: data.images || [],
+            externalLink: data.externalLink || '',
+          };
+          setPost(mapped);
+          setMainImage(mapped.images?.[0] || mapped.image);
+        } else {
+          // Fallback to local data
+          const localPost = (blogPosts as BlogPost[]).find((p) => p.id === id);
+          setPost(localPost);
+          setMainImage(localPost?.images?.[0] || localPost?.image);
+        }
+      } catch (e) {
+        console.warn('Blog API not reachable, using local data');
+        const localPost = (blogPosts as BlogPost[]).find((p) => p.id === id);
+        setPost(localPost);
+        setMainImage(localPost?.images?.[0] || localPost?.image);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBlog();
+  }, [id]);
+
+  // Increment view count
+  React.useEffect(() => {
+    if (!id) return;
+    fetch(`/api/blog/${id}/tang-luot-xem`, { method: 'POST' })
+      .catch(e => console.warn('View count update failed'));
+  }, [id]);
+
+  // Fetch related posts
+  React.useEffect(() => {
+    const fetchRelated = async () => {
+      try {
+        const res = await fetch('/api/blog?limit=4');
+        if (res.ok) {
+          const data = await res.json();
+          const mapped = (data as any[])
+            .filter((d: any) => d.id !== id)
+            .slice(0, 3)
+            .map(d => ({
+              id: d.id,
+              title: d.title || '',
+              category: d.category || '',
+              type: (d.type || 'internal') as 'internal' | 'external',
+              image: d.image || '',
+              date: d.date || d.publishedAt || '',
+              images: d.images || [],
+            } as BlogPost));
+          setRelatedPosts(mapped.length > 0 ? mapped : blogPosts.filter((p: BlogPost) => p.id !== id).slice(0, 3));
+        } else {
+          setRelatedPosts(blogPosts.filter((p: BlogPost) => p.id !== id).slice(0, 3));
+        }
+      } catch (e) {
+        setRelatedPosts(blogPosts.filter((p: BlogPost) => p.id !== id).slice(0, 3));
+      }
+    };
+    fetchRelated();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="container max-w-4xl mx-auto" style={{ padding: '60px 0' }}>
+        <p>Đang tải bài viết...</p>
+      </div>
+    );
+  }
 
   if (!post) {
     return (
@@ -52,11 +145,6 @@ const BlogDetail: React.FC = () => {
     );
   }
 
-  const readingTime = React.useMemo(() => {
-    const words = (post?.content || "").split(/\s+/).filter(Boolean).length;
-    return Math.max(1, Math.round(words / 200));
-  }, [post]);
-  
   // Xử lý nội dung để hiển thị Markdown (## Tiêu đề, List)
   const renderContent = (content: string) => {
     return content.trim().split('\n\n').map((block, idx) => {
@@ -168,7 +256,7 @@ const BlogDetail: React.FC = () => {
         <div style={{ marginTop: 40 }}>
           <h3 style={{ fontSize: '1.5rem', fontWeight: 400, borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 16 }}>Bài viết liên quan</h3>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'space-between' }}>
-            {blogPosts.filter((p: BlogPost) => p.id !== post.id).slice(0,3).map((rel) => (
+            {relatedPosts.map((rel) => (
               <a 
                 key={rel.id} 
                 href={`/blog/${rel.id}`} 

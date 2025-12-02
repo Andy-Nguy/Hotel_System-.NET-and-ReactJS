@@ -62,7 +62,10 @@ export interface RoomType {
 
 // === 2. LOGIC GỌP API CHUNG ===
 
-const API_BASE = ""; // Giữ trống để dùng proxy của Vite
+// Resolve API base from Vite env when available, otherwise keep empty for Vite proxy in dev
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`; // include /api in base
 
 /**
  * Utility function to decode JWT token and get claims
@@ -116,7 +119,7 @@ async function fetchApi(endpoint: string): Promise<any[]> {
  * Lấy tất cả phòng và chuẩn hóa dữ liệu
  */
 export async function getRooms(): Promise<Room[]> {
-  const data = await fetchApi("/api/Phong");
+  const data = await fetchApi("/Phong");
 
   // Tự động chuẩn hóa PascalCase (C#) sang camelCase (JS)
   const normalizedRooms: Room[] = (data as any[]).map((r) => ({
@@ -140,7 +143,7 @@ export async function getRooms(): Promise<Room[]> {
  * Lấy tất cả loại phòng và chuẩn hóa dữ liệu
  */
 export async function getRoomTypes(): Promise<RoomType[]> {
-  const data = await fetchApi("/api/LoaiPhong");
+  const data = await fetchApi("/LoaiPhong");
 
   // Tự động chuẩn hóa
   const normalizedTypes: RoomType[] = (data as any[]).map((rt) => ({
@@ -167,7 +170,8 @@ export async function createRoomType(
   payload: Partial<RoomType>
 ): Promise<RoomType> {
   const headers: any = { "Content-Type": "application/json" };
-  const res = await fetch(`/api/LoaiPhong`, {
+  const url = `${API_BASE}/LoaiPhong`;
+  const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
@@ -187,7 +191,8 @@ export async function updateRoomType(
   payload: Partial<RoomType>
 ): Promise<void> {
   const headers: any = { "Content-Type": "application/json" };
-  const res = await fetch(`/api/LoaiPhong/${id}`, {
+  const url = `${API_BASE}/LoaiPhong/${id}`;
+  const res = await fetch(url, {
     method: "PUT",
     headers,
     body: JSON.stringify(payload),
@@ -197,7 +202,8 @@ export async function updateRoomType(
 
 export async function deleteRoomType(id: string): Promise<void> {
   const headers: any = {};
-  const res = await fetch(`/api/LoaiPhong/${id}`, {
+  const url = `${API_BASE}/LoaiPhong/${id}`;
+  const res = await fetch(url, {
     method: "DELETE",
     headers,
   });
@@ -207,7 +213,8 @@ export async function deleteRoomType(id: string): Promise<void> {
 // === CRUD for Room ===
 export async function createRoom(payload: Partial<Room>): Promise<Room> {
   const headers: any = { "Content-Type": "application/json" };
-  const res = await fetch(`/api/Phong`, {
+  const url = `${API_BASE}/Phong`;
+  const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
@@ -239,7 +246,8 @@ export async function updateRoom(
   console.log("updateRoom - token:", "removed");
   console.log("updateRoom - headers:", headers);
 
-  const res = await fetch(`/api/Phong/${id}`, {
+  const url = `${API_BASE}/Phong/${id}`;
+  const res = await fetch(url, {
     method: "PUT",
     headers,
     body: JSON.stringify(payload),
@@ -255,7 +263,8 @@ export async function updateRoom(
 
 export async function deleteRoom(id: string): Promise<void> {
   const headers: any = {};
-  const res = await fetch(`/api/Phong/${id}`, { method: "DELETE", headers });
+  const url = `${API_BASE}/Phong/${id}`;
+  const res = await fetch(url, { method: "DELETE", headers });
   if (!res.ok) throw new Error(`Failed to delete room: ${res.status}`);
 }
 
@@ -264,7 +273,7 @@ export async function deleteRoom(id: string): Promise<void> {
  */
 export async function getRoomsByType(loaiPhongId: string): Promise<Room[]> {
   const data = await fetchApi(
-    `/api/Phong?loaiPhongId=${encodeURIComponent(loaiPhongId)}`
+    `/Phong?loaiPhongId=${encodeURIComponent(loaiPhongId)}`
   );
 
   // Chuẩn hóa tương tự getRooms
@@ -295,7 +304,7 @@ export async function checkRoomAvailability(
   numberOfGuests: number = 1
 ): Promise<Room[]> {
   const data = await fetchApi(
-    `/api/Phong/kiem-tra-trong-theo-loai-phong?loaiPhongId=${encodeURIComponent(
+    `/Phong/kiem-tra-trong-theo-loai-phong?loaiPhongId=${encodeURIComponent(
       loaiPhongId
     )}&checkin=${encodeURIComponent(checkin)}&checkout=${encodeURIComponent(
       checkout
@@ -334,6 +343,41 @@ export async function checkRoomAvailability(
   return normalizedRooms;
 }
 
+
+/**
+ * Find available rooms for a date range and guest count (no room type filter).
+ * Calls POST /api/Phong/check-available-rooms with body { CheckIn, CheckOut, NumberOfGuests }
+ */
+export async function findAvailableRooms(checkin: string, checkout: string, numberOfGuests: number = 1): Promise<Room[]> {
+  const headers: any = { 'Content-Type': 'application/json' };
+  const res = await fetch(`/api/Phong/check-available-rooms`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ CheckIn: checkin, CheckOut: checkout, NumberOfGuests: numberOfGuests })
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => null);
+    throw new Error(`Failed to fetch available rooms: ${res.status}${text ? ` - ${text}` : ''}`);
+  }
+  const data = await res.json();
+  if (!data) return [];
+  // Normalize AvailableRoomResponse shape to Room
+  const arr = Array.isArray(data) ? data : (data.items || data.data || []);
+  const normalized: Room[] = (arr as any[]).map(r => ({
+    idphong: r.roomId ?? r.RoomId ?? r.idphong ?? r.Idphong,
+    tenPhong: r.roomName ?? r.RoomName ?? r.tenPhong ?? r.TenPhong,
+    soPhong: r.roomNumber ?? r.RoomNumber ?? r.soPhong ?? r.SoPhong,
+    giaCoBanMotDem: r.basePricePerNight ?? r.BasePricePerNight ?? r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
+    promotionName: r.promotionName ?? r.PromotionName ?? null,
+    discountPercent: r.discountPercent ?? r.DiscountPercent ?? null,
+    discountedPrice: r.discountedPrice ?? r.DiscountedPrice ?? null,
+    tenLoaiPhong: r.roomTypeName ?? r.RoomTypeName ?? r.tenLoaiPhong ?? r.TenLoaiPhong,
+    trangThai: r.trangThai ?? r.TrangThai ?? null,
+    urlAnhPhong: r.roomImageUrl ?? r.RoomImageUrl ?? r.urlAnhPhong ?? r.UrlAnhPhong
+  }));
+  return normalized;
+}
+
 /**
  * Kiểm tra phòng trống với request tổng quát (từ CheckAvailableRoomsRequest)
  * Dùng API: POST /api/Phong/check-available-rooms
@@ -343,7 +387,7 @@ export async function postCheckAvailableRooms(
   checkOut: string,
   numberOfGuests: number = 1
 ): Promise<Room[]> {
-  const url = `${API_BASE}/api/Phong/check-available-rooms`;
+  const url = `${API_BASE}/Phong/check-available-rooms`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

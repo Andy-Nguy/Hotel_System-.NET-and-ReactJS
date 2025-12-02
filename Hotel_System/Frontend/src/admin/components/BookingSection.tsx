@@ -258,7 +258,7 @@ const BookingSection: React.FC = () => {
         }
         open={showModal && !!selectedBooking}
         onCancel={closeModal}
-        width={900}
+        width={1200}
         footer={null}
         styles={{ body: { padding: "24px 24px 40px" } }}
         centered
@@ -469,6 +469,70 @@ const BookingSection: React.FC = () => {
                 </div>
               )}
 
+            {selectedBooking.dichVuDaChon &&
+              selectedBooking.dichVuDaChon.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <Typography.Title level={5} style={{ marginBottom: 16 }}>
+                    Dịch vụ đã chọn
+                  </Typography.Title>
+                  <List
+                    grid={{ gutter: 16, column: 2 }}
+                    dataSource={selectedBooking.dichVuDaChon}
+                    renderItem={(item) => (
+                      <List.Item>
+                        <Card
+                          size="small"
+                          hoverable
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid #e5e7eb",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "start",
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: 15 }}>
+                                {item.tenDichVu || item.iddichVu}
+                              </div>
+                              <div style={{ color: "#6b7280", fontSize: 13 }}>
+                                {item.soLuong || 1} x{" "}
+                                {item.giaDichVu?.toLocaleString() || "N/A"}
+                              </div>
+                            </div>
+                            <div style={{ fontWeight: 700, color: "#059669" }}>
+                              {(
+                                item.thanhTien ||
+                                (item.giaDichVu && item.soLuong
+                                  ? item.giaDichVu * item.soLuong
+                                  : item.giaDichVu)
+                              )?.toLocaleString()}{" "}
+                              đ
+                            </div>
+                          </div>
+                          {item.ghiChu && (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                fontSize: 12,
+                                color: "#9ca3af",
+                                fontStyle: "italic",
+                              }}
+                            >
+                              "{item.ghiChu}"
+                            </div>
+                          )}
+                        </Card>
+                      </List.Item>
+                    )}
+                  />
+                </div>
+              )}
+
             <Divider style={{ margin: "12px 0" }} />
 
             <div
@@ -504,7 +568,7 @@ const BookingSection: React.FC = () => {
                     await handleDelete(selectedBooking.iddatPhong);
                     closeModal();
                   }}
-                  okText="Xóa ngay"
+                  okText="Xóa"
                   cancelText="Hủy"
                   okButtonProps={{ danger: true }}
                 >

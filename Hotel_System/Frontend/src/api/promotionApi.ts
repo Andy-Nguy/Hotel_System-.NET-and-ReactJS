@@ -1,4 +1,7 @@
-const API_BASE = "/api/KhuyenMai";
+// Use VITE_API_URL when provided in production; otherwise keep relative path for dev proxy
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 export interface PromotionRoom {
   id: number;
@@ -75,14 +78,62 @@ export const getAllPromotions = async (
   if (toDate) params.append("toDate", toDate.toISOString());
 
   const query = params.toString() ? `?${params.toString()}` : "";
-  const response = await fetch(`${API_BASE}${query}`);
+  const url = `${API_BASE}/khuyenmai${query}`;
+  const response = await fetch(url);
   if (!response.ok) throw new Error("Failed to fetch promotions");
+  return response.json();
+};
+
+// Create a combo attached to an existing promotion
+export interface CreateComboRequest {
+  idkhuyenMai: string;
+  tenCombo: string;
+  moTa?: string;
+  ngayBatDau?: string; // YYYY-MM-DD
+  ngayKetThuc?: string; // YYYY-MM-DD
+  dichVuIds: string[];
+  forceCreateIfConflict?: boolean;
+}
+
+export const createCombo = async (data: CreateComboRequest) => {
+  const token = localStorage.getItem('hs_token');
+  const headers: any = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch('/api/khuyenmai/combo', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      IdkhuyenMai: data.idkhuyenMai,
+      TenCombo: data.tenCombo,
+      MoTa: data.moTa,
+      NgayBatDau: data.ngayBatDau,
+      NgayKetThuc: data.ngayKetThuc,
+      DichVuIds: data.dichVuIds,
+      ForceCreateIfConflict: data.forceCreateIfConflict || false,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to create combo');
+  }
+  return response.json();
+};
+
+// Suggest existing combos given a set of service IDs
+export const suggestCombos = async (dichvuIds: string[]) => {
+  const q = dichvuIds.map(encodeURIComponent).join(',');
+  const response = await fetch(`/api/combo/suggest?dichvuIds=${q}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to fetch combo suggestions');
+  }
   return response.json();
 };
 
 // Get promotion by ID
 export const getPromotionById = async (id: string): Promise<Promotion> => {
-  const response = await fetch(`${API_BASE}/${id}`);
+  const url = `${API_BASE}/khuyenmai/${id}`;
+  const response = await fetch(url);
   if (!response.ok) throw new Error("Failed to fetch promotion");
   return response.json();
 };
@@ -94,7 +145,8 @@ export const createPromotion = async (
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(API_BASE, {
+  const url = `${API_BASE}/khuyenmai`;
+  const response = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(data),
@@ -114,7 +166,8 @@ export const updatePromotion = async (
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/${id}`, {
+  const url = `${API_BASE}/khuyenmai/${id}`;
+  const response = await fetch(url, {
     method: "PUT",
     headers,
     body: JSON.stringify(data),
@@ -129,9 +182,14 @@ export const updatePromotion = async (
 // Assign a service to a promotion (backend endpoint)
 export const assignServiceToPromotion = async (
   promotionId: string,
-  payload: { iddichVu: string; isActive?: boolean; ngayApDung?: string; ngayKetThuc?: string }
+  payload: {
+    iddichVu: string;
+    isActive?: boolean;
+    ngayApDung?: string;
+    ngayKetThuc?: string;
+  }
 ): Promise<any> => {
-  const response = await fetch(`${API_BASE}/${promotionId}/assign-service`, {
+  const response = await fetch(`${API_BASE}/khuyenmai/${promotionId}/gan-dich-vu`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -148,7 +206,7 @@ export const togglePromotion = async (id: string): Promise<Promotion> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/${id}/toggle`, {
+  const response = await fetch(`${API_BASE}/khuyenmai/${id}/bat-tat`, {
     method: "PATCH",
     headers,
   });
@@ -164,7 +222,8 @@ export const deletePromotion = async (id: string): Promise<void> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/${id}`, {
+  const url = `${API_BASE}/khuyenmai/${id}`;
+  const response = await fetch(url, {
     method: "DELETE",
     headers,
   });
@@ -182,15 +241,23 @@ export const updateExpiredStatus = async (): Promise<{
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/update-expired-status`, {
+  const response = await fetch(`${API_BASE}/khuyenmai/cap-nhat-trang-thai-het-han`, {
     method: "POST",
     headers,
   });
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || "Failed to update expired status");
+    let errorMessage = "Failed to update expired status";
+    try {
+      const error = await response.json();
+      errorMessage = error.message || errorMessage;
+    } catch (e) {
+      // Response might not have JSON body
+      errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
   }
-  return response.json();
+  const text = await response.text();
+  return text ? JSON.parse(text) : { message: "Success", count: 0 };
 };
 
 export interface UploadResult {
@@ -220,7 +287,7 @@ export const uploadBanner = async (file: File): Promise<UploadResult> => {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${API_BASE}/upload-banner`, {
+  const response = await fetch(`${API_BASE}/khuyenmai/tai-banner`, {
     method: "POST",
     headers,
     body: formData,
@@ -248,56 +315,71 @@ export const uploadBanner = async (file: File): Promise<UploadResult> => {
 // promotions that include the given service and have an active mapping.
 export const getPromotionsForService = async (
   serviceId: string
-): Promise<{
-  promotionId: string;
-  promotionName: string;
-  loaiGiamGia: string;
-  giaTriGiam?: number | null;
-  moTa?: string | null;
-  ngayBatDau?: string | null;
-  ngayKetThuc?: string | null;
-  hinhAnhBanner?: string | null;
-  mapping?: { id: number; isActive: boolean; ngayApDung?: string | null; ngayKetThuc?: string | null };
-}[]> => {
+): Promise<
+  {
+    promotionId: string;
+    promotionName: string;
+    loaiGiamGia: string;
+    giaTriGiam?: number | null;
+    moTa?: string | null;
+    ngayBatDau?: string | null;
+    ngayKetThuc?: string | null;
+    hinhAnhBanner?: string | null;
+    mapping?: {
+      id: number;
+      isActive: boolean;
+      ngayApDung?: string | null;
+      ngayKetThuc?: string | null;
+    };
+  }[]
+> => {
   try {
     // Fetch only active promotions to reduce calls
     const promotions = await getAllPromotions("active");
     if (!promotions || promotions.length === 0) return [];
 
     const today = new Date();
-    const candidates = promotions.filter((p) => (p.loaiKhuyenMai || p.LoaiKhuyenMai) === "service");
+    const candidates = promotions.filter((p) => p.loaiKhuyenMai === "service");
 
     const results: any[] = [];
     // For each candidate promotion, fetch mapping list
     await Promise.all(
       candidates.map(async (p) => {
         try {
-          const resp = await fetch(`${API_BASE}/${p.idkhuyenMai || p.IdkhuyenMai}/services`);
+          // backend route for promo service mappings is '/khuyenmai/{id}/dich-vu'
+          const url2 = `${API_BASE}/khuyenmai/${p.idkhuyenMai}/dich-vu`;
+          const resp = await fetch(url2);
           if (!resp.ok) return;
           const mappingList = await resp.json();
           if (!Array.isArray(mappingList)) return;
-          const found = mappingList.find((m: any) => (m.iddichVu ?? m.IddichVu ?? m.iddichVu) === serviceId && m.isActive !== false && m.IsActive !== false);
+          const found = mappingList.find((m: any) => (m.iddichVu ?? m.IddichVu) === serviceId && (m.isActive ?? m.IsActive) !== false);
           if (!found) return;
 
           // Basic date checks (if mapping has dates)
-          const startsOk = !found.ngayApDung || new Date(found.ngayApDung) <= today;
-          const endsOk = !found.ngayKetThuc || new Date(found.ngayKetThuc) >= today;
+          const startsOk =
+            !found.ngayApDung || new Date(found.ngayApDung) <= today;
+          const endsOk =
+            !found.ngayKetThuc || new Date(found.ngayKetThuc) >= today;
           if (!startsOk || !endsOk) return;
 
           results.push({
-            promotionId: p.idkhuyenMai || p.IdkhuyenMai,
-            promotionName: p.tenKhuyenMai || p.TenKhuyenMai || p.tenKhuyenMai,
-            loaiGiamGia: p.loaiGiamGia || p.LoaiGiamGia || p.loaiGiamGia,
-            giaTriGiam: p.giaTriGiam ?? p.GiaTriGiam ?? null,
-            moTa: p.moTa || p.MoTa || null,
-            ngayBatDau: p.ngayBatDau || p.NgayBatDau || null,
-            ngayKetThuc: p.ngayKetThuc || p.NgayKetThuc || null,
-            hinhAnhBanner: p.hinhAnhBanner || p.HinhAnhBanner || null,
+            promotionId: p.idkhuyenMai,
+            promotionName: p.tenKhuyenMai,
+            loaiGiamGia: p.loaiGiamGia,
+            giaTriGiam: p.giaTriGiam ?? null,
+            moTa: p.moTa ?? null,
+            ngayBatDau: p.ngayBatDau ?? null,
+            ngayKetThuc: p.ngayKetThuc ?? null,
+            hinhAnhBanner: p.hinhAnhBanner ?? null,
             mapping: found,
           });
         } catch (err) {
           // ignore per-promotion fetch errors
-          console.warn("promotionApi.getPromotionsForService: failed for", p, err);
+          console.warn(
+            "promotionApi.getPromotionsForService: failed for",
+            p,
+            err
+          );
         }
       })
     );

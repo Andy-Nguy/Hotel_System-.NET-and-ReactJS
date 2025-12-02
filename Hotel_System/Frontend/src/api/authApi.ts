@@ -1,5 +1,7 @@
 // Centralized auth API helper
-const API_BASE = import.meta.env.VITE_API_URL || "";
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 export type RegisterRequest = {
   Hoten?: string;
@@ -46,7 +48,7 @@ async function handleRes(res: Response) {
 }
 
 export async function register(req: RegisterRequest) {
-  const res = await fetch(`${API_BASE}/api/Auth/register`, {
+  const res = await fetch(`${API_BASE}/Auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -55,7 +57,7 @@ export async function register(req: RegisterRequest) {
 }
 
 export async function verifyOtp(req: VerifyOtpRequest) {
-  const res = await fetch(`${API_BASE}/api/Auth/verify`, {
+  const res = await fetch(`${API_BASE}/Auth/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -64,7 +66,7 @@ export async function verifyOtp(req: VerifyOtpRequest) {
 }
 
 export async function login(req: LoginRequest) {
-  const res = await fetch(`${API_BASE}/api/Auth/login`, {
+  const res = await fetch(`${API_BASE}/Auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -72,4 +74,26 @@ export async function login(req: LoginRequest) {
   return handleRes(res);
 }
 
-export default { register, verifyOtp, login };
+export async function forgotPassword(email: string) {
+  const res = await fetch(`${API_BASE}/Auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ Email: email }),
+  });
+  return handleRes(res);
+}
+
+export async function resetPassword(
+  email: string,
+  otp: string,
+  newPassword: string
+) {
+  const res = await fetch(`${API_BASE}/Auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ Email: email, Otp: otp, NewPassword: newPassword }),
+  });
+  return handleRes(res);
+}
+
+export default { register, verifyOtp, login, forgotPassword, resetPassword };

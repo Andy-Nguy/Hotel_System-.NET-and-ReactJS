@@ -27,6 +27,11 @@ import CheckoutManager from "../admin/pages/CheckoutManager";
 import CheckInManager from "../admin/pages/CheckInManager";
 import LoyaltyManager from "../admin/pages/LoyaltyManager";
 import ReviewManager from "../admin/pages/ReviewManager";
+import BlogManager from "../admin/pages/BlogManager";
+import BlogCreate from "../admin/components/BlogCreate";
+import BlogEdit from "../admin/components/BlogEdit";
+import QuanLyNhanVienManager from "../admin/pages/QuanLyNhanVienManager";
+
 import NoAccessPage from "./NoAccessPage";
 import BookingSuccessPage from "./BookingSuccessPage";
 import AboutUsSection from "../components/AboutUsSection";
@@ -37,39 +42,122 @@ import BlogDetail from "./BlogDetail";
 import ReviewPage from "./ReviewPage";
 
 import AdminLayout from "../admin/components/AdminLayout";
+import {
+  getUserInfo,
+  checkIsNhanVien,
+  checkIsAdmin,
+} from "../context/UserContext";
 
 const MainPage: React.FC = () => {
-  const parseJwt = (): any | null => {
-    const token = localStorage.getItem("hs_token");
-    if (!token) return null;
-    try {
-      const base64Payload = token.split(".")[1];
-      const decodedPayload = decodeURIComponent(
-        atob(base64Payload)
-          .split("")
-          .map(function (c) {
-            return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-          })
-          .join("")
-      );
-      return JSON.parse(decodedPayload);
-    } catch (e) {
-      return null;
-    }
+  // Sử dụng hàm getUserInfo thống nhất
+  const getInitialUserInfo = () => {
+    return getUserInfo();
   };
 
-  const isNhanVien = (): boolean => {
-    const payload = parseJwt();
-    if (!payload) return false;
-    const role =
-      payload.role ||
-      payload.roles ||
-      payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ||
-      payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ||
-      payload.VaiTro;
-    if (!role) return false;
-    if (Array.isArray(role)) return role.includes("nhanvien");
-    return String(role).toLowerCase() === "nhanvien" || String(role) === "1";
+  const [cachedUserInfo, setCachedUserInfo] =
+    React.useState<any>(getInitialUserInfo);
+  const [authLoading, setAuthLoading] = React.useState(!getInitialUserInfo());
+
+  // Fetch user info on mount (to refresh/validate)
+  React.useEffect(() => {
+    const fetchUserInfo = async () => {
+      const token = localStorage.getItem("hs_token");
+      if (!token) {
+        setCachedUserInfo(null);
+        localStorage.removeItem("hs_userInfo");
+        setAuthLoading(false);
+        return;
+      }
+
+      // Sử dụng hàm getUserInfo thống nhất
+      const info = getUserInfo();
+      if (info && typeof info.role === "number") {
+        console.log("[MainPage] Using getUserInfo:", info);
+        setCachedUserInfo(info);
+        setAuthLoading(false);
+        return;
+      }
+
+      // Fallback: gọi API profile
+      try {
+        const API_BASE = `${
+          (await import("../api/config")).API_CONFIG.CURRENT
+        }/api`;
+        const res = await fetch(`${API_BASE}/Auth/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const profile = await res.json();
+          console.log("[MainPage] Profile from API:", profile);
+          const userInfo = {
+            name: profile.hoTen || profile.HoTen || profile.name,
+            role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
+            email: profile.email || profile.Email,
+          };
+          setCachedUserInfo(userInfo);
+          localStorage.setItem("hs_userInfo", JSON.stringify(userInfo));
+        } else {
+          // Fallback to JWT
+          const fallbackInfo = getUserInfo();
+          setCachedUserInfo(fallbackInfo);
+        }
+      } catch (e) {
+        console.error("[MainPage] Profile fetch error:", e);
+        const fallbackInfo = getUserInfo();
+        setCachedUserInfo(fallbackInfo);
+      }
+      setAuthLoading(false);
+    };
+
+    fetchUserInfo();
+  }, []);
+
+  // Listen for auth changes
+  React.useEffect(() => {
+    const handleAuthChange = () => {
+      const info = getUserInfo();
+      console.log("[MainPage] Auth change, getUserInfo:", info);
+      setCachedUserInfo(info);
+    };
+
+    window.addEventListener("storage", handleAuthChange);
+    window.addEventListener("popstate", handleAuthChange);
+    window.addEventListener("hashchange", handleAuthChange);
+
+    return () => {
+      window.removeEventListener("storage", handleAuthChange);
+      window.removeEventListener("popstate", handleAuthChange);
+      window.removeEventListener("hashchange", handleAuthChange);
+    };
+  }, []);
+
+  // Helper functions sử dụng hàm thống nhất
+  const isNhanVien = () => {
+    return checkIsNhanVien(cachedUserInfo);
+  };
+
+  const isAdmin = () => {
+    return checkIsAdmin(cachedUserInfo);
+  };
+
+  // Legacy helper
+  const parseJwt = (): any | null => {
+    return cachedUserInfo;
+  };
+
+  // Helper to check admin access - returns true if should show loading
+  const shouldShowAdminLoading = (): boolean => {
+    const hasToken = !!localStorage.getItem("hs_token");
+    const hasUserInfo = !!localStorage.getItem("hs_userInfo");
+    // Show loading only if has token but no userInfo yet
+    return hasToken && !hasUserInfo && authLoading;
+  };
+
+  // Helper to check admin access with loading state
+  const checkAdminAccess = (): "loading" | "allowed" | "denied" => {
+    if (shouldShowAdminLoading()) return "loading";
+    if (isNhanVien()) return "allowed";
+    return "denied";
   };
 
   const redirectToNoAccess = () => {
@@ -96,13 +184,34 @@ const MainPage: React.FC = () => {
 
   const [route, setRoute] = React.useState<string>(resolveRoute);
 
+  // Function to refresh userInfo from localStorage using getUserInfo
+  const refreshUserInfoFromStorage = () => {
+    const info = getUserInfo();
+    console.log("[MainPage] Refreshing userInfo:", info);
+    if (info) {
+      setCachedUserInfo(info);
+      setAuthLoading(false);
+    } else {
+      const token = localStorage.getItem("hs_token");
+      if (!token) {
+        setCachedUserInfo(null);
+        setAuthLoading(false);
+      }
+    }
+  };
+
   React.useEffect(() => {
-    const onLocationChange = () => setRoute(resolveRoute());
+    const onLocationChange = () => {
+      setRoute(resolveRoute());
+      refreshUserInfoFromStorage();
+    };
     window.addEventListener("hashchange", onLocationChange);
     window.addEventListener("popstate", onLocationChange);
+    window.addEventListener("storage", refreshUserInfoFromStorage);
     return () => {
       window.removeEventListener("hashchange", onLocationChange);
       window.removeEventListener("popstate", onLocationChange);
+      window.removeEventListener("storage", refreshUserInfoFromStorage);
     };
   }, []);
   // If URL has only a single '#' (empty hash), remove it to keep clean URLs
@@ -265,6 +374,17 @@ const MainPage: React.FC = () => {
     );
   }
 
+  if (route === "#forgot-password" || route === "/forgot-password") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <LoginPage />
+        <FooterSection />
+      </>
+    );
+  }
+
   if (route === "#rooms" || route === "/rooms") {
     return (
       <>
@@ -370,6 +490,11 @@ const MainPage: React.FC = () => {
     route === "/admin/dashboard" ||
     route === "#/admin/dashboard"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -387,6 +512,11 @@ const MainPage: React.FC = () => {
     route === "/admin/rooms" ||
     route === "#/admin/rooms"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -404,6 +534,11 @@ const MainPage: React.FC = () => {
     route === "/admin/amenities" ||
     route === "#/admin/amenities"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -417,6 +552,11 @@ const MainPage: React.FC = () => {
     route === "/admin/services" ||
     route === "#/admin/services"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -430,6 +570,11 @@ const MainPage: React.FC = () => {
     route === "/admin/promotions" ||
     route === "#/admin/promotions"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -447,6 +592,11 @@ const MainPage: React.FC = () => {
     route === "/admin/bookings" ||
     route === "#/admin/bookings"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -464,6 +614,11 @@ const MainPage: React.FC = () => {
     route === "/admin/invoices" ||
     route === "#/admin/invoices"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -477,6 +632,11 @@ const MainPage: React.FC = () => {
     route === "/admin/checkout" ||
     route === "#/admin/checkout"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -490,6 +650,11 @@ const MainPage: React.FC = () => {
     route === "/admin/checkin" ||
     route === "#/admin/checkin"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -502,6 +667,11 @@ const MainPage: React.FC = () => {
     route === "/admin/review" ||
     route === "#/admin/review"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
@@ -547,11 +717,95 @@ const MainPage: React.FC = () => {
     route === "/admin/loyalty" ||
     route === "#/admin/loyalty"
   ) {
+    if (shouldShowAdminLoading()) {
+      return (
+        <div style={{ padding: 50, textAlign: "center" }}>Đang tải...</div>
+      );
+    }
     if (!isNhanVien()) {
       redirectToNoAccess();
       return null;
     }
     return <LoyaltyManager />;
+  }
+
+  // No-access page
+  if (route === "#no-access" || route === "/no-access") {
+    return <NoAccessPage />;
+  }
+
+  if (
+    route === "#admin/blog" ||
+    route === "/admin/blog" ||
+    route === "#/admin/blog"
+  ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
+    return <BlogManager />;
+  }
+
+  if (
+    route === "#admin/blog/create" ||
+    route === "/admin/blog/create" ||
+    route === "#/admin/blog/create"
+  ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
+    return <BlogCreate />;
+  }
+
+  // Blog edit route
+  if (
+    route.startsWith("#admin/blog/edit/") ||
+    route.startsWith("/admin/blog/edit/") ||
+    route.startsWith("#/admin/blog/edit/")
+  ) {
+    if (!isNhanVien()) {
+      redirectToNoAccess();
+      return null;
+    }
+    return <BlogEdit />;
+  }
+
+  // Quản lý nhân viên - chỉ dành cho Admin (role = 2)
+  if (
+    route === "#admin/nhanvien" ||
+    route === "/admin/nhanvien" ||
+    route === "#/admin/nhanvien"
+  ) {
+    // Kiểm tra quyền admin
+    const checkAdmin = () => {
+      try {
+        const userInfo = localStorage.getItem("hs_userInfo");
+        if (userInfo) {
+          const parsed = JSON.parse(userInfo);
+          const role = parsed.role ?? parsed.vaiTro;
+          // Check cả number và string
+          if (typeof role === "number") return role === 2;
+          if (typeof role === "string") {
+            const roleStr = role.toLowerCase().trim();
+            return roleStr === "admin" || roleStr === "2";
+          }
+        }
+      } catch (e) {
+        console.error("[MainPage] Error checking admin:", e);
+      }
+      return false;
+    };
+
+    if (!checkAdmin()) {
+      redirectToNoAccess();
+      return null;
+    }
+    return (
+      <AdminLayout>
+        <QuanLyNhanVienManager />
+      </AdminLayout>
+    );
   }
 
   // No-access page

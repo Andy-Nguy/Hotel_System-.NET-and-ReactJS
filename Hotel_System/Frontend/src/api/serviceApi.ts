@@ -33,14 +33,19 @@ export interface ServiceUsage {
   trangThai?: string | null;
 }
 
-const API_BASE = ""; // use relative paths so Vite proxy forwards /api to backend in dev
+// Resolve API base from Vite env when available. Use empty string to keep relative paths
+// in local dev (Vite proxy). Use a safe any-cast to avoid TS issues when types not picked up.
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 async function fetchApi(endpoint: string, options?: RequestInit) {
   try {
     const token = localStorage.getItem("hs_token");
     const headers: any = { ...options?.headers };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    const url = `${API_BASE}${endpoint}`;
+    const res = await fetch(url, { ...options, headers });
 
     // treat not-found and no-content as null (caller will handle)
     if (res.status === 404 || res.status === 204) return null;
@@ -121,14 +126,14 @@ function normalizeService(raw: any): Service {
 
 // 3. Cập nhật các hàm với route tiếng Việt
 export async function getServices(): Promise<Service[]> {
-  const data = await fetchApi("/api/dich-vu/lay-danh-sach"); // <= Đã đổi
+  const data = await fetchApi("/dich-vu/lay-danh-sach");
   if (!data) return [];
   const arr = Array.isArray(data) ? data : data.items ?? data.data ?? [data];
   return arr.map(normalizeService);
 }
 
 export async function getServiceById(serviceId: string): Promise<Service> {
-  const data = await fetchApi(`/api/dich-vu/lay-chi-tiet/${serviceId}`); // <= Đã đổi
+  const data = await fetchApi(`/dich-vu/lay-chi-tiet/${serviceId}`);
   if (!data) throw new Error("Service not found");
   return normalizeService(data);
 }
@@ -136,8 +141,7 @@ export async function getServiceById(serviceId: string): Promise<Service> {
 export async function createService(
   payload: Partial<Service>
 ): Promise<Service> {
-  const data = await fetchApi("/api/dich-vu/them-moi", {
-    // <= Đã đổi
+  const data = await fetchApi("/dich-vu/them-moi", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -153,8 +157,7 @@ export async function updateService(
 ): Promise<void> {
   // Ensure the payload includes the service id
   const bodyPayload = { ...payload, iddichVu: payload.iddichVu ?? id };
-  await fetchApi(`/api/dich-vu/cap-nhat/${id}`, {
-    // <= Đã đổi
+  await fetchApi(`/dich-vu/cap-nhat/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(bodyPayload),
@@ -162,7 +165,7 @@ export async function updateService(
 }
 
 export async function deleteService(id: string): Promise<void> {
-  await fetchApi(`/api/dich-vu/xoa/${id}`, { method: "DELETE" }); // <= Đã đổi
+  await fetchApi(`/dich-vu/xoa/${id}`, { method: "DELETE" });
 }
 
 // 4. LOẠI BỎ HOÀN TOÀN CÁC HÀM CHI TIẾT
@@ -170,8 +173,7 @@ export async function deleteService(id: string): Promise<void> {
 
 // 5. Cập nhật các hàm còn lại
 export async function recordServiceUsage(payload: ServiceUsage): Promise<void> {
-  await fetchApi("/api/dich-vu/ghi-nhan-su-dung", {
-    // <= Đã đổi
+  await fetchApi("/dich-vu/ghi-nhan-su-dung", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -181,7 +183,7 @@ export async function recordServiceUsage(payload: ServiceUsage): Promise<void> {
 export async function getServiceUsage(
   serviceId: string
 ): Promise<ServiceUsage[]> {
-  const endpoint = `/api/dich-vu/lich-su/${serviceId}`; // <= Đã đổi
+  const endpoint = `/dich-vu/lich-su/${serviceId}`;
   const data = await fetchApi(endpoint);
   if (!data) return [];
   const arr = Array.isArray(data) ? data : data.items ?? data.data ?? [data];
@@ -197,7 +199,7 @@ export async function getServiceUsage(
 }
 
 export async function getAllUsage(): Promise<ServiceUsage[]> {
-  const endpoint = "/api/dich-vu/lich-su/tat-ca"; // <= Đã đổi
+  const endpoint = "/dich-vu/lich-su/tat-ca";
   const data = await fetchApi(endpoint);
   if (!data) return [];
   const arr = Array.isArray(data) ? data : data.items ?? data.data ?? [data];
@@ -221,10 +223,11 @@ export async function uploadServiceImage(
   fd.append("file", file);
   if (serviceId) fd.append("serviceId", serviceId);
   if (serviceName) fd.append("serviceName", serviceName);
-  const res = await fetch(`/api/dich-vu/tai-anh-len`, {
+  const uploadUrl = `${API_BASE}/dich-vu/tai-anh-len`;
+  const res = await fetch(uploadUrl, {
     method: "POST",
     body: fd,
-  }); // <= Đã đổi
+  });
   if (!res.ok) {
     const t = await res.text().catch(() => null);
     throw new Error(`Upload failed ${res.status}${t ? `: ${t}` : ""}`);

@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getRoomTypes, getRooms, Room, RoomType } from "../../api/roomsApi";
+import { API_CONFIG } from "../../api/config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 import RoomTypeSection from "../components/RoomTypeSection";
 import RoomSection from "../components/RoomSection";
 
@@ -37,7 +40,7 @@ const Badge: React.FC<{ status?: string | null }> = ({ status }) => {
 const RoomManager: React.FC = () => {
   const [types, setTypes] = useState<RoomType[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // per-room loading state for quick toggle actions
   const [roomLoading, setRoomLoading] = useState<Record<string, boolean>>({});
@@ -164,7 +167,7 @@ const RoomManager: React.FC = () => {
     setRoomLoading((prev) => ({ ...prev, [roomId]: true }));
 
     try {
-      const resp = await fetch(`/api/Phong/${roomId}`, {
+      const resp = await fetch(`${API_BASE}/Phong/${roomId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ TrangThai: target }),
@@ -204,7 +207,10 @@ const RoomManager: React.FC = () => {
         /* ignore */
       }
     } finally {
-      setRoomLoading((prev: Record<string, boolean>) => ({ ...prev, [roomId]: false }));
+      setRoomLoading((prev: Record<string, boolean>) => ({
+        ...prev,
+        [roomId]: false,
+      }));
     }
   };
 

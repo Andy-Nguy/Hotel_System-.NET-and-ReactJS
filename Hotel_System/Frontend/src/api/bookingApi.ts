@@ -1,5 +1,16 @@
 import axiosClient from "./axiosClient";
 
+export interface DichVuDaChon {
+  idcthddv: number;
+  idhoaDon: string;
+  iddichVu: string;
+  tenDichVu?: string;
+  giaDichVu?: number;
+  soLuong?: number;
+  thanhTien?: number;
+  ghiChu?: string;
+}
+
 export interface Booking {
   iddatPhong: string;
   idkhachHang?: number;
@@ -17,6 +28,7 @@ export interface Booking {
   trangThai: number;
   trangThaiThanhToan: number;
   chiTietDatPhongs: BookingDetail[];
+  dichVuDaChon?: DichVuDaChon[];
 }
 
 export interface UpdateBookingRequest {
@@ -24,17 +36,16 @@ export interface UpdateBookingRequest {
   trangThaiThanhToan?: number;
 }
 
-// Use relative '/api' so Vite dev proxy forwards calls to the backend (https://localhost:5001)
-// This avoids CORS and TLS dev-certificate issues in dev mode.
-const API_BASE_URL = "/api";
+// axiosClient đã có baseURL = /api hoặc VITE_API_URL/api
+// nên chỉ cần dùng đường dẫn tương đối
 
 export const getBookings = async (): Promise<Booking[]> => {
-  const response = await axiosClient.get(`${API_BASE_URL}/DatPhong`);
+  const response = await axiosClient.get(`/DatPhong`);
   return response.data;
 };
 
 export const getBookingById = async (id: string): Promise<Booking> => {
-  const response = await axiosClient.get(`${API_BASE_URL}/DatPhong/${id}`);
+  const response = await axiosClient.get(`/DatPhong/${id}`);
   return response.data;
 };
 
@@ -42,11 +53,11 @@ export const updateBooking = async (
   id: string,
   data: UpdateBookingRequest
 ): Promise<void> => {
-  await axiosClient.put(`${API_BASE_URL}/DatPhong/${id}`, data);
+  await axiosClient.put(`/DatPhong/${id}`, data);
 };
 
 export const deleteBooking = async (id: string): Promise<void> => {
-  await axiosClient.delete(`${API_BASE_URL}/DatPhong/${id}`);
+  await axiosClient.delete(`/DatPhong/${id}`);
 };
 
 /**
@@ -54,7 +65,7 @@ export const deleteBooking = async (id: string): Promise<void> => {
  * Lấy lịch sử đặt phòng của user hiện tại dựa trên JWT
  */
 export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
-  const response = await axiosClient.get(`${API_BASE_URL}/DatPhong/LichSuDatPhong`);
+  const response = await axiosClient.get(`/DatPhong/LichSuDatPhong`);
   const raw = response.data || [];
   // backend returns an array of bookings (PascalCase); normalize each
   return (raw as any[]).map(normalizeBookingSummary);
@@ -64,9 +75,10 @@ export const getMyBookingHistory = async (): Promise<BookingSummary[]> => {
  * Handles booking operations: get details, history, reschedule, cancel, QR code
  */
 
-const API_BASE = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/api/datphong` 
-  : "/api/datphong";
+// Resolve API base for fetch calls (not using axiosClient)
+import { API_CONFIG } from "./config";
+
+const API_BASE = `${API_CONFIG.CURRENT}/api/datphong`;
 
 // ============================================
 // Type Definitions

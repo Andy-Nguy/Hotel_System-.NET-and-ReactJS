@@ -62,8 +62,14 @@ const statusText = (s: number) =>
     ? "Đã cọc"
     : "Khác";
 
+// Use centralized API configuration
+import { API_CONFIG } from "../../api/config";
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
+
 const fetchJson = async (url: string, init?: RequestInit) => {
-  const res = await fetch(url, init);
+  // Prepend API_BASE if url starts with /api
+  const finalUrl = url.startsWith("/api") ? `${API_BASE}${url.slice(4)}` : url;
+  const res = await fetch(finalUrl, init);
   const txt = await res.text().catch(() => "");
   const data = txt ? JSON.parse(txt) : null;
   if (!res.ok)
@@ -228,7 +234,7 @@ const InvoicesManager: React.FC = () => {
   }, [data, keyword]);
 
   const downloadPdf = async (row: InvoiceRow) => {
-    const url = `/api/Payment/invoice/${row.idHoaDon}/pdf`;
+    const url = `${API_BASE}/Payment/invoice/${row.idHoaDon}/pdf`;
     try {
       setLoading(true);
       const res = await fetch(url, {
@@ -422,7 +428,7 @@ const InvoicesManager: React.FC = () => {
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
       <Slidebar />
-      <div style={{ marginLeft: 240 }}>
+      <div style={{ marginLeft: 280 }}>
         <HeaderSection showStats={false} />
         <main style={{ padding: "0px 60px" }}>
           <div
@@ -466,7 +472,7 @@ const InvoicesManager: React.FC = () => {
                   style={{ width: 160 }}
                 />
                 <Input.Search
-                  placeholder="Tìm HĐ / ĐP / KH"
+                  placeholder="Tìm kiếm HĐ / ĐP / KH"
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   onSearch={() => load()}

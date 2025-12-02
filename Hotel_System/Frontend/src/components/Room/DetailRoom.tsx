@@ -1,11 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { getAmenitiesForRoom } from "../../api/amenticsApi";
 import ReviewPreview from "./ReviewPreview";
-import ReviewPanel from "./ReviewPanel";
-import ReviewDetailPanel from "./ReviewDetailPanel";
-const BACKEND_BASE =
-  ((import.meta as any).env?.VITE_API_BASE as string) ||
-  "https://localhost:5001";
+import { API_CONFIG } from "../../api/config";
+const BACKEND_BASE = `${API_CONFIG.CURRENT}/api`;
 
 function resolveImageUrl(u?: string | null) {
   if (!u) return undefined;
@@ -36,9 +33,17 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
 
   const [promotion, setPromotion] = React.useState<Promotion | null>(null);
 
-  const rawStatus = (room as any).TrangThai || (room as any).trangThai || (room as any).status || "";
+  const rawStatus =
+    (room as any).TrangThai ||
+    (room as any).trangThai ||
+    (room as any).status ||
+    "";
   const statusStr = String(rawStatus || "").toLowerCase();
-  const isSoldOut = statusStr === "occupied" || statusStr === "soldout" || statusStr === "sold out" || statusStr === "unavailable";
+  const isSoldOut =
+    statusStr === "occupied" ||
+    statusStr === "soldout" ||
+    statusStr === "sold out" ||
+    statusStr === "unavailable";
 
   React.useEffect(() => {
     let cancelled = false;
@@ -47,9 +52,12 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       try {
         const promos = await getAllPromotions("active");
         if (cancelled) return;
-        const found = promos.find((p) =>
-          Array.isArray(p.khuyenMaiPhongs) &&
-          p.khuyenMaiPhongs.some((r) => String(r.idphong) === String(room.idphong))
+        const found = promos.find(
+          (p) =>
+            Array.isArray(p.khuyenMaiPhongs) &&
+            p.khuyenMaiPhongs.some(
+              (r) => String(r.idphong) === String(room.idphong)
+            )
         );
         // also verify date range if present
         if (found && found.ngayBatDau && found.ngayKetThuc) {
@@ -97,7 +105,9 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       setLoadingStats(true);
       try {
         setStatsError(null);
-        const res = await fetch(`${BACKEND_BASE}/api/Review/room/${room.idphong}/stats`);
+        const res = await fetch(
+          `${BACKEND_BASE}/Review/room/${room.idphong}/stats`
+        );
         if (!res.ok) {
           const txt = await res.text().catch(() => null);
           console.error("Failed to fetch stats", res.status, txt);
@@ -121,7 +131,9 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       setLoadingReviews(true);
       try {
         setReviewError(null);
-        const res = await fetch(`${BACKEND_BASE}/api/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${pageSize}`);
+        const res = await fetch(
+          `${BACKEND_BASE}/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${pageSize}`
+        );
         if (!res.ok) {
           const txt = await res.text().catch(() => null);
           console.error("Failed to fetch reviews", res.status, txt);
@@ -157,7 +169,9 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       if (!room?.idphong) return;
       setLoadingReviewPanel(true);
       try {
-        const res = await fetch(`${BACKEND_BASE}/api/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${reviewPanelPageSize}`);
+        const res = await fetch(
+          `${BACKEND_BASE}/Review/room/${room.idphong}/reviews?page=${page}&pageSize=${reviewPanelPageSize}`
+        );
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
@@ -170,7 +184,9 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
       }
     };
     loadPage(reviewPanelPage);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [showReviewPanel, reviewPanelPage, room?.idphong]);
 
   return (
@@ -276,34 +292,6 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
             <h3 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>
               {room.tenPhong}
             </h3>
-            <Button
-              type="default"
-              onClick={() => {
-                if (isSoldOut) return;
-                try {
-                  if (promotion) {
-                    sessionStorage.setItem(
-                      "pendingPromotion",
-                      JSON.stringify(promotion)
-                    );
-                  }
-                } catch (e) {
-                  /* ignore */
-                }
-                onBook(room);
-              }}
-              disabled={isSoldOut}
-              style={{
-                borderRadius: 6,
-                background: isSoldOut ? '#cfcfcf' : '#4a5a4a',
-                color: "#fff",
-                borderColor: isSoldOut ? '#cfcfcf' : '#4a5a4a',
-                padding: "8px 20px",
-                height: "auto",
-              }}
-            >
-              {isSoldOut ? 'Hết phòng' : 'Đặt ngay'}
-            </Button>
           </div>
 
           {room.moTa && (
@@ -344,22 +332,60 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
                 </div>
               )}
 
-              <div style={{ color: "#666" }}>
-                Giá: {room.giaCoBanMotDem != null ? (
-                  <>
-                    {room.giaCoBanMotDem.toLocaleString("vi-VN")}₫/đêm
+              <div>
+                <div style={{ color: "#666", marginBottom: 6 }}>Giá: </div>
+                {room.giaCoBanMotDem != null ? (
+                  <div
+                    style={{ display: "flex", alignItems: "baseline", gap: 12 }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 26,
+                        fontWeight: 800,
+                        color: "rgb(216, 152, 96)",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {room.giaCoBanMotDem.toLocaleString("vi-VN")}
+                      <span
+                        style={{ fontSize: 14, fontWeight: 600, marginLeft: 8 }}
+                      >
+                        ₫/đêm
+                      </span>
+                    </div>
                     {promotion && room.giaCoBanMotDem != null && (
-                      <div style={{ marginTop: 6, color: "#d83737", fontWeight: 700 }}>
-                        Giá sau khuyến mãi: {(
-                          promotion.loaiGiamGia === "percent"
-                            ? Math.max(0, Math.round((room.giaCoBanMotDem || 0) * (1 - (promotion.giaTriGiam || 0) / 100)))
-                            : Math.max(0, Math.round((room.giaCoBanMotDem || 0) - (promotion.giaTriGiam || 0)))
-                        ).toLocaleString("vi-VN")}₫/đêm
+                      <div
+                        style={{
+                          marginLeft: 4,
+                          color: "#6b7280",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Giá sau khuyến mãi:{" "}
+                        {(promotion.loaiGiamGia === "percent"
+                          ? Math.max(
+                              0,
+                              Math.round(
+                                (room.giaCoBanMotDem || 0) *
+                                  (1 - (promotion.giaTriGiam || 0) / 100)
+                              )
+                            )
+                          : Math.max(
+                              0,
+                              Math.round(
+                                (room.giaCoBanMotDem || 0) -
+                                  (promotion.giaTriGiam || 0)
+                              )
+                            )
+                        ).toLocaleString("vi-VN")}
+                        ₫/đêm
                       </div>
                     )}
-                  </>
+                  </div>
                 ) : (
-                  "Liên hệ"
+                  <div style={{ color: "#111827", fontWeight: 700 }}>
+                    Liên hệ
+                  </div>
                 )}
               </div>
             </div>
@@ -396,37 +422,6 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
           />
         </div>
       </div>
-      {/* Review Panel (full-screen overlay) */}
-      <ReviewPanel
-        visible={showReviewPanel}
-        room={room}
-        stats={stats}
-        totalReviews={totalReviews}
-        reviewPanelReviews={reviewPanelReviews}
-        reviewPanelPage={reviewPanelPage}
-        reviewPanelPageSize={reviewPanelPageSize}
-        loadingReviewPanel={loadingReviewPanel}
-        onClose={() => {
-          setShowReviewPanel(false);
-          setShowReviewDetailPanel(false);
-        }}
-        onSelectReview={(review) => {
-          setSelectedReview(review);
-          setShowReviewDetailPanel(true);
-        }}
-        onPageChange={setReviewPanelPage}
-      />
-
-      {/* Review Detail Panel (layer above ReviewPanel) */}
-      <ReviewDetailPanel
-        visible={showReviewDetailPanel}
-        selectedReview={selectedReview}
-        onClose={() => {
-          setShowReviewDetailPanel(false);
-          setShowReviewPanel(false);
-        }}
-        onBackToList={() => setShowReviewDetailPanel(false)}
-      />
     </Modal>
   );
 };

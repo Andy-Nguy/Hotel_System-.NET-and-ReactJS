@@ -14,9 +14,17 @@ import {
   Tooltip,
   Image,
 } from "antd";
-import { EditOutlined, DeleteOutlined, PoweroffOutlined } from "@ant-design/icons";
+import {
+  EditOutlined,
+  DeleteOutlined,
+  PoweroffOutlined,
+} from "@ant-design/icons";
 import dayjs from "dayjs";
-import { Promotion, deletePromotion, togglePromotion } from "../../api/promotionApi";
+import {
+  Promotion,
+  deletePromotion,
+  togglePromotion,
+} from "../../api/promotionApi";
 import PromotionModal from "./PromotionModal";
 
 interface PromotionListProps {
@@ -34,11 +42,18 @@ const PromotionList: React.FC<PromotionListProps> = ({
   onFilterChange,
   onCreateNew,
 }) => {
-  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
+  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(
+    null
+  );
   const [showDetail, setShowDetail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
-  const [filterDiscountType, setFilterDiscountType] = useState<string | undefined>();
+  const [filterDiscountType, setFilterDiscountType] = useState<
+    string | undefined
+  >();
+  const [filterPromotionType, setFilterPromotionType] = useState<
+    string | undefined
+  >();
 
   const handleDelete = async (id: string) => {
     try {
@@ -48,7 +63,9 @@ const PromotionList: React.FC<PromotionListProps> = ({
       onRefresh();
     } catch (error) {
       console.error("[PROMOTION_LIST] Error deleting:", error);
-      message.error(`Lỗi: ${error instanceof Error ? error.message : "Xóa thất bại"}`);
+      message.error(
+        `Lỗi: ${error instanceof Error ? error.message : "Xóa thất bại"}`
+      );
     } finally {
       setLoading(false);
     }
@@ -64,7 +81,9 @@ const PromotionList: React.FC<PromotionListProps> = ({
       onRefresh();
     } catch (error) {
       console.error("[PROMOTION_LIST] Error toggling:", error);
-      message.error(`Lỗi: ${error instanceof Error ? error.message : "Thay đổi thất bại"}`);
+      message.error(
+        `Lỗi: ${error instanceof Error ? error.message : "Thay đổi thất bại"}`
+      );
     } finally {
       setLoading(false);
     }
@@ -73,7 +92,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
   const getStatusTag = (status?: string) => {
     switch (status) {
       case "active":
-        return <Tag color="green">Đang Hoạt Động</Tag>;
+        return <Tag color="green">Đang Áp Dụng</Tag>;
       case "inactive":
         return <Tag color="orange">Tạm Ngưng</Tag>;
       case "expired":
@@ -87,29 +106,57 @@ const PromotionList: React.FC<PromotionListProps> = ({
     return type === "percent" ? "% Giảm" : "Giảm Tiền";
   };
 
+  const getPromotionTypeLabel = (type?: string) => {
+    switch (type) {
+      case "room":
+        return <Tag color="blue">Phòng</Tag>;
+      case "service":
+        return <Tag color="purple">Dịch Vụ</Tag>;
+      case "combo":
+        return <Tag color="cyan">Combo</Tag>;
+      case "customer":
+        return <Tag color="gold">Khách Hàng</Tag>;
+      default:
+        return <Tag>Không xác định</Tag>;
+    }
+  };
+
   const columns = [
     {
       title: "Tên Khuyến Mãi",
       dataIndex: "tenKhuyenMai",
       key: "tenKhuyenMai",
-      width: 200,
+      width: 180,
+    },
+    {
+      title: "Loại KM",
+      key: "loaiKhuyenMai",
+      width: 130,
+      render: (_: any, record: Promotion) =>
+        getPromotionTypeLabel(record.loaiKhuyenMai),
     },
     {
       title: "Banner",
       key: "banner",
-      width: 120,
+      width: 100,
       render: (_: any, record: Promotion) =>
         record.hinhAnhBanner ? (
           <Image
             // If backend returns a full relative path (starts with '/'), use it directly.
             // Otherwise assume it's a filename and prepend the folder.
             src={
-              record.hinhAnhBanner.startsWith("/") || record.hinhAnhBanner.includes("/img/promotion")
+              record.hinhAnhBanner.startsWith("/") ||
+              record.hinhAnhBanner.includes("/img/promotion")
                 ? record.hinhAnhBanner
                 : `/img/promotion/${record.hinhAnhBanner}`
             }
             alt="Banner"
-            style={{ width: 80, height: 40, objectFit: "cover", borderRadius: 4 }}
+            style={{
+              width: 80,
+              height: 40,
+              objectFit: "cover",
+              borderRadius: 4,
+            }}
             fallback="/img/placeholder.png"
           />
         ) : (
@@ -120,7 +167,8 @@ const PromotionList: React.FC<PromotionListProps> = ({
       title: "Loại Giảm Giá",
       key: "loaiGiamGia",
       width: 120,
-      render: (_: any, record: Promotion) => getDiscountTypeLabel(record.loaiGiamGia),
+      render: (_: any, record: Promotion) =>
+        getDiscountTypeLabel(record.loaiGiamGia),
     },
     {
       title: "Giá Trị Giảm",
@@ -128,8 +176,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
       width: 100,
       render: (_: any, record: Promotion) => (
         <>
-          {record.giaTriGiam}{" "}
-          {record.loaiGiamGia === "percent" ? "%" : "đ"}
+          {record.giaTriGiam} {record.loaiGiamGia === "percent" ? "%" : "đ"}
         </>
       ),
     },
@@ -150,7 +197,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
     {
       title: "Trạng Thái",
       key: "trangThai",
-      width: 150,
+      width: 120,
       render: (_: any, record: Promotion) => getStatusTag(record.trangThai),
     },
     {
@@ -159,7 +206,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
       width: 200,
       render: (_: any, record: Promotion) => (
         <Space>
-          <Tooltip title="Chỉnh Sửa">
+          <Tooltip title="Sửa">
             <Button
               type="text"
               icon={<EditOutlined />}
@@ -167,11 +214,17 @@ const PromotionList: React.FC<PromotionListProps> = ({
               disabled={record.trangThai === "expired"}
             />
           </Tooltip>
-          <Tooltip title={record.trangThai === "active" ? "Ngưng Hoạt Động" : "Kích Hoạt"}>
+          <Tooltip
+            title={
+              record.trangThai === "active" ? "Ngưng Hoạt Động" : "Kích Hoạt"
+            }
+          >
             <Button
               type="text"
               icon={<PoweroffOutlined />}
-              onClick={() => handleToggle(record.idkhuyenMai, record.trangThai || "active")}
+              onClick={() =>
+                handleToggle(record.idkhuyenMai, record.trangThai || "active")
+              }
               danger={record.trangThai === "active"}
               disabled={record.trangThai === "expired"}
             />
@@ -183,7 +236,12 @@ const PromotionList: React.FC<PromotionListProps> = ({
             okText="Xóa"
             cancelText="Hủy"
           >
-            <Button type="text" danger icon={<DeleteOutlined />} loading={loading} />
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              loading={loading}
+            />
           </Popconfirm>
         </Space>
       ),
@@ -224,6 +282,22 @@ const PromotionList: React.FC<PromotionListProps> = ({
             ]}
           />
         </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Select
+            placeholder="Lọc theo loại khuyến mãi"
+            allowClear
+            value={filterPromotionType}
+            onChange={(value) => {
+              setFilterPromotionType(value);
+            }}
+            options={[
+              { label: "Phòng", value: "room" },
+              { label: "Dịch Vụ", value: "service" },
+              { label: "Combo", value: "combo" },
+              { label: "Khách Hàng", value: "customer" },
+            ]}
+          />
+        </Col>
       </Row>
 
       {/* Small inline style to indicate rows are clickable */}
@@ -231,10 +305,15 @@ const PromotionList: React.FC<PromotionListProps> = ({
 
       <Table
         columns={columns}
-        dataSource={promotions.map((p) => ({
-          ...p,
-          key: p.idkhuyenMai,
-        }))}
+        dataSource={promotions
+          .filter(
+            (p) =>
+              !filterPromotionType || p.loaiKhuyenMai === filterPromotionType
+          )
+          .map((p) => ({
+            ...p,
+            key: p.idkhuyenMai,
+          }))}
         loading={loading}
         pagination={{ pageSize: 10, showSizeChanger: true }}
         scroll={{ x: 1200 }}
@@ -242,7 +321,7 @@ const PromotionList: React.FC<PromotionListProps> = ({
         onRow={(record: Promotion) => ({
           onClick: (event) => {
             // Prevent opening detail when clicking action buttons inside the row
-            if ((event.target as HTMLElement).closest('.ant-btn')) return;
+            if ((event.target as HTMLElement).closest(".ant-btn")) return;
             setSelectedPromotion(record);
             setShowDetail(true);
           },

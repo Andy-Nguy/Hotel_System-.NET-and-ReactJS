@@ -1,0 +1,109 @@
+/* Custom styles for admin sidebar scroll and UI improvements */
+
+.slidebar-aside {
+  width: 280px;
+  padding: 20px;
+  background: #fff;
+  border-right: 1px solid rgba(0, 0, 0, 0.04);
+  height: 100vh;
+  box-sizing: border-box;
+  position: fixed;
+  left: 0;
+  top: 0;
+  .slidebar-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    flex: 1;
+    padding-bottom: 20px;
+    -webkit-overflow-scrolling: touch;
+    /* Hide scrollbars visually but keep functional scrolling on all modern browsers */
+    scrollbar-width: none; /* firefox */
+  }
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  .slidebar-scroll::-webkit-scrollbar {
+    width: 0px; /* WebKit-based browsers */
+    height: 0px;
+    display: none;
+  }
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin; /* firefox */
+  scrollbar-color: transparent transparent; /* hide by default on firefox */
+}
+
+.slidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.slidebar-scroll::-webkit-scrollbar-thumb {
+  display: none; /* ensure the thumb is not visible on WebKit */
+}
+
+/* Optional: Add `show-scroll-on-hover` to the scroller element if you want
+   the scrollbar to appear when hovered or focused (useful to temporarily
+   show for debugging or accessibility). By default the scrollbar is hidden.
+*/
+.slidebar-scroll.show-scroll-on-hover::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  display: block;
+}
+.slidebar-scroll.show-scroll-on-hover::-webkit-scrollbar-thumb {
+  display: block;
+  background-color: rgba(99, 102, 241, 0.5);
+  opacity: 1;
+}
+.slidebar-scroll.show-scroll-on-hover:hover,
+.slidebar-scroll.show-scroll-on-hover:focus-within {
+  scrollbar-color: rgba(99, 102, 241, 0.5) transparent;
+}
+.slidebar-scroll:focus-within {
+  scrollbar-color: rgba(255, 255, 255, 0.5) transparent;
+}
+
+.slidebar-shadow-top,
+.slidebar-shadow-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18px;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+  opacity: 0;
+}
+.slidebar-shadow-top {
+  top: 68px; /* header height + spacing */
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0));
+  z-index: 10;
+}
+.slidebar-shadow-bottom {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0));
+  z-index: 10;
+}
+.slidebar-shadow-visible {
+  opacity: 1;
+}
+
+.nav-item {
+  padding: 10px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  outline: none;
+}
+.nav-item:hover {
+  background: rgba(59, 130, 246, 0.04);
+}
+.nav-item:focus {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+.nav-item-active {
+  background: #eef7ff;
+  color: #0f172a;
+  font-weight: 700;
+}

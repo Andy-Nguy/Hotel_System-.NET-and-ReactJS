@@ -1,4 +1,8 @@
 import React, { useEffect, useState } from "react";
+import { API_CONFIG } from "../api/config";
+
+// Use centralized API config
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
@@ -94,7 +98,7 @@ const CheckoutPage: React.FC = () => {
         if (parsed.idDatPhong && parsed.holdExpiresAt) {
           try {
             const res = await fetch(
-              `/api/datphong/${encodeURIComponent(parsed.idDatPhong)}`
+              `${API_BASE}/datphong/${encodeURIComponent(parsed.idDatPhong)}`
             );
             if (res.ok) {
               setHoldExpiresAt(parsed.holdExpiresAt);
@@ -194,10 +198,11 @@ const CheckoutPage: React.FC = () => {
       };
 
       // GỌI API TẠO BOOKING THẬT
-      // Build rooms payload robustly: support different possible id/price field names
+     
       const roomsPayload = (bookingInfo.selectedRooms || []).map((sr) => {
         const r = sr.room || {};
-        const idPhong = r.idphong ?? r.idPhong ?? r.id ?? r.roomId ?? String(sr.roomNumber);
+        const idPhong =
+          r.idphong ?? r.idPhong ?? r.id ?? r.roomId ?? String(sr.roomNumber);
         const gia = r.giaCoBanMotDem ?? r.GiaCoBanMotDem ?? r.gia ?? r.Gia ?? 0;
         return {
           IdPhong: String(idPhong),
@@ -217,7 +222,7 @@ const CheckoutPage: React.FC = () => {
         ghiChu: values.notes,
       };
 
-      const response = await fetch("/api/datphong/create", {
+      const response = await fetch(`${API_BASE}/datphong/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bookingPayload),
@@ -234,7 +239,10 @@ const CheckoutPage: React.FC = () => {
 
       if (!result.success || !result.data || !result.data.idDatPhong) {
         console.error("Booking API returned unexpected response:", result);
-        throw new Error(result.message || "Tạo đặt phòng thất bại (không có ID đặt phòng trả về)!");
+        throw new Error(
+          result.message ||
+            "Tạo đặt phòng thất bại (không có ID đặt phòng trả về)!"
+        );
       }
 
       const invoiceInfo = {
@@ -277,7 +285,7 @@ const CheckoutPage: React.FC = () => {
     let mounted = true;
     const fetchServices = async () => {
       try {
-        const res = await fetch("/api/dich-vu/lay-danh-sach");
+        const res = await fetch(`${API_BASE}/dich-vu/lay-danh-sach`);
         if (!res.ok) throw new Error("Failed to load services");
         const data = await res.json();
         if (!mounted) return;

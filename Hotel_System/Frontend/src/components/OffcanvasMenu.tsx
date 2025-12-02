@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { getUserInfo, checkIsNhanVien } from "../context/UserContext";
+import { API_CONFIG } from "../api/config";
 
 const OffcanvasMenu: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<string>("");
@@ -13,38 +15,54 @@ const OffcanvasMenu: React.FC = () => {
     return "/";
   };
 
-  const refreshAuth = () => {
+  const refreshAuth = async () => {
     const token = localStorage.getItem("hs_token");
     setIsLoggedIn(!!token);
+
     if (token) {
+      // Sử dụng hàm getUserInfo thống nhất
+      const info = getUserInfo();
+      if (info) {
+        console.log("[OffcanvasMenu] Using getUserInfo:", info);
+        setUserInfo(info);
+        return;
+      }
+
+      // Fallback: gọi API profile
       try {
-        const base64Payload = token.split(".")[1];
-        const decodedPayload = decodeURIComponent(
-          atob(base64Payload)
-            .split("")
-            .map(function (c) {
-              return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-            })
-            .join("")
-        );
-        const payload = JSON.parse(decodedPayload);
-        setUserInfo(payload);
+        const API_BASE = `${API_CONFIG.CURRENT}/api`;
+        const res = await fetch(`${API_BASE}/Auth/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const profile = await res.json();
+          console.log("[OffcanvasMenu] Profile from API:", profile);
+          const mappedUserInfo = {
+            name: profile.hoTen || profile.HoTen || profile.name || "User",
+            email: profile.email || profile.Email,
+            role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
+            phone: profile.soDienThoai || profile.SoDienThoai,
+          };
+          setUserInfo(mappedUserInfo);
+          localStorage.setItem("hs_userInfo", JSON.stringify(mappedUserInfo));
+        } else {
+          setUserInfo({ name: "User" });
+        }
       } catch (e) {
-        console.warn("Could not decode token:", e);
-        setUserInfo(null);
+        console.warn("[OffcanvasMenu] Could not fetch user profile:", e);
+        setUserInfo({ name: "User" });
       }
     } else {
       setUserInfo(null);
+      localStorage.removeItem("hs_userInfo");
     }
   };
 
   useEffect(() => {
     setCurrentRoute(resolveRoute());
-    // ensure auth state is read on mount
     refreshAuth();
     const onLocationChange = () => {
       setCurrentRoute(resolveRoute());
-      // also refresh auth when route changes via pushState/popstate
       refreshAuth();
     };
     window.addEventListener("hashchange", onLocationChange);
@@ -56,30 +74,20 @@ const OffcanvasMenu: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // initialize auth and listen for storage changes (other tabs)
     refreshAuth();
     const handleStorageChange = () => refreshAuth();
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
+  // Sử dụng hàm thống nhất
   const isNhanVien = () => {
-    if (!userInfo) return false;
-    const role =
-      userInfo.role ||
-      userInfo.roles ||
-      userInfo[
-        "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-      ] ||
-      userInfo["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"] ||
-      userInfo.VaiTro;
-    if (!role) return false;
-    if (Array.isArray(role)) return role.includes("nhanvien");
-    return String(role).toLowerCase() === "nhanvien" || String(role) === "1";
+    return checkIsNhanVien(userInfo);
   };
 
   const handleLogout = () => {
     localStorage.removeItem("hs_token");
+    localStorage.removeItem("hs_userInfo");
     setIsLoggedIn(false);
     setUserInfo(null);
     // Redirect to home page and remove hash from URL

@@ -1,5 +1,9 @@
 import React, { useState } from "react";
 import RoomCard from "./Room/RoomCard";
+import { API_CONFIG } from "../api/config";
+
+// Use centralized API config
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
 
 type BookingFormProps = {
   horizontal?: boolean; // compact inline layout to save vertical space
@@ -63,7 +67,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
         NumberOfGuests: Number(guests),
       };
 
-      const res = await fetch("/api/Phong/check-available-rooms", {
+      const res = await fetch(`${API_BASE}/Phong/check-available-rooms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -71,7 +75,7 @@ const BookingForm: React.FC<BookingFormProps> = ({
 
       const json = await res.json().catch(() => null);
       console.log("Raw API Response from check-available-rooms:", json);
-      
+
       if (!res.ok) {
         const text = json && (json.message || JSON.stringify(json));
         throw new Error(text || `HTTP ${res.status}`);

@@ -73,7 +73,6 @@ namespace Hotel_System.API.Controllers
             var customer = await _context.KhachHangs.FindAsync(userId);
             if (customer == null) return NotFound(new { error = "Customer not found" });
 
-            // total spent: sum of paid amounts (TienThanhToan) for fully paid invoices belonging to this customer's bookings
             var paidInvoices = await _context.HoaDons
                 .Include(h => h.IddatPhongNavigation)
                 .Where(h => h.IddatPhongNavigation != null && h.IddatPhongNavigation.IdkhachHang == userId && h.TrangThaiThanhToan == 2)
@@ -133,6 +132,22 @@ namespace Hotel_System.API.Controllers
                 totalNights,
                 rewards = available
             });
+        }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest req)
+        {
+            var (success, error) = await _auth.ForgotPasswordAsync(req);
+            if (!success) return BadRequest(new { error });
+            return Ok(new { message = "OTP sent to email" });
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req)
+        {
+            var (success, error) = await _auth.ResetPasswordAsync(req);
+            if (!success) return BadRequest(new { error });
+            return Ok(new { message = "Password reset successfully" });
         }
 
     // login-OTP endpoints removed to keep a simpler register + password login flow

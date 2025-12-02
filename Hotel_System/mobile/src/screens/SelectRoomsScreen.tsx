@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Modal,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -78,33 +79,50 @@ const SelectRoomsScreen: React.FC = () => {
           setTotalRooms(parsed.totalRooms || rooms || 1);
           setCurrentRoomNumber(parsed.currentRoomNumber || 1);
           setSelectedServices(parsed.selectedServices || []);
-          
+
           // If we have an initial selection but it's not in the saved list (and we have space), add it?
           // Or maybe we should prioritize the user's explicit click over saved state if it's a "new" navigation action?
-          // For simplicity, if the user clicked "Select" on the previous screen, let's assume they want that room selected 
+          // For simplicity, if the user clicked "Select" on the previous screen, let's assume they want that room selected
           // even if they had a previous session. But we must be careful not to duplicate.
-          
-          if (initialSelectedRoom) {
-             const alreadySelected = (parsed.selectedRooms || []).some((sr: any) => sr.room.roomId === initialSelectedRoom.roomId);
-             if (!alreadySelected && (parsed.selectedRooms || []).length < (parsed.totalRooms || rooms)) {
-                 // Add it
-                 const newSelected = [...(parsed.selectedRooms || []), { roomNumber: (parsed.currentRoomNumber || 1), room: initialSelectedRoom }];
-                 setSelectedRooms(newSelected);
-                 // Update current room number
-                 let nextRoomNum = 1;
-                 const selectedNumbers = newSelected.map((r: any) => r.roomNumber);
-                 while (selectedNumbers.includes(nextRoomNum) && nextRoomNum <= (parsed.totalRooms || rooms)) {
-                    nextRoomNum++;
-                 }
-                 setCurrentRoomNumber(nextRoomNum <= (parsed.totalRooms || rooms) ? nextRoomNum : (parsed.totalRooms || rooms));
-             }
-          }
 
+          if (initialSelectedRoom) {
+            const alreadySelected = (parsed.selectedRooms || []).some(
+              (sr: any) => sr.room.roomId === initialSelectedRoom.roomId
+            );
+            if (
+              !alreadySelected &&
+              (parsed.selectedRooms || []).length < (parsed.totalRooms || rooms)
+            ) {
+              // Add it
+              const newSelected = [
+                ...(parsed.selectedRooms || []),
+                {
+                  roomNumber: parsed.currentRoomNumber || 1,
+                  room: initialSelectedRoom,
+                },
+              ];
+              setSelectedRooms(newSelected);
+              // Update current room number
+              let nextRoomNum = 1;
+              const selectedNumbers = newSelected.map((r: any) => r.roomNumber);
+              while (
+                selectedNumbers.includes(nextRoomNum) &&
+                nextRoomNum <= (parsed.totalRooms || rooms)
+              ) {
+                nextRoomNum++;
+              }
+              setCurrentRoomNumber(
+                nextRoomNum <= (parsed.totalRooms || rooms)
+                  ? nextRoomNum
+                  : parsed.totalRooms || rooms
+              );
+            }
+          }
         } else {
           // Different booking session, start fresh
           setTotalRooms(rooms || 1);
           setSelectedServices([]);
-          
+
           if (initialSelectedRoom) {
             setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
             setCurrentRoomNumber(rooms > 1 ? 2 : 1);
@@ -119,11 +137,11 @@ const SelectRoomsScreen: React.FC = () => {
         setSelectedServices([]);
 
         if (initialSelectedRoom) {
-            setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
-            setCurrentRoomNumber(rooms > 1 ? 2 : 1);
+          setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
+          setCurrentRoomNumber(rooms > 1 ? 2 : 1);
         } else {
-            setSelectedRooms([]);
-            setCurrentRoomNumber(1);
+          setSelectedRooms([]);
+          setCurrentRoomNumber(1);
         }
       }
     } catch (error) {
@@ -179,17 +197,17 @@ const SelectRoomsScreen: React.FC = () => {
     setSelectedRooms(newSelectedRooms);
 
     // Find next available room number slot
-    const selectedNumbers = newSelectedRooms.map(r => r.roomNumber);
+    const selectedNumbers = newSelectedRooms.map((r) => r.roomNumber);
     let nextRoomNum = 1;
     while (selectedNumbers.includes(nextRoomNum) && nextRoomNum <= totalRooms) {
       nextRoomNum++;
     }
-    
+
     if (nextRoomNum <= totalRooms) {
       setCurrentRoomNumber(nextRoomNum);
     } else {
       // All rooms selected
-      setCurrentRoomNumber(totalRooms); 
+      setCurrentRoomNumber(totalRooms);
     }
 
     saveBookingData();
@@ -323,16 +341,25 @@ const SelectRoomsScreen: React.FC = () => {
         selectedRoomNumbers={selectedRooms.map((sr) => sr.roomNumber)}
       />
 
-      <ScrollView style={styles.scrollContent} contentContainerStyle={{paddingBottom: 100}}>
+      <ScrollView
+        style={styles.scrollContent}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
         <View style={styles.summarySection}>
           <View style={styles.summaryHeader}>
             <Text style={styles.sectionTitle}>
-              Phòng {selectedRooms.length < totalRooms ? currentRoomNumber : totalRooms} / {totalRooms}
+              Phòng{" "}
+              {selectedRooms.length < totalRooms
+                ? currentRoomNumber
+                : totalRooms}{" "}
+              / {totalRooms}
             </Text>
             <View style={styles.dateBadge}>
               <AppIcon name="calendar" size={12} color={COLORS.primary} />
               <Text style={styles.dateText}>
-                {new Date(checkIn).getDate()}/{new Date(checkIn).getMonth() + 1} - {new Date(checkOut).getDate()}/{new Date(checkOut).getMonth() + 1}
+                {new Date(checkIn).getDate()}/{new Date(checkIn).getMonth() + 1}{" "}
+                - {new Date(checkOut).getDate()}/
+                {new Date(checkOut).getMonth() + 1}
               </Text>
             </View>
           </View>
@@ -356,7 +383,8 @@ const SelectRoomsScreen: React.FC = () => {
                       sr.room.discountedPrice ||
                       sr.room.basePricePerNight ||
                       0
-                    ).toLocaleString()}đ x {calculateNights()} đêm
+                    ).toLocaleString()}
+                    đ x {calculateNights()} đêm
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -388,7 +416,9 @@ const SelectRoomsScreen: React.FC = () => {
             <View style={styles.noRooms}>
               <AppIcon name="bed" size={40} color={COLORS.gray} />
               <Text style={styles.noRoomsText}>
-                {selectedRooms.length >= totalRooms ? "Bạn đã chọn đủ số phòng" : "Không còn phòng nào để chọn"}
+                {selectedRooms.length >= totalRooms
+                  ? "Bạn đã chọn đủ số phòng"
+                  : "Không còn phòng nào để chọn"}
               </Text>
             </View>
           )}
@@ -479,16 +509,18 @@ const SelectRoomsScreen: React.FC = () => {
                     <Text style={styles.modalPrice}>
                       {Number(
                         selectedRoomDetail.basePricePerNight || 0
-                      ).toLocaleString()}đ
+                      ).toLocaleString()}
+                      đ
                     </Text>
                   </View>
 
                   <Text style={styles.modalNights}>
-                    Số đêm: {calculateNights()} | Tổng: 
+                    Số đêm: {calculateNights()} | Tổng:
                     {(
                       Number(selectedRoomDetail.basePricePerNight || 0) *
                       calculateNights()
-                    ).toLocaleString()}đ
+                    ).toLocaleString()}
+                    đ
                   </Text>
                 </View>
               </ScrollView>
@@ -634,7 +666,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 34,
+    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,

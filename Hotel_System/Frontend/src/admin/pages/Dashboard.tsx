@@ -21,8 +21,14 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { Dayjs } from "dayjs";
 
+// Use centralized API configuration
+import { API_CONFIG } from "../../api/config";
+const API_BASE = `${API_CONFIG.CURRENT}/api`;
+
 const fetchJson = async (url: string, init?: RequestInit) => {
-  const res = await fetch(url, init);
+  // Prepend API_BASE if url starts with /api
+  const finalUrl = url.startsWith("/api") ? `${API_BASE}${url.slice(4)}` : url;
+  const res = await fetch(finalUrl, init);
   let text = "";
   try {
     text = await res.text();
