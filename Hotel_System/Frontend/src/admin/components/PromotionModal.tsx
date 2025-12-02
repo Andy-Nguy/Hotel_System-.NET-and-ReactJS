@@ -12,12 +12,6 @@ import {
 import dayjs from "dayjs";
 import { Promotion } from "../../api/promotionApi";
 
-// Resolve API base from Vite env
-const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-const API_BASE = _VITE_API.replace(/\/$/, "")
-  ? `${_VITE_API.replace(/\/$/, "")}/api`
-  : "/api";
-
 interface PromotionModalProps {
   promotion: Promotion;
   visible: boolean;
@@ -64,6 +58,17 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       key: "tenPhong",
       width: "40%",
     },
+    {
+      title: "Trạng Thái Áp Dụng",
+      dataIndex: "isActive",
+      key: "isActive",
+      width: "30%",
+      render: (isActive: boolean) => (
+        <Tag color={isActive ? "green" : "red"}>
+          {isActive ? "Đang Áp Dụng" : "Tạm Ngưng"}
+        </Tag>
+      ),
+    },
   ];
 
   const [serviceList, setServiceList] = useState<PromotionService[]>([]);
@@ -74,7 +79,7 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       title: "Mã Dịch Vụ",
       dataIndex: "iddichVu",
       key: "iddichVu",
-      width: "30%",
+      width: "25%",
     },
     {
       title: "Tên Dịch Vụ",
@@ -82,23 +87,17 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       key: "tenDichVu",
       width: "40%",
     },
-  ];
-
-  // Services for room_service type always have "Đang Áp Dụng" status, so no status column
-  const serviceColumnsForRoomService = [
     {
-      title: "Mã Dịch Vụ",
-      dataIndex: "iddichVu",
-      key: "iddichVu",
-      width: "25%",
+      title: "Trạng Thái",
+      dataIndex: "isActive",
+      key: "isActive",
+      width: "20%",
+      render: (isActive: boolean) => (
+        <Tag color={isActive ? "green" : "red"}>
+          {isActive ? "Đang Áp Dụng" : "Tạm Ngưng"}
+        </Tag>
+      ),
     },
-    {
-      title: "Tên Dịch Vụ",
-      dataIndex: "tenDichVu",
-      key: "tenDichVu",
-      width: "50%",
-    },
-
   ];
 
   useEffect(() => {
@@ -108,37 +107,11 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
       const loai = (promotion as any).loaiKhuyenMai;
       if (!loai) return;
 
+      console.log('[PromotionModal] Loading services for promotion:', promotion);
+      console.log('[PromotionModal] Promotion type:', loai);
+
       try {
         setLoadingServices(true);
-        const resp = await fetch(
-          `${API_BASE}/KhuyenMai/${promotion.idkhuyenMai}/services`
-        );
-
-        // If the promotion object already contains khuyenMaiDichVus mapping, use it.
-        const existing = (promotion as any).khuyenMaiDichVus;
-        if (existing && Array.isArray(existing) && existing.length > 0) {
-          // map to PromotionService shape
-          const mapped = existing.map((m: any, idx: number) => ({
-            id: m.id || idx,
-            iddichVu: m.iddichVu || m.IddichVu || m.iddichvu,
-            tenDichVu: m.tenDichVu || m.TenDichVu || m.ten || m.name || '',
-            isActive: true,
-            ngayApDung: undefined,
-            ngayKetThuc: undefined,
-          }));
-          setServiceList(mapped);
-          return;
-        }
-
-        // Fallback: fetch full promotion detail and derive service list from
-        // khuyenMaiDichVus (service), khuyenMaiCombos (combo items) or
-        // khuyenMaiPhongDichVus (room-service pairs) if present.
-        // const resp = await fetch(`/api/khuyenmai/${promotion.idkhuyenMai}`);
-        if (!resp.ok) {
-          setServiceList([]);
-          return;
-        }
-        const full = await resp.json();
 
         // Helper to normalize a service item
         const normalizeItem = (it: any, idx: number) => ({
@@ -153,7 +126,6 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
         // Check if promotion already has the data we need
         const existingServices = (promotion as any).khuyenMaiDichVus;
         const existingCombos = (promotion as any).khuyenMaiCombos;
-        const existingPairs = (promotion as any).khuyenMaiPhongDichVus;
 
         let derived: any[] = [];
 
@@ -166,31 +138,33 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
 
         // For combo type, extract from khuyenMaiCombos
         if (loai === "combo" && existingCombos && Array.isArray(existingCombos) && existingCombos.length > 0) {
-          const comboItems = existingCombos.flatMap((c: any) =>
-            (c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || []).map((it: any) => it)
-          );
-          if (comboItems.length > 0) {
-            derived = comboItems.map((m: any, idx: number) => normalizeItem(m, idx));
-            setServiceList(derived);
-            return;
-          }
-        }
-
-        // For room_service type, extract unique services from khuyenMaiPhongDichVus
-        if (loai === "room_service" && existingPairs && Array.isArray(existingPairs) && existingPairs.length > 0) {
-          // Dedupe by service ID and extract just services (not room-service pairs)
-          const uniqueMap = new Map();
-          existingPairs.forEach((p: any) => {
-            const serviceId = p.iddichVu || p.IddichVu || p.idDichVu || p.IdDichVu;
-            if (serviceId && !uniqueMap.has(serviceId)) {
-              uniqueMap.set(serviceId, p);
-            }
+          console.log('[PromotionModal] Combo detected, combos:', existingCombos);
+          // Flatten all services from all combos
+          const serviceMap = new Map();
+          
+          existingCombos.forEach((combo: any) => {
+            const comboDichVus = combo.khuyenMaiComboDichVus || combo.KhuyenMaiComboDichVus || [];
+            console.log('[PromotionModal] Combo services in combo:', comboDichVus);
+            comboDichVus.forEach((service: any) => {
+              const serviceId = service.iddichVu || service.IddichVu || service.idDichVu || service.IdDichVu;
+              if (serviceId && !serviceMap.has(serviceId)) {
+                const normalizedService = {
+                  id: service.id || service.Id,
+                  iddichVu: serviceId,
+                  tenDichVu: service.tenDichVu || service.TenDichVu || service.ten || service.name || '',
+                  isActive: service.isActive ?? service.IsActive ?? true,
+                };
+                console.log('[PromotionModal] Adding service:', normalizedService);
+                serviceMap.set(serviceId, normalizedService);
+              }
+            });
           });
-          derived = Array.from(uniqueMap.values()).map((m: any, idx: number) => normalizeItem(m, idx));
+          
+          derived = Array.from(serviceMap.values());
+          console.log('[PromotionModal] Final service list:', derived);
           setServiceList(derived);
           return;
         }
-
         // Fallback: if no local data, just set empty
         setServiceList([]);
       } catch (err) {
@@ -288,42 +262,6 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
             );
           }
 
-          if (loai === "room_service") {
-            return (
-              <>
-                <h3>Danh Sách Phòng Áp Dụng ({promotion.khuyenMaiPhongs?.length ?? 0} phòng)</h3>
-
-                {promotion.khuyenMaiPhongs && promotion.khuyenMaiPhongs.length > 0 ? (
-                  <Table
-                    columns={roomColumns}
-                    dataSource={promotion.khuyenMaiPhongs.map((room, index) => ({
-                      ...room,
-                      key: `${room.idphong}_${index}`,
-                    }))}
-                    pagination={false}
-                    size="small"
-                  />
-                ) : (
-                  <Empty description="Không có phòng nào áp dụng khuyến mãi này" />
-                )}
-
-                <Divider />
-                <h3>Dịch Vụ Áp Dụng - Đang Áp Dụng ({serviceList.length} dịch vụ)</h3>
-                {serviceList.length > 0 ? (
-                  <Table
-                    columns={serviceColumnsForRoomService}
-                    dataSource={serviceList.map((s, index) => ({ ...s, key: `${s.id}_${index}` }))}
-                    pagination={false}
-                    size="small"
-                    loading={loadingServices}
-                  />
-                ) : (
-                  <Empty description="Không có dịch vụ nào được gán cho gói" />
-                )}
-              </>
-            );
-          }
-
           // default: show rooms if any
           return (
             <>
@@ -335,6 +273,7 @@ const PromotionModal: React.FC<PromotionModalProps> = ({
                   dataSource={promotion.khuyenMaiPhongs.map((room, index) => ({
                     ...room,
                     key: `${room.idphong}_${index}`,
+                    isActive: (room as any).isActive ?? (room as any).IsActive ?? true,
                   }))}
                   pagination={false}
                   size="small"

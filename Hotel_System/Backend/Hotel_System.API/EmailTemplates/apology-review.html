@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phản hồi về đánh giá của Quý khách</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f9f9f9;
+            line-height: 1.6;
+            color: #333333;
+            -webkit-text-size-adjust: 100%;
+            word-break: break-word;
+        }
+        .wrapper {
+            padding: 20px 0;
+            background-color: #f9f9f9;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fdfdfd;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.05);
+        }
+        .header {
+            background: #fdfdfd;
+            padding: 30px 20px 20px;
+            text-align: center;
+            border-bottom: 1px solid #eeeeee;
+            color: #333333;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 4px;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+        .header p {
+            font-size: 13px;
+            opacity: 0.7;
+            color: #666666;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .greeting {
+            margin-bottom: 24px;
+            font-size: 16px;
+        }
+        .greeting strong {
+            color: #C9A043;
+            font-weight: 600;
+        }
+        .apology-section {
+            background: #fff5f5;
+            border-left: 3px solid #e53e3e;
+            padding: 16px;
+            margin-bottom: 30px; 
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333333;
+        }
+        .apology-section p {
+            margin: 6px 0;
+        }
+        .issue-section {
+            background: #fefcf5;
+            border-left: 3px solid #C9A043;
+            padding: 16px;
+            margin-bottom: 30px; 
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333333;
+        }
+        .issue-section h3 {
+            color: #C9A043;
+            font-size: 15px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        .issue-section p {
+            margin: 6px 0;
+        }
+        .action-section {
+            background: #f0fff4;
+            border-left: 3px solid #38a169;
+            padding: 16px;
+            margin-bottom: 30px; 
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333333;
+        }
+        .action-section h3 {
+            color: #38a169;
+            font-size: 15px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        .action-section p {
+            margin: 6px 0;
+        }
+        .booking-details {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+            border: 1px solid #eeeeee;
+        }
+        .booking-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px; 
+            font-size: 14px;
+        }
+        .booking-row label {
+            font-weight: 400;
+            color: #666666;
+        }
+        .booking-row span {
+            font-weight: 500;
+            color: #333333;
+        }
+        .compensation-section {
+            background: #fefcf5;
+            border: 1px solid #C9A043;
+            border-radius: 8px;
+            padding: 30px 24px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .compensation-section h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #C9A043;
+            font-weight: 500;
+        }
+        .compensation-section p {
+            font-size: 14px;
+            color: #666666;
+            margin-bottom: 20px;
+        }
+        .compensation-list {
+            text-align: left;
+            background: #fff;
+            padding: 16px 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .compensation-list ul {
+            margin-left: 18px;
+        }
+        .compensation-list li {
+            margin: 8px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        .cta-button {
+            display: inline-block;
+            background: #C9A043;
+            color: white;
+            padding: 12px 32px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(201, 160, 67, 0.4);
+        }
+        .cta-button:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+        }
+        .review-content {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+            border: 1px solid #eeeeee;
+            font-style: italic;
+        }
+        .review-content h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #666;
+            font-style: normal;
+        }
+        .review-content .stars {
+            color: #f6ad55;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .review-content .title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-style: normal;
+        }
+        .review-content .text {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+        .contact-info {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 6px;
+            margin-top: 24px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #666666;
+            border: 1px solid #eeeeee;
+            text-align: center;
+        }
+        .contact-info strong {
+            color: #C9A043;
+        }
+        .signature {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 14px;
+        }
+        .signature .name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .signature .title {
+            color: #666;
+            font-size: 13px;
+        }
+        .footer {
+            background: #fdfdfd;
+            padding: 30px; 
+            text-align: center;
+            border-top: 1px solid #eee;
+            font-size: 12px;
+            color: #666666;
+        }
+        .footer a {
+            color: #C9A043;
+            text-decoration: none;
+        }
+        .icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            color: #C9A043;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 0 auto;
+                border-radius: 0;
+            }
+            .content {
+                padding: 24px 16px;
+            }
+            .cta-button {
+                display: block;
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <div class="container">
+            <!-- Header -->
+            <div class="header">
+                <div class="icon">💌</div>
+                <h1>Phản hồi về đánh giá của Quý khách</h1>
+                <p>Từ Khách sạn Robins Villa</p>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+                <!-- Greeting -->
+                <div class="greeting">
+                    Kính gửi <strong>{{CustomerName}}</strong>,
+                </div>
+
+                <!-- Apology Section -->
+                <div class="apology-section">
+                    <p>Trước hết, chúng tôi xin gửi lời <strong>xin lỗi chân thành nhất</strong> vì trải nghiệm của Quý khách tại Robins Villa chưa được như mong đợi.</p>
+                    <p>Chúng tôi hoàn toàn thấu hiểu sự bất tiện mà điều này đã gây ra trong kỳ lưu trú của Quý khách.</p>
+                </div>
+
+                <!-- Customer Review Content -->
+                <div class="review-content">
+                    <h3>📝 Nội dung đánh giá của Quý khách:</h3>
+                    <div class="stars">{{ReviewStars}}</div>
+                    <div class="title">{{ReviewTitle}}</div>
+                    <div class="text">"{{ReviewContent}}"</div>
+                </div>
+
+                <!-- Issue Acknowledgment -->
+                <div class="issue-section">
+                    <h3>📋 Vấn đề chúng tôi đã ghi nhận:</h3>
+                    <p>{{IssueDescription}}</p>
+                </div>
+
+                <!-- Action Taken -->
+                <div class="action-section">
+                    <h3>✅ Hành động khắc phục:</h3>
+                    <p>{{ActionTaken}}</p>
+                    <p style="margin-top: 10px; font-style: italic;">Chúng tôi cam kết sự cố tương tự sẽ không tái diễn.</p>
+                </div>
+
+                <!-- Booking Details -->
+                <div class="booking-details">
+                    <h3 style="font-size: 16px; margin-bottom: 15px; font-weight: 600; color: #333333;">Thông tin đặt phòng</h3>
+                    <div class="booking-row">
+                        <label>Mã đặt phòng:</label>
+                        <span>{{BookingId}}</span>
+                    </div>
+                    <div class="booking-row">
+                        <label>Phòng/Villa:</label>
+                        <span>{{RoomName}}</span>
+                    </div>
+                    <div class="booking-row">
+                        <label>Check-in:</label>
+                        <span>{{CheckInDate}}</span>
+                    </div>
+                    <div class="booking-row">
+                        <label>Check-out:</label>
+                        <span>{{CheckOutDate}}</span>
+                    </div>
+                </div>
+
+                <!-- Compensation Section
+                <div class="compensation-section">
+                    <h2>🎁 Ưu đãi bồi thường dành riêng cho Quý khách</h2>
+                    <p>Để bày tỏ sự trân trọng và mong muốn mang lại trải nghiệm tốt hơn cho Quý khách trong lần lưu trú tiếp theo:</p>
+                    <div class="compensation-list">
+                        <ul>
+                            {{CompensationList}}
+                        </ul>
+                    </div>
+                    <a href="{{BookingLink}}" class="cta-button" style="color: #f9f9f9;">
+                        Đặt phòng ngay →
+                    </a>
+                </div> -->
+
+                <!-- Contact Info -->
+                <div class="contact-info">
+                    <p><strong>📞 Liên hệ hỗ trợ:</strong></p>
+                    <p style="margin-top: 8px;">Nếu Quý khách cần thêm bất kỳ hỗ trợ nào, xin vui lòng liên hệ trực tiếp:</p>
+                    <p style="margin-top: 8px;">
+                        Hotline: <strong>{{HotelPhone}}</strong> | Email: <a href="mailto:{{HotelEmail}}" style="color: #C9A043;">{{HotelEmail}}</a>
+                    </p>
+                </div>
+
+                <!-- Signature -->
+                <div class="signature">
+                    <p>Một lần nữa, chúng tôi rất tiếc vì những bất tiện đã xảy ra, và chân thành cảm ơn Quý khách đã dành thời gian phản hồi để chúng tôi có cơ hội cải thiện dịch vụ.</p>
+                    <p style="margin-top: 16px;">Trân trọng,</p>
+                    <p class="name" style="margin-top: 8px;">{{SenderName}}</p>
+                    <p class="title">Quản lý Chăm sóc Khách hàng – Robins Villa</p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <p style="margin-bottom: 8px;">© {{CurrentYear}} Robins Villa | {{HotelAddress}}</p>
+                <p style="margin-bottom: 8px;">📞 {{HotelPhone}} | 📧 <a href="mailto:{{HotelEmail}}" style="color: #C9A043;">{{HotelEmail}}</a></p>
+                <p style="color: #999; margin-top: 12px;">
+                    <a href="#" style="color: #C9A043;">Hủy đăng ký</a> | <a href="#" style="color: #C9A043;">Chính sách bảo mật</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
