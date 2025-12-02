@@ -568,7 +568,7 @@ const BookingSection: React.FC = () => {
                     await handleDelete(selectedBooking.iddatPhong);
                     closeModal();
                   }}
-                  okText="Xóa ngay"
+                  okText="Xóa"
                   cancelText="Hủy"
                   okButtonProps={{ danger: true }}
                 >

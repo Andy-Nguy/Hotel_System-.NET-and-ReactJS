@@ -41,8 +41,6 @@ interface PromotionFormProps {
   onSuccess: () => void;
 }
 
-
-
 interface Service {
   iddichVu: string;
   tenDichVu: string;
@@ -51,7 +49,11 @@ interface Service {
 
 const ServiceAssignPanel: React.FC<{
   selectedIds: string[];
-  onToggle: (id: string, checked: boolean, service?: { id: string; name: string; price: number }) => void;
+  onToggle: (
+    id: string,
+    checked: boolean,
+    service?: { id: string; name: string; price: number }
+  ) => void;
 }> = ({ selectedIds, onToggle }) => {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(false);
@@ -98,16 +100,18 @@ const ServiceAssignPanel: React.FC<{
               <input
                 type="checkbox"
                 checked={selectedIds.includes(s.iddichVu)}
-                onChange={(e) => onToggle(s.iddichVu, e.target.checked, { 
-                  id: s.iddichVu, 
-                  name: s.tenDichVu, 
-                  price: s.gia || 0 
-                })}
+                onChange={(e) =>
+                  onToggle(s.iddichVu, e.target.checked, {
+                    id: s.iddichVu,
+                    name: s.tenDichVu,
+                    price: s.gia || 0,
+                  })
+                }
               />
               <span style={{ fontSize: 13 }}>Gán dịch vụ</span>
             </label>
-            <div style={{ marginLeft: 'auto', color: '#333', fontWeight: 600 }}>
-              {(s.gia || 0).toLocaleString('vi-VN')} ₫
+            <div style={{ marginLeft: "auto", color: "#333", fontWeight: 600 }}>
+              {(s.gia || 0).toLocaleString("vi-VN")} ₫
             </div>
           </div>
         </div>
@@ -135,7 +139,9 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
   const [bannerImage, setBannerImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   // State cho combo: lưu danh sách dịch vụ với giá để tính tổng
-  const [comboServices, setComboServices] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [comboServices, setComboServices] = useState<
+    { id: string; name: string; price: number }[]
+  >([]);
 
   // Load rooms from API - only once
   useEffect(() => {
@@ -146,12 +152,12 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
         setLoadingRooms(true);
         const response = await fetch(`${API_BASE}/Phong`);
         // const response = await fetch("/api/Phong", { signal: controller.signal });
-        if (!response.ok) throw new Error('Failed to fetch rooms');
+        if (!response.ok) throw new Error("Failed to fetch rooms");
         const data = await response.json();
         setRoomObjects(data);
         roomsLoadedRef.current = true;
       } catch (error: any) {
-        if (error.name !== 'AbortError') {
+        if (error.name !== "AbortError") {
           console.error("[PROMOTION_FORM] Error loading rooms:", error);
           message.error("Lỗi khi tải danh sách phòng");
         }
@@ -194,104 +200,136 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
         try {
           const full = await getPromotionById(promotion.idkhuyenMai);
           const promoType = (full as any).loaiKhuyenMai;
-          
-          if (promoType === 'service') {
+
+          if (promoType === "service") {
             // Loại 'service': ID dịch vụ được lưu vào selectedRooms
-            const svcIds = (full as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu || m.IddichVu) || [];
+            const svcIds =
+              (full as any).khuyenMaiDichVus?.map(
+                (m: any) => m.iddichVu || m.IddichVu
+              ) || [];
             setSelectedRooms(svcIds);
             setSelectedServiceIds([]);
             setComboServices([]);
-          } else if (promoType === 'combo') {
+          } else if (promoType === "combo") {
             // Loại 'combo': Load combo dịch vụ và giá từ khuyenMaiCombos
-            const selectedPhongIds = full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
+            const selectedPhongIds =
+              full.khuyenMaiPhongs?.map(
+                (kmp: any) => kmp.idphong || kmp.Idphong
+              ) || [];
             setSelectedRooms(selectedPhongIds);
-            
+
             // Extract service IDs and prices from combos
             const combos = (full as any).khuyenMaiCombos || [];
             const allComboItems: any[] = [];
             combos.forEach((c: any) => {
-              const items = c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || [];
+              const items =
+                c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || [];
               items.forEach((it: any) => {
-                if (!allComboItems.find(x => x.id === (it.iddichVu || it.IddichVu))) {
+                if (
+                  !allComboItems.find(
+                    (x) => x.id === (it.iddichVu || it.IddichVu)
+                  )
+                ) {
                   allComboItems.push({
-                    id: it.iddichVu || it.IddichVu || it.id || '',
-                    name: it.tenDichVu || it.TenDichVu || it.ten || '',
+                    id: it.iddichVu || it.IddichVu || it.id || "",
+                    name: it.tenDichVu || it.TenDichVu || it.ten || "",
                     price: it.gia || it.Gia || 0,
                   });
                 }
               });
             });
-            
+
             // If prices are missing, fetch from service API
-            const itemsWithoutPrice = allComboItems.filter(item => !item.price || item.price === 0);
+            const itemsWithoutPrice = allComboItems.filter(
+              (item) => !item.price || item.price === 0
+            );
             if (itemsWithoutPrice.length > 0) {
               try {
-                const res = await fetch('/api/dich-vu/lay-danh-sach');
+                const res = await fetch("/api/dich-vu/lay-danh-sach");
                 const allServices = await res.json();
-                itemsWithoutPrice.forEach(item => {
-                  const svc = allServices.find((s: any) => (s.iddichVu || s.IddichVu) === item.id);
+                itemsWithoutPrice.forEach((item) => {
+                  const svc = allServices.find(
+                    (s: any) => (s.iddichVu || s.IddichVu) === item.id
+                  );
                   if (svc) {
                     item.price = svc.tienDichVu || svc.TienDichVu || 0;
-                    if (!item.name) item.name = svc.tenDichVu || svc.TenDichVu || item.id;
+                    if (!item.name)
+                      item.name = svc.tenDichVu || svc.TenDichVu || item.id;
                   }
                 });
               } catch (err) {
-                console.error('Error fetching service prices', err);
+                console.error("Error fetching service prices", err);
               }
             }
-            
-            setSelectedServiceIds(allComboItems.map(x => x.id));
+
+            setSelectedServiceIds(allComboItems.map((x) => x.id));
             setComboServices(allComboItems);
           } 
           // Set banner image from canonical data
           setBannerImage(full.hinhAnhBanner || null);
         } catch (err) {
-          console.error('Error loading promotion details for edit', err);
+          console.error("Error loading promotion details for edit", err);
           // Fallback to whatever was passed in if fetch fails
           const promoType = (promotion as any).loaiKhuyenMai;
-          
-          if (promoType === 'service') {
-            const svcIds = (promotion as any).khuyenMaiDichVus?.map((m: any) => m.iddichVu || m.IddichVu) || [];
+
+          if (promoType === "service") {
+            const svcIds =
+              (promotion as any).khuyenMaiDichVus?.map(
+                (m: any) => m.iddichVu || m.IddichVu
+              ) || [];
             setSelectedRooms(svcIds);
             setSelectedServiceIds([]);
             setComboServices([]);
-          } else if (promoType === 'combo') {
-            const selectedPhongIds = promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
+          } else if (promoType === "combo") {
+            const selectedPhongIds =
+              promotion.khuyenMaiPhongs?.map(
+                (kmp: any) => kmp.idphong || kmp.Idphong
+              ) || [];
             const combos = (promotion as any).khuyenMaiCombos || [];
             const allComboItems: any[] = [];
             combos.forEach((c: any) => {
-              const items = c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || [];
+              const items =
+                c.khuyenMaiComboDichVus || c.KhuyenMaiComboDichVus || [];
               items.forEach((it: any) => {
-                if (!allComboItems.find(x => x.id === (it.iddichVu || it.IddichVu))) {
+                if (
+                  !allComboItems.find(
+                    (x) => x.id === (it.iddichVu || it.IddichVu)
+                  )
+                ) {
                   allComboItems.push({
-                    id: it.iddichVu || it.IddichVu || it.id || '',
-                    name: it.tenDichVu || it.TenDichVu || it.ten || '',
+                    id: it.iddichVu || it.IddichVu || it.id || "",
+                    name: it.tenDichVu || it.TenDichVu || it.ten || "",
                     price: it.gia || it.Gia || 0,
                   });
                 }
               });
             });
-            
+
             // If prices are missing, fetch from service API (fallback case)
-            const itemsWithoutPrice = allComboItems.filter(item => !item.price || item.price === 0);
+            const itemsWithoutPrice = allComboItems.filter(
+              (item) => !item.price || item.price === 0
+            );
             if (itemsWithoutPrice.length > 0) {
               try {
-                const res = await fetch('/api/dich-vu/lay-danh-sach');
+                const res = await fetch("/api/dich-vu/lay-danh-sach");
                 const allServices = await res.json();
-                itemsWithoutPrice.forEach(item => {
-                  const svc = allServices.find((s: any) => (s.iddichVu || s.IddichVu) === item.id);
+                itemsWithoutPrice.forEach((item) => {
+                  const svc = allServices.find(
+                    (s: any) => (s.iddichVu || s.IddichVu) === item.id
+                  );
                   if (svc) {
                     item.price = svc.tienDichVu || svc.TienDichVu || 0;
-                    if (!item.name) item.name = svc.tenDichVu || svc.TenDichVu || item.id;
+                    if (!item.name)
+                      item.name = svc.tenDichVu || svc.TenDichVu || item.id;
                   }
                 });
               } catch (err) {
-                console.error('Error fetching service prices (fallback)', err);
+                console.error("Error fetching service prices (fallback)", err);
               }
             }
-            
+
             setSelectedRooms(selectedPhongIds);
-            setSelectedServiceIds(allComboItems.map(x => x.id));
+            setSelectedServiceIds(allComboItems.map((x) => x.id));
             setComboServices(allComboItems);
           } 
           setBannerImage(promotion.hinhAnhBanner || null);
@@ -326,9 +364,9 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
       };
 
       const payload: any = { ...base };
-      const promoType = values.loaiKhuyenMai || 'room';
-      
-      if (promoType === 'service') {
+      const promoType = values.loaiKhuyenMai || "room";
+
+      if (promoType === "service") {
         // Loại 'service': selectedRooms đang chứa ID Dịch vụ
         payload.dichVuIds = selectedRooms; 
       } else if (promoType === 'combo') {
@@ -394,7 +432,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
   return (
     <Card
-      title={promotion ? "Chỉnh Sửa Khuyến Mãi" : "Tạo Khuyến Mãi Mới"}
+      title={promotion ? "Chỉnh sửa khuyến mãi" : "Tạo khuyến mãi mới"}
       extra={
         <Button onClick={onClose} disabled={loading}>
           Đóng
@@ -466,7 +504,12 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item noStyle shouldUpdate={(prev, cur) => prev.loaiKhuyenMai !== cur.loaiKhuyenMai}>
+              <Form.Item
+                noStyle
+                shouldUpdate={(prev, cur) =>
+                  prev.loaiKhuyenMai !== cur.loaiKhuyenMai
+                }
+              >
                 {({ getFieldValue }) => {
                   const loai = getFieldValue('loaiKhuyenMai');
                   let helpText = '';
@@ -478,15 +521,17 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                     helpText = '💡 Phòng: Giảm giá cho từng phòng riêng lẻ';
                   }
                   return helpText ? (
-                    <div style={{ 
-                      marginTop: -8,
-                      padding: '8px 12px', 
-                      background: '#f0f7ff', 
-                      border: '1px solid #d6e9ff', 
-                      borderRadius: 6,
-                      fontSize: 13,
-                      color: '#0066cc'
-                    }}>
+                    <div
+                      style={{
+                        marginTop: -8,
+                        padding: "8px 12px",
+                        background: "#f0f7ff",
+                        border: "1px solid #d6e9ff",
+                        borderRadius: 6,
+                        fontSize: 13,
+                        color: "#0066cc",
+                      }}
+                    >
                       {helpText}
                     </div>
                   ) : null;
@@ -619,9 +664,14 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
           {/* Assignment area: either rooms or services depending on promotion type */}
           <Form.Item label="Gán Áp Dụng">
             <div>
-              <Form.Item noStyle shouldUpdate={(prev, cur) => prev.loaiKhuyenMai !== cur.loaiKhuyenMai}>
+              <Form.Item
+                noStyle
+                shouldUpdate={(prev, cur) =>
+                  prev.loaiKhuyenMai !== cur.loaiKhuyenMai
+                }
+              >
                 {({ getFieldValue }) => {
-                  const promoType = getFieldValue('loaiKhuyenMai');
+                  const promoType = getFieldValue("loaiKhuyenMai");
                   return (
                     <div>
                       {promoType === 'service' ? (
@@ -629,7 +679,9 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                       ) : promoType === 'combo' ? (
                         <Button onClick={() => setAssignModalVisible(true)}>Gán Combo Dịch Vụ</Button>
                       ) : (
-                        <Button onClick={() => setAssignModalVisible(true)}>Gán Phòng</Button>
+                        <Button onClick={() => setAssignModalVisible(true)}>
+                          Gán Phòng
+                        </Button>
                       )}
                     </div>
                   );
@@ -638,27 +690,82 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
               {/* Assigned rooms list */}
               <div style={{ marginTop: 12 }}>
-                {selectedRooms.length === 0 && selectedServiceIds.length === 0 ? (
-                  <div style={{ color: '#888' }}>Chưa có mục nào được gán</div>
+                {selectedRooms.length === 0 &&
+                selectedServiceIds.length === 0 ? (
+                  <div style={{ color: "#888" }}>Chưa có mục nào được gán</div>
                 ) : (
                   <div>
-                    <Form.Item noStyle shouldUpdate={(prev, cur) => prev.loaiKhuyenMai !== cur.loaiKhuyenMai}>
+                    <Form.Item
+                      noStyle
+                      shouldUpdate={(prev, cur) =>
+                        prev.loaiKhuyenMai !== cur.loaiKhuyenMai
+                      }
+                    >
                       {({ getFieldValue }) => {
-                        const promoType = getFieldValue('loaiKhuyenMai');
-                        const isServiceType = promoType === 'service';
+                        const promoType = getFieldValue("loaiKhuyenMai");
+                        const isServiceType = promoType === "service";
 
                         return (
                           <>
                             {selectedRooms.length > 0 && (
                               <div style={{ marginBottom: 8 }}>
-                                <div style={{ fontWeight: 600, marginBottom: 4, color: '#666' }}>
-                                  {isServiceType ? 'Dịch vụ đã chọn:' : 'Phòng đã chọn:'}
+                                <div
+                                  style={{
+                                    fontWeight: 600,
+                                    marginBottom: 4,
+                                    color: "#666",
+                                  }}
+                                >
+                                  {isServiceType
+                                    ? "Dịch vụ đã chọn:"
+                                    : "Phòng đã chọn:"}
                                 </div>
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 8,
+                                    flexWrap: "wrap",
+                                    alignItems: "center",
+                                  }}
+                                >
                                   {selectedRooms.map((id) => (
-                                    <div key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: isServiceType ? '1px solid #1890ff' : '1px solid #e6e6e6', borderRadius: 20, background: isServiceType ? '#e6f7ff' : '#fff' }}>
-                                      <div style={{ fontWeight: 700, color: isServiceType ? '#1890ff' : '#000' }}>{id}</div>
-                                      <Button size="small" danger onClick={() => setSelectedRooms((s) => s.filter(x => x !== id))}>X</Button>
+                                    <div
+                                      key={id}
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        padding: "6px 10px",
+                                        border: isServiceType
+                                          ? "1px solid #1890ff"
+                                          : "1px solid #e6e6e6",
+                                        borderRadius: 20,
+                                        background: isServiceType
+                                          ? "#e6f7ff"
+                                          : "#fff",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          fontWeight: 700,
+                                          color: isServiceType
+                                            ? "#1890ff"
+                                            : "#000",
+                                        }}
+                                      >
+                                        {id}
+                                      </div>
+                                      <Button
+                                        size="small"
+                                        danger
+                                        onClick={() =>
+                                          setSelectedRooms((s) =>
+                                            s.filter((x) => x !== id)
+                                          )
+                                        }
+                                      >
+                                        X
+                                      </Button>
                                     </div>
                                   ))}
                                 </div>
@@ -683,31 +790,10 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                                             </span>
                                           )}
                                         </div>
-                                        <Button size="small" danger onClick={() => {
-                                          setSelectedServiceIds((s) => s.filter(x => x !== id));
-                                          setComboServices((prev) => prev.filter(x => x.id !== id));
-                                        }}>X</Button>
                                       </div>
-                                    );
-                                  })}
+                                    )}
                                 </div>
-                                {promoType === 'combo' && comboServices.length > 0 && (
-                                  <div style={{ marginTop: 12, padding: 12, background: '#f0f7ff', borderRadius: 8, fontSize: 14 }}>
-                                    <div style={{ fontWeight: 700, color: '#0066cc' }}>
-                                      {(() => {
-                                        const total = comboServices.reduce((sum, s) => sum + s.price, 0);
-                                        const discount = form.getFieldValue('giaTriGiam') || 0;
-                                        const type = form.getFieldValue('loaiGiamGia');
-                                        const final = type === 'percent'
-                                          ? total * (1 - discount / 100)
-                                          : total - discount;
-                                        return `💰 Tổng tiền combo: ${Math.max(0, Math.round(final)).toLocaleString('vi-VN')} ₫`;
-                                      })()}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                              )}
                           </>
                         );
                       }}
@@ -718,7 +804,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
               <Modal
                 title={
-                  form.getFieldValue('loaiKhuyenMai') === 'service'
+                  form.getFieldValue("loaiKhuyenMai") === "service"
                     ? "Gán Dịch Vụ cho Khuyến Mãi"
                     : form.getFieldValue('loaiKhuyenMai') === 'combo'
                     ? "Gán Phòng & Dịch Vụ cho Combo/Gói"
@@ -729,7 +815,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                 footer={null}
                 width={900}
               >
-                {form.getFieldValue('loaiKhuyenMai') === 'service' ? (
+                {form.getFieldValue("loaiKhuyenMai") === "service" ? (
                   // Gán Dịch vụ cho selectedRooms
                   <ServiceAssignPanel
                     selectedIds={selectedRooms}
@@ -741,55 +827,119 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                       else setSelectedRooms((s) => s.filter((x) => x !== id));
                     }}
                   />
-                ) : form.getFieldValue('loaiKhuyenMai') === 'combo' ? (
+                ) : form.getFieldValue("loaiKhuyenMai") === "combo" ? (
                   // Combo Dịch Vụ: Chỉ chọn 2-3 dịch vụ, tính tổng tiền
                   <div>
-                    <h3 style={{ marginBottom: 12 }}>Chọn Dịch Vụ cho Combo (2-3 dịch vụ)</h3>
+                    <h3 style={{ marginBottom: 12 }}>
+                      Chọn Dịch Vụ cho Combo (2-3 dịch vụ)
+                    </h3>
                     <ServiceAssignPanel
                       selectedIds={selectedServiceIds}
                       onToggle={(id: string, checked: boolean, service) => {
                         if (checked && service) {
-                          setSelectedServiceIds((s) => (s.includes(id) ? s : [...s, id]));
-                          setComboServices((prev) => [...prev.filter(x => x.id !== id), service]);
+                          setSelectedServiceIds((s) =>
+                            s.includes(id) ? s : [...s, id]
+                          );
+                          setComboServices((prev) => [
+                            ...prev.filter((x) => x.id !== id),
+                            service,
+                          ]);
                         } else {
-                          setSelectedServiceIds((s) => s.filter(x => x !== id));
-                          setComboServices((prev) => prev.filter(x => x.id !== id));
+                          setSelectedServiceIds((s) =>
+                            s.filter((x) => x !== id)
+                          );
+                          setComboServices((prev) =>
+                            prev.filter((x) => x.id !== id)
+                          );
                         }
                       }}
                     />
                     {selectedServiceIds.length > 0 && (
-                      <div style={{ marginTop: 16, padding: 16, background: '#f0f7ff', borderRadius: 8, border: '1px solid #d6e9ff' }}>
-                        <h4 style={{ margin: '0 0 12px 0', color: '#0066cc' }}>🎁 Thông tin Combo</h4>
+                      <div
+                        style={{
+                          marginTop: 16,
+                          padding: 16,
+                          background: "#f0f7ff",
+                          borderRadius: 8,
+                          border: "1px solid #d6e9ff",
+                        }}
+                      >
+                        <h4 style={{ margin: "0 0 12px 0", color: "#0066cc" }}>
+                          🎁 Thông tin Combo
+                        </h4>
                         <div style={{ marginBottom: 8 }}>
                           <strong>Các dịch vụ đã chọn:</strong>
-                          {comboServices.map(s => (
-                            <div key={s.id} style={{ marginLeft: 16, fontSize: 14 }}>
-                              • {s.name}: <span style={{ fontWeight: 600 }}>{s.price.toLocaleString('vi-VN')} ₫</span>
+                          {comboServices.map((s) => (
+                            <div
+                              key={s.id}
+                              style={{ marginLeft: 16, fontSize: 14 }}
+                            >
+                              • {s.name}:{" "}
+                              <span style={{ fontWeight: 600 }}>
+                                {s.price.toLocaleString("vi-VN")} ₫
+                              </span>
                             </div>
                           ))}
                         </div>
-                        <div style={{ fontSize: 15, fontWeight: 700, marginTop: 12, paddingTop: 12, borderTop: '1px solid #b3d9ff' }}>
-                          Tổng tiền combo: <span style={{ color: '#333' }}>{comboServices.reduce((sum, s) => sum + s.price, 0).toLocaleString('vi-VN')} ₫</span>
+                        <div
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            marginTop: 12,
+                            paddingTop: 12,
+                            borderTop: "1px solid #b3d9ff",
+                          }}
+                        >
+                          Tổng tiền combo:{" "}
+                          <span style={{ color: "#333" }}>
+                            {comboServices
+                              .reduce((sum, s) => sum + s.price, 0)
+                              .toLocaleString("vi-VN")}{" "}
+                            ₫
+                          </span>
                         </div>
-                        {form.getFieldValue('loaiGiamGia') && form.getFieldValue('giaTriGiam') && (
-                          <div style={{ fontSize: 16, fontWeight: 700, color: '#d9534f', marginTop: 8 }}>
-                            Giá sau giảm: {(() => {
-                              const total = comboServices.reduce((sum, s) => sum + s.price, 0);
-                              const discount = form.getFieldValue('giaTriGiam') || 0;
-                              const type = form.getFieldValue('loaiGiamGia');
-                              const final = type === 'percent' 
-                                ? total * (1 - discount / 100) 
-                                : total - discount;
-                              return Math.max(0, final).toLocaleString('vi-VN');
-                            })()} ₫
-                          </div>
-                        )}
+                        {form.getFieldValue("loaiGiamGia") &&
+                          form.getFieldValue("giaTriGiam") && (
+                            <div
+                              style={{
+                                fontSize: 16,
+                                fontWeight: 700,
+                                color: "#d9534f",
+                                marginTop: 8,
+                              }}
+                            >
+                              Giá sau giảm:{" "}
+                              {(() => {
+                                const total = comboServices.reduce(
+                                  (sum, s) => sum + s.price,
+                                  0
+                                );
+                                const discount =
+                                  form.getFieldValue("giaTriGiam") || 0;
+                                const type = form.getFieldValue("loaiGiamGia");
+                                const final =
+                                  type === "percent"
+                                    ? total * (1 - discount / 100)
+                                    : total - discount;
+                                return Math.max(0, final).toLocaleString(
+                                  "vi-VN"
+                                );
+                              })()}{" "}
+                              ₫
+                            </div>
+                          )}
                       </div>
                     )}
                   </div>
                 ) : (
                   // Gán Phòng cho selectedRooms
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4,1fr)",
+                      gap: 12,
+                    }}
+                  >
                     {roomObjects.map((r) => (
                       <div
                         key={r.idphong}
@@ -869,7 +1019,7 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
           <Space>
             <Button type="primary" htmlType="submit" loading={loading}>
-              {promotion ? "Cập Nhật" : "Tạo"}
+              {promotion ? "Cập nhật" : "Tạo mới"}
             </Button>
             <Button onClick={onClose} disabled={loading}>
               Hủy

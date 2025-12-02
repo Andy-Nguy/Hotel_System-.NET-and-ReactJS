@@ -30,6 +30,7 @@ import ReviewManager from "../admin/pages/ReviewManager";
 import BlogManager from "../admin/pages/BlogManager";
 import BlogCreate from "../admin/components/BlogCreate";
 import BlogEdit from "../admin/components/BlogEdit";
+import QuanLyNhanVienManager from "../admin/pages/QuanLyNhanVienManager";
 
 import NoAccessPage from "./NoAccessPage";
 import BookingSuccessPage from "./BookingSuccessPage";
@@ -41,24 +42,20 @@ import BlogDetail from "./BlogDetail";
 import ReviewPage from "./ReviewPage";
 
 import AdminLayout from "../admin/components/AdminLayout";
+import {
+  getUserInfo,
+  checkIsNhanVien,
+  checkIsAdmin,
+} from "../context/UserContext";
 
 const MainPage: React.FC = () => {
-  // Try to read cached userInfo from localStorage first for instant access
+  // Sử dụng hàm getUserInfo thống nhất
   const getInitialUserInfo = () => {
-    try {
-      const cached = localStorage.getItem("hs_userInfo");
-      if (cached) {
-        return JSON.parse(cached);
-      }
-    } catch (e) {
-      console.warn("[MainPage] Could not parse cached userInfo:", e);
-    }
-    return null;
+    return getUserInfo();
   };
 
   const [cachedUserInfo, setCachedUserInfo] =
     React.useState<any>(getInitialUserInfo);
-  // If we have cached userInfo, we don't need to show loading
   const [authLoading, setAuthLoading] = React.useState(!getInitialUserInfo());
 
   // Fetch user info on mount (to refresh/validate)
@@ -72,78 +69,42 @@ const MainPage: React.FC = () => {
         return;
       }
 
-      // If we already have cached userInfo from localStorage, don't show loading
-      const existingCached = localStorage.getItem("hs_userInfo");
-      if (existingCached) {
-        try {
-          const parsed = JSON.parse(existingCached);
-          setCachedUserInfo(parsed);
-          setAuthLoading(false);
-          console.log(
-            "[MainPage] Using cached userInfo from localStorage:",
-            parsed
-          );
-        } catch (e) {
-          // Will fetch fresh below
-        }
+      // Sử dụng hàm getUserInfo thống nhất
+      const info = getUserInfo();
+      if (info && typeof info.role === "number") {
+        console.log("[MainPage] Using getUserInfo:", info);
+        setCachedUserInfo(info);
+        setAuthLoading(false);
+        return;
       }
 
-      // Check if JWT (3 parts) or GUID
-      const parts = token.split(".");
-      if (parts.length === 3) {
-        // JWT - decode
-        try {
-          const base64Payload = parts[1];
-          const decodedPayload = decodeURIComponent(
-            atob(base64Payload)
-              .split("")
-              .map(function (c) {
-                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-              })
-              .join("")
-          );
-          const payload = JSON.parse(decodedPayload);
-          console.log("[MainPage] JWT payload:", payload);
-          setCachedUserInfo(payload);
-          localStorage.setItem("hs_userInfo", JSON.stringify(payload));
-        } catch (e) {
-          console.error("[MainPage] JWT decode error:", e);
-          if (!existingCached) {
-            setCachedUserInfo(null);
-            localStorage.removeItem("hs_userInfo");
-          }
+      // Fallback: gọi API profile
+      try {
+        const API_BASE = `${
+          (await import("../api/config")).API_CONFIG.CURRENT
+        }/api`;
+        const res = await fetch(`${API_BASE}/Auth/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const profile = await res.json();
+          console.log("[MainPage] Profile from API:", profile);
+          const userInfo = {
+            name: profile.hoTen || profile.HoTen || profile.name,
+            role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
+            email: profile.email || profile.Email,
+          };
+          setCachedUserInfo(userInfo);
+          localStorage.setItem("hs_userInfo", JSON.stringify(userInfo));
+        } else {
+          // Fallback to JWT
+          const fallbackInfo = getUserInfo();
+          setCachedUserInfo(fallbackInfo);
         }
-      } else {
-        // GUID token - fetch profile from API (but only if we don't have cached data)
-        if (!existingCached) {
-          try {
-            const API_BASE = `${
-              (await import("../api/config")).API_CONFIG.CURRENT
-            }/api`;
-            const res = await fetch(`${API_BASE}/Auth/profile`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.ok) {
-              const profile = await res.json();
-              console.log("[MainPage] Profile from API:", profile);
-              const userInfo = {
-                name: profile.hoTen || profile.HoTen || profile.name,
-                role: profile.vaiTro ?? profile.VaiTro ?? profile.role,
-                email: profile.email || profile.Email,
-              };
-              setCachedUserInfo(userInfo);
-              localStorage.setItem("hs_userInfo", JSON.stringify(userInfo));
-            } else {
-              console.warn("[MainPage] Profile fetch failed:", res.status);
-              setCachedUserInfo(null);
-              localStorage.removeItem("hs_userInfo");
-            }
-          } catch (e) {
-            console.error("[MainPage] Profile fetch error:", e);
-            setCachedUserInfo(null);
-            localStorage.removeItem("hs_userInfo");
-          }
-        }
+      } catch (e) {
+        console.error("[MainPage] Profile fetch error:", e);
+        const fallbackInfo = getUserInfo();
+        setCachedUserInfo(fallbackInfo);
       }
       setAuthLoading(false);
     };
@@ -151,47 +112,37 @@ const MainPage: React.FC = () => {
     fetchUserInfo();
   }, []);
 
-  const parseJwt = (): any | null => {
-    return cachedUserInfo;
+  // Listen for auth changes
+  React.useEffect(() => {
+    const handleAuthChange = () => {
+      const info = getUserInfo();
+      console.log("[MainPage] Auth change, getUserInfo:", info);
+      setCachedUserInfo(info);
+    };
+
+    window.addEventListener("storage", handleAuthChange);
+    window.addEventListener("popstate", handleAuthChange);
+    window.addEventListener("hashchange", handleAuthChange);
+
+    return () => {
+      window.removeEventListener("storage", handleAuthChange);
+      window.removeEventListener("popstate", handleAuthChange);
+      window.removeEventListener("hashchange", handleAuthChange);
+    };
+  }, []);
+
+  // Helper functions sử dụng hàm thống nhất
+  const isNhanVien = () => {
+    return checkIsNhanVien(cachedUserInfo);
   };
 
-  const isNhanVien = (): boolean => {
-    // Always read fresh from localStorage to avoid stale state issues
-    let payload = cachedUserInfo;
-    try {
-      const freshCached = localStorage.getItem("hs_userInfo");
-      if (freshCached) {
-        payload = JSON.parse(freshCached);
-      }
-    } catch (e) {
-      // Use state as fallback
-    }
-    console.log("[isNhanVien] payload:", payload);
-    if (!payload) return false;
-    // Use nullish coalescing (??) to handle role = 0 correctly (0 is falsy but valid)
-    const role =
-      payload.role ??
-      payload.roles ??
-      payload.Role ??
-      payload.Roles ??
-      payload.vaiTro ??
-      payload.VaiTro ??
-      payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ??
-      payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role"];
-    console.log("[isNhanVien] Extracted role:", role, typeof role);
-    if (role === undefined || role === null) return false;
-    // Handle numeric role (1 = nhanvien)
-    if (typeof role === "number") return role === 1;
-    const roleStr = Array.isArray(role) ? String(role[0]) : String(role);
-    const normalizedRole = roleStr.toLowerCase().trim();
-    // Accept various role values for staff/admin
-    return (
-      normalizedRole === "nhanvien" ||
-      normalizedRole === "admin" ||
-      normalizedRole === "staff" ||
-      normalizedRole === "1" ||
-      normalizedRole === "2"
-    );
+  const isAdmin = () => {
+    return checkIsAdmin(cachedUserInfo);
+  };
+
+  // Legacy helper
+  const parseJwt = (): any | null => {
+    return cachedUserInfo;
   };
 
   // Helper to check admin access - returns true if should show loading
@@ -233,40 +184,29 @@ const MainPage: React.FC = () => {
 
   const [route, setRoute] = React.useState<string>(resolveRoute);
 
-  // Function to refresh userInfo from localStorage
+  // Function to refresh userInfo from localStorage using getUserInfo
   const refreshUserInfoFromStorage = () => {
-    try {
-      const cached = localStorage.getItem("hs_userInfo");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        console.log(
-          "[MainPage] Refreshing userInfo from localStorage:",
-          parsed
-        );
-        setCachedUserInfo(parsed);
+    const info = getUserInfo();
+    console.log("[MainPage] Refreshing userInfo:", info);
+    if (info) {
+      setCachedUserInfo(info);
+      setAuthLoading(false);
+    } else {
+      const token = localStorage.getItem("hs_token");
+      if (!token) {
+        setCachedUserInfo(null);
         setAuthLoading(false);
-      } else {
-        // No cached userInfo but has token - might need to fetch
-        const token = localStorage.getItem("hs_token");
-        if (!token) {
-          setCachedUserInfo(null);
-          setAuthLoading(false);
-        }
       }
-    } catch (e) {
-      console.warn("[MainPage] Could not refresh userInfo:", e);
     }
   };
 
   React.useEffect(() => {
     const onLocationChange = () => {
       setRoute(resolveRoute());
-      // Also refresh userInfo when route changes (e.g., after login navigates here)
       refreshUserInfoFromStorage();
     };
     window.addEventListener("hashchange", onLocationChange);
     window.addEventListener("popstate", onLocationChange);
-    // Also listen for storage changes (other tabs or same tab updates)
     window.addEventListener("storage", refreshUserInfoFromStorage);
     return () => {
       window.removeEventListener("hashchange", onLocationChange);
@@ -429,6 +369,17 @@ const MainPage: React.FC = () => {
         <OffcanvasMenu />
         <HeaderSection />
         <RegisterPage />
+        <FooterSection />
+      </>
+    );
+  }
+
+  if (route === "#forgot-password" || route === "/forgot-password") {
+    return (
+      <>
+        <OffcanvasMenu />
+        <HeaderSection />
+        <LoginPage />
         <FooterSection />
       </>
     );
@@ -818,6 +769,43 @@ const MainPage: React.FC = () => {
       return null;
     }
     return <BlogEdit />;
+  }
+
+  // Quản lý nhân viên - chỉ dành cho Admin (role = 2)
+  if (
+    route === "#admin/nhanvien" ||
+    route === "/admin/nhanvien" ||
+    route === "#/admin/nhanvien"
+  ) {
+    // Kiểm tra quyền admin
+    const checkAdmin = () => {
+      try {
+        const userInfo = localStorage.getItem("hs_userInfo");
+        if (userInfo) {
+          const parsed = JSON.parse(userInfo);
+          const role = parsed.role ?? parsed.vaiTro;
+          // Check cả number và string
+          if (typeof role === "number") return role === 2;
+          if (typeof role === "string") {
+            const roleStr = role.toLowerCase().trim();
+            return roleStr === "admin" || roleStr === "2";
+          }
+        }
+      } catch (e) {
+        console.error("[MainPage] Error checking admin:", e);
+      }
+      return false;
+    };
+
+    if (!checkAdmin()) {
+      redirectToNoAccess();
+      return null;
+    }
+    return (
+      <AdminLayout>
+        <QuanLyNhanVienManager />
+      </AdminLayout>
+    );
   }
 
   // No-access page

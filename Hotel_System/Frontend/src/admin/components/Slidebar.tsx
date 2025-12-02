@@ -1,4 +1,35 @@
-import React, { useEffect, useState } from "react";
+// Slidebar improvements:
+// - Scroll container with smooth scroll and custom thin scrollbar
+// - Top/bottom shadow gradients to indicate more content
+// - Auto-scroll active menu into view when route changes
+// - Keyboard navigation (Enter/Space to activate, ArrowUp/ArrowDown to focus items)
+// - Accessibility improvements: aria-label and aria-current for active item
+import React, { useEffect, useState, useRef } from "react";
+import "./Slidebar.css";
+import { getUserInfo } from "../../context/UserContext";
+
+// Helper to get user role from localStorage using getUserInfo
+const getUserRole = (): number | null => {
+  try {
+    const info = getUserInfo();
+    if (info) {
+      const role = info.role ?? info.vaiTro ?? null;
+      console.log("[Slidebar] getUserRole:", role, typeof role);
+      // Ensure it's a number
+      if (typeof role === "number") return role;
+      if (typeof role === "string") {
+        const num = parseInt(role, 10);
+        if (!isNaN(num)) return num;
+        // Handle string roles
+        if (role.toLowerCase() === "admin") return 2;
+        if (role.toLowerCase() === "nhanvien") return 1;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not get userRole:", e);
+  }
+  return null;
+};
 
 const MenuItem: React.FC<{
   icon?: React.ReactNode;
@@ -104,7 +135,36 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
   };
 
   return (
-    <div onClick={handleClick} style={active ? activeStyle : baseStyle}>
+    <div
+      onClick={handleClick}
+      style={active ? activeStyle : baseStyle}
+      tabIndex={0}
+      role="button"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick();
+        }
+        // Support arrow key navigation within the sidebar
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          const next =
+            (e.currentTarget.nextElementSibling as HTMLElement) || null;
+          if (next) next.focus();
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          const prev =
+            (e.currentTarget.previousElementSibling as HTMLElement) || null;
+          if (prev) prev.focus();
+        }
+      }}
+      data-route={routeFragment}
+      data-active={active}
+      aria-current={active ? "page" : undefined}
+      aria-label={label}
+      className={active ? "nav-item nav-item-active" : "nav-item"}
+    >
       <div
         style={{
           width: 36,
@@ -113,7 +173,7 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
           background: active ? "#e6f0ff" : "transparent",
           display: "flex",
           alignItems: "center",
-justifyContent: "center",
+          justifyContent: "center",
         }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -129,21 +189,107 @@ justifyContent: "center",
 };
 
 const Slidebar: React.FC = () => {
+  const [userRole, setUserRole] = useState<number | null>(getUserRole());
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [showTopShadow, setShowTopShadow] = useState(false);
+  const [showBottomShadow, setShowBottomShadow] = useState(false);
+
+  // Listen for storage changes and route changes (in case user logs in/out)
+  useEffect(() => {
+    const handleChange = () => {
+      const newRole = getUserRole();
+      console.log("[Slidebar] Role changed:", newRole);
+      setUserRole(newRole);
+    };
+
+    // Check on mount
+    handleChange();
+
+    // Listen for various events
+    window.addEventListener("storage", handleChange);
+    window.addEventListener("popstate", handleChange);
+    window.addEventListener("hashchange", handleChange);
+
+    // Also set an interval to check periodically (in case localStorage is updated without event)
+    const interval = setInterval(handleChange, 3000); // Reduced frequency
+
+    return () => {
+      window.removeEventListener("storage", handleChange);
+      window.removeEventListener("popstate", handleChange);
+      window.removeEventListener("hashchange", handleChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const isAdmin = userRole === 2;
+
+  // Log isAdmin every render
+  useEffect(() => {
+    console.log(
+      "[Slidebar] RENDER - isAdmin:",
+      isAdmin,
+      "userRole:",
+      userRole,
+      "type:",
+      typeof userRole
+    );
+  }, [isAdmin, userRole]);
+
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+
+    const checkShadow = () => {
+      const { scrollTop, clientHeight, scrollHeight } = scroller;
+      setShowTopShadow(scrollTop > 2);
+      setShowBottomShadow(scrollTop + clientHeight < scrollHeight - 2);
+    };
+
+    checkShadow();
+    scroller.addEventListener("scroll", checkShadow, { passive: true });
+    window.addEventListener("resize", checkShadow);
+    return () => {
+      scroller.removeEventListener("scroll", checkShadow);
+      window.removeEventListener("resize", checkShadow);
+    };
+  }, [scrollRef]);
+
+  // Scroll to active item when route changes (popstate/hashchange)
+  useEffect(() => {
+    const onRouteChange = () => {
+      const scroller = scrollRef.current;
+      if (!scroller) return;
+      const activeEl = scroller.querySelector(
+        '[data-active="true"]'
+      ) as HTMLElement | null;
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    };
+    window.addEventListener("popstate", onRouteChange);
+    window.addEventListener("hashchange", onRouteChange);
+    return () => {
+      window.removeEventListener("popstate", onRouteChange);
+      window.removeEventListener("hashchange", onRouteChange);
+    };
+  }, []);
+
+  // Scroll active item into view when route or role changes
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const activeEl = scroller.querySelector(
+      '[data-active="true"]'
+    ) as HTMLElement | null;
+    if (activeEl) {
+      // Smooth scroll but keep the item within the viewport of the scroller
+      activeEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [userRole]);
+
   return (
-    <aside
-      style={{
-        width: 280,
-        padding: 20,
-        background: "#fff",
-        borderRight: "1px solid rgba(15,23,42,0.04)",
-        height: "100vh",
-        boxSizing: "border-box",
-        position: "fixed",
-        left: 0,
-        top: 0,
-      }}
-    >
-      <div style={{ marginBottom: 12 }}>
+    <aside className="slidebar-aside">
+      <div className="slidebar-header">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div
             style={{
@@ -167,9 +313,21 @@ const Slidebar: React.FC = () => {
         </div>
       </div>
 
-      <nav style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {/* determine active state from current location (pathname or hash) */}
-        {/* local state to trigger re-render when route changes */}
+      <div
+        ref={scrollRef}
+        className="slidebar-scroll"
+        tabIndex={0}
+        role="navigation"
+        aria-label="Admin navigation"
+      >
+        {/* Chỉ hiển thị menu Quản lý nhân viên khi role = 2 (Admin) - ĐẶT LÊN ĐẦU */}
+        {isAdmin && (
+          <NavItem
+            key="nhanvien"
+            routeFragment="admin/nhanvien"
+            label="Quản lý Nhân viên"
+          />
+        )}
 
         {/* Dashboard link */}
         <NavItem
@@ -240,14 +398,21 @@ const Slidebar: React.FC = () => {
           label="Quản lý đánh giá"
         />
 
-        <NavItem
-          key="blog"
-          routeFragment="admin/blog"
-          label="Quản lý Blog"
-        />
+        <NavItem key="blog" routeFragment="admin/blog" label="Quản lý Blog" />
+      </div>
 
-      </nav>
-      
+      <div
+        className={`slidebar-shadow-top ${
+          showTopShadow ? "slidebar-shadow-visible" : ""
+        }`}
+        aria-hidden="true"
+      />
+      <div
+        className={`slidebar-shadow-bottom ${
+          showBottomShadow ? "slidebar-shadow-visible" : ""
+        }`}
+        aria-hidden="true"
+      />
     </aside>
   );
 };

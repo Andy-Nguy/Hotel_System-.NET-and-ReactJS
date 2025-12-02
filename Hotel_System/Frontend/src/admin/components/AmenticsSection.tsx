@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import {
   getAmenities,
   createAmenity,
   updateAmenity,
   deleteAmenity,
-  type Amenity
-} from '../../api/amenticsApi';
+  type Amenity,
+} from "../../api/amenticsApi";
 
 interface ModalProps {
   visible: boolean;
@@ -17,7 +17,15 @@ interface ModalProps {
   error?: string;
 }
 
-const AmenityFormModal = ({ visible, onClose, onSave, title, initialValue = '', loading = false, error = '' }: ModalProps) => {
+const AmenityFormModal = ({
+  visible,
+  onClose,
+  onSave,
+  title,
+  initialValue = "",
+  loading = false,
+  error = "",
+}: ModalProps) => {
   const [name, setName] = useState(initialValue);
 
   useEffect(() => {
@@ -26,12 +34,12 @@ const AmenityFormModal = ({ visible, onClose, onSave, title, initialValue = '', 
 
   const handleSave = async () => {
     if (!name.trim()) {
-      alert('Vui lòng nhập tên tiện nghi');
+      alert("Vui lòng nhập tên tiện nghi");
       return;
     }
     try {
       await onSave(name);
-      setName('');
+      setName("");
       onClose();
     } catch (err) {
       // Error will be shown via error prop
@@ -87,7 +95,7 @@ const AmenityFormModal = ({ visible, onClose, onSave, title, initialValue = '', 
             onClick={handleSave}
             disabled={loading || !name.trim()}
           >
-            {loading ? 'Đang lưu...' : 'Lưu'}
+            {loading ? "Đang lưu..." : "Lưu"}
           </button>
         </div>
       </div>
@@ -98,9 +106,9 @@ const AmenityFormModal = ({ visible, onClose, onSave, title, initialValue = '', 
 export const AmenticsSection = () => {
   const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [filteredAmenities, setFilteredAmenities] = useState<Amenity[]>([]);
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -108,10 +116,13 @@ export const AmenticsSection = () => {
   const [editingAmenity, setEditingAmenity] = useState<Amenity | null>(null);
   // Inline edit states
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingNameLocal, setEditingNameLocal] = useState<string>('');
+  const [editingNameLocal, setEditingNameLocal] = useState<string>("");
   const debounceTimers = useRef<Record<string, number>>({});
-  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
-  const [modalError, setModalError] = useState('');
+  const [toast, setToast] = useState<{
+    message: string;
+    type?: "success" | "error";
+  } | null>(null);
+  const [modalError, setModalError] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
 
   // Load amenities on mount
@@ -123,7 +134,7 @@ export const AmenticsSection = () => {
   useEffect(() => {
     if (searchText.trim()) {
       setFilteredAmenities(
-        amenities.filter(a =>
+        amenities.filter((a) =>
           a.tenTienNghi.toLowerCase().includes(searchText.toLowerCase())
         )
       );
@@ -134,12 +145,12 @@ export const AmenticsSection = () => {
 
   const loadAmenities = async () => {
     setLoading(true);
-    setError('');
+    setError("");
     try {
       const data = await getAmenities();
       setAmenities(data);
     } catch (err: any) {
-      setError(err.message || 'Không thể tải danh sách tiện nghi');
+      setError(err.message || "Không thể tải danh sách tiện nghi");
     } finally {
       setLoading(false);
     }
@@ -147,12 +158,12 @@ export const AmenticsSection = () => {
 
   const handleAddAmenity = async (name: string) => {
     setModalLoading(true);
-    setModalError('');
+    setModalError("");
     try {
       await createAmenity(name);
       await loadAmenities();
     } catch (err: any) {
-      setModalError(err.message || 'Lỗi khi thêm tiện nghi');
+      setModalError(err.message || "Lỗi khi thêm tiện nghi");
       throw err;
     } finally {
       setModalLoading(false);
@@ -162,12 +173,12 @@ export const AmenticsSection = () => {
   const handleEditAmenity = async (name: string) => {
     if (!editingAmenity) return;
     setModalLoading(true);
-    setModalError('');
+    setModalError("");
     try {
       await updateAmenity(editingAmenity.idtienNghi, name);
       await loadAmenities();
     } catch (err: any) {
-      setModalError(err.message || 'Lỗi khi cập nhật tiện nghi');
+      setModalError(err.message || "Lỗi khi cập nhật tiện nghi");
       throw err;
     } finally {
       setModalLoading(false);
@@ -175,15 +186,15 @@ export const AmenticsSection = () => {
   };
 
   const handleDeleteAmenity = async (id: string) => {
-    if (!window.confirm('Bạn chắc chắn muốn xóa tiện nghi này?')) return;
+    if (!window.confirm("Bạn chắc chắn muốn xóa tiện nghi này?")) return;
 
     setLoading(true);
-    setError('');
+    setError("");
     try {
       await deleteAmenity(id);
       await loadAmenities();
     } catch (err: any) {
-      setError(err.message || 'Lỗi khi xóa tiện nghi');
+      setError(err.message || "Lỗi khi xóa tiện nghi");
     } finally {
       setLoading(false);
     }
@@ -194,10 +205,13 @@ export const AmenticsSection = () => {
     setEditingAmenity(amenity);
     setEditingId(amenity.idtienNghi);
     setEditingNameLocal(amenity.tenTienNghi);
-    setModalError('');
+    setModalError("");
   };
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (
+    message: string,
+    type: "success" | "error" = "success"
+  ) => {
     setToast({ message, type });
     window.clearTimeout((showToast as any)._timer);
     (showToast as any)._timer = window.setTimeout(() => setToast(null), 3000);
@@ -206,16 +220,19 @@ export const AmenticsSection = () => {
   const handleInlineNameChange = (id: string, value: string) => {
     setEditingNameLocal(value);
     // optimistic UI update
-    setAmenities(prev => prev.map(a => a.idtienNghi === id ? { ...a, tenTienNghi: value } : a));
+    setAmenities((prev) =>
+      prev.map((a) => (a.idtienNghi === id ? { ...a, tenTienNghi: value } : a))
+    );
 
     // debounce update
-    if (debounceTimers.current[id]) window.clearTimeout(debounceTimers.current[id]);
+    if (debounceTimers.current[id])
+      window.clearTimeout(debounceTimers.current[id]);
     debounceTimers.current[id] = window.setTimeout(async () => {
       try {
         await updateAmenity(id, value);
-        showToast('Cập nhật tiện nghi thành công', 'success');
+        showToast("Cập nhật tiện nghi thành công", "success");
       } catch (err: any) {
-        showToast(err?.message || 'Lỗi khi cập nhật', 'error');
+        showToast(err?.message || "Lỗi khi cập nhật", "error");
         // revert name by reloading list
         await loadAmenities();
       }
@@ -225,7 +242,7 @@ export const AmenticsSection = () => {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <h1 style={styles.title}>Quản lý Tiện nghi</h1>
           <div style={styles.countBadge}>{amenities.length}</div>
         </div>
@@ -234,13 +251,19 @@ export const AmenticsSection = () => {
           <div style={styles.searchWrapper}>
             <input
               type="text"
-              placeholder="Tìm tiện nghi, ví dụ: Wi-Fi"
+              placeholder="Tìm kiếm tiện nghi, ví dụ: Wi-Fi"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               style={styles.searchInput}
             />
             {searchText && (
-              <button type="button" onClick={() => setSearchText('')} style={styles.searchClearBtn}>✕</button>
+              <button
+                type="button"
+                onClick={() => setSearchText("")}
+                style={styles.searchClearBtn}
+              >
+                ✕
+              </button>
             )}
           </div>
 
@@ -249,7 +272,7 @@ export const AmenticsSection = () => {
             style={{ ...styles.btn, ...styles.btnPrimary }}
             onClick={() => {
               setShowAddModal(true);
-              setModalError('');
+              setModalError("");
             }}
             disabled={loading}
           >
@@ -265,8 +288,18 @@ export const AmenticsSection = () => {
       <div style={styles.tableWrapper}>
         {/* Toast */}
         {toast && (
-          <div style={{ position: 'fixed', right: 28, top: 28, zIndex: 1200 }}>
-            <div style={{ padding: '10px 14px', borderRadius: 8, color: toast.type === 'error' ? '#7f1d1d' : '#064e3b', background: toast.type === 'error' ? '#fee2e2' : '#ecfdf5', boxShadow: '0 8px 30px rgba(2,6,23,0.08)' }}>{toast.message}</div>
+          <div style={{ position: "fixed", right: 28, top: 28, zIndex: 1200 }}>
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: 8,
+                color: toast.type === "error" ? "#7f1d1d" : "#064e3b",
+                background: toast.type === "error" ? "#fee2e2" : "#ecfdf5",
+                boxShadow: "0 8px 30px rgba(2,6,23,0.08)",
+              }}
+            >
+              {toast.message}
+            </div>
           </div>
         )}
         <table style={styles.table}>
@@ -282,7 +315,9 @@ export const AmenticsSection = () => {
             {filteredAmenities.length === 0 ? (
               <tr>
                 <td colSpan={4} style={styles.emptyCell}>
-                  {amenities.length === 0 ? 'Chưa có tiện nghi nào' : 'Không tìm thấy tiện nghi'}
+                  {amenities.length === 0
+                    ? "Chưa có tiện nghi nào"
+                    : "Không tìm thấy tiện nghi"}
                 </td>
               </tr>
             ) : (
@@ -293,8 +328,18 @@ export const AmenticsSection = () => {
                     {editingId === amenity.idtienNghi ? (
                       <input
                         value={editingNameLocal}
-                        onChange={(e) => handleInlineNameChange(amenity.idtienNghi, e.target.value)}
-                        style={{ ...styles.input, padding: '8px 10px', borderRadius: 8, maxWidth: 420 }}
+                        onChange={(e) =>
+                          handleInlineNameChange(
+                            amenity.idtienNghi,
+                            e.target.value
+                          )
+                        }
+                        style={{
+                          ...styles.input,
+                          padding: "8px 10px",
+                          borderRadius: 8,
+                          maxWidth: 420,
+                        }}
                       />
                     ) : (
                       amenity.tenTienNghi
@@ -318,7 +363,9 @@ export const AmenticsSection = () => {
                       }}
                       disabled={loading}
                     >
-                      {editingId === amenity.idtienNghi ? '⏸️ Hoàn tất' : '✎ Sửa'}
+                      {editingId === amenity.idtienNghi
+                        ? "⏸️ Hoàn tất"
+                        : "✎ Sửa"}
                     </button>
                     <button
                       type="button"
@@ -340,7 +387,7 @@ export const AmenticsSection = () => {
         visible={showAddModal}
         onClose={() => {
           setShowAddModal(false);
-          setModalError('');
+          setModalError("");
         }}
         onSave={handleAddAmenity}
         title="Thêm tiện nghi mới"
@@ -353,11 +400,11 @@ export const AmenticsSection = () => {
         onClose={() => {
           setShowEditModal(false);
           setEditingAmenity(null);
-          setModalError('');
+          setModalError("");
         }}
         onSave={handleEditAmenity}
         title="Cập nhật tiện nghi"
-        initialValue={editingAmenity?.tenTienNghi || ''}
+        initialValue={editingAmenity?.tenTienNghi || ""}
         loading={modalLoading}
         error={modalError}
       />
@@ -367,234 +414,234 @@ export const AmenticsSection = () => {
 
 const styles = {
   container: {
-    padding: '20px',
-    backgroundColor: '#f5f5f5',
+    padding: "20px",
+    backgroundColor: "#f5f5f5",
   },
   header: {
-    display: 'flex' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    marginBottom: '20px',
-    gap: '10px'
+    display: "flex" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    marginBottom: "20px",
+    gap: "10px",
   },
   title: {
-    fontSize: '24px',
-    fontWeight: '600' as const,
+    fontSize: "24px",
+    fontWeight: "600" as const,
     margin: 0,
-    color: '#333'
+    color: "#333",
   },
   searchBox: {
-    marginBottom: '20px'
+    marginBottom: "20px",
   },
   searchInput: {
-    width: '100%',
-    maxWidth: '400px',
-    padding: '10px 15px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '14px',
-    boxSizing: 'border-box' as const
+    width: "100%",
+    maxWidth: "400px",
+    padding: "10px 15px",
+    border: "1px solid #ddd",
+    borderRadius: "4px",
+    fontSize: "14px",
+    boxSizing: "border-box" as const,
   },
   tableWrapper: {
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    boxShadow: '0 6px 20px rgba(2,6,23,0.04)',
-    overflow: 'auto',
-    maxHeight: '520px'
+    backgroundColor: "white",
+    borderRadius: "8px",
+    boxShadow: "0 6px 20px rgba(2,6,23,0.04)",
+    overflow: "auto",
+    maxHeight: "520px",
   },
   table: {
-    width: '100%',
-    borderCollapse: 'collapse' as const,
-    fontSize: '14px'
+    width: "100%",
+    borderCollapse: "collapse" as const,
+    fontSize: "14px",
   },
   tableHeader: {
-    backgroundColor: '#2c3e50',
-    color: 'white',
-    fontWeight: '600' as const,
-    position: 'sticky' as const,
+    backgroundColor: "#2c3e50",
+    color: "white",
+    fontWeight: "600" as const,
+    position: "sticky" as const,
     top: 0,
-    zIndex: 2
+    zIndex: 2,
   },
   th: {
-    padding: '12px 15px',
-    textAlign: 'left' as const,
-    fontWeight: '600' as const
+    padding: "12px 15px",
+    textAlign: "left" as const,
+    fontWeight: "600" as const,
   },
   tableRow: {
-    borderBottom: '1px solid #f1f5f9',
-    backgroundColor: '#fff',
-    transition: 'background-color 0.12s, transform 0.12s',
-    cursor: 'default'
+    borderBottom: "1px solid #f1f5f9",
+    backgroundColor: "#fff",
+    transition: "background-color 0.12s, transform 0.12s",
+    cursor: "default",
   },
   tableRowHover: {
-    backgroundColor: '#f8fafc'
+    backgroundColor: "#f8fafc",
   },
   td: {
-    padding: '12px 15px',
-    verticalAlign: 'middle' as const
+    padding: "12px 15px",
+    verticalAlign: "middle" as const,
   },
   badge: {
-    display: 'inline-block',
-    padding: '4px 12px',
-    backgroundColor: '#3498db',
-    color: 'white',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: '600' as const
+    display: "inline-block",
+    padding: "4px 12px",
+    backgroundColor: "#3498db",
+    color: "white",
+    borderRadius: "12px",
+    fontSize: "12px",
+    fontWeight: "600" as const,
   },
   btn: {
-    padding: '6px 12px',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer' as const,
-    fontSize: '12px',
-    fontWeight: '500' as const,
-    marginRight: '8px',
-    transition: 'all 0.3s'
+    padding: "6px 12px",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer" as const,
+    fontSize: "12px",
+    fontWeight: "500" as const,
+    marginRight: "8px",
+    transition: "all 0.3s",
   },
   btnPrimary: {
-    backgroundColor: '#27ae60',
-    color: 'white'
+    backgroundColor: "#27ae60",
+    color: "white",
   },
   btnEdit: {
-    backgroundColor: '#3498db',
-    color: 'white'
+    backgroundColor: "#3498db",
+    color: "white",
   },
   btnDelete: {
-    backgroundColor: '#e74c3c',
-    color: 'white'
+    backgroundColor: "#e74c3c",
+    color: "white",
   },
   btnSecondary: {
-    backgroundColor: '#95a5a6',
-    color: 'white'
+    backgroundColor: "#95a5a6",
+    color: "white",
   },
   errorMsg: {
-    padding: '12px 15px',
-    backgroundColor: '#ffe6e6',
-    color: '#c0392b',
-    borderRadius: '4px',
-    marginBottom: '15px',
-    border: '1px solid #e74c3c'
+    padding: "12px 15px",
+    backgroundColor: "#ffe6e6",
+    color: "#c0392b",
+    borderRadius: "4px",
+    marginBottom: "15px",
+    border: "1px solid #e74c3c",
   },
   loadingMsg: {
-    padding: '12px 15px',
-    backgroundColor: '#e8f4f8',
-    color: '#2c3e50',
-    borderRadius: '4px',
-    marginBottom: '15px'
+    padding: "12px 15px",
+    backgroundColor: "#e8f4f8",
+    color: "#2c3e50",
+    borderRadius: "4px",
+    marginBottom: "15px",
   },
   emptyCell: {
-    textAlign: 'center' as const,
-    color: '#999',
-    fontStyle: 'italic' as const
+    textAlign: "center" as const,
+    color: "#999",
+    fontStyle: "italic" as const,
   },
   modalOverlay: {
-    position: 'fixed' as const,
+    position: "fixed" as const,
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    display: 'flex' as const,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    zIndex: 1000
+    backgroundColor: "rgba(0,0,0,0.5)",
+    display: "flex" as const,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    zIndex: 1000,
   },
   modal: {
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    boxShadow: '0 6px 20px rgba(2,6,23,0.06)',
-    maxWidth: '540px',
-    width: '92%',
-    overflow: 'hidden'
+    backgroundColor: "white",
+    borderRadius: "8px",
+    boxShadow: "0 6px 20px rgba(2,6,23,0.06)",
+    maxWidth: "540px",
+    width: "92%",
+    overflow: "hidden",
   },
   headerRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
   },
   countBadge: {
-    background: 'linear-gradient(135deg,#eef2ff,#e0f2fe)',
-    color: '#0f172a',
-    padding: '6px 10px',
+    background: "linear-gradient(135deg,#eef2ff,#e0f2fe)",
+    color: "#0f172a",
+    padding: "6px 10px",
     borderRadius: 999,
     fontWeight: 800,
-    fontSize: 13
+    fontSize: 13,
   },
   searchWrapper: {
-    position: 'relative' as const,
-    display: 'flex',
-    alignItems: 'center'
+    position: "relative" as const,
+    display: "flex",
+    alignItems: "center",
   },
   searchClearBtn: {
-    position: 'absolute' as const,
+    position: "absolute" as const,
     right: 8,
     top: 6,
-    background: 'transparent',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#6b7280'
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    color: "#6b7280",
   },
   modalHeader: {
-    display: 'flex' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    padding: '20px',
-    borderBottom: '1px solid #eee',
-    backgroundColor: '#f9f9f9'
+    display: "flex" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    padding: "20px",
+    borderBottom: "1px solid #eee",
+    backgroundColor: "#f9f9f9",
   },
   modalTitle: {
     margin: 0,
-    fontSize: '18px',
-    fontWeight: '600' as const,
-    color: '#333'
+    fontSize: "18px",
+    fontWeight: "600" as const,
+    color: "#333",
   },
   closeBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: '24px',
-    cursor: 'pointer' as const,
-    color: '#666',
+    background: "none",
+    border: "none",
+    fontSize: "24px",
+    cursor: "pointer" as const,
+    color: "#666",
     padding: 0,
-    width: '30px',
-    height: '30px',
-    display: 'flex' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const
+    width: "30px",
+    height: "30px",
+    display: "flex" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
   modalBody: {
-    padding: '20px'
+    padding: "20px",
   },
   formGroup: {
-    marginBottom: '15px'
+    marginBottom: "15px",
   },
   label: {
-    display: 'block',
-    marginBottom: '8px',
-    fontSize: '14px',
-    fontWeight: '500' as const,
-    color: '#333'
+    display: "block",
+    marginBottom: "8px",
+    fontSize: "14px",
+    fontWeight: "500" as const,
+    color: "#333",
   },
   input: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '14px',
-    boxSizing: 'border-box' as const
+    width: "100%",
+    padding: "10px 12px",
+    border: "1px solid #ddd",
+    borderRadius: "4px",
+    fontSize: "14px",
+    boxSizing: "border-box" as const,
   },
   charCount: {
-    fontSize: '12px',
-    color: '#999',
-    marginTop: '4px',
-    textAlign: 'right' as const
+    fontSize: "12px",
+    color: "#999",
+    marginTop: "4px",
+    textAlign: "right" as const,
   },
   modalFooter: {
-    display: 'flex' as const,
-    justifyContent: 'flex-end' as const,
-    gap: '10px',
-    padding: '15px 20px',
-    borderTop: '1px solid #eee',
-    backgroundColor: '#f9f9f9'
-  }
+    display: "flex" as const,
+    justifyContent: "flex-end" as const,
+    gap: "10px",
+    padding: "15px 20px",
+    borderTop: "1px solid #eee",
+    backgroundColor: "#f9f9f9",
+  },
 };
