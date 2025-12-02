@@ -293,22 +293,39 @@ const Slidebar: React.FC = () => {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 10,
-              background: "linear-gradient(135deg,#5eead4,#60a5fa)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: 800,
+              width: 64,
+              height: 64,
+              padding: 8,
+              borderRadius: 12,
+              background: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              boxShadow: '0 6px 18px rgba(15,23,42,0.06)',
+              border: '1px solid #a75a00'
             }}
           >
-            M
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, color: "#111827" }}>MyAdmin</div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>Control panel</div>
+            <img
+              src="/img/logo.webp"
+              alt="Khách sạn"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                display: 'block',
+                background: '#ffffff'
+              }}
+              onError={(e) => {
+                // fallback to letter M if logo not found
+                const el = e.target as HTMLImageElement;
+                el.style.display = 'none';
+                try {
+                  const parent = el.parentElement;
+                  if (parent) parent.innerText = 'M';
+                } catch {}
+              }}
+            />
           </div>
         </div>
       </div>

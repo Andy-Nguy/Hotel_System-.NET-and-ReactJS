@@ -126,28 +126,21 @@ const InvoiceModalWithLateFee: React.FC<Props> = ({
   const serviceTotal = displayServices.reduce((s: number, sv: any) => s + Number((sv as any).thanhTien ?? 0), 0);
 
   const subTotal = roomTotal + serviceTotal; // before VAT
+  
+  // Phí trả phòng muộn KHÔNG tính VAT (là phí phạt)
+  // Công thức: TongTien = (room + service) * 1.1 + lateFee
   const vat = Math.round(subTotal * 0.1);
-  const finalTotalBeforeLate = Math.round(subTotal + vat);
-  // Recompute totals: only include late-fee in totals for overdue bookings (match PaymentModal behavior)
-  let finalTotal = finalTotalBeforeLate;
-  if (isOverdueBooking && lateFee > 0) {
-    finalTotal = finalTotalBeforeLate + lateFee;
-  }
+  
+  // Tổng cộng = (tiền phòng + dịch vụ) * 1.1 + phí trả muộn (không VAT)
+  let finalTotal = Math.round(subTotal + vat + (isOverdueBooking ? lateFee : 0));
 
   const deposit = Number(data?.money?.deposit ?? data?.TienCoc ?? 0);
-  const dbPaid = Number(data?.money?.paidAmount ?? data?.tienThanhToan ?? data?.TienThanhToan ?? 0);
-  // Paid amount default behavior:
-  // - If there's a recorded payment from DB use it
-  // - Otherwise default to (total - deposit) as the paid amount placeholder
-  const defaultPaid = Math.max(0, finalTotal - deposit);
-  const paid = dbPaid > 0 ? Math.max(0, dbPaid) : defaultPaid;
-  const needToPay = Math.max(0, finalTotal - paid);
+  
+  // Đã thanh toán luôn luôn = TỔNG CỘNG - Tiền cọc
+  const displayedPaid = Math.max(0, finalTotal - deposit);
 
   const invoiceId = getInvoiceId(data) ?? data?.IDHoaDon ?? data?.idHoaDon ?? '';
   const invoiceDateStr = data?.NgayLap ? new Date(data.NgayLap).toLocaleString('vi-VN') : (data?.ngayLap ? new Date(data.ngayLap).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN'));
-  
-  // Displayed paid amount: include late fee for overdue bookings so UI shows "Đã thanh toán + phí trả muộn"
-  const displayedPaid = Math.max(0, (paid ?? 0) + (isOverdueBooking && Number(lateFee ?? 0) > 0 ? Number(lateFee ?? 0) : 0));
 
   const handleCompleteClick = async () => {
     const id = (mergedInvoice ?? invoiceData ?? paymentRow)?.IDDatPhong ?? (mergedInvoice ?? invoiceData ?? paymentRow)?.idDatPhong ?? paymentRow?.IddatPhong;
@@ -174,7 +167,7 @@ const InvoiceModalWithLateFee: React.FC<Props> = ({
         if (aggregated > 0 || serverVal > 0) return; // already have a value
         const bookingId = (mergedInvoice ?? invoiceData ?? paymentRow)?.IDDatPhong ?? (mergedInvoice ?? invoiceData ?? paymentRow)?.idDatPhong ?? paymentRow?.IddatPhong;
         if (!bookingId) return;
-        const resp = await fetch(`/api/TraPhong/tinh-phu-phi/${bookingId}`);
+        const resp = await fetch(`/api/Checkout/tinh-phu-phi/${bookingId}`);
         if (!mounted) return;
         if (!resp.ok) return;
         const data = await resp.json();
@@ -292,12 +285,12 @@ const InvoiceModalWithLateFee: React.FC<Props> = ({
                 <strong>{vat.toLocaleString()} đ</strong>
               </div>
 
-                {isOverdueBooking && lateFee > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16 }}>
-                    <span style={{ color: '#d4380d' }}>Phí trả phòng muộn:</span>
-                    <strong style={{ color: '#d4380d' }}>{Number(lateFee).toLocaleString()} đ</strong>
-                  </div>
-                )}
+              {isOverdueBooking && lateFee > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, marginTop: 8 }}>
+                  <span style={{ color: '#d4380d' }}>Phí trả phòng muộn (không VAT):</span>
+                  <strong style={{ color: '#d4380d' }}>+ {Number(lateFee).toLocaleString()} đ</strong>
+                </div>
+              )}
 
               <div style={{ borderTop: '2px solid #000', margin: '12px 0' }} />
 
@@ -313,8 +306,8 @@ const InvoiceModalWithLateFee: React.FC<Props> = ({
 
               {displayedPaid > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                  <span>Đã thanh toán{isOverdueBooking && Number(lateFee ?? 0) > 0 ? ' ' : ''}:</span>
-                  <strong>- {displayedPaid.toLocaleString()} đ</strong>
+                  <span>Đã thanh toán:</span>
+                  <strong>{displayedPaid.toLocaleString()} đ</strong>
                 </div>
               )}
 

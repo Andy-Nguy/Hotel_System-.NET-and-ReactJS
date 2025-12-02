@@ -204,6 +204,19 @@ setData(mappedWithTotals);
   const [refreshAfterInvoiceClose, setRefreshAfterInvoiceClose] = useState(false);
   const [forceLateFeeInvoice, setForceLateFeeInvoice] = useState(false);
 
+  // helper: detect if a given date string corresponds to today (local date)
+  const isDateToday = (d?: string | null) => {
+    if (!d) return false;
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return false;
+      const today = new Date();
+      return dt.getFullYear() === today.getFullYear() && dt.getMonth() === today.getMonth() && dt.getDate() === today.getDate();
+    } catch {
+      return false;
+    }
+  };
+
   // Services state
   const [serviceModalVisible, setServiceModalVisible] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Array<any>>([]);
@@ -950,82 +963,94 @@ setData(mappedWithTotals);
           </Modal>
 
           {
-            (
-              Number(invoiceData?.TrangThai ?? paymentRow?.TrangThai ?? 0) === 5
-              || Number(invoiceData?.money?.lateFee ?? (paymentRow as any)?.TienPhuPhi ?? (paymentRow as any)?.tienPhuPhi ?? 0) > 0
-              || (Array.isArray(paymentRow?.ChiTietDatPhongs) && paymentRow.ChiTietDatPhongs.some((s: any) => /trả phòng muộn|phí trả phòng muộn|phu.?phi.?tra phong muon/i.test(String(s.tenDichVu ?? s.TenDichVu ?? s.dichVu ?? ''))))
-              || (Array.isArray(invoiceData?.services) && invoiceData.services.some((s: any) => /trả phòng muộn|phí trả phòng muộn|phu.?phi.?tra phong muon/i.test(String(s.tenDichVu ?? s.TenDichVu ?? s.ten ?? ''))))
-              || (Array.isArray(invoiceData?.items) && invoiceData.items.some((s: any) => /trả phòng muộn|phí trả phòng muộn|phu.?phi.?tra phong muon/i.test(String(s.tenDichVu ?? s.TenDichVu ?? s.dichVu ?? s.TenDichVu ?? ''))))
-              || forceLateFeeInvoice
-            ) ? (
-            <InvoiceModalWithLateFee
-              visible={invoiceModalVisible}
-              invoiceData={invoiceData}
-              paymentRow={paymentRow}
-              selectedServices={selectedServices}
-              servicesTotal={servicesTotal}
-              onClose={async () => {
-                setInvoiceModalVisible(false);
-                setInvoiceData(null);
-                setSelectedServices([]);
-                setServicesTotal(0);
-                if (refreshAfterInvoiceClose) {
-                  await load();
-                  setRefreshAfterInvoiceClose(false);
-                }
-                setForceLateFeeInvoice(false);
-              }}
-              onComplete={async (id: string) => {
-                try {
-                  if (typeof id !== 'undefined' && id !== null) {
-                    const resp = await checkinApi.completePayment(id);
-                    msg.success('Thanh toán thành công');
+            (() => {
+              const isOverdue = Number(invoiceData?.TrangThai ?? paymentRow?.TrangThai ?? 0) === 5;
+              const lateFeePresent = Number(invoiceData?.money?.lateFee ?? (paymentRow as any)?.TienPhuPhi ?? (paymentRow as any)?.tienPhuPhi ?? 0) > 0;
+              const hasLateFeeService = (Array.isArray(paymentRow?.ChiTietDatPhongs) && paymentRow.ChiTietDatPhongs.some((s: any) => /trả phòng muộn|phí trả phòng muộn|phu.?phi.?tra phong muon/i.test(String(s.tenDichVu ?? s.TenDichVu ?? s.dichVu ?? ''))))
+                || (Array.isArray(invoiceData?.services) && invoiceData.services.some((s: any) => /trả phòng muộn|phí trả phòng muộn|phu.?phi.?tra phong muon/i.test(String(s.tenDichVu ?? s.TenDichVu ?? s.ten ?? ''))))
+                || (Array.isArray(invoiceData?.items) && invoiceData.items.some((s: any) => /trả phòng muộn|phí trả phòng muộn|phu.?phi.?tra phong muon/i.test(String(s.tenDichVu ?? s.TenDichVu ?? s.dichVu ?? s.TenDichVu ?? ''))));
+
+              // If operator is in 'using' tab and the booking's checkout date is today, prefer InvoiceCheckin (no late-fee modal)
+              const checkoutDate = paymentRow?.NgayTraPhong ?? invoiceData?.dates?.checkout ?? null;
+              const isCheckoutToday = viewMode === 'using' && isDateToday(checkoutDate);
+
+              const shouldShowLateFeeInvoice = (isOverdue || lateFeePresent || hasLateFeeService || forceLateFeeInvoice) && !isCheckoutToday;
+
+              if (shouldShowLateFeeInvoice) {
+                return (
+                  <InvoiceModalWithLateFee
+                    visible={invoiceModalVisible}
+                    invoiceData={invoiceData}
+                    paymentRow={paymentRow}
+                    selectedServices={selectedServices}
+                    servicesTotal={servicesTotal}
+                    onClose={async () => {
+                      setInvoiceModalVisible(false);
+                      setInvoiceData(null);
+                      setSelectedServices([]);
+                      setServicesTotal(0);
+                      if (refreshAfterInvoiceClose) {
+                        await load();
+                        setRefreshAfterInvoiceClose(false);
+                      }
+                      setForceLateFeeInvoice(false);
+                    }}
+                    onComplete={async (id: string) => {
+                      try {
+                        if (typeof id !== 'undefined' && id !== null) {
+                          const resp = await checkinApi.completePayment(id);
+                          msg.success('Thanh toán thành công');
+                          setInvoiceModalVisible(false);
+                          await load();
+                        } else {
+                          throw new Error('Không có id để hoàn tất thanh toán');
+                        }
+                      } catch (e: any) {
+                        message.error(e?.message || 'Thanh toán thất bại');
+                      }
+                    }}
+                  />
+                );
+              }
+
+              return (
+                <InvoiceModal
+                  visible={invoiceModalVisible}
+                  invoiceData={invoiceData}
+                  paymentRow={paymentRow}
+                  selectedServices={selectedServices}
+                  servicesTotal={servicesTotal}
+                  onClose={async () => {
                     setInvoiceModalVisible(false);
-                    await load();
-                  } else {
-                    throw new Error('Không có id để hoàn tất thanh toán');
-                  }
-                } catch (e: any) {
-                  message.error(e?.message || 'Thanh toán thất bại');
-                }
-              }}
-            />
-          ) : (
-            <InvoiceModal
-              visible={invoiceModalVisible}
-              invoiceData={invoiceData}
-              paymentRow={paymentRow}
-              selectedServices={selectedServices}
-              servicesTotal={servicesTotal}
-              onClose={async () => {
-                setInvoiceModalVisible(false);
-                setInvoiceData(null);
-                setSelectedServices([]);
-                setServicesTotal(0);
-                if (refreshAfterInvoiceClose) {
-                  await load();
-                  setRefreshAfterInvoiceClose(false);
-                }
-                setForceLateFeeInvoice(false);
-              }}
-              onComplete={async (id) => {
-                try {
-                  // For check-ins we must only update the payment status and keep the booking.TrangThai = 3 (Đang sử dụng)
-                  if (typeof id !== 'undefined' && id !== null) {
-                    const resp = await checkinApi.completePayment(id);
-                    // resp is expected to include trangThaiThanhToan; show success and refresh
-                    msg.success('Thanh toán thành công');
-                    setInvoiceModalVisible(false);
-                    await load();
-                  } else {
-                    throw new Error('Không có id để hoàn tất thanh toán');
-                  }
-                } catch (e: any) {
-                  message.error(e?.message || 'Thanh toán thất bại');
-                }
-              }}
-            />
-          )}
+                    setInvoiceData(null);
+                    setSelectedServices([]);
+                    setServicesTotal(0);
+                    if (refreshAfterInvoiceClose) {
+                      await load();
+                      setRefreshAfterInvoiceClose(false);
+                    }
+                    setForceLateFeeInvoice(false);
+                  }}
+                  onComplete={async (id) => {
+                    try {
+                      // For check-ins we must only update the payment status and keep the booking.TrangThai = 3 (Đang sử dụng)
+                      if (typeof id !== 'undefined' && id !== null) {
+                        const resp = await checkinApi.completePayment(id);
+                        // resp is expected to include trangThaiThanhToan; show success and refresh
+                        msg.success('Thanh toán thành công');
+                        setInvoiceModalVisible(false);
+                        await load();
+                      } else {
+                        throw new Error('Không có id để hoàn tất thanh toán');
+                      }
+                    } catch (e: any) {
+                      message.error(e?.message || 'Thanh toán thất bại');
+                    }
+                  }}
+                />
+              );
+            })()
+          }
           </div>
         </main>
       </div>

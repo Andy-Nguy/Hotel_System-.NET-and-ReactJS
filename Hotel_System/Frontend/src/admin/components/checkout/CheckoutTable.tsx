@@ -24,6 +24,7 @@ interface Props {
   onOpenPaymentForm?: (row: BookingRow) => void;
   onAddService?: (row: BookingRow) => void;
   onViewInvoice?: (row: BookingRow) => void;
+  onExtend?: (row: BookingRow) => void; // Gia hạn phòng quá hạn
   viewInvoiceIds?: string[];
   viewMode?: "using" | "checkout" | "overdue";
   onViewChange?: (mode: "using" | "checkout" | "overdue") => void;
@@ -38,6 +39,7 @@ const CheckoutTable: React.FC<Props> = ({
   onOpenPaymentForm,
   onAddService,
   onViewInvoice,
+  onExtend,
   viewInvoiceIds,
   viewMode = "using",
   onViewChange,
@@ -139,6 +141,17 @@ const CheckoutTable: React.FC<Props> = ({
                       }}
                     >
                       Xác nhận thanh toán
+                    </Button>
+                  )}
+
+                  {/* Nút Gia hạn - cho phép khách ở thêm */}
+                  {onExtend && (
+                    <Button
+                      type="default"
+                      style={{ background: '#3b82f6', borderColor: '#3b82f6', color: '#fff' }}
+                      onClick={() => onExtend(r)}
+                    >
+                      Gia hạn
                     </Button>
                   )}
                 </>

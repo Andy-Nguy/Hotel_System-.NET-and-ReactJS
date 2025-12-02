@@ -130,7 +130,7 @@ const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) 
   }, []);
 
   return (
-    <header style={{ padding: "28px 36px", marginLeft: "20" }}>
+    <header style={{ padding: "28px 36px", marginLeft: "20", position: "relative" }}>
       <div
         style={{
           display: "flex",
@@ -156,50 +156,45 @@ const HeaderSection: React.FC<{ showStats?: boolean }> = ({ showStats = true }) 
         </div>
 
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <input
-            placeholder="Search..."
+          {/* Search removed as requested; only the power button remains at top-right */}
+
+          {/* Power button (home) placed at the top-right corner */}
+          <a
+            href="/"
+            title="Trang chủ"
+            aria-label="Trang chủ"
             style={{
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: "1px solid rgba(15,23,42,0.06)",
-              width: 220,
+              position: "absolute",
+              right: 36,
+              top: 28,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              overflow: "hidden",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 6px 18px rgba(2,6,23,0.04)",
+              background: "#fff",
+              textDecoration: "none",
             }}
-          />
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                background: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 6px 18px rgba(2,6,23,0.04)",
-              }}
+          >
+            {/* Power button SVG */}
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+              focusable="false"
+              style={{ cursor: "pointer" }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" fill="#dbeafe" />
-              </svg>
-            </div>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                overflow: "hidden",
-              }}
-            >
-              <img
-                src="/img/logo.webp"
-                alt="avatar"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-            </div>
-          </div>
+              <title>Trang chủ</title>
+              <path d="M12 2v10" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5.05 6.05a9 9 0 1 0 13.9 0" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
         </div>
       </div>
     </header>

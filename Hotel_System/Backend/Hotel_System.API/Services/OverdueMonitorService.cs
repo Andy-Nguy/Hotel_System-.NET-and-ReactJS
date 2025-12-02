@@ -19,7 +19,7 @@ namespace Hotel_System.API.Services
     /// - Phòng đang sử dụng: TrangThai == 3
     /// - Ngày trả phòng dự kiến: NgayTraPhong <= hôm nay
     /// - Thời điểm hiện tại: Now > NgayTraPhong + 12:00
-    /// => Đánh dấu Quá hạn.
+    /// => Đánh dấu Quá hạn + Cộng phí trả phòng muộn vào TongTien (KHÔNG lưu CTHDDV, phí phạt không VAT).
     ///
     /// Service chạy định kỳ (mặc định mỗi 5 phút).
     /// </summary>
@@ -58,6 +58,9 @@ namespace Hotel_System.API.Services
                     // - Ngày trả phòng dự kiến <= hôm nay
                     var candidates = await db.DatPhongs
                         .Include(d => d.IdphongNavigation)
+                        .Include(d => d.ChiTietDatPhongs)
+                        .Include(d => d.HoaDons)
+                            .ThenInclude(h => h.Cthddvs)
                         .Where(d =>
                             d.TrangThai == 3 &&        // Đang sử dụng
                             d.NgayTraPhong <= today    // Ngày trả phòng dự kiến ≤ hôm nay
@@ -98,16 +101,10 @@ namespace Hotel_System.API.Services
                                         dp.IdphongNavigation.TrangThai = "Quá hạn";
                                     }
 
-                                    changedCount++;
+                                    // ========== CỘNG PHÍ TRẢ PHÒNG MUỘN VÀO TONGTIEN (KHÔNG LƯU CTHDDV) ==========
+                                    await AddLateFeeToTotal(db, dp, now, standardCheckout, stoppingToken);
 
-                                    // (Tùy chọn) Lưu log chi tiết vào bảng lịch sử
-                                    // var log = new LichSuDatPhong
-                                    // {
-                                    //     IddatPhong = dp.IddatPhong,
-                                    //     NgayCapNhat = DateTime.Now,
-                                    //     GhiChu = $"Tự động đánh dấu Quá hạn: phòng {dp.Idphong}, NgayTraPhong={dp.NgayTraPhong:yyyy-MM-dd}, standardCheckout=12:00."
-                                    // };
-                                    // db.LichSuDatPhongs.Add(log);
+                                    changedCount++;
                                 }
                             }
                             catch (Exception ex)
@@ -123,7 +120,7 @@ namespace Hotel_System.API.Services
                         {
                             await db.SaveChangesAsync(stoppingToken);
                             _logger.LogInformation(
-                                "OverdueMonitorService: marked {count} booking(s) as overdue",
+                                "OverdueMonitorService: marked {count} booking(s) as overdue and added late fees",
                                 changedCount);
                         }
                     }
@@ -144,6 +141,98 @@ namespace Hotel_System.API.Services
             }
 
             _logger.LogInformation("OverdueMonitorService stopping");
+        }
+
+        /// <summary>
+        /// Cộng phí trả phòng muộn vào TongTien khi booking chuyển sang trạng thái Quá hạn
+        /// Phí phạt KHÔNG tính VAT và KHÔNG lưu vào CTHDDV
+        /// </summary>
+        private async Task AddLateFeeToTotal(HotelSystemContext db, DatPhong dp, DateTime now, DateTime standardCheckout, CancellationToken stoppingToken)
+        {
+            try
+            {
+                // Tìm hóa đơn mới nhất của booking
+                var latestInvoice = dp.HoaDons?
+                    .OrderByDescending(h => h.NgayLap)
+                    .FirstOrDefault();
+
+                if (latestInvoice == null)
+                {
+                    _logger.LogWarning("OverdueMonitorService: No invoice found for booking {id}, skipping late fee", dp.IddatPhong);
+                    return;
+                }
+
+                // Kiểm tra xem đã có ghi chú phí trả muộn chưa (tránh tính trùng)
+                bool hasLateNote = !string.IsNullOrEmpty(latestInvoice.GhiChu) &&
+                    latestInvoice.GhiChu.IndexOf("Phí trả phòng muộn", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                if (hasLateNote)
+                {
+                    _logger.LogInformation("OverdueMonitorService: Late fee already added for booking {id}", dp.IddatPhong);
+                    return;
+                }
+
+                // Tính phí trả muộn
+                var roomLines = dp.ChiTietDatPhongs;
+                decimal baseRoomTotal = roomLines?.Sum(ct => ct.ThanhTien) ?? 0m;
+                int nights = dp.SoDem ?? 1;
+                
+                decimal oneNightPrice = nights > 0
+                    ? Math.Round(baseRoomTotal / nights, 0, MidpointRounding.AwayFromZero)
+                    : Math.Round(baseRoomTotal, 0, MidpointRounding.AwayFromZero);
+
+                var diff = now - standardCheckout;
+                decimal surchargePercent = 0m;
+                
+                if (diff <= TimeSpan.FromHours(3)) 
+                    surchargePercent = 0.30m;
+                else if (diff <= TimeSpan.FromHours(6)) 
+                    surchargePercent = 0.50m;
+                else 
+                    surchargePercent = 1.00m;
+
+                decimal lateFeeAmount = surchargePercent >= 1.0m
+                    ? oneNightPrice
+                    : Math.Round(oneNightPrice * surchargePercent, 0, MidpointRounding.AwayFromZero);
+
+                if (lateFeeAmount <= 0)
+                {
+                    _logger.LogInformation("OverdueMonitorService: Late fee is 0 for booking {id}", dp.IddatPhong);
+                    return;
+                }
+
+                // Cập nhật TongTien của hóa đơn và booking
+                // TongTien = (TienPhong + TongDichVu) * 1.1 + PhiMuon (phí phạt KHÔNG tính VAT)
+                decimal roomVal = Convert.ToDecimal(latestInvoice.TienPhong ?? 0);
+                
+                // Loại trừ DV_LATE_FEE cũ nếu có (từ dữ liệu cũ)
+                decimal serviceVal = latestInvoice.Cthddvs?
+                    .Where(c => c.TrangThai == "Hoạt động" && c.IddichVu != "DV_LATE_FEE")
+                    .Sum(c => c.TienDichVu ?? 0m) ?? 0m;
+
+                decimal subTotal = roomVal + serviceVal;
+                decimal vat = Math.Round(subTotal * 0.1m, 0, MidpointRounding.AwayFromZero);
+                decimal grandTotal = subTotal + vat + lateFeeAmount;
+
+                latestInvoice.TongTien = grandTotal;
+                dp.TongTien = grandTotal;
+
+                // Đặt trạng thái thanh toán = 1 (Chưa thanh toán) vì có thêm phí
+                latestInvoice.TrangThaiThanhToan = 1;
+                dp.TrangThaiThanhToan = 1;
+
+                // Thêm ghi chú
+                latestInvoice.GhiChu = (latestInvoice.GhiChu ?? string.Empty)
+                    + $"\nPhí trả phòng muộn (không VAT, {surchargePercent * 100}%): {lateFeeAmount:N0}đ - Thêm lúc {now:yyyy-MM-dd HH:mm:ss}";
+
+                _logger.LogInformation(
+                    "OverdueMonitorService: Added late fee {Amount}đ ({Percent}%) to booking {Id}, new total: {Total}đ (room+svc)*1.1 + lateFee",
+                    lateFeeAmount, surchargePercent * 100, dp.IddatPhong, grandTotal);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "OverdueMonitorService: Failed to add late fee for booking {id}", dp.IddatPhong);
+            }
         }
     }
 }

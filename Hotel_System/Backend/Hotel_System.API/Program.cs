@@ -69,6 +69,8 @@ builder.Services.AddSingleton<Hotel_System.API.Services.EmailTemplateRenderer>()
 
 // Background service: expire holds (ThoiHan)
 builder.Services.AddHostedService<HoldExpiryBackgroundService>();
+// Background service: monitor overdue bookings and add late fees
+builder.Services.AddHostedService<OverdueMonitorService>();
 
 // Configure JWT authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");

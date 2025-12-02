@@ -3,7 +3,7 @@ import { Modal, List, Tag, Image, Button, Select, message as antdMessage, Alert,
 import checkinApi, { UsingBooking } from "../../../api/checkinApi";
 import * as roomsApi from '../../../api/roomsApi';
 import checkoutApi from '../../../api/checkout.Api';
-import InvoiceModalWithLateFee from '../checkout/InvoiceModalWithLateFee';
+import InvoiceCheckin from './InvoiceCheckin';
 
 const CheckinSectionNewFixed: React.FC = () => {
   const [bookings, setBookings] = useState<UsingBooking[]>([]);
@@ -659,6 +659,11 @@ const CheckinSectionNewFixed: React.FC = () => {
                       <button disabled={disabledConfirmIds.has(b.iddatPhong)} onClick={() => handleConfirm(b.iddatPhong)}>Xác nhận</button>
                     )}
 
+                    {/* Show Đổi phòng button for status 3 (Đang sử dụng) */}
+                    {b.trangThai === 3 && (
+                      <button onClick={() => openReassignModal(b.iddatPhong)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #3b82f6", background: "#eff6ff", color: "#3b82f6", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Đổi phòng</button>
+                    )}
+
                     {/* Show a single Cancel button for any non-cancelled booking so it stays visible after confirm */}
                     {b.trangThai !== 0 && (
                       <button onClick={() => handleCancelBooking(b.iddatPhong)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ef4444", background: "#fff", color: "#ef4444", cursor: "pointer", fontSize: 12 }}>Hủy</button>
@@ -694,33 +699,18 @@ const CheckinSectionNewFixed: React.FC = () => {
             </svg>
           </div>
           <div style={{ flex: 1 }}>
-            <h3 style={{ margin: 0, color: '#111827' }}>Phòng bạn đã đặt hiện vẫn đang được sử dụng</h3>
-            <div style={{ marginTop: 6, color: '#6b7280' }}>(Khách trước chưa Checkout đúng giờ).</div>
+            <h3 style={{ margin: 0, color: '#111827' }}>Không thể nhận phòng</h3>
+            <div style={{ marginTop: 6, color: '#6b7280' }}>Phòng hiện đang có khách sử dụng hoặc khách trước chưa checkout đúng giờ.</div>
             {overdueContext?.message && <div style={{ marginTop: 8, color: '#6b7280' }}>{overdueContext.message}</div>}
-
-            {/* show a small summary of the booked room (if available) */}
-            {overdueContext?.bookingId && (() => {
-              const b = bookings.find(x => x.iddatPhong === overdueContext.bookingId);
-              if (!b) return null;
-              return (
-                <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: '#fff', border: '1px solid #f1f5f9', display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <div style={{ width: 92, height: 64, overflow: 'hidden', borderRadius: 6, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Image src={(b as any).roomImageUrl ?? (b as any).urlAnhPhong ?? (b as any).hinhAnh} width={92} height={64} preview={false} fallback="/img/placeholder.png" />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700 }}>{b.tenPhong ?? b.soPhong ?? b.idphong}</div>
-                    <div style={{ color: '#6b7280', fontSize: 13 }}>{b.soDem ? `${b.soDem} đêm` : ''} {b.tongTien ? '• ' + Number(b.tongTien).toLocaleString() + ' đ' : ''}</div>
-                  </div>
-                </div>
-              );
-            })()}
+            <Alert 
+              style={{ marginTop: 12 }} 
+              type="info" 
+              message="Vui lòng chờ khách trước checkout hoặc liên hệ bộ phận quản lý để xử lý." 
+              showIcon 
+            />
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <Button type="primary" onClick={async () => {
-                setShowOverdueModal(false);
-                if (overdueContext?.bookingId) await openReassignModal(overdueContext.bookingId);
-              }}>Đổi phòng</Button>
-              <Button onClick={() => setShowOverdueModal(false)}>Hủy</Button>
+              <Button type="primary" onClick={() => setShowOverdueModal(false)}>Đã hiểu</Button>
             </div>
           </div>
         </div>
@@ -789,7 +779,7 @@ const CheckinSectionNewFixed: React.FC = () => {
       </Modal>
 
       {/* Overdue invoice modal using existing invoice component */}
-      <InvoiceModalWithLateFee
+      <InvoiceCheckin
         visible={overdueInvoiceVisible}
         invoiceData={overdueInvoiceData}
         paymentRow={null}

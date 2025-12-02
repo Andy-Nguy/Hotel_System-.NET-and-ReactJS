@@ -220,6 +220,8 @@ namespace Hotel_System.API.Controllers
 
                 // Check if any booking is currently using this room (TrangThai == 3), excluding this booking
                 var currentOccupant = await _context.DatPhongs
+                    .Include(dp => dp.HoaDons)
+                    .Include(dp => dp.IdphongNavigation)
                     .Where(dp => dp.Idphong == booking.Idphong && dp.TrangThai == 3 && dp.IddatPhong != booking.IddatPhong)
                     .OrderByDescending(dp => dp.NgayNhanPhong)
                     .FirstOrDefaultAsync();
@@ -243,10 +245,30 @@ namespace Hotel_System.API.Controllers
                         {
                             // mark occupant overdue and mark room status accordingly
                             currentOccupant.TrangThai = 5; // Quá hạn
+
+                            // Business rule: when booking is overdue (TrangThai == 5), payment status
+                            // must always be 'chưa thanh toán' (1). Sync booking and any invoices.
+                            try
+                            {
+                                currentOccupant.TrangThaiThanhToan = 1;
+                                if (currentOccupant.HoaDons != null)
+                                {
+                                    foreach (var hd in currentOccupant.HoaDons)
+                                    {
+                                        hd.TrangThaiThanhToan = 1;
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Không thể đồng bộ trạng thái thanh toán khi đánh dấu quá hạn cho {Id}", currentOccupant.IddatPhong);
+                            }
+
                             if (currentOccupant.IdphongNavigation != null)
                             {
                                 currentOccupant.IdphongNavigation.TrangThai = "Quá hạn";
                             }
+
                             await _context.SaveChangesAsync();
 
                             // Inform operator that room is overdue and cannot be checked-in

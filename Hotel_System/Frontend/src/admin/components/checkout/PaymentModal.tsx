@@ -398,6 +398,8 @@ const PaymentModal: React.FC<Props> = ({
     if (isOverdueBooking && lateFee > 0) {
     // recompute using finalDisplayServices (includes deduped + computed late fee)
     serviceTotal = serviceTotalFromCombined;
+    // Phí trả phòng muộn KHÔNG tính VAT (là phí phạt)
+    // Công thức: TongTien = (room + service) * 1.1 + lateFee
     subTotal = roomTotal + serviceTotal;
     vat = Math.round(subTotal * 0.1);
     total = subTotal + vat + lateFee;
@@ -639,7 +641,7 @@ const PaymentModal: React.FC<Props> = ({
               }}
             >
               <span>Tạm tính (chưa VAT):</span>
-              <strong>{subTotal.toLocaleString()} đ</strong>
+              <strong>{(roomTotal + serviceTotal).toLocaleString()} đ</strong>
             </div>
             <div
               style={{
@@ -651,11 +653,11 @@ const PaymentModal: React.FC<Props> = ({
               <span>Thuế VAT (10%):</span>
               <strong>{vat.toLocaleString()} đ</strong>
             </div>
-            {/* Show late-fee under VAT only for overdue booking with a detected surcharge */}
+            {/* Show late-fee AFTER VAT for overdue booking - phí phạt không tính VAT */}
             {isOverdueBooking && lateFee > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span>Phí trả phòng muộn:</span>
-                <strong>{Number(lateFee).toLocaleString()} đ</strong>
+                <span style={{ color: '#d4380d' }}>Phí trả phòng muộn (không VAT):</span>
+                <strong style={{ color: '#d4380d' }}>+ {Number(lateFee).toLocaleString()} đ</strong>
               </div>
             )}
             <Divider />
