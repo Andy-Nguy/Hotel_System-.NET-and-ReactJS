@@ -1,4 +1,5 @@
 using Hotel_System.API.Models;
+using Hotel_System.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,13 +18,15 @@ namespace Hotel_System.API.Controllers
         private readonly ILogger<CheckInController> _logger;
         private readonly Hotel_System.API.Services.IEmailService _emailService;
         private readonly Hotel_System.API.Services.EmailTemplateRenderer _templateRenderer;
+        private readonly RoomService _roomService;
 
-        public CheckInController(HotelSystemContext context, ILogger<CheckInController> logger, Hotel_System.API.Services.IEmailService emailService, Hotel_System.API.Services.EmailTemplateRenderer templateRenderer)
+        public CheckInController(HotelSystemContext context, ILogger<CheckInController> logger, Hotel_System.API.Services.IEmailService emailService, Hotel_System.API.Services.EmailTemplateRenderer templateRenderer, RoomService roomService)
         {
             _context = context;
             _logger = logger;
             _emailService = emailService;
             _templateRenderer = templateRenderer;
+            _roomService = roomService;
         }
 
         private async Task<bool> TrySendEmailAsync(string to, string subject, string body)
@@ -35,7 +38,7 @@ namespace Hotel_System.API.Controllers
                 var m5 = type.GetMethod("SendEmailAsync", new[] { typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool) });
                 if (m5 != null)
                 {
-                    var task = (Task)m5.Invoke(_emailService, new object[] { to, subject, body, true, true })!; 
+                    var task = (Task)m5.Invoke(_emailService, new object[] { to, subject, body, true, true })!;
                     await task.ConfigureAwait(false);
                     return true;
                 }
@@ -48,7 +51,6 @@ namespace Hotel_System.API.Controllers
                     return true;
                 }
 
-                // fallback to common 3-arg signature
                 await _emailService.SendEmailAsync(to, subject, body);
                 return true;
             }
@@ -59,7 +61,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        // GET: api/CheckIn
+        // GET: api/NhanPhong
         // Return bookings that are currently 'Đang sử dụng' (TrangThai == 3)
         [HttpGet]
         public async Task<IActionResult> GetUsingBookings()
@@ -90,7 +92,7 @@ namespace Hotel_System.API.Controllers
             return Ok(list);
         }
 
-        // GET: api/CheckIn/today
+        // GET: api/CheckIn/hom-nay
         // Return bookings that have NgayNhanPhong == today and TrangThai == 2 (ready/confirmed)
         [HttpGet("today")]
         public async Task<IActionResult> GetTodayBookings()
@@ -191,36 +193,10 @@ namespace Hotel_System.API.Controllers
             return Ok(result);
         }
 
-        // POST: api/CheckIn/start/{id}
-        // Mark the booking as 'Đang sử dụng' (TrangThai = 3) and set NgayNhanPhong to now if not set
-        [HttpPost("start/{id}")]
-        public async Task<IActionResult> StartCheckIn(string id)
-        {
-            if (string.IsNullOrWhiteSpace(id)) return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });
 
-            var booking = await _context.DatPhongs.FirstOrDefaultAsync(dp => dp.IddatPhong == id);
-            if (booking == null) return NotFound(new { message = "Không tìm thấy đặt phòng." });
-
-            try
-            {
-                booking.TrangThai = 3; // Đang sử dụng
-                // If NgayNhanPhong is default, set to today
-                if (booking.NgayNhanPhong == default)
-                    booking.NgayNhanPhong = DateOnly.FromDateTime(DateTime.Now);
-
-                await _context.SaveChangesAsync();
-                return Ok(new { message = "Bắt đầu nhận phòng thành công.", bookingId = booking.IddatPhong, trangThai = booking.TrangThai });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi bắt đầu nhận phòng cho {Id}", id);
-                return StatusCode(500, new { message = "Lỗi server.", error = ex.Message });
-            }
-        }
-
-    // PUT/POST: api/CheckIn/confirm/{id}
-    // Confirm a booking as 'Đang sử dụng' (TrangThai = 3). Accepts either PUT or POST for compatibility.
-    [HttpPost("confirm/{id}")]
+        // PUT/POST: api/CheckIn/confirm/{id}
+        // Confirm a booking as 'Đang sử dụng' (TrangThai = 3). Accepts either PUT or POST for compatibility.
+        [HttpPost("confirm/{id}")]
         public async Task<IActionResult> ConfirmCheckIn(string id)
         {
             if (string.IsNullOrWhiteSpace(id)) return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });
@@ -233,6 +209,77 @@ namespace Hotel_System.API.Controllers
 
             try
             {
+                // Enforce fixed check-in time: 14:00 on the booking date
+                var now = DateTime.Now;
+                var allowedCheckIn = booking.NgayNhanPhong.ToDateTime(new TimeOnly(14, 0));
+
+                if (now < allowedCheckIn)
+                {
+                    return BadRequest(new { message = $"Chưa đến giờ nhận phòng. Vui lòng chờ đến {allowedCheckIn:HH:mm} ngày {allowedCheckIn:dd/MM/yyyy}." });
+                }
+
+                // Check if any booking is currently using this room (TrangThai == 3), excluding this booking
+                var currentOccupant = await _context.DatPhongs
+                    .Include(dp => dp.HoaDons)
+                    .Include(dp => dp.IdphongNavigation)
+                    .Where(dp => dp.Idphong == booking.Idphong && dp.TrangThai == 3 && dp.IddatPhong != booking.IddatPhong)
+                    .OrderByDescending(dp => dp.NgayNhanPhong)
+                    .FirstOrDefaultAsync();
+
+                if (currentOccupant != null)
+                {
+                    // Determine whether the two bookings overlap. If the new booking starts after the current occupant's end, allow check-in.
+                    var currentEnd = currentOccupant.NgayTraPhong;
+                    var bookingStart = booking.NgayNhanPhong;
+
+                    if (bookingStart > currentEnd)
+                    {
+                        // no overlap in dates — allow check-in
+                    }
+                    else
+                    {
+                        var today = DateOnly.FromDateTime(DateTime.Now);
+
+                        // If the current occupant was expected to checkout today, mark overdue and prompt reassign
+                        if (currentOccupant.NgayTraPhong == today)
+                        {
+                            // mark occupant overdue and mark room status accordingly
+                            currentOccupant.TrangThai = 5; // Quá hạn
+
+                            // Business rule: when booking is overdue (TrangThai == 5), payment status
+                            // must always be 'chưa thanh toán' (1). Sync booking and any invoices.
+                            try
+                            {
+                                currentOccupant.TrangThaiThanhToan = 1;
+                                if (currentOccupant.HoaDons != null)
+                                {
+                                    foreach (var hd in currentOccupant.HoaDons)
+                                    {
+                                        hd.TrangThaiThanhToan = 1;
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Không thể đồng bộ trạng thái thanh toán khi đánh dấu quá hạn cho {Id}", currentOccupant.IddatPhong);
+                            }
+
+                            if (currentOccupant.IdphongNavigation != null)
+                            {
+                                currentOccupant.IdphongNavigation.TrangThai = "Quá hạn";
+                            }
+
+                            await _context.SaveChangesAsync();
+
+                            // Inform operator that room is overdue and cannot be checked-in
+                            return BadRequest(new { message = "Phòng hiện đang bị quá hạn (khách chưa trả phòng). Vui lòng đợi hoặc sắp xếp phòng khác." });
+                        }
+
+                        // Otherwise block check-in — room is still occupied by another booking
+                        return BadRequest(new { message = "Phòng đang có khách sử dụng. Vui lòng kiểm tra tình trạng phòng hoặc chuyển phòng khác." });
+                    }
+                }
+
                 booking.TrangThai = 3; // Đang sử dụng
                 if (booking.NgayNhanPhong == default)
                     booking.NgayNhanPhong = DateOnly.FromDateTime(DateTime.Now);
@@ -244,48 +291,9 @@ namespace Hotel_System.API.Controllers
                 }
 
                 await _context.SaveChangesAsync();
-                // send notification email if we have customer's email
-                bool emailSent = false;
-                try
-                {
-                    var email = booking.IdkhachHangNavigation?.Email;
-                    var customerName = booking.IdkhachHangNavigation?.HoTen ?? "Khách hàng";
-                    if (!string.IsNullOrWhiteSpace(email))
-                    {
-                        var subject = $"Xác nhận nhận phòng - {booking.IddatPhong}";
-                        var roomName = booking.IdphongNavigation?.TenPhong ?? booking.Idphong;
-                        // Prepare date/time and guest info safely
-                        var checkinDt = booking.NgayNhanPhong.ToDateTime(new TimeOnly(14, 0));
-                        var checkoutDt = booking.NgayTraPhong.ToDateTime(new TimeOnly(12, 0));
-                        var checkinStr = checkinDt.ToString("dddd, dd/MM/yyyy 'lúc' HH:mm");
-                        var checkoutStr = checkoutDt.ToString("dddd, dd/MM/yyyy 'lúc' HH:mm");
-                        var nights = (booking.NgayTraPhong.ToDateTime(new TimeOnly(0, 0)) - booking.NgayNhanPhong.ToDateTime(new TimeOnly(0, 0))).Days;
-                        var soKhach = booking.SoNguoi ?? 1;
-                        
 
-                        var placeholders = new Dictionary<string, string>
-                        {
-                            ["CustomerName"] = customerName,
-                            ["BookingId"] = booking.IddatPhong,
-                            ["RoomName"] = roomName,
-                            ["RoomNumber"] = booking.Idphong ?? string.Empty,
-                            ["Checkin"] = checkinStr,
-                            ["Checkout"] = checkoutStr,
-                            ["Nights"] = nights.ToString(),
-                            ["Guests"] = soKhach.ToString(),
-                            ["HotelPhone"] = "0909 888 999"
-                        };
-
-                        var html = _templateRenderer.Render("checkin.html", placeholders);
-                        emailSent = await TrySendEmailAsync(email, subject, html);
-                    }
-                }
-                catch (Exception ex2)
-                {
-                    _logger.LogError(ex2, "Lỗi gửi email xác nhận cho đặt phòng {Id}", id);
-                }
-
-                return Ok(new { message = "Xác nhận nhận phòng thành công.", bookingId = booking.IddatPhong, trangThai = booking.TrangThai, emailSent });
+                // Do not send emails here; simply acknowledge success to the operator
+                return Ok(new { message = "Xác nhận nhận phòng thành công.", bookingId = booking.IddatPhong, trangThai = booking.TrangThai });
             }
             catch (Exception ex)
             {
@@ -294,9 +302,184 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-    // PUT/POST: api/CheckIn/cancel/{id}
-    // Cancel a booking (no-show) and set the room status to empty/available
-    [HttpPut("cancel/{id}")]
+        // DTO for reassign request
+        public class ReassignRoomRequest
+        {
+            public string NewRoomId { get; set; } = null!;
+        }
+
+        // POST: api/CheckIn/reassign-room/{id}
+        // Reassign the booking to a different room (performed by receptionist when original room is unavailable)
+        [HttpPost("reassign-room/{id}")]
+        public async Task<IActionResult> ReassignRoom(string id, [FromBody] ReassignRoomRequest req)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });
+            if (req == null || string.IsNullOrWhiteSpace(req.NewRoomId)) return BadRequest(new { message = "Mã phòng mới không hợp lệ." });
+
+            var booking = await _context.DatPhongs
+                .Include(dp => dp.ChiTietDatPhongs)
+                .Include(dp => dp.IdphongNavigation)
+                .Include(dp => dp.HoaDons)
+                .FirstOrDefaultAsync(dp => dp.IddatPhong == id);
+            if (booking == null) return NotFound(new { message = "Không tìm thấy đặt phòng." });
+
+            var newRoom = await _context.Phongs.FindAsync(req.NewRoomId);
+            if (newRoom == null) return NotFound(new { message = "Phòng mới không tồn tại." });
+
+            try
+            {
+                // Check availability for the requested dates
+                var checkInDt = booking.NgayNhanPhong.ToDateTime(new TimeOnly(0, 0));
+                var checkOutDt = booking.NgayTraPhong.ToDateTime(new TimeOnly(0, 0));
+                var available = await _roomService.CheckAvailableRoomsAsync(checkInDt, checkOutDt, booking.SoNguoi ?? 1);
+                var found = available.FirstOrDefault(r => string.Equals(r.RoomId, req.NewRoomId, StringComparison.OrdinalIgnoreCase));
+                if (found == null)
+                {
+                    return BadRequest(new { message = "Phòng được chọn không còn trống cho khoảng thời gian này." });
+                }
+
+                // Compute price difference based on base nightly price (fallback to 0)
+                decimal oldPrice = booking.IdphongNavigation?.GiaCoBanMotDem ?? 0m;
+                decimal newPrice = newRoom.GiaCoBanMotDem ?? 0m;
+                int nights = booking.SoDem ?? 1;
+                var deltaPerNight = newPrice - oldPrice;
+
+                // Số đêm dùng để tính chênh lệch giá phòng
+                // Mặc định: toàn bộ số đêm đã đặt
+                int nightsToCharge = nights;
+
+                // Ngày hiện tại (ngày thực hiện đổi phòng)
+                var today = DateOnly.FromDateTime(DateTime.Now);
+
+                // Nếu khách đã check-in và hôm nay nằm trong khoảng lưu trú,
+                // thì chỉ tính chênh lệch từ hôm nay đến ngày trả phòng (tính luôn đêm hôm nay)
+                if (today > booking.NgayNhanPhong && today < booking.NgayTraPhong)
+                {
+                    nightsToCharge = Math.Max(0, booking.NgayTraPhong.DayNumber - today.DayNumber);
+                }
+                // Nếu đổi sau hoặc đúng ngày trả phòng thì không còn đêm nào để tính
+                else if (today >= booking.NgayTraPhong)
+                {
+                    nightsToCharge = 0;
+                }
+
+                // Tính chênh lệch cơ bản (chưa VAT) theo số đêm áp dụng
+                var totalDelta = deltaPerNight * nightsToCharge; // base delta (no VAT)
+
+                // Apply VAT to the delta so booking.TongTien (which stores total AFTER VAT) is adjusted correctly
+                var totalDeltaWithVat = Math.Round(totalDelta * 1.1m, 0, MidpointRounding.AwayFromZero);
+
+                // Update booking main fields
+                var oldRoomId = booking.Idphong;
+                booking.Idphong = req.NewRoomId;
+                // Add delta WITH VAT to match how totals are computed elsewhere (room+services then VAT)
+                booking.TongTien = booking.TongTien + totalDeltaWithVat;
+
+                // If the new room is more expensive, mark booking and related invoices as unpaid (1 = Chưa thanh toán)
+                if (totalDelta > 0)
+                {
+                    try
+                    {
+                        booking.TrangThaiThanhToan = 1;
+                        if (booking.HoaDons != null)
+                        {
+                            foreach (var hd in booking.HoaDons)
+                            {
+                                hd.TrangThaiThanhToan = 1;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Không thể cập nhật trạng thái thanh toán cho hoá đơn khi đổi phòng cho {Id}", id);
+                    }
+                }
+
+                // Update any ChiTietDatPhongs entries that reference the old room
+                if (booking.ChiTietDatPhongs != null)
+                {
+                    foreach (var ct in booking.ChiTietDatPhongs)
+                    {
+                        if (!string.IsNullOrWhiteSpace(ct.IDPhong) && ct.IDPhong == oldRoomId)
+                        {
+                            ct.IDPhong = req.NewRoomId;
+                            // update price if new room has a base price
+                            if (newRoom.GiaCoBanMotDem.HasValue)
+                            {
+                                ct.GiaPhong = newRoom.GiaCoBanMotDem.Value;
+                            }
+                            // recalc line total
+                            ct.ThanhTien = ct.SoDem * ct.GiaPhong;
+                        }
+                    }
+                }
+
+                // Add an audit log entry
+                var log = new LichSuDatPhong
+                {
+                    IddatPhong = booking.IddatPhong,
+                    NgayCapNhat = DateTime.Now,
+                    GhiChu = $"Chuyển phòng: {oldRoomId} -> {req.NewRoomId}. Chênh lệch tổng: {totalDelta:C} (theo {nightsToCharge} đêm)."
+                };
+                _context.LichSuDatPhongs.Add(log);
+
+                // If the new room is more expensive, update the existing invoice for this booking
+                // rather than creating a new one. This keeps the customer's invoice consolidated.
+                string? createdInvoiceId = null;
+                if (totalDelta > 0)
+                {
+                    try
+                    {
+                        var deltaWithVat = Math.Round(totalDelta * 1.1m, 0, MidpointRounding.AwayFromZero);
+
+                        // Prefer updating the latest invoice for this booking if present
+                        var existingInvoice = booking.HoaDons?.OrderByDescending(h => h.NgayLap).FirstOrDefault();
+                        if (existingInvoice != null)
+                        {
+                            // Add delta to base room amount and VAT-inclusive total
+                            existingInvoice.TienPhong = (existingInvoice.TienPhong ?? 0) + (int?)Math.Round((double)totalDelta);
+                            // TongTien is a non-nullable decimal in the model — add delta directly
+                            existingInvoice.TongTien = existingInvoice.TongTien + deltaWithVat;
+                            // Mark as unpaid/needs payment confirmation
+                            existingInvoice.TrangThaiThanhToan = 1;
+                            // Keep TienThanhToan as-is (frontend/admin will compute remaining due)
+                            createdInvoiceId = existingInvoice.IdhoaDon;
+                        }
+                        else
+                        {
+                            // THEO YÊU CẦU MỚI:
+                            // Không tạo hóa đơn mới khi đổi phòng.
+                            // Chỉ cập nhật Booking.TongTien & trạng thái thanh toán ở trên.
+                            _logger.LogWarning(
+                                "ReassignRoom: booking {Id} không có hóa đơn cũ để cập nhật khi đổi phòng. " +
+                                "Theo nghiệp vụ mới: KHÔNG tạo hóa đ��n mới. Chênh lệch {Delta} sẽ phản ánh trong TongTien của đặt phòng.",
+                                booking.IddatPhong,
+                                totalDelta
+                            );
+
+                            // createdInvoiceId để nguyên null, frontend không phụ thuộc giá trị này.
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Không thể cập nhật hoá đơn chênh lệch khi đổi phòng cho {Id}", id);
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Đổi phòng thành công.", bookingId = booking.IddatPhong, newRoom = req.NewRoomId, priceDelta = totalDelta, tongTien = booking.TongTien, invoiceId = createdInvoiceId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi đổi phòng cho {Id}", id);
+                return StatusCode(500, new { message = "Lỗi server khi đổi phòng.", error = ex.Message });
+            }
+        }
+
+        // PUT/POST: api/CheckIn/cancel/{id}
+        // Cancel a booking (no-show) and set the room status to empty/available
+        [HttpPut("cancel/{id}")]
         public async Task<IActionResult> CancelBooking(string id)
         {
             if (string.IsNullOrWhiteSpace(id)) return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });

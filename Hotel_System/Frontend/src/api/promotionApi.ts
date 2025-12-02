@@ -78,7 +78,7 @@ export const getAllPromotions = async (
   if (toDate) params.append("toDate", toDate.toISOString());
 
   const query = params.toString() ? `?${params.toString()}` : "";
-  const url = `${API_BASE}/KhuyenMai${query}`;
+  const url = `${API_BASE}/khuyenmai${query}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error("Failed to fetch promotions");
   return response.json();
@@ -119,41 +119,6 @@ export const createCombo = async (data: CreateComboRequest) => {
   return response.json();
 };
 
-// Create a room+service promotion mapping
-export interface CreatePhongDichVuRequest {
-  idkhuyenMai: string;
-  idphong: string;
-  iddichVu: string;
-  ngayApDung?: string;
-  ngayKetThuc?: string;
-  isActive?: boolean;
-  forceCreateIfConflict?: boolean;
-}
-
-export const createPhongDichVu = async (data: CreatePhongDichVuRequest) => {
-  const token = localStorage.getItem('hs_token');
-  const headers: any = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch('/api/khuyenmai/phongdichvu', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      IdkhuyenMai: data.idkhuyenMai,
-      Idphong: data.idphong,
-      IddichVu: data.iddichVu,
-      NgayApDung: data.ngayApDung,
-      NgayKetThuc: data.ngayKetThuc,
-      IsActive: data.isActive ?? true,
-      ForceCreateIfConflict: data.forceCreateIfConflict ?? false,
-    }),
-  });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || 'Failed to create phong-dichvu mapping');
-  }
-  return response.json();
-};
-
 // Suggest existing combos given a set of service IDs
 export const suggestCombos = async (dichvuIds: string[]) => {
   const q = dichvuIds.map(encodeURIComponent).join(',');
@@ -167,7 +132,7 @@ export const suggestCombos = async (dichvuIds: string[]) => {
 
 // Get promotion by ID
 export const getPromotionById = async (id: string): Promise<Promotion> => {
-  const url = `${API_BASE}/KhuyenMai/${id}`;
+  const url = `${API_BASE}/khuyenmai/${id}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error("Failed to fetch promotion");
   return response.json();
@@ -180,7 +145,7 @@ export const createPromotion = async (
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = `${API_BASE}/KhuyenMai`;
+  const url = `${API_BASE}/khuyenmai`;
   const response = await fetch(url, {
     method: "POST",
     headers,
@@ -201,7 +166,7 @@ export const updatePromotion = async (
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = `${API_BASE}/KhuyenMai/${id}`;
+  const url = `${API_BASE}/khuyenmai/${id}`;
   const response = await fetch(url, {
     method: "PUT",
     headers,
@@ -224,7 +189,7 @@ export const assignServiceToPromotion = async (
     ngayKetThuc?: string;
   }
 ): Promise<any> => {
-  const response = await fetch(`${API_BASE}/${promotionId}/gan-dich-vu`, {
+  const response = await fetch(`${API_BASE}/khuyenmai/${promotionId}/gan-dich-vu`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -241,7 +206,7 @@ export const togglePromotion = async (id: string): Promise<Promotion> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/${id}/bat-tat`, {
+  const response = await fetch(`${API_BASE}/khuyenmai/${id}/bat-tat`, {
     method: "PATCH",
     headers,
   });
@@ -257,7 +222,7 @@ export const deletePromotion = async (id: string): Promise<void> => {
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const url = `${API_BASE}/KhuyenMai/${id}`;
+  const url = `${API_BASE}/khuyenmai/${id}`;
   const response = await fetch(url, {
     method: "DELETE",
     headers,
@@ -276,15 +241,23 @@ export const updateExpiredStatus = async (): Promise<{
   const token = localStorage.getItem("hs_token");
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_BASE}/cap-nhat-trang-thai-het-han`, {
+  const response = await fetch(`${API_BASE}/khuyenmai/cap-nhat-trang-thai-het-han`, {
     method: "POST",
     headers,
   });
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || "Failed to update expired status");
+    let errorMessage = "Failed to update expired status";
+    try {
+      const error = await response.json();
+      errorMessage = error.message || errorMessage;
+    } catch (e) {
+      // Response might not have JSON body
+      errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
   }
-  return response.json();
+  const text = await response.text();
+  return text ? JSON.parse(text) : { message: "Success", count: 0 };
 };
 
 export interface UploadResult {
@@ -314,7 +287,7 @@ export const uploadBanner = async (file: File): Promise<UploadResult> => {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${API_BASE}/tai-banner`, {
+  const response = await fetch(`${API_BASE}/khuyenmai/tai-banner`, {
     method: "POST",
     headers,
     body: formData,

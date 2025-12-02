@@ -49,7 +49,7 @@ namespace Hotel_System.API.Controllers
                     {
                         id = r.IddanhGia,
                         roomId = r.Idphong,
-                        bookingId = r.IddatPhong,
+                        bookingId = (string?)null,
                         rating = r.SoSao,
                         title = r.TieuDe,
                         content = r.NoiDung,
@@ -114,150 +114,7 @@ namespace Hotel_System.API.Controllers
         }
 
         /// <summary>
-        /// POST /api/Review - Submit a review for a booking
-        /// </summary>
-        [HttpPost]
-        public async Task<IActionResult> SubmitReview([FromBody] ReviewSubmitRequest request)
-        {
-            try
-            {
-                if (request == null || string.IsNullOrEmpty(request.IddatPhong))
-                {
-                    return BadRequest(new { error = "IddatPhong là bắt buộc" });
-                }
-
-                if (request.Rating < 1 || request.Rating > 5)
-                {
-                    return BadRequest(new { error = "Rating phải nằm trong khoảng 1-5" });
-                }
-
-                // Check if booking exists
-                var booking = await _context.DatPhongs.FirstOrDefaultAsync(b => b.IddatPhong == request.IddatPhong);
-                if (booking == null)
-                {
-                    return NotFound(new { error = "Không tìm thấy phòng đặt" });
-                }
-
-                // Check if review already exists for this booking
-                var existingReview = await _context.DanhGia
-                    .FirstOrDefaultAsync(r => r.IddatPhong == request.IddatPhong);
-
-                if (existingReview != null)
-                {
-                    return BadRequest(new { error = "Bạn đã đánh giá phòng này rồi" });
-                }
-
-                // Ensure we associate review with the correct room and customer
-                if (booking.Idphong == null)
-                {
-                    return StatusCode(500, new { error = "Booking does not contain room information" });
-                }
-
-                if (booking.IdkhachHang == null)
-                {
-                    // Must have a customer associated with the booking to submit a review
-                    return BadRequest(new { error = "Booking does not have an associated customer" });
-                }
-
-                // Create new review
-                var review = new DanhGium
-                {
-                    IddatPhong = request.IddatPhong,
-                    IdkhachHang = booking.IdkhachHang.Value,
-                    Idphong = booking.Idphong, // use the booked room id
-                    SoSao = (byte)request.Rating,
-                    TieuDe = request.Title,
-                    NoiDung = request.Content,
-                    IsAnonym = request.IsAnonym == 1,
-                    CreatedAt = DateTime.Now,
-                    UpdatedAt = DateTime.Now
-                };
-
-                _context.DanhGia.Add(review);
-                try
-                {
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateException dbex)
-                {
-                    _logger.LogError(dbex, "DB error saving review for booking {BookingId}", request.IddatPhong);
-                    return StatusCode(500, new { error = "Lỗi khi lưu đánh giá vào cơ sở dữ liệu", detail = dbex.Message });
-                }
-
-                return Ok(new
-                {
-                    message = "Đánh giá được tạo thành công",
-                    id = review.IddanhGia,
-                    IddatPhong = review.IddatPhong
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error submitting review");
-                // Return detailed error for debugging (remove detail in production)
-                return StatusCode(500, new { error = "Lỗi khi gửi đánh giá", detail = ex.Message });
-            }
-        }
-
-        /// <summary>
-        /// GET /api/Review/status/{IddatPhong} - Check review status for a booking
-        /// </summary>
-        [HttpGet("status/{IddatPhong}")]
-        public async Task<IActionResult> GetReviewStatus(string IddatPhong)
-        {
-            try
-            {
-                var review = await _context.DanhGia
-                    .FirstOrDefaultAsync(r => r.IddatPhong == IddatPhong);
-
-                return Ok(new
-                {
-                    IddatPhong = IddatPhong,
-                    hasReview = review != null,
-                    reviewId = review?.IddanhGia,
-                    createdAt = review?.CreatedAt
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error fetching review status");
-                return StatusCode(500, new { error = "Lỗi khi kiểm tra trạng thái đánh giá" });
-            }
-        }
-
-        /// <summary>
-        /// GET /api/Review/booking/{IddatPhong} - Get reviews for a booking
-        /// </summary>
-        [HttpGet("booking/{IddatPhong}")]
-        public async Task<IActionResult> GetBookingReviews(string IddatPhong)
-        {
-            try
-            {
-                var reviews = await _context.DanhGia
-                    .Where(r => r.IddatPhong == IddatPhong)
-                    .Select(r => new
-                    {
-                        id = r.IddanhGia,
-                        IddatPhong = r.IddatPhong,
-                        Rating = r.SoSao,
-                        Title = r.TieuDe,
-                        Content = r.NoiDung,
-                        IsAnonym = r.IsAnonym,
-                        CreatedAt = r.CreatedAt
-                    })
-                    .ToListAsync();
-
-                return Ok(reviews);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error fetching booking reviews");
-                return StatusCode(500, new { error = "Lỗi khi lấy đánh giá" });
-            }
-        }
-
-        /// <summary>
-        /// GET /api/Review/stats - Get rating statistics
+        /// GET /api/Review/stats - Get global rating statistics (all rooms)
         /// </summary>
         [HttpGet("stats")]
         public async Task<IActionResult> GetRatingStats()
@@ -287,8 +144,468 @@ namespace Hotel_System.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching rating stats");
+                _logger.LogError(ex, "Error fetching global rating stats");
                 return StatusCode(500, new { error = "Lỗi khi lấy thống kê đánh giá" });
+            }
+        }
+
+        /// <summary>
+        /// POST /api/Review - Submit a review for a booking
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> SubmitReview([FromBody] ReviewSubmitRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrEmpty(request.IddatPhong))
+                {
+                    return BadRequest(new { error = "IddatPhong là bắt buộc" });
+                }
+
+                if (request.Rating < 1 || request.Rating > 5)
+                {
+                    return BadRequest(new { error = "Rating phải nằm trong khoảng 1-5" });
+                }
+
+                // Check if booking exists
+                var booking = await _context.DatPhongs.FirstOrDefaultAsync(b => b.IddatPhong == request.IddatPhong);
+                if (booking == null)
+                {
+                    return NotFound(new { error = "Không tìm thấy phòng đặt" });
+                }
+
+                // Check if review already exists for this booking
+                // Since the DB schema may not have an IDDatPhong column, detect
+                // an existing review by the same customer for the same room
+                var existingReview = await _context.DanhGia
+                    .FirstOrDefaultAsync(r => r.IdkhachHang == booking.IdkhachHang && r.Idphong == booking.Idphong);
+
+                if (existingReview != null)
+                {
+                    return BadRequest(new { error = "Bạn đã đánh giá phòng này rồi" });
+                }
+
+                // Ensure we associate review with the correct room and customer
+                if (booking.Idphong == null)
+                {
+                    return StatusCode(500, new { error = "Booking does not contain room information" });
+                }
+
+                if (booking.IdkhachHang == null)
+                {
+                    // Must have a customer associated with the booking to submit a review
+                    return BadRequest(new { error = "Booking does not have an associated customer" });
+                }
+
+                // Create new review
+                var review = new DanhGium
+                {
+                    IddatPhong = request.IddatPhong,
+                    IdkhachHang = booking.IdkhachHang.Value,
+                    Idphong = booking.Idphong, // use the booked room id
+                    SoSao = (byte)request.Rating,
+                    TieuDe = request.Title,
+                    NoiDung = request.Content,
+                    IsAnonym = request.IsAnonym == 1,
+                    IsApproved = false, // Default to pending approval
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now
+                };
+
+                _context.DanhGia.Add(review);
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateException dbex)
+                {
+                    _logger.LogError(dbex, "DB error saving review for booking {BookingId}", request.IddatPhong);
+                    return StatusCode(500, new { error = "Lỗi khi lưu đánh giá vào cơ sở dữ liệu", detail = dbex.Message });
+                }
+
+                // Send urgent notification for low ratings (<= 3 stars)
+                if (request.Rating <= 3)
+                {
+                    await SendUrgentReviewNotificationAsync(review, booking);
+                }
+
+                return Ok(new
+                {
+                    message = "Đánh giá được tạo thành công",
+                    id = review.IddanhGia,
+                    IddatPhong = review.IddatPhong
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error submitting review");
+                // Return detailed error for debugging (remove detail in production)
+                return StatusCode(500, new { error = "Lỗi khi gửi đánh giá", detail = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// GET /api/Review/status/{IddatPhong} - Check review status for a booking
+        /// </summary>
+        [HttpGet("status/{IddatPhong}")]
+        public async Task<IActionResult> GetReviewStatus(string IddatPhong)
+        {
+            try
+            {
+                // Find booking, then check for a review by the same customer for that room
+                var booking = await _context.DatPhongs.FirstOrDefaultAsync(b => b.IddatPhong == IddatPhong);
+                if (booking == null)
+                {
+                    return NotFound(new { error = "Không tìm thấy phòng đặt" });
+                }
+
+                var review = await _context.DanhGia
+                    .FirstOrDefaultAsync(r => r.IdkhachHang == booking.IdkhachHang && r.Idphong == booking.Idphong);
+
+                return Ok(new
+                {
+                    IddatPhong = IddatPhong,
+                    hasReview = review != null,
+                    reviewId = review?.IddanhGia,
+                    createdAt = review?.CreatedAt
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching review status");
+                return StatusCode(500, new { error = "Lỗi khi kiểm tra trạng thái đánh giá" });
+            }
+        }
+
+        /// <summary>
+        /// GET /api/Review/booking/{IddatPhong} - Get reviews for a booking
+        /// </summary>
+        [HttpGet("booking/{IddatPhong}")]
+        public async Task<IActionResult> GetBookingReviews(string IddatPhong)
+        {
+            try
+            {
+                // Find booking then return reviews by that booking's customer for the same room
+                var booking = await _context.DatPhongs.FirstOrDefaultAsync(b => b.IddatPhong == IddatPhong);
+                if (booking == null)
+                {
+                    return NotFound(new { error = "Không tìm thấy phòng đặt" });
+                }
+
+                var reviews = await _context.DanhGia
+                    .Where(r => r.IdkhachHang == booking.IdkhachHang && r.Idphong == booking.Idphong)
+                    .Select(r => new
+                    {
+                        id = r.IddanhGia,
+                        IddatPhong = IddatPhong,
+                        Rating = r.SoSao,
+                        Title = r.TieuDe,
+                        Content = r.NoiDung,
+                        IsAnonym = r.IsAnonym,
+                        CreatedAt = r.CreatedAt
+                    })
+                    .ToListAsync();
+
+                return Ok(reviews);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching booking reviews");
+                return StatusCode(500, new { error = "Lỗi khi lấy đánh giá" });
+            }
+        }
+
+        /// <summary>
+        /// GET /api/Review - Get all reviews for admin management (paginated)
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetAllReviews(int page = 1, int pageSize = 20, string? status = null, string? keyword = null)
+        {
+            try
+            {
+                var query = _context.DanhGia
+                    .Include(r => r.IdkhachHangNavigation)
+                    .Include(r => r.IdphongNavigation)
+                        .ThenInclude(p => p.IdloaiPhongNavigation)
+                    .AsQueryable();
+
+                // Filter by approval status if specified
+                if (!string.IsNullOrEmpty(status))
+                {
+                    if (status.ToLower() == "pending")
+                    {
+                        query = query.Where(r => !r.IsApproved);
+                    }
+                    else if (status.ToLower() == "approved")
+                    {
+                        query = query.Where(r => r.IsApproved);
+                    }
+                }
+
+                // Search by customer name or title
+                if (!string.IsNullOrEmpty(keyword))
+                {
+                    query = query.Where(r =>
+                        (r.IdkhachHangNavigation != null && r.IdkhachHangNavigation.HoTen.Contains(keyword)) ||
+                        r.TieuDe.Contains(keyword));
+                }
+
+                var total = await query.CountAsync();
+
+                var reviews = await query
+                    .OrderByDescending(r => r.CreatedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(r => new
+                    {
+                        id = r.IddanhGia,
+                        bookingId = r.IddatPhong,
+                        roomId = r.Idphong,
+                        roomName = r.IdphongNavigation != null ? r.IdphongNavigation.TenPhong : null,
+                        roomType = r.IdphongNavigation != null && r.IdphongNavigation.IdloaiPhongNavigation != null 
+                            ? r.IdphongNavigation.IdloaiPhongNavigation.TenLoaiPhong : null,
+                        customerId = r.IdkhachHang,
+                        customerName = r.IsAnonym == true ? "Ẩn danh" : (r.IdkhachHangNavigation != null ? r.IdkhachHangNavigation.HoTen : "Ẩn danh"),
+                        rating = r.SoSao,
+                        title = r.TieuDe,
+                        content = r.NoiDung,
+                        isAnonym = r.IsAnonym,
+                        isApproved = r.IsApproved,
+                        isResponded = r.IsResponded,
+                        createdAt = r.CreatedAt,
+                        updatedAt = r.UpdatedAt
+                    })
+                    .ToListAsync();
+                
+                _logger.LogInformation("GetAllReviews returning {Count} reviews. First review IsApproved: {IsApproved}", 
+                    reviews.Count, reviews.Count > 0 ? reviews[0].isApproved : null);
+
+                return Ok(new
+                {
+                    total,
+                    page,
+                    pageSize,
+                    reviews
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching all reviews: {Message}", ex.Message);
+                return StatusCode(500, new { 
+                    error = "Lỗi khi lấy danh sách đánh giá", 
+                    detail = ex.Message,
+                    innerError = ex.InnerException?.Message 
+                });
+            }
+        }
+
+        /// <summary>
+        /// PUT /api/Review/{id}/approve - Approve a review
+        /// </summary>
+        [HttpPut("{id}/approve")]
+        public async Task<IActionResult> ApproveReview(int id)
+        {
+            try
+            {
+                var review = await _context.DanhGia.FindAsync(id);
+                if (review == null)
+                {
+                    return NotFound(new { error = "Không tìm thấy đánh giá" });
+                }
+
+                if (review.IsApproved)
+                {
+                    return BadRequest(new { error = "Đánh giá đã được duyệt rồi" });
+                }
+
+                review.IsApproved = true;
+                review.UpdatedAt = DateTime.Now;
+
+                _logger.LogInformation("Review {ReviewId} before save - IsApproved: {IsApproved}", id, review.IsApproved);
+                
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Review {ReviewId} approved by admin - IsApproved: {IsApproved}", id, review.IsApproved);
+
+                // TODO: Send notification to customer about approval
+                // TODO: If rating <= 3, send urgent notification to CSM
+
+                return Ok(new
+                {
+                    message = "Đánh giá đã được duyệt thành công",
+                    reviewId = id,
+                    isApproved = true
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error approving review {ReviewId}", id);
+                return StatusCode(500, new { error = "Lỗi khi duyệt đánh giá" });
+            }
+        }
+
+        /// <summary>
+        /// DELETE /api/Review/{id} - Delete a review
+        /// </summary>
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteReview(int id)
+        {
+            try
+            {
+                var review = await _context.DanhGia.FindAsync(id);
+                if (review == null)
+                {
+                    return NotFound(new { error = "Không tìm thấy đánh giá" });
+                }
+
+                _context.DanhGia.Remove(review);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Review {ReviewId} deleted by admin", id);
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting review {ReviewId}", id);
+                return StatusCode(500, new { error = "Lỗi khi xóa đánh giá" });
+            }
+        }
+
+        /// <summary>
+        /// POST /api/Review/{id}/respond - Send apology/response email to customer
+        /// </summary>
+        [HttpPost("{id}/respond")]
+        public async Task<IActionResult> RespondToReview(int id, [FromBody] ReviewResponseRequest request)
+        {
+            try
+            {
+                // Get review with customer and booking info
+                var review = await _context.DanhGia
+                    .Include(r => r.IdkhachHangNavigation)
+                    .Include(r => r.IdphongNavigation)
+                        .ThenInclude(p => p.IdloaiPhongNavigation)
+                    .FirstOrDefaultAsync(r => r.IddanhGia == id);
+
+                if (review == null)
+                {
+                    return NotFound(new { error = "Không tìm thấy đánh giá" });
+                }
+
+                // Check if already responded
+                if (review.IsResponded)
+                {
+                    return BadRequest(new { error = "Đánh giá này đã được phản hồi rồi" });
+                }
+
+                // Only allow response for reviews with rating < 4 stars
+                if (review.SoSao >= 4)
+                {
+                    return BadRequest(new { error = "Chỉ cho phép phản hồi đánh giá dưới 4 sao" });
+                }
+
+                var customer = review.IdkhachHangNavigation;
+                if (customer == null || string.IsNullOrEmpty(customer.Email))
+                {
+                    return BadRequest(new { error = "Không tìm thấy email khách hàng" });
+                }
+
+                // Get booking info if available
+                DatPhong? booking = null;
+                if (!string.IsNullOrEmpty(review.IddatPhong))
+                {
+                    booking = await _context.DatPhongs.FirstOrDefaultAsync(b => b.IddatPhong == review.IddatPhong);
+                }
+
+                // Load email template
+                string templatePath = Path.Combine(Directory.GetCurrentDirectory(), "EmailTemplates", "apology-review.html");
+                if (!System.IO.File.Exists(templatePath))
+                {
+                    _logger.LogWarning($"Apology email template not found at {templatePath}");
+                    return StatusCode(500, new { error = "Email template không tìm thấy" });
+                }
+
+                string emailBody = System.IO.File.ReadAllText(templatePath);
+
+                // Generate star display
+                string stars = "";
+                for (int i = 0; i < review.SoSao; i++) stars += "⭐";
+
+                // Convert compensation text to HTML list items
+                var compensationItems = request.Compensation?
+                    .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => $"<li>{s.Trim()}</li>")
+                    .ToList() ?? new List<string>();
+                string compensationHtml = string.Join("\n", compensationItems);
+
+                var roomName = review.IdphongNavigation?.TenPhong ?? "Phòng";
+                var roomType = review.IdphongNavigation?.IdloaiPhongNavigation?.TenLoaiPhong ?? "";
+
+                // Replace placeholders
+                emailBody = emailBody
+                    .Replace("{{CustomerName}}", customer.HoTen ?? "Quý khách")
+                    .Replace("{{ReviewStars}}", stars)
+                    .Replace("{{ReviewTitle}}", review.TieuDe ?? "")
+                    .Replace("{{ReviewContent}}", review.NoiDung ?? "")
+                    .Replace("{{IssueDescription}}", request.IssueDescription ?? "")
+                    .Replace("{{ActionTaken}}", request.ActionTaken ?? "")
+                    .Replace("{{CompensationList}}", compensationHtml)
+                    .Replace("{{BookingId}}", review.IddatPhong ?? "N/A")
+                    .Replace("{{RoomName}}", $"{roomName} {roomType}".Trim())
+                    .Replace("{{CheckInDate}}", booking?.NgayNhanPhong.ToString("dd/MM/yyyy") ?? "N/A")
+                    .Replace("{{CheckOutDate}}", booking?.NgayTraPhong.ToString("dd/MM/yyyy") ?? "N/A")
+                    .Replace("{{SenderName}}", request.SenderName ?? "Quản lý Chăm sóc Khách hàng")
+                    .Replace("{{BookingLink}}", _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173")
+                    .Replace("{{HotelPhone}}", _configuration["Hotel:Phone"] ?? "1900 xxxx")
+                    .Replace("{{HotelEmail}}", _configuration["Hotel:Email"] ?? "support@robinsvilla.com")
+                    .Replace("{{HotelAddress}}", _configuration["Hotel:Address"] ?? "Robins Villa")
+                    .Replace("{{CurrentYear}}", DateTime.Now.Year.ToString());
+
+                // Send email
+                var smtpHost = _configuration["SMTP:Host"] ?? "smtp.gmail.com";
+                var smtpPort = int.Parse(_configuration["SMTP:Port"] ?? "587");
+                var smtpUser = _configuration["SMTP:User"];
+                var smtpPass = _configuration["SMTP:Password"];
+                var fromEmail = _configuration["SMTP:FromEmail"] ?? smtpUser;
+                var fromName = _configuration["SMTP:FromName"] ?? "Robins Villa";
+
+                if (string.IsNullOrEmpty(smtpUser) || string.IsNullOrEmpty(smtpPass))
+                {
+                    _logger.LogWarning("SMTP credentials not configured");
+                    return StatusCode(500, new { error = "Cấu hình email chưa được thiết lập" });
+                }
+
+                using var client = new SmtpClient(smtpHost, smtpPort)
+                {
+                    EnableSsl = true,
+                    Credentials = new NetworkCredential(smtpUser, smtpPass)
+                };
+
+                var mailMessage = new MailMessage
+                {
+                    From = new MailAddress(fromEmail!, fromName),
+                    Subject = $"[Robins Villa] – Phản hồi về đánh giá của Quý khách",
+                    Body = emailBody,
+                    IsBodyHtml = true
+                };
+                mailMessage.To.Add(customer.Email);
+
+                await client.SendMailAsync(mailMessage);
+
+                // Update IsResponded = true after successful email send
+                review.IsResponded = true;
+                review.UpdatedAt = DateTime.Now;
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Apology email sent to {Email} for review {ReviewId}. IsResponded set to true.", customer.Email, id);
+
+                return Ok(new { message = "Email phản hồi đã được gửi thành công", isResponded = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending response email for review {ReviewId}", id);
+                return StatusCode(500, new { error = "Lỗi khi gửi email phản hồi", detail = ex.Message });
             }
         }
 
@@ -317,9 +634,9 @@ namespace Hotel_System.API.Controllers
                     return NotFound(new { error = "Không tìm thấy phòng đặt" });
                 }
 
-                // Check if review already exists
+                // Check if review already exists for the same customer & room
                 var existingReview = await _context.DanhGia
-                    .FirstOrDefaultAsync(r => r.IddatPhong == request.IddatPhong);
+                    .FirstOrDefaultAsync(r => r.IdkhachHang == booking.IdkhachHang && r.Idphong == booking.Idphong);
 
                 if (existingReview != null)
                 {
@@ -402,6 +719,31 @@ namespace Hotel_System.API.Controllers
         }
 
         /// <summary>
+        /// Send urgent notification for low rating reviews (<= 3 stars)
+        /// </summary>
+        private async Task SendUrgentReviewNotificationAsync(DanhGium review, DatPhong booking)
+        {
+            try
+            {
+                // TODO: Implement actual notification system (email, SMS, internal notification)
+                // For now, just log the urgent review
+                _logger.LogWarning("URGENT REVIEW ALERT: Low rating ({Rating} stars) received for booking {BookingId}, room {RoomId}. Customer: {CustomerName}. Review: {Title}",
+                    review.SoSao, review.IddatPhong, review.Idphong, 
+                    booking.IdkhachHangNavigation?.HoTen ?? "Unknown", 
+                    review.TieuDe ?? "No title");
+
+                // TODO: Send email to CSM Leader and Hotel Management
+                // TODO: Create internal notification in admin dashboard
+                // TODO: Flag review for immediate attention
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send urgent review notification for review {ReviewId}", review.IddanhGia);
+            }
+        }
+
+        /// <summary>
         /// Helper method to send email
         /// </summary>
         private async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
@@ -453,11 +795,11 @@ namespace Hotel_System.API.Controllers
                     await client.SendMailAsync(mailMessage);
                 }
 
-                _logger.LogInformation($"Email sent successfully to {toEmail}");
+                _logger.LogInformation($"Email sent successfully to {toEmail}", toEmail);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to send email to {toEmail}");
+                _logger.LogError(ex, $"Failed to send email to {toEmail}", toEmail);
                 throw;
             }
         }
@@ -482,6 +824,32 @@ namespace Hotel_System.API.Controllers
     {
         public string? IddatPhong { get; set; }
         public string? Email { get; set; }
+    }
+
+    /// <summary>
+    /// Request model for responding to a review (apology email)
+    /// </summary>
+    public class ReviewResponseRequest
+    {
+        /// <summary>
+        /// Mô tả vấn đề đã ghi nhận từ đánh giá của khách
+        /// </summary>
+        public string? IssueDescription { get; set; }
+        
+        /// <summary>
+        /// Hành động khắc phục đã thực hiện
+        /// </summary>
+        public string? ActionTaken { get; set; }
+        
+        /// <summary>
+        /// Danh sách ưu đãi bồi thường (mỗi dòng là một ưu đãi)
+        /// </summary>
+        public string? Compensation { get; set; }
+        
+        /// <summary>
+        /// Tên người gửi (Quản lý CSKH)
+        /// </summary>
+        public string? SenderName { get; set; }
     }
     
 }

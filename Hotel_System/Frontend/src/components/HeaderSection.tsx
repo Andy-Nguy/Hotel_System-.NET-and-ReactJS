@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { getUserInfo, checkIsNhanVien } from "../context/UserContext";
+import { API_CONFIG } from "../api/config";
 
 const HeaderSection: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -29,10 +30,7 @@ const HeaderSection: React.FC = () => {
 
       // Fallback: gọi API profile nếu getUserInfo không có dữ liệu
       try {
-        const _VITE_API = (import.meta as any).env?.VITE_API_URL || "";
-        const API_BASE = _VITE_API.replace(/\/$/, "")
-          ? `${_VITE_API.replace(/\/$/, "")}/api`
-          : "/api";
+        const API_BASE = `${API_CONFIG.CURRENT}/api`;
         const res = await fetch(`${API_BASE}/Auth/profile`, {
           headers: { Authorization: `Bearer ${token}` },
         });

@@ -36,7 +36,6 @@ public partial class HotelSystemContext : DbContext
     public virtual DbSet<KhuyenMaiDichVu> KhuyenMaiDichVus { get; set; }
     public virtual DbSet<KhuyenMaiCombo> KhuyenMaiCombos { get; set; }
     public virtual DbSet<KhuyenMaiComboDichVu> KhuyenMaiComboDichVus { get; set; }
-    public virtual DbSet<KhuyenMaiPhongDichVu> KhuyenMaiPhongDichVus { get; set; }
 
     public virtual DbSet<LichSuDatPhong> LichSuDatPhongs { get; set; }
 
@@ -140,36 +139,46 @@ public partial class HotelSystemContext : DbContext
 
         modelBuilder.Entity<DanhGium>(entity =>
         {
-            entity.HasKey(e => e.IddanhGia).HasName("PK__DanhGia__C216E48D8ACD96EC");
+            entity.HasKey(e => e.IddanhGia);
 
-            entity.ToTable("DanhGia");
+            entity.ToTable("danhgia");
 
-            entity.Property(e => e.IddanhGia).HasColumnName("IDDanhGia");
+            entity.Property(e => e.IddanhGia).HasColumnName("iddanhgia");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
-            entity.Property(e => e.IdkhachHang).HasColumnName("IDKhachHang");
+            entity.Property(e => e.IdkhachHang).HasColumnName("idkhachhang");
             entity.Property(e => e.Idphong)
                 .HasMaxLength(50)
-                .HasColumnName("IDPhong");
+                .HasColumnName("idphong");
             entity.Property(e => e.IddatPhong)
                 .HasMaxLength(50)
-                .HasColumnName("IDDatPhong");
-            entity.Property(e => e.IsAnonym).HasDefaultValue(false);
-            entity.Property(e => e.NoiDung).HasColumnType("text");
-            entity.Property(e => e.SoSao).HasColumnName("SoSao");
-            entity.Property(e => e.TieuDe).HasMaxLength(200);
+                .HasColumnName("iddatphong");
+            entity.Property(e => e.IsApproved)
+                .HasDefaultValue(false)
+                .HasColumnName("isapproved");
+            entity.Property(e => e.IsResponded)
+                .HasDefaultValue(false)
+                .HasColumnName("isresponded");
+            entity.Property(e => e.IsAnonym)
+                .HasDefaultValue(false)
+                .HasColumnName("isanonym");
+            entity.Property(e => e.NoiDung)
+                .HasColumnType("text")
+                .HasColumnName("noidung");
+            entity.Property(e => e.SoSao).HasColumnName("sosao");
+            entity.Property(e => e.TieuDe)
+                .HasMaxLength(200)
+                .HasColumnName("tieude");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
 
             entity.HasOne(d => d.IdkhachHangNavigation).WithMany(p => p.DanhGia)
-                .HasForeignKey(d => d.IdkhachHang)
-                .HasConstraintName("FK_DanhGia_KhachHang");
+                .HasForeignKey(d => d.IdkhachHang);
 
             entity.HasOne(d => d.IdphongNavigation).WithMany(p => p.DanhGia)
-                .HasForeignKey(d => d.Idphong)
-                .HasConstraintName("FK_DanhGia_Phong");
+                .HasForeignKey(d => d.Idphong);
         });
 
         modelBuilder.Entity<BlogPost>(entity =>
@@ -337,44 +346,6 @@ public partial class HotelSystemContext : DbContext
             entity.HasOne(d => d.IddichVuNavigation).WithMany()
                 .HasForeignKey(d => d.IddichVu)
                 .HasConstraintName("FK_KhuyenMaiComboDichVu_DichVu");
-        });
-
-        modelBuilder.Entity<KhuyenMaiPhongDichVu>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK_KhuyenMaiPhongDichVu");
-            entity.ToTable("KhuyenMaiPhongDichVu");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.IdkhuyenMai)
-                .HasMaxLength(50)
-                .HasColumnName("IDKhuyenMai");
-            entity.Property(e => e.Idphong)
-                .HasMaxLength(50)
-                .HasColumnName("IDPhong");
-            entity.Property(e => e.IddichVu)
-                .HasMaxLength(50)
-                .HasColumnName("IDDichVu");
-            entity.Property(e => e.IsActive).HasColumnName("IsActive").HasDefaultValue(true);
-            entity.Property(e => e.NgayApDung).HasColumnName("NgayApDung");
-            entity.Property(e => e.NgayKetThuc).HasColumnName("NgayKetThuc");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnName("created_at");
-            entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnName("updated_at");
-
-            entity.HasOne(d => d.IdkhuyenMaiNavigation).WithMany(p => p.KhuyenMaiPhongDichVus)
-                .HasForeignKey(d => d.IdkhuyenMai)
-                .HasConstraintName("FK_KhuyenMaiPhongDichVu_KhuyenMai");
-
-            entity.HasOne(d => d.IdphongNavigation).WithMany()
-                .HasForeignKey(d => d.Idphong)
-                .HasConstraintName("FK_KhuyenMaiPhongDichVu_Phong");
-
-            entity.HasOne(d => d.IddichVuNavigation).WithMany()
-                .HasForeignKey(d => d.IddichVu)
-                .HasConstraintName("FK_KhuyenMaiPhongDichVu_DichVu");
         });
 
         modelBuilder.Entity<HoaDon>(entity =>

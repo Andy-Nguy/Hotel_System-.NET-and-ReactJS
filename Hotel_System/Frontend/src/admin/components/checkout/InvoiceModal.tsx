@@ -71,10 +71,14 @@ const InvoiceModal: React.FC<Props> = ({
   const combinedServices = [...serverServices, ...clientServices];
   const serviceTotal = combinedServices.reduce((s: number, sv: any) => s + Number(sv.thanhTien ?? 0), 0);
 
+  // PHÍ GIA HẠN (nếu có)
+  const extendFee = Number(invoiceData?.money?.extendFee ?? 0);
+  const extendDescription = invoiceData?.money?.extendDescription ?? null;
+
   // TỔNG CUỐI CỦA KHÁCH (ÁP VAT 10%)
   const subTotal = roomTotal + serviceTotal; // trước VAT
   const vat = Math.round(subTotal * 0.1);
-  const finalTotal = Math.round(subTotal + vat);
+  const finalTotal = Math.round(subTotal + vat + extendFee); // cộng thêm phí gia hạn (đã gồm VAT)
 
   // Tiền cọc
   const deposit = Number(invoiceData?.money?.deposit ?? invoiceData?.TienCoc ?? 0);
@@ -212,6 +216,13 @@ const InvoiceModal: React.FC<Props> = ({
                 <span>Thuế VAT (10%):</span>
                 <strong>{vat.toLocaleString()} đ</strong>
               </div>
+              {/* Hiển thị phí gia hạn nếu có */}
+              {extendFee > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, color: '#fa8c16' }}>
+                  <span title={extendDescription || ''}>Phí gia hạn (đã gồm VAT):</span>
+                  <strong>{extendFee.toLocaleString()} đ</strong>
+                </div>
+              )}
               <div style={{ borderTop: '2px solid #000', margin: '12px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 20, fontWeight: 700 }}>
                 <span>TỔNG CỘNG:</span>

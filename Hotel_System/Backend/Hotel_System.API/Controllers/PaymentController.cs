@@ -133,8 +133,9 @@ namespace Hotel_System.API.Controllers
                             ct.ThanhTien = Math.Round(lineTotal, 0, MidpointRounding.AwayFromZero);
                         }
 
-                        // Cập nhật lại tổng tiền đặt phòng = tổng ThànhTiền sau KM
-                        datPhong.TongTien = datPhong.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m;
+                        // NOTE: do NOT persist pre-VAT sum here. We'll compute and persist
+                        // the VAT-inclusive booking total after services are considered
+                        // (see below where `tongTien` is computed).
                     }
                 }
                 catch (Exception ex)
@@ -166,6 +167,9 @@ namespace Hotel_System.API.Controllers
                 // Apply VAT 10% and round to nearest integer
                 decimal tongTien = Math.Round(totalBeforeVat * 1.1m, 0, MidpointRounding.AwayFromZero);
                 _logger.LogInformation("PaymentController: computed tongTien server-side room={Room} services={Services} tongTien={TongTien}", roomTotal, servicesTotal, tongTien);
+
+                // Persist VAT-inclusive total to booking so DatPhong.TongTien always includes VAT
+                datPhong.TongTien = tongTien;
 
                 // Lấy tiền cọc hiện có trên DatPhong làm nguồn dữ liệu mặc định
                 decimal tienCoc = datPhong.TienCoc ?? 0m;
