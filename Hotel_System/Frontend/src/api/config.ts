@@ -18,7 +18,7 @@ export const API_CONFIG = {
   // Set to `false` for local development (use `LOCAL`).
   // NOTE: switching this to false will make `API_CONFIG.CURRENT` point to your
   // local .NET backend (e.g. `https://localhost:5001`).
-  IS_PRODUCTION: true,
+  IS_PRODUCTION: false,
 
   // Current active API - automatically selected based on IS_PRODUCTION
   get CURRENT() {
