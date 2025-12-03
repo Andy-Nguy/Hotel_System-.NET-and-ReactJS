@@ -14,6 +14,7 @@ import {
   Modal,
 } from "antd";
 import { UploadOutlined, EyeOutlined } from "@ant-design/icons";
+import blogApi from "../../api/blogApi";
 
 interface BlogFormData {
   title: string;
@@ -61,28 +62,10 @@ const BlogCreate: React.FC = () => {
     if (!file) return;
     setUploading(true);
     try {
-      const formDataUpload = new FormData();
-      formDataUpload.append("file", file);
-
       const title = formData.title || "blog";
-      const res = await fetch(
-        `/admin/blogs/upload-image?title=${encodeURIComponent(
-          title
-        )}&type=banner`,
-        {
-          method: "POST",
-          body: formDataUpload,
-        }
-      );
-
-      if (res.ok) {
-        const data = await res.json();
-        setFormData((prev) => ({ ...prev, image: data.url }));
-        message.success("✔️ Ảnh cover được upload thành công");
-      } else {
-        const err = await res.text();
-        message.error(`❌ Upload ảnh thất bại: ${err}`);
-      }
+      const data = await blogApi.uploadBlogImage(file, title, "banner");
+      setFormData((prev) => ({ ...prev, image: data.url }));
+      message.success("✔️ Ảnh cover được upload thành công");
     } catch (e) {
       console.error("Upload error:", e);
       message.error("❌ Lỗi upload ảnh cover");
@@ -96,30 +79,13 @@ const BlogCreate: React.FC = () => {
     if (!file) return;
     setUploading(true);
     try {
-      const formDataUpload = new FormData();
-      formDataUpload.append("file", file);
-
       const title = formData.title || "blog";
-      const res = await fetch(
-        `/admin/blogs/upload-image?title=${encodeURIComponent(
-          title
-        )}&type=gallery`,
-        {
-          method: "POST",
-          body: formDataUpload,
-        }
-      );
-
-      if (res.ok) {
-        const data = await res.json();
-        setFormData((prev) => ({
-          ...prev,
-          images: [...(prev.images || []), data.url],
-        }));
-        message.success("✔️ Ảnh được thêm vào gallery");
-      } else {
-        message.error("❌ Upload ảnh gallery thất bại");
-      }
+      const data = await blogApi.uploadBlogImage(file, title, "gallery");
+      setFormData((prev) => ({
+        ...prev,
+        images: [...(prev.images || []), data.url],
+      }));
+      message.success("✔️ Ảnh được thêm vào gallery");
     } catch (e) {
       console.error("Gallery upload error:", e);
       message.error("❌ Lỗi upload ảnh gallery");
@@ -293,10 +259,10 @@ const BlogCreate: React.FC = () => {
     setSubmitting(true);
     try {
       const payload = {
-        title: formData.title?.trim(),
-        category: formData.category?.trim(),
-        type: formData.type,
-        image: formData.image,
+        title: formData.title?.trim() || "",
+        category: formData.category?.trim() || "",
+        type: formData.type || "internal",
+        image: formData.image || "",
         date:
           formData.date?.trim() ||
           new Date().toLocaleDateString("en-US", {
@@ -319,33 +285,22 @@ const BlogCreate: React.FC = () => {
         status: publish ? "PUBLISHED" : formData.status || "DRAFT",
       };
 
-      const res = await fetch("/admin/blogs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        if (publish) message.success("✔️ Tạo và xuất bản thành công!");
-        else message.success("✔️ Tạo bài viết thành công!");
-        // Navigate back to BlogManager
-        setTimeout(() => {
-          try {
-            window.history.pushState(null, "", "/admin/blog");
-            window.dispatchEvent(new PopStateEvent("popstate"));
-          } catch {
-            window.location.hash = "#/admin/blog";
-          }
-        }, 1500);
-      } else {
-        const errData = await res.json();
-        const errorMsg =
-          errData.error || errData.message || "Lỗi không xác định";
-        message.error(`❌ ${errorMsg}`);
-      }
-    } catch (e) {
+      await blogApi.createBlog(payload);
+      if (publish) message.success("✔️ Tạo và xuất bản thành công!");
+      else message.success("✔️ Tạo bài viết thành công!");
+      // Navigate back to BlogManager
+      setTimeout(() => {
+        try {
+          window.history.pushState(null, "", "/admin/blog");
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        } catch {
+          window.location.hash = "#/admin/blog";
+        }
+      }, 1500);
+    } catch (e: any) {
       console.error("Submit error:", e);
-      message.error("❌ Lỗi gửi bài viết. Vui lòng thử lại.");
+      const errorMsg = e.response?.data?.error || e.message || "Lỗi không xác định";
+      message.error(`❌ ${errorMsg}`);
     } finally {
       setSubmitting(false);
     }

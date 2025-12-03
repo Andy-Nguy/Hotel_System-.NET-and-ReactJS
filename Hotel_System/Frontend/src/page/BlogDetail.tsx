@@ -1,5 +1,6 @@
 import React from "react";
 import blogPosts from "../data/blogPosts"; // Giả định đường dẫn data là "../data/blogPosts"
+import blogApi from "../api/blogApi";
 
 // --- TYPE DEFINITIONS ---
 interface BlogPost {
@@ -53,31 +54,23 @@ const BlogDetail: React.FC = () => {
     
     const fetchBlog = async () => {
       try {
-        const res = await fetch(`/api/blog/${id}`);
-        if (res.ok) {
-          const data = await res.json();
-          const mapped: BlogPost = {
-            id: data.id,
-            title: data.title || '',
-            category: data.category || '',
-            type: (data.type || 'internal') as 'internal' | 'external',
-            image: data.image || '',
-            date: data.date || data.publishedAt || '',
-            excerpt: data.excerpt || '',
-            author: data.author || '',
-            tags: typeof data.tags === 'string' ? data.tags.split(',').map((t: string) => t.trim()) : (data.tags || []),
-            content: data.content || '',
-            images: data.images || [],
-            externalLink: data.externalLink || '',
-          };
-          setPost(mapped);
-          setMainImage(mapped.images?.[0] || mapped.image);
-        } else {
-          // Fallback to local data
-          const localPost = (blogPosts as BlogPost[]).find((p) => p.id === id);
-          setPost(localPost);
-          setMainImage(localPost?.images?.[0] || localPost?.image);
-        }
+        const data = await blogApi.getBlogById(id);
+        const mapped: BlogPost = {
+          id: data.id,
+          title: data.title || '',
+          category: data.category || '',
+          type: (data.type || 'internal') as 'internal' | 'external',
+          image: data.image || '',
+          date: data.date || data.publishedAt || '',
+          excerpt: data.excerpt || '',
+          author: data.author || '',
+          tags: typeof data.tags === 'string' ? data.tags.split(',').map((t: string) => t.trim()) : (data.tags || []),
+          content: data.content || '',
+          images: data.images || [],
+          externalLink: data.externalLink || '',
+        };
+        setPost(mapped);
+        setMainImage(mapped.images?.[0] || mapped.image);
       } catch (e) {
         console.warn('Blog API not reachable, using local data');
         const localPost = (blogPosts as BlogPost[]).find((p) => p.id === id);
@@ -94,7 +87,7 @@ const BlogDetail: React.FC = () => {
   // Increment view count
   React.useEffect(() => {
     if (!id) return;
-    fetch(`/api/blog/${id}/tang-luot-xem`, { method: 'POST' })
+    blogApi.incrementViewCount(id)
       .catch(e => console.warn('View count update failed'));
   }, [id]);
 
@@ -102,25 +95,20 @@ const BlogDetail: React.FC = () => {
   React.useEffect(() => {
     const fetchRelated = async () => {
       try {
-        const res = await fetch('/api/blog?limit=4');
-        if (res.ok) {
-          const data = await res.json();
-          const mapped = (data as any[])
-            .filter((d: any) => d.id !== id)
-            .slice(0, 3)
-            .map(d => ({
-              id: d.id,
-              title: d.title || '',
-              category: d.category || '',
-              type: (d.type || 'internal') as 'internal' | 'external',
-              image: d.image || '',
-              date: d.date || d.publishedAt || '',
-              images: d.images || [],
-            } as BlogPost));
-          setRelatedPosts(mapped.length > 0 ? mapped : blogPosts.filter((p: BlogPost) => p.id !== id).slice(0, 3));
-        } else {
-          setRelatedPosts(blogPosts.filter((p: BlogPost) => p.id !== id).slice(0, 3));
-        }
+        const data = await blogApi.getAllBlogs({ limit: 4 });
+        const mapped = (data as any[])
+          .filter((d: any) => d.id !== id)
+          .slice(0, 3)
+          .map(d => ({
+            id: d.id,
+            title: d.title || '',
+            category: d.category || '',
+            type: (d.type || 'internal') as 'internal' | 'external',
+            image: d.image || '',
+            date: d.date || d.publishedAt || '',
+            images: d.images || [],
+          } as BlogPost));
+        setRelatedPosts(mapped.length > 0 ? mapped : blogPosts.filter((p: BlogPost) => p.id !== id).slice(0, 3));
       } catch (e) {
         setRelatedPosts(blogPosts.filter((p: BlogPost) => p.id !== id).slice(0, 3));
       }

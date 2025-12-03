@@ -33,36 +33,89 @@ namespace Hotel_System.API.Controllers
             if (!System.IO.File.Exists(_storagePath)) System.IO.File.WriteAllText(_storagePath, "[]");
         }
 
-        // Admin image upload endpoint: saves file to wwwroot/images/blog and returns public URL
+        // Admin image upload endpoint: saves file to wwwroot/img/blog and returns public URL
         [HttpPost("/admin/blogs/upload-image")]
-        public async Task<IActionResult> UploadImage(IFormFile file, [FromQuery] string title = "", [FromQuery] string type = "gallery")
+        public async Task<IActionResult> UploadImage(IFormFile file, [FromQuery] string? title = "", [FromQuery] string type = "gallery", [FromQuery] string? replacePath = null)
         {
-            if (file == null || file.Length == 0) return BadRequest("No file uploaded.");
-
-            var webRoot = _env.WebRootPath;
-            if (string.IsNullOrEmpty(webRoot)) webRoot = Path.Combine(_env.ContentRootPath, "wwwroot");
-            var imagesDir = Path.Combine(webRoot, "img", "blog");
-            if (!Directory.Exists(imagesDir)) Directory.CreateDirectory(imagesDir);
-
-            var ext = Path.GetExtension(file.FileName);
-            // Generate filename based on type: BlogBanner_[title] or Blog_[title]
-            var fileName = string.IsNullOrWhiteSpace(title) 
-                ? Guid.NewGuid().ToString("N") + ext
-                : type == "banner" 
-                    ? $"BlogBanner_{Slugify(title)}{ext}"
-                    : $"Blog_{Slugify(title)}{ext}";
-            
-            var filePath = Path.Combine(imagesDir, fileName);
-            Console.WriteLine($"[UploadImage] type={type}, title={title}, fileName={fileName}, filePath={filePath}");
-            
-            using (var stream = System.IO.File.Create(filePath))
+            try
             {
-                await file.CopyToAsync(stream);
-            }
+                if (file == null || file.Length == 0)
+                    return BadRequest(new { message = "Không có file được upload" });
 
-            var publicUrl = $"/img/blog/{fileName}";
-            Console.WriteLine($"[UploadImage] Success: {publicUrl}");
-            return Ok(new { url = publicUrl });
+                // Validate file type
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+                var fileExtension = Path.GetExtension(file.FileName).ToLower();
+                if (!allowedExtensions.Contains(fileExtension))
+                    return BadRequest(new { message = "Chỉ chấp nhận file ảnh JPG, PNG, WebP, GIF" });
+
+                // Validate file size (max 5MB)
+                if (file.Length > 5 * 1024 * 1024)
+                    return BadRequest(new { message = "Kích thước file không được vượt quá 5MB" });
+
+                var blogPath = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "blog");
+                if (!Directory.Exists(blogPath)) Directory.CreateDirectory(blogPath);
+
+                string fileName;
+                // If replacePath provided, overwrite the existing filename
+                if (!string.IsNullOrWhiteSpace(replacePath))
+                {
+                    fileName = Path.GetFileName(replacePath);
+                }
+                else if (type?.Trim().ToLowerInvariant() == "banner")
+                {
+                    // Banner: BlogBanner_{slug}{ext}
+                    var slug = Slugify(title ?? "");
+                    if (string.IsNullOrWhiteSpace(slug)) slug = Guid.NewGuid().ToString("N");
+                    fileName = $"BlogBanner_{slug}{fileExtension}";
+                }
+                else
+                {
+                    // Gallery: Blog_{slug}_1, _2, ... (choose next index)
+                    var slug = Slugify(title ?? "");
+                    if (string.IsNullOrWhiteSpace(slug)) slug = Guid.NewGuid().ToString("N");
+                    // find existing files with prefix Blog_{slug}_
+                    var existing = Directory.GetFiles(blogPath)
+                        .Select(p => Path.GetFileNameWithoutExtension(p))
+                        .Where(n => n != null && n.StartsWith($"Blog_{slug}_"))
+                        .ToList();
+                    var maxIndex = 0;
+                    foreach (var name in existing)
+                    {
+                        var parts = name.Split('_');
+                        if (parts.Length >= 3 && int.TryParse(parts.Last(), out var idx))
+                        {
+                            if (idx > maxIndex) maxIndex = idx;
+                        }
+                    }
+                    var next = maxIndex + 1;
+                    fileName = $"Blog_{slug}_{next}{fileExtension}";
+                }
+
+                var filePath = Path.Combine(blogPath, fileName);
+
+                // Save (overwrite if exists)
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                var relativePath = $"/img/blog/{fileName}";
+                Console.WriteLine($"[UploadImage] Upload thành công: {relativePath} ({file.Length} bytes)");
+
+                return Ok(new
+                {
+                    fileName = fileName,
+                    relativePath = relativePath,
+                    fullPath = filePath,
+                    size = file.Length,
+                    contentType = file.ContentType
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UploadImage] Lỗi: {ex.Message}");
+                return StatusCode(500, new { message = "Lỗi khi upload hình ảnh", error = ex.Message });
+            }
         }
 
         // Delete image file endpoint
@@ -238,9 +291,6 @@ namespace Hotel_System.API.Controllers
                 ? string.Join(',', dto.Tags.Where(t => !string.IsNullOrWhiteSpace(t)))
                 : string.Empty;
 
-            // ===== RENAME IMAGE FILE TO Blog_[title] FORMAT IF NEEDED =====
-            var imagePath = RenameImageToBlogPattern(dto.Image, dto.Title);
-
             // ===== CREATE BLOG POST OBJECT =====
             var post = new BlogPost
             {
@@ -249,7 +299,7 @@ namespace Hotel_System.API.Controllers
                 Slug = slug,
                 Excerpt = dto.Excerpt?.Trim() ?? string.Empty,
                 Content = dto.Content?.Trim() ?? string.Empty,
-                Image = imagePath.Trim(),
+                Image = dto.Image?.Trim() ?? string.Empty,
                 Category = dto.Category.Trim(),
                 Author = string.IsNullOrWhiteSpace(dto.Author) ? "Admin" : dto.Author.Trim(),
                 AuthorId = string.Empty, // For future DB integration
@@ -290,6 +340,23 @@ namespace Hotel_System.API.Controllers
         public IActionResult Get([FromQuery] bool admin = false)
         {
             var posts = LoadFromFile();
+            
+            // Normalize image paths (fix legacy /images/blog/ to /img/blog/)
+            foreach (var post in posts)
+            {
+                if (!string.IsNullOrEmpty(post.Image) && post.Image.Contains("/images/blog/"))
+                    post.Image = post.Image.Replace("/images/blog/", "/img/blog/");
+                
+                if (post.Images != null && post.Images.Count > 0)
+                {
+                    for (int i = 0; i < post.Images.Count; i++)
+                    {
+                        if (post.Images[i].Contains("/images/blog/"))
+                            post.Images[i] = post.Images[i].Replace("/images/blog/", "/img/blog/");
+                    }
+                }
+            }
+            
             if (!admin)
             {
                 var published = posts.Where(b => string.Equals(b.Status, "PUBLISHED", StringComparison.OrdinalIgnoreCase) && b.DisplayOrder.HasValue)
@@ -310,13 +377,29 @@ namespace Hotel_System.API.Controllers
             var posts = LoadFromFile();
             // First try to get by slug
             var post = posts.FirstOrDefault(b => string.Equals(b.Slug, slug, StringComparison.OrdinalIgnoreCase));
-            if (post != null) return Ok(post);
+            if (post != null)
+            {
+                // Normalize image paths
+                if (!string.IsNullOrEmpty(post.Image) && post.Image.Contains("/images/blog/"))
+                    post.Image = post.Image.Replace("/images/blog/", "/img/blog/");
+                if (post.Images != null)
+                    post.Images = post.Images.Select(i => i.Replace("/images/blog/", "/img/blog/")).ToList();
+                return Ok(post);
+            }
             
             // If not found by slug, try by ID (for edit endpoint which uses numeric ID)
             if (int.TryParse(slug, out int id))
             {
                 post = posts.FirstOrDefault(b => b.Id == id);
-                if (post != null) return Ok(post);
+                if (post != null)
+                {
+                    // Normalize image paths
+                    if (!string.IsNullOrEmpty(post.Image) && post.Image.Contains("/images/blog/"))
+                        post.Image = post.Image.Replace("/images/blog/", "/img/blog/");
+                    if (post.Images != null)
+                        post.Images = post.Images.Select(i => i.Replace("/images/blog/", "/img/blog/")).ToList();
+                    return Ok(post);
+                }
             }
             
             return NotFound();
@@ -411,10 +494,7 @@ namespace Hotel_System.API.Controllers
                     {
                         // Delete old image file
                         DeleteImageFile(existing.Image);
-                        
-                        // Rename new image to Blog_[title] format
-                        var newImagePath = RenameImageToBlogPattern(model.Image, model.Title ?? existing.Title);
-                        existing.Image = newImagePath;
+                        existing.Image = model.Image;
                     }
                     else if (!string.IsNullOrWhiteSpace(model.Image))
                     {
@@ -744,51 +824,5 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        /// <summary>
-        /// Rename uploaded image file to Blog_[title] format
-        /// Returns the new public URL path
-        /// </summary>
-        private string RenameImageToBlogPattern(string imagePath, string blogTitle)
-        {
-            if (string.IsNullOrWhiteSpace(imagePath)) return imagePath;
-
-            try
-            {
-                // If it's already a Blog_* file in the blog directory, return as is
-                if (imagePath.Contains("/images/blog/") && Path.GetFileName(imagePath).StartsWith("Blog_"))
-                    return imagePath;
-
-                var webRoot = _env.WebRootPath;
-                if (string.IsNullOrEmpty(webRoot)) webRoot = Path.Combine(_env.ContentRootPath, "wwwroot");
-
-                var fileName = Path.GetFileName(imagePath);
-                if (string.IsNullOrWhiteSpace(fileName)) return imagePath;
-
-                var ext = Path.GetExtension(fileName);
-                var newFileName = $"Blog_{Slugify(blogTitle)}{ext}";
-                
-                // Handle source file - check if it exists in blog directory
-                var imagesDir = Path.Combine(webRoot, "images", "blog");
-                var oldFilePath = Path.Combine(imagesDir, fileName);
-                var newFilePath = Path.Combine(imagesDir, newFileName);
-
-                // If old file exists and new name is different, rename it
-                if (System.IO.File.Exists(oldFilePath) && !string.Equals(fileName, newFileName, StringComparison.OrdinalIgnoreCase))
-                {
-                    // Delete destination if it exists
-                    if (System.IO.File.Exists(newFilePath))
-                        System.IO.File.Delete(newFilePath);
-
-                    System.IO.File.Move(oldFilePath, newFilePath);
-                }
-
-                return $"/images/blog/{newFileName}";
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[BlogController] Error renaming image '{imagePath}': {ex.Message}");
-                return imagePath;
-            }
-        }
     }
 }

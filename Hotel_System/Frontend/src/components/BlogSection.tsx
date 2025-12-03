@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { message } from 'antd';
 import blogPosts from "../data/blogPosts";
+import blogApi from "../api/blogApi";
 
 interface BlogPost {
   id: number;
@@ -27,47 +28,41 @@ const BlogSection: React.FC = () => {
   useEffect(() => {
     const fetchBlogs = async () => {
       try {
-        const res = await fetch('/api/blog?limit=5');
-        if (res.ok) {
-          const data = await res.json();
-          // If backend erroneously returns more than 5 published posts, alert the user
-          try {
-            const totalReturned = Array.isArray(data) ? (data as any[]).length : 0;
-            if (totalReturned > 5) {
-              message.error('Có nhiều hơn 5 bài đã xuất bản. Hệ thống chỉ cho phép tối đa 5 bài, vui lòng kiểm tra quản trị.');
-            }
-          } catch (e) {
-            // ignore messaging errors
+        const data = await blogApi.getAllBlogs({ limit: 5 });
+        // If backend erroneously returns more than 5 published posts, alert the user
+        try {
+          const totalReturned = Array.isArray(data) ? (data as any[]).length : 0;
+          if (totalReturned > 5) {
+            message.error('Có nhiều hơn 5 bài đã xuất bản. Hệ thống chỉ cho phép tối đa 5 bài, vui lòng kiểm tra quản trị.');
           }
-          // Map API response to BlogPost format and normalize displayOrder
-          const apiArray = Array.isArray(data) ? (data as any[]) : [];
-          const mapped = apiArray
-            .filter(d => (d.status || '').toString().toUpperCase() === 'PUBLISHED' && (d.displayOrder !== undefined && d.displayOrder !== null))
-            .map(d => ({
-            id: d.id,
-            title: d.title || '',
-            category: d.category || '',
-            type: (d.type || 'internal') as 'internal' | 'external',
-            image: d.image || '',
-            date: d.date || d.publishedAt || '',
-            excerpt: d.excerpt || '',
-            author: d.author || '',
-            tags: typeof d.tags === 'string' ? d.tags.split(',').map((t: string) => t.trim()) : (d.tags || []),
-            content: d.content || '',
-            images: d.images || [],
-            externalLink: d.externalLink || '',
-            status: d.status || '',
-            displayOrder: typeof d.displayOrder === 'number' ? d.displayOrder : (typeof d.displayOrder === 'string' && !isNaN(parseInt(d.displayOrder)) ? parseInt(d.displayOrder) : undefined),
-          } as BlogPost));
-          // Sort by displayOrder ascending and take up to 5
-          mapped.sort((a, b) => (typeof a.displayOrder === 'number' ? a.displayOrder! : 999) - (typeof b.displayOrder === 'number' ? b.displayOrder! : 999));
-          const final = mapped.slice(0, 5);
-          console.log('[BlogSection] fetched ordered displayOrders:', final.map(f => f.displayOrder));
-          setFeaturedBlogs(final.length > 0 ? final : blogPosts.slice(0, 5));
-        } else {
-          // Fallback to local data if API fails
-          setFeaturedBlogs(blogPosts.slice(0, 5));
+        } catch (e) {
+          // ignore messaging errors
         }
+        // Map API response to BlogPost format and normalize displayOrder
+        const apiArray = Array.isArray(data) ? (data as any[]) : [];
+        const mapped = apiArray
+          .filter(d => (d.status || '').toString().toUpperCase() === 'PUBLISHED' && (d.displayOrder !== undefined && d.displayOrder !== null))
+          .map(d => ({
+          id: d.id,
+          title: d.title || '',
+          category: d.category || '',
+          type: (d.type || 'internal') as 'internal' | 'external',
+          image: d.image || '',
+          date: d.date || d.publishedAt || '',
+          excerpt: d.excerpt || '',
+          author: d.author || '',
+          tags: typeof d.tags === 'string' ? d.tags.split(',').map((t: string) => t.trim()) : (d.tags || []),
+          content: d.content || '',
+          images: d.images || [],
+          externalLink: d.externalLink || '',
+          status: d.status || '',
+          displayOrder: typeof d.displayOrder === 'number' ? d.displayOrder : (typeof d.displayOrder === 'string' && !isNaN(parseInt(d.displayOrder)) ? parseInt(d.displayOrder) : undefined),
+        } as BlogPost));
+        // Sort by displayOrder ascending and take up to 5
+        mapped.sort((a, b) => (typeof a.displayOrder === 'number' ? a.displayOrder! : 999) - (typeof b.displayOrder === 'number' ? b.displayOrder! : 999));
+        const final = mapped.slice(0, 5);
+        console.log('[BlogSection] fetched ordered displayOrders:', final.map(f => f.displayOrder));
+        setFeaturedBlogs(final.length > 0 ? final : blogPosts.slice(0, 5));
       } catch (e) {
         console.warn('Blog API not reachable, using local posts');
         setFeaturedBlogs(blogPosts.slice(0, 5));
@@ -151,7 +146,13 @@ const BlogSection: React.FC = () => {
                     <span className="b-tag" style={{ background: post.type === 'external' ? '#FF4500' : '#B8860B', padding: '5px 10px', fontWeight: post.type === 'external' ? 'bold' : undefined }}>{post.category}</span>
                     <h4 style={{ marginTop: '10px', marginBottom: '5px', fontSize: '2rem' }}>{isExternal ? (<a href={linkHref} target="_blank" rel="noopener noreferrer" style={{ color: 'white', textDecoration: 'none' }}>{post.title}</a>) : (<a href={linkHref} onClick={(e) => handleInternalNav(e, linkHref)} style={{ color: 'white', textDecoration: 'none' }}>{post.title}</a>)}</h4>
                     <div className="b-time" style={{ opacity: post.type === 'external' ? 0.9 : 0.8, fontWeight: post.type === 'external' ? 'bold' : undefined }}><i className="icon_clock_alt"></i> {post.date}</div>
-                    <div style={{ marginTop: '8px' }}>{post.type === 'external' ? (<a href={linkHref} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ background: '#FF4500', color: 'white', padding: '6px 10px', borderRadius: 4 }}>Xem tin tức</a>) : (<a href={linkHref} onClick={(e) => handleInternalNav(e, linkHref)} className="btn btn-sm" style={{ background: '#B8860B', color: 'white', padding: '6px 10px', borderRadius: 4 }}>Xem chi tiết</a>)}</div>
+                    <div style={{ marginTop: '8px' }}>
+                      {isEmergencyCategory ? (
+                        <a href={linkHref} onClick={(e) => { if (!isExternal) { e.preventDefault(); handleInternalNav(e, linkHref); } }} className="btn btn-sm" style={{ background: '#B22222', color: 'white', padding: '6px 10px', borderRadius: 4 }}>Xem tin tức</a>
+                      ) : (
+                        <a href={linkHref} onClick={(e) => { if (!isExternal) { e.preventDefault(); handleInternalNav(e, linkHref); } }} className="btn btn-sm" style={{ background: '#B8860B', color: 'white', padding: '6px 10px', borderRadius: 4 }}>Xem chi tiết</a>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -177,7 +178,13 @@ const BlogSection: React.FC = () => {
                     <span className="b-tag" style={{ background: post.type === 'external' ? '#FF4500' : '#B8860B', padding: '5px 10px', fontWeight: post.type === 'external' ? 'bold' : undefined }}>{post.category}</span>
                     <h4 style={{ marginTop: '10px', marginBottom: '5px' }}>{isExternal ? (<a href={linkHref} target="_blank" rel="noopener noreferrer" style={{ color: 'white', textDecoration: 'none' }}>{post.title}</a>) : (<a href={linkHref} onClick={(e) => handleInternalNav(e, linkHref)} style={{ color: 'white', textDecoration: 'none' }}>{post.title}</a>)}</h4>
                     <div className="b-time" style={{ opacity: post.type === 'external' ? 0.9 : 0.8, fontWeight: post.type === 'external' ? 'bold' : undefined }}><i className="icon_clock_alt"></i> {post.date}</div>
-                    <div style={{ marginTop: '8px' }}>{post.type === 'external' ? (<a href={linkHref} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ background: '#FF4500', color: 'white', padding: '6px 10px', borderRadius: 4 }}>Xem tin tức</a>) : (<a href={linkHref} onClick={(e) => handleInternalNav(e, linkHref)} className="btn btn-sm" style={{ background: '#B8860B', color: 'white', padding: '6px 10px', borderRadius: 4 }}>Xem chi tiết</a>)}</div>
+                    <div style={{ marginTop: '8px' }}>
+                      {isEmergencyCategory ? (
+                        <a href={linkHref} onClick={(e) => { if (!isExternal) { e.preventDefault(); handleInternalNav(e, linkHref); } }} className="btn btn-sm" style={{ background: '#B22222', color: 'white', padding: '6px 10px', borderRadius: 4 }}>Xem tin tức</a>
+                      ) : (
+                        <a href={linkHref} onClick={(e) => { if (!isExternal) { e.preventDefault(); handleInternalNav(e, linkHref); } }} className="btn btn-sm" style={{ background: '#B8860B', color: 'white', padding: '6px 10px', borderRadius: 4 }}>Xem chi tiết</a>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
