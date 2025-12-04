@@ -47,7 +47,16 @@ namespace Hotel_System.API.Controllers
         public string? Note { get; set; }
         public bool? IsOnline { get; set; }
         public bool? IsOverdue { get; set; } // Flag từ frontend để xác định booking quá hạn
+        // Số điểm khách muốn dùng để giảm giá (tính theo điểm, không phải tiền)
+        public int? PointsToUse { get; set; }
     }
+    // DTO for previewing checkout totals when using points
+    public class CheckoutPreviewRequest
+    {
+        // Points customer intends to use for preview (optional)
+        public int? PointsToUse { get; set; }
+    }
+
 
     [Route("api/[controller]")]
     [ApiController]
@@ -92,8 +101,9 @@ namespace Hotel_System.API.Controllers
             if (booking == null)
                 return NotFound(new { message = "Không tìm thấy đặt phòng." });
 
-            // 1. TIỀN PHÒNG (CHƯA VAT)
-            decimal roomTotal = booking.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m;
+            // ========== LẤY GIÁ ĐÃ CHỐT TỪ DatPhong.TongTien (single source of truth) ==========
+            // Sử dụng DatPhong.TongTien thay vì HoaDon.TongTien để đảm bảo consistency
+            decimal tongTienDaChot = booking.TongTien;
 
             // chuẩn 12h trưa – dùng để xác định quá hạn
             DateTime standardCheckout;
@@ -111,24 +121,20 @@ namespace Hotel_System.API.Controllers
             //  - Thời điểm hiện tại đã sau 12:00 ngày checkout
             bool isOverdueBooking = (booking.TrangThai == 5) || (DateTime.Now > standardCheckout);
 
-            // 2. TIỀN DỊCH VỤ (CHƯA VAT) – từ CTHDDV
-            decimal serviceTotal = 0m;
+            // 2. DỊCH VỤ PHÁT SINH (từ tất cả hóa đơn)
             var services = new List<object>();
-
             if (booking.HoaDons != null)
             {
-                foreach (var hd in booking.HoaDons)
+                foreach (var invoice in booking.HoaDons)
                 {
-                    if (hd.Cthddvs != null)
+                    if (invoice.Cthddvs != null)
                     {
-                        var lines = hd.Cthddvs
+                        var lines = invoice.Cthddvs
                             .Where(c =>
                                 string.IsNullOrEmpty(c.TrangThai) ||
                                 c.TrangThai == "Hoạt động" ||
                                 c.TrangThai == "new")
                             .ToList();
-
-                        serviceTotal += lines.Sum(c => c.TienDichVu ?? 0m);
 
                         services.AddRange(lines.Select(c => new
                         {
@@ -140,31 +146,22 @@ namespace Hotel_System.API.Controllers
                 }
             }
 
-            // 3. TỔNG CƠ BẢN (KHÔNG PHÍ MUỘN)
-            decimal subTotalBase = roomTotal + serviceTotal;
-            decimal vatBase = Math.Round(subTotalBase * 0.1m, 0, MidpointRounding.AwayFromZero);
-            decimal tongTienBase = subTotalBase + vatBase;
-
-            decimal persistedBookingTotal = booking.TongTien;
-            if (persistedBookingTotal <= 0m)
-                persistedBookingTotal = tongTienBase;
-
             decimal lateFee = 0m;
-            decimal tongTien;
+            decimal tongTien = tongTienDaChot; // Mặc định = giá đã chốt
 
             if (isOverdueBooking)
             {
-                // Tính phí trả phòng muộn trực tiếp (KHÔNG lưu vào CTHDDV)
+                // Tính phí trả phòng muộn dựa trên giá đã chốt
                 var actualCheckout = DateTime.Now;
                 var diff = actualCheckout - standardCheckout;
 
                 if (diff > TimeSpan.Zero || booking.TrangThai == 5)
                 {
-                    // Tính giá 1 đêm
+                    // Tính giá 1 đêm từ TongTien đã chốt (đã bao gồm giảm giá)
                     int nights = booking.SoDem ?? 1;
                     decimal oneNightPrice = nights > 0
-                        ? Math.Round(roomTotal / nights, 0, MidpointRounding.AwayFromZero)
-                        : Math.Round(roomTotal, 0, MidpointRounding.AwayFromZero);
+                        ? Math.Round(tongTienDaChot / nights, 0, MidpointRounding.AwayFromZero)
+                        : Math.Round(tongTienDaChot, 0, MidpointRounding.AwayFromZero);
 
                     // Tính % phụ phí theo quy định
                     decimal surchargePercent = 0m;
@@ -186,13 +183,11 @@ namespace Hotel_System.API.Controllers
                         booking.IddatPhong, lateFee, surchargePercent * 100);
                 }
 
-                // Tính tổng tiền = (roomTotal + serviceTotal) * 1.1 + lateFee (phí phạt không VAT)
-                decimal subTotal = roomTotal + serviceTotal;
-                decimal vat = Math.Round(subTotal * 0.1m, 0, MidpointRounding.AwayFromZero);
-                tongTien = subTotal + vat + lateFee;
+                // Tổng = Giá đã chốt + Phí trả muộn
+                tongTien = tongTienDaChot + lateFee;
 
-                _logger.LogInformation("[GetSummary] Booking {Id} - TongTien = ({Room} + {Service}) * 1.1 + {LateFee} = {Total}",
-                    booking.IddatPhong, roomTotal, serviceTotal, lateFee, tongTien);
+                _logger.LogInformation("[GetSummary] Booking {Id} - TongTien = {LockedPrice} (giá đã chốt) + {LateFee} (phạt) = {Total}",
+                    booking.IddatPhong, tongTienDaChot, lateFee, tongTien);
 
                 // Cập nhật booking + hóa đơn chính
                 try
@@ -228,74 +223,72 @@ namespace Hotel_System.API.Controllers
                     _logger.LogWarning(ex, "Không thể cập nhật TongTien trong GetSummary cho booking quá hạn {Id}", booking.IddatPhong);
                 }
             }
-            else
-            {
-                // booking thường: giữ logic cũ, ghi đè TongTien nếu lệch
-                tongTien = tongTienBase;
-                try
-                {
-                    if (booking.TongTien != tongTienBase)
-                    {
-                        booking.TongTien = tongTienBase;
-                        await _context.SaveChangesAsync();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Không thể cập nhật booking.TongTien trong GetSummary cho {Id}", booking.IddatPhong);
-                }
-            }
+            // ========== BOOKING THƯỜNG: KHÔNG RECOMPUTE HÓA ĐƠN, GIÁ ĐÃ CHỐT TRONG PRICE_LOCKED.cuoi ==========
 
-            // 4. KHÔNG RECOMPUTE HÓA ĐƠN CHO BOOKING QUÁ HẠN (TRÁNH GHI ĐÈ PHÍ MUỘN)
-            if (!isOverdueBooking)
+            // 5. TÍNH TOÁN CHO HIỂN THỊ (không dùng để cập nhật TongTien)
+            // Tính serviceTotal từ tất cả hóa đơn
+            decimal serviceTotal = booking.HoaDons?
+                .SelectMany(h => h.Cthddvs?
+                    .Where(c => string.IsNullOrEmpty(c.TrangThai) || c.TrangThai == "Hoạt động" || c.TrangThai == "new")
+                    .Select(c => c.TienDichVu ?? 0m) ?? new List<decimal>())
+                .Sum() ?? 0m;
+
+            // Thử lấy breakdown từ PRICE_LOCKED JSON trong GhiChu
+            decimal roomTotal = 0m;
+            decimal subTotalBase = 0m;
+            decimal vatBase = 0m;
+
+            var latestInvoice = booking.HoaDons?.OrderByDescending(h => h.NgayLap).FirstOrDefault();
+            if (latestInvoice?.GhiChu?.Contains("[PRICE_LOCKED]") == true)
             {
                 try
                 {
-                    var invoicesChanged = false;
-                    if (booking.HoaDons != null)
+                    var priceLockedJson = ExtractPriceLockedJson(latestInvoice.GhiChu);
+                    if (!string.IsNullOrEmpty(priceLockedJson))
                     {
-                        foreach (var hd in booking.HoaDons)
+                        var priceData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(priceLockedJson);
+                        if (priceData != null)
                         {
-                            try
+                            // Lấy giá gốc phòng từ PRICE_LOCKED
+                            if (priceData.TryGetValue("goc", out var gocValue))
                             {
-                                decimal invoiceRoom = 0m;
-                                try { invoiceRoom = Convert.ToDecimal(hd.TienPhong ?? 0); } catch { invoiceRoom = 0m; }
-
-                                decimal invoiceService = hd.Cthddvs != null
-                                    ? hd.Cthddvs.Where(c => string.IsNullOrEmpty(c.TrangThai) || c.TrangThai == "Hoạt động" || c.TrangThai == "new").Sum(c => c.TienDichVu ?? 0m)
-                                    : 0m;
-
-                                decimal invoiceSub = invoiceRoom + invoiceService;
-                                decimal invoiceTotalComputed = Math.Round(invoiceSub * 1.1m, 0, MidpointRounding.AwayFromZero);
-
-                                if (hd.TongTien != invoiceTotalComputed)
-                                {
-                                    hd.TongTien = invoiceTotalComputed;
-                                    invoicesChanged = true;
-                                }
+                                roomTotal = Convert.ToDecimal(gocValue);
                             }
-                            catch (Exception inner)
+                            // Áp dụng giảm giá KM
+                            if (priceData.TryGetValue("giamKM", out var giamKmValue))
                             {
-                                _logger.LogDebug(inner, "Không thể tính lại tongTien cho hóa đơn {IdHoaDon}", hd?.IdhoaDon);
+                                roomTotal -= Convert.ToDecimal(giamKmValue);
                             }
+                            // Áp dụng giảm điểm
+                            if (priceData.TryGetValue("giamDiem", out var giamDiemValue))
+                            {
+                                roomTotal -= Convert.ToDecimal(giamDiemValue);
+                            }
+
+                            subTotalBase = roomTotal + serviceTotal;
+                            vatBase = Math.Round(subTotalBase * 0.1m, 0, MidpointRounding.AwayFromZero);
                         }
                     }
-                    if (invoicesChanged)
-                    {
-                        await _context.SaveChangesAsync();
-                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Không thể cập nhật các hóa đơn liên quan trong GetSummary cho {Id}", booking.IddatPhong);
+                    _logger.LogWarning(ex, "Không thể parse PRICE_LOCKED JSON cho booking {Id}", booking.IddatPhong);
                 }
             }
 
-            // 5. CỌC & ĐÃ THANH TOÁN
+            // Nếu không có PRICE_LOCKED, tính ngược từ TongTien
+            if (roomTotal == 0m)
+            {
+                subTotalBase = Math.Round(tongTienDaChot / 1.1m, 0, MidpointRounding.AwayFromZero);
+                vatBase = tongTienDaChot - subTotalBase;
+                roomTotal = subTotalBase - serviceTotal;
+            }
+
+            // 6. CỌC & ĐÃ THANH TOÁN
             decimal deposit = booking.TienCoc ?? 0m;
             decimal paidAmount = booking.HoaDons?.Sum(h => h.TienThanhToan ?? 0m) ?? 0m;
 
-            // 6. CÒN PHẢI THU
+            // 7. CÒN PHẢI THU
             decimal remaining = Math.Max(0m, tongTien - paidAmount);
 
             // Sắp xếp hóa đơn mới nhất lên đầu
@@ -356,6 +349,99 @@ namespace Hotel_System.API.Controllers
             });
         }
 
+        // ===================== PREVIEW CHECKOUT (with points) =========================
+        [HttpPost("preview/{idDatPhong}")]
+        public async Task<IActionResult> PreviewCheckout(string idDatPhong, [FromBody] CheckoutPreviewRequest? req)
+        {
+            if (string.IsNullOrWhiteSpace(idDatPhong))
+                return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });
+
+            var booking = await _context.DatPhongs
+                .Include(b => b.ChiTietDatPhongs)
+                .Include(b => b.HoaDons)
+                    .ThenInclude(h => h.Cthddvs)
+                .Include(b => b.IdkhachHangNavigation)
+                .FirstOrDefaultAsync(b => b.IddatPhong == idDatPhong);
+
+            if (booking == null)
+                return NotFound(new { message = "Không tìm thấy đặt phòng." });
+
+            var targetInvoice = booking.HoaDons?.OrderByDescending(h => h.NgayLap).FirstOrDefault();
+            if (targetInvoice == null)
+                return NotFound(new { message = "Không tìm thấy hóa đơn cho đặt phòng." });
+
+            // Recompute if not overdue to ensure totals are fresh
+            DateTime standardCheckout;
+            try { standardCheckout = booking.NgayTraPhong.ToDateTime(new TimeOnly(12, 0)); }
+            catch { standardCheckout = booking.NgayTraPhong.ToDateTime(TimeOnly.MinValue); }
+            bool isOverdue = DateTime.Now > standardCheckout || booking.TrangThai == 5;
+            if (!isOverdue)
+            {
+                await RecomputeInvoiceAndBookingTotal(targetInvoice);
+                // reload targetInvoice totals
+                await _context.Entry(targetInvoice).ReloadAsync();
+            }
+
+            decimal finalTotal = targetInvoice.TongTien;
+            decimal paidAmount = targetInvoice.TienThanhToan ?? 0m;
+            decimal deposit = booking.TienCoc ?? 0m;
+            decimal remaining = Math.Max(0m, finalTotal - paidAmount);
+
+            // QUY ĐỔI ĐIỂM:
+            // - Cộng điểm: 100.000đ = 1 điểm
+            // - Dùng điểm: 1 điểm = 100đ giảm giá
+            const decimal EARN_RATE = 100_000m;   // 100.000đ = 1 điểm
+            const decimal REDEEM_RATE = 100m;     // 1 điểm = 100đ giảm
+            const decimal MAX_REDEEM_PERCENT = 0.5m; // Tối đa dùng 50% giá trị hóa đơn
+
+            int currentPoints = booking.IdkhachHangNavigation?.TichDiem ?? 0;
+            int pointsToUse = req?.PointsToUse ?? 0;
+
+            // Tính số điểm tối đa có thể dùng (50% giá trị hóa đơn)
+            decimal maxDiscountAmount = finalTotal * MAX_REDEEM_PERCENT;
+            int maxPointsByAmount = (int)Math.Floor(maxDiscountAmount / REDEEM_RATE);
+            
+            if (pointsToUse < 0) pointsToUse = 0;
+
+            if (pointsToUse > currentPoints)
+            {
+                return BadRequest(new { message = $"Không đủ điểm. Hiện có {currentPoints} điểm." });
+            }
+
+            if (pointsToUse > maxPointsByAmount)
+            {
+                return BadRequest(new { message = $"Chỉ được dùng tối đa {maxPointsByAmount} điểm (50% giá trị hóa đơn)." });
+            }
+
+            // Tính tiền giảm từ điểm
+            decimal discount = pointsToUse * REDEEM_RATE;
+            decimal finalAfterPoints = Math.Max(0m, finalTotal - discount);
+            
+            // Tính điểm mới sẽ được cộng (dựa trên số tiền thực trả sau khi đã giảm điểm)
+            int pointsToAdd = (int)Math.Floor((double)(finalAfterPoints / EARN_RATE));
+
+            return Ok(new
+            {
+                idDatPhong = booking.IddatPhong,
+                money = new
+                {
+                    tongTien = finalTotal,
+                    paidAmount,
+                    deposit,
+                    remaining,
+                    discountFromPoints = discount,
+                    finalAfterPoints
+                },
+                points = new
+                {
+                    currentPoints,
+                    pointsToUse,
+                    pointsToAdd,
+                    maxPointsByAmount
+                }
+            });
+        }
+
         // ===================== ADD SERVICE TO INVOICE =========================
         [HttpPost("add-service-to-invoice")]
         public async Task<IActionResult> AddServiceToInvoice([FromBody] AddServiceToInvoiceRequest req)
@@ -384,25 +470,96 @@ namespace Hotel_System.API.Controllers
                 if (hoaDon == null)
                     return NotFound(new { message = "Không tìm thấy hóa đơn cho đặt phòng này." });
 
+                var booking = hoaDon.IddatPhongNavigation;
+
                 foreach (var item in req.DichVu)
                 {
                     var lineTotal = item.TongTien ?? item.TienDichVu ?? item.DonGia ?? 0m;
-                    _context.Cthddvs.Add(new Cthddv
+                    
+                    // Handle combo services
+                    string? dichVuId = null;
+                    string? comboId = null;
+                    
+                    if (item.IddichVu.StartsWith("combo:"))
+                    {
+                        comboId = item.IddichVu.Substring(6); // Remove "combo:" prefix
+                        
+                        // Validate combo exists
+                        var comboExists = await _context.KhuyenMaiCombos
+                            .AnyAsync(kmc => kmc.IdkhuyenMaiCombo == comboId);
+                        if (!comboExists)
+                        {
+                            _logger.LogError("Combo {ComboId} not found in database", comboId);
+                            return BadRequest(new { message = $"Combo {comboId} không tồn tại." });
+                        }
+                        
+                        // For combo: only set IdkhuyenMaiCombo, leave IddichVu as null
+                        dichVuId = null;
+                    }
+                    else
+                    {
+                        // For regular service: only set IddichVu, leave IdkhuyenMaiCombo as null
+                        dichVuId = item.IddichVu;
+                        comboId = null;
+                    }
+                    
+                    var serviceDetail = new Cthddv
                     {
                         IdhoaDon = hoaDon.IdhoaDon,
-                        IddichVu = item.IddichVu,
+                        IddichVu = dichVuId,
+                        IdkhuyenMaiCombo = comboId,
                         TienDichVu = Math.Round(lineTotal),
                         IdkhuyenMai = null,
                         ThoiGianThucHien = DateTime.Now,
                         TrangThai = "Hoạt động"
-                    });
+                    };
+                    
+                    _logger.LogInformation("Adding service to invoice: IddichVu={DichVuId}, IdkhuyenMaiCombo={ComboId}, Amount={Amount}", 
+                        dichVuId, comboId, lineTotal);
+                    
+                    _context.Cthddvs.Add(serviceDetail);
+                }
+
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error saving service additions to invoice {InvoiceId}", hoaDon.IdhoaDon);
+                    throw;
+                }
+
+                // ========== KHÔNG TÍNH LẠI GIÁ PHÒNG - CHỈ CỘNG THÊM TIỀN DỊCH VỤ ==========
+                // Lấy tổng tiền dịch vụ mới thêm
+                decimal newServiceTotal = req.DichVu.Sum(item => item.TongTien ?? item.TienDichVu ?? item.DonGia ?? 0m);
+                newServiceTotal = Math.Round(newServiceTotal, 0, MidpointRounding.AwayFromZero);
+
+                // Cộng thêm vào TongTien của hóa đơn
+                hoaDon.TongTien = hoaDon.TongTien + newServiceTotal;
+
+                // Cộng thêm vào TongTien của đặt phòng
+                if (booking != null)
+                {
+                    booking.TongTien += newServiceTotal;
                 }
 
                 await _context.SaveChangesAsync();
 
-                await RecomputeInvoiceAndBookingTotal(hoaDon);
+                // Cập nhật trạng thái thanh toán nếu cần
+                decimal daTra = hoaDon.TienThanhToan ?? 0m;
+                decimal conLai = hoaDon.TongTien - daTra;
+                if (conLai <= 1000m && hoaDon.TongTien > 0)
+                {
+                    hoaDon.TrangThaiThanhToan = 2; // Đã thanh toán đủ
+                }
+                else if (daTra > 0)
+                {
+                    hoaDon.TrangThaiThanhToan = 1; // Còn thiếu
+                }
 
-                var booking = hoaDon.IddatPhongNavigation;
+                await _context.SaveChangesAsync();
+
                 if (booking != null)
                 {
                     if (hoaDon.TrangThaiThanhToan == 2)
@@ -515,6 +672,7 @@ namespace Hotel_System.API.Controllers
             {
                 var booking = await _context.DatPhongs
                     .Include(dp => dp.HoaDons)
+                    .Include(dp => dp.IdkhachHangNavigation)
                     .FirstOrDefaultAsync(dp => dp.IddatPhong == idDatPhong);
 
                 if (booking == null) return NotFound();
@@ -558,17 +716,23 @@ namespace Hotel_System.API.Controllers
                 // ====== ÁP DỤNG PHÍ TRẢ PHÒNG MUỘN CHO BOOKING QUÁ HẠN (KHÔNG LƯU CTHDDV) ======
                 if (isOverdueBooking)
                 {
-                    decimal roomVal = Convert.ToDecimal(targetInvoice.TienPhong ?? 0);
+                    // Lấy giá phòng đã chốt (bao gồm giảm giá từ khuyến mãi và điểm)
+                    // KHÔNG tính lại từ ChiTietDatPhongs
+                    decimal lockedRoomPrice = TryGetLockedPriceFromNote(targetInvoice.GhiChu) ?? targetInvoice.TongTien;
+                    
+                    // Nếu có dịch vụ, trừ đi tiền dịch vụ để lấy tiền phòng thuần
+                    decimal serviceTotal = targetInvoice.Cthddvs?
+                        .Where(c => string.IsNullOrEmpty(c.TrangThai) || c.TrangThai == "Hoạt động" || c.TrangThai == "new")
+                        .Sum(c => c.TienDichVu ?? 0m) ?? 0m;
+                    
+                    decimal roomPriceAfterDiscount = lockedRoomPrice - serviceTotal;
+                    if (roomPriceAfterDiscount < 0) roomPriceAfterDiscount = 0;
 
-                    // Tính phí trả phòng muộn trực tiếp (KHÔNG lưu vào CTHDDV)
-                    await _context.Entry(booking).Collection(b => b.ChiTietDatPhongs).LoadAsync();
-                    var roomLines = booking.ChiTietDatPhongs;
-                    decimal baseRoomTotal = roomLines?.Sum(ct => ct.ThanhTien) ?? roomVal;
+                    // Tính phí trả phòng muộn dựa trên giá phòng đã giảm
                     int nights = booking.SoDem ?? 1;
-
-                    decimal oneNightPrice = nights > 0
-                        ? Math.Round(baseRoomTotal / nights, 0, MidpointRounding.AwayFromZero)
-                        : Math.Round(baseRoomTotal, 0, MidpointRounding.AwayFromZero);
+                    decimal oneNightPrice = nights > 0 
+                        ? Math.Round(roomPriceAfterDiscount / nights, 0, MidpointRounding.AwayFromZero)
+                        : roomPriceAfterDiscount;
 
                     var actualCheckout = DateTime.Now;
                     DateTime standardCheckout;
@@ -608,13 +772,13 @@ namespace Hotel_System.API.Controllers
                         .Where(c => c.IddichVu != "DV_LATE_FEE")
                         .Sum(c => c.TienDichVu ?? 0m) ?? 0m;
 
-                    // Tổng = (room + service) * 1.1 + lateFee (phí phạt không tính VAT)
-                    decimal subTotal = roomVal + serviceVal;
+                    // Tổng = tiền phòng đã giảm + dịch vụ + VAT + lateFee
+                    decimal subTotal = roomPriceAfterDiscount + serviceVal;
                     decimal vat = Math.Round(subTotal * 0.1m, 0, MidpointRounding.AwayFromZero);
                     decimal grandTotal = subTotal + vat + lateFeeAmount;
 
-                    _logger.LogInformation("[ConfirmPaid] Booking {Id} - TongTien = ({Room} + {Service}) * 1.1 + {LateFee} = {Total}",
-                        booking.IddatPhong, roomVal, serviceVal, lateFeeAmount, grandTotal);
+                    _logger.LogInformation("[ConfirmPaid] Booking {Id} - TongTien = {RoomAfterDiscount} (phòng đã giảm) + {Service} (dịch vụ) * 1.1 + {LateFee} (phạt) = {Total}",
+                        booking.IddatPhong, roomPriceAfterDiscount, serviceVal, lateFeeAmount, grandTotal);
 
                     // Cập nhật tổng
                     targetInvoice.TongTien = grandTotal;
@@ -638,6 +802,40 @@ namespace Hotel_System.API.Controllers
                 {
                     finalTotal = targetInvoice.TongTien;
                 }
+
+                // ----------------- QUY ĐỔI ĐIỂM -----------------
+                // Cộng điểm: 100.000đ = 1 điểm
+                // Dùng điểm: 1 điểm = 100đ giảm giá
+                const decimal EARN_RATE = 100_000m;      // 100.000đ thanh toán = 1 điểm
+                const decimal REDEEM_RATE = 100m;        // 1 điểm = 100đ giảm
+                const decimal MAX_REDEEM_PERCENT = 0.5m; // Tối đa dùng 50% giá trị hóa đơn
+                
+                int pointsToUse = req?.PointsToUse ?? 0;
+                int customerCurrentPoints = booking.IdkhachHangNavigation?.TichDiem ?? 0;
+
+                decimal pointsDiscount = 0m;
+                if (pointsToUse > 0)
+                {
+                    if (pointsToUse > customerCurrentPoints)
+                        return BadRequest(new { message = $"Không đủ điểm. Hiện có {customerCurrentPoints} điểm." });
+
+                    // Tính số điểm tối đa có thể dùng (50% giá trị hóa đơn)
+                    decimal maxDiscountAmount = finalTotal * MAX_REDEEM_PERCENT;
+                    int maxPointsByAmount = (int)Math.Floor(maxDiscountAmount / REDEEM_RATE);
+                    
+                    if (pointsToUse > maxPointsByAmount)
+                        return BadRequest(new { message = $"Chỉ được dùng tối đa {maxPointsByAmount} điểm (50% giá trị hóa đơn)." });
+
+                    pointsDiscount = pointsToUse * REDEEM_RATE;
+                    finalTotal = Math.Max(0m, finalTotal - pointsDiscount);
+
+                    targetInvoice.DiemSuDung = pointsToUse;
+                    if (string.IsNullOrWhiteSpace(targetInvoice.GhiChu) || !targetInvoice.GhiChu.Contains("[USE_POINT]"))
+                    {
+                        targetInvoice.GhiChu = (targetInvoice.GhiChu ?? string.Empty) + $" [USE_POINT] Dùng {pointsToUse} điểm giảm {pointsDiscount:N0}đ";
+                    }
+                }
+                // -----------------------------------------------------------------------------
 
                 // ================== NHÁNH ONLINE (QR) ==================
                 if (isOnline)
@@ -687,6 +885,32 @@ namespace Hotel_System.API.Controllers
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Recompute after ConfirmPaid (online) failed for {Id}", targetInvoice.IdhoaDon);
+                    }
+
+                    // Nếu đã thanh toán hoàn tất (online), xử lý điểm tích lũy
+                    if (targetInvoice.TrangThaiThanhToan == 2)
+                    {
+                        // 1. Trừ điểm đã dùng
+                        if (pointsToUse > 0 && (booking.IdkhachHangNavigation?.TichDiem ?? 0) >= pointsToUse)
+                        {
+                            booking.IdkhachHangNavigation.TichDiem = (booking.IdkhachHangNavigation.TichDiem ?? 0) - pointsToUse;
+                            _logger.LogInformation("[ConfirmPaid-Online] Trừ {Points} điểm từ khách {CustomerId}", pointsToUse, booking.IdkhachHang);
+                        }
+
+                        // 2. Cộng điểm mới theo số tiền thực trả (100.000đ = 1 điểm)
+                        int pointsToAddOnline = (int)Math.Floor((double)(finalTotal / EARN_RATE));
+                        if (pointsToAddOnline > 0 && booking.IdkhachHangNavigation != null)
+                        {
+                            booking.IdkhachHangNavigation.TichDiem = (booking.IdkhachHangNavigation.TichDiem ?? 0) + pointsToAddOnline;
+                            _logger.LogInformation("[ConfirmPaid-Online] Cộng {Points} điểm mới cho khách {CustomerId} (thanh toán {Amount}đ)", 
+                                pointsToAddOnline, booking.IdkhachHang, finalTotal);
+                        }
+
+                        // 3. Cập nhật ghi chú hóa đơn
+                        if (!string.IsNullOrWhiteSpace(targetInvoice.GhiChu) && targetInvoice.GhiChu.Contains("[USE_POINT]"))
+                        {
+                            targetInvoice.GhiChu = targetInvoice.GhiChu.Replace("[USE_POINT]", "[POINT_USED]");
+                        }
                     }
 
                     await _context.SaveChangesAsync();
@@ -744,6 +968,32 @@ namespace Hotel_System.API.Controllers
 
                 _logger.LogInformation("[ConfirmPaid-Cash] BEFORE SaveChanges - Booking {Id}: HoaDon.TongTien={HoaDonTotal}, HoaDon.TienThanhToan={Paid}, DatPhong.TongTien={DatPhongTotal}, finalTotal={Final}",
                     booking.IddatPhong, targetInvoice.TongTien, targetInvoice.TienThanhToan, booking.TongTien, finalTotal);
+
+                // Nếu đã thanh toán hoàn tất, xử lý điểm tích lũy
+                if (targetInvoice.TrangThaiThanhToan == 2 && booking.IdkhachHangNavigation != null)
+                {
+                    // 1. Trừ điểm đã dùng
+                    if (pointsToUse > 0 && (booking.IdkhachHangNavigation.TichDiem ?? 0) >= pointsToUse)
+                    {
+                        booking.IdkhachHangNavigation.TichDiem = (booking.IdkhachHangNavigation.TichDiem ?? 0) - pointsToUse;
+                        _logger.LogInformation("[ConfirmPaid-Cash] Trừ {Points} điểm từ khách {CustomerId}", pointsToUse, booking.IdkhachHang);
+                    }
+
+                    // 2. Cộng điểm mới theo số tiền thực trả (100.000đ = 1 điểm)
+                    int pointsToAdd = (int)Math.Floor((double)(finalTotal / EARN_RATE));
+                    if (pointsToAdd > 0)
+                    {
+                        booking.IdkhachHangNavigation.TichDiem = (booking.IdkhachHangNavigation.TichDiem ?? 0) + pointsToAdd;
+                        _logger.LogInformation("[ConfirmPaid-Cash] Cộng {Points} điểm mới cho khách {CustomerId} (thanh toán {Amount}đ)", 
+                            pointsToAdd, booking.IdkhachHang, finalTotal);
+                    }
+
+                    // 3. Cập nhật ghi chú hóa đơn
+                    if (!string.IsNullOrWhiteSpace(targetInvoice.GhiChu) && targetInvoice.GhiChu.Contains("[USE_POINT]"))
+                    {
+                        targetInvoice.GhiChu = targetInvoice.GhiChu.Replace("[USE_POINT]", "[POINT_USED]");
+                    }
+                }
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -808,7 +1058,7 @@ namespace Hotel_System.API.Controllers
                     : (decimal)tienPhong;
 
                 decimal totalBeforeVat = roomAmount + servicesTotal;
-                decimal tongTien = Math.Round(totalBeforeVat * 1.1m, 0, MidpointRounding.AwayFromZero);
+                decimal tongTien = booking.TongTien > 0m ? booking.TongTien : Math.Round(totalBeforeVat * 1.1m, 0, MidpointRounding.AwayFromZero);
 
                 int trangThaiThanhToan = request.TrangThaiThanhToan ?? (request.PhuongThucThanhToan == 2 ? 1 : 2);
 
@@ -911,18 +1161,29 @@ namespace Hotel_System.API.Controllers
                     ? tongTien
                     : ((request.TienCoc ?? booking.TienCoc ?? 0m) + (request.PreviousPayment ?? 0m));
 
+                var ghiChuBase = request.GhiChu ?? "";
+                var priceLockedJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    goc = (int)tongTien, // Since price is locked, use final as all components
+                    giamKM = 0,
+                    giamDiem = 0,
+                    cuoi = (int)tongTien,
+                    diemDaDung = 0
+                });
+                var ghiChuFull = $"{ghiChuBase} [PRICE_LOCKED]{priceLockedJson}[/PRICE_LOCKED]";
+
                 var hoaDon = new HoaDon
                 {
                     IdhoaDon = newIdHoaDon,
                     IddatPhong = booking.IddatPhong,
                     NgayLap = DateTime.Now,
-                    TienPhong = tienPhong,
+                    TienPhong = (int)Math.Round(tongTien), // Final price after all discounts and VAT
                     Slngay = request.SoLuongNgay ?? booking.SoDem ?? 1,
                     TongTien = tongTien,
                     TienCoc = request.TienCoc ?? booking.TienCoc,
                     TrangThaiThanhToan = trangThaiThanhToan,
                     TienThanhToan = initialPaid,
-                    GhiChu = request.GhiChu
+                    GhiChu = ghiChuFull
                 };
 
                 _context.HoaDons.Add(hoaDon);
@@ -1039,19 +1300,30 @@ namespace Hotel_System.API.Controllers
 
                     decimal tienCoc = booking.TienCoc ?? 0m;
 
+                    var ghiChuBase = req.Note ?? "";
+                    var priceLockedJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        goc = (int)tongTien, // Since price is locked, use final as all components
+                        giamKM = 0,
+                        giamDiem = 0,
+                        cuoi = (int)tongTien,
+                        diemDaDung = 0
+                    });
+                    var ghiChuFull = $"{ghiChuBase} [PRICE_LOCKED]{priceLockedJson}[/PRICE_LOCKED]";
+
                     var idHoaDon = $"HD{DateTime.Now:yyyyMMddHHmmssfff}";
                     hoaDon = new HoaDon
                     {
                         IdhoaDon = idHoaDon,
                         IddatPhong = booking.IddatPhong,
                         NgayLap = DateTime.Now,
-                        TienPhong = tienPhong,
+                        TienPhong = (int)Math.Round(tongTien), // Final price after all discounts and VAT
                         Slngay = booking.SoDem ?? 1,
                         TongTien = tongTien,
                         TienCoc = tienCoc,
                         TrangThaiThanhToan = 1,
                         TienThanhToan = 0m,
-                        GhiChu = req.Note
+                        GhiChu = ghiChuFull
                     };
                     _context.HoaDons.Add(hoaDon);
 
@@ -1321,11 +1593,14 @@ namespace Hotel_System.API.Controllers
                     var kh = booking.IdkhachHangNavigation;
                     if (kh != null)
                     {
-                        var vndPerPoint = 100000m;
-                        var pointsToAdd = (int)Math.Floor((double)(booking.TongTien / vndPerPoint));
+                        // Cộng điểm: 100.000đ = 1 điểm
+                        const decimal EARN_RATE = 100_000m;
+                        var pointsToAdd = (int)Math.Floor((double)(booking.TongTien / EARN_RATE));
                         if (pointsToAdd > 0)
                         {
                             kh.TichDiem = (kh.TichDiem ?? 0) + pointsToAdd;
+                            _logger.LogInformation("[CompleteCheckout] Cộng {Points} điểm cho khách {CustomerId} (tổng tiền {Amount}đ)", 
+                                pointsToAdd, kh.IdkhachHang, booking.TongTien);
                         }
                     }
                 }
@@ -1515,6 +1790,53 @@ namespace Hotel_System.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Đọc giá đã chốt từ GhiChu (format: [PRICE_LOCKED]{json}[/PRICE_LOCKED])
+        /// Returns: final price nếu tìm thấy, null nếu không
+        /// </summary>
+        private decimal? TryGetLockedPriceFromNote(string? ghiChu)
+        {
+            if (string.IsNullOrWhiteSpace(ghiChu)) return null;
+            
+            try
+            {
+                var startTag = "[PRICE_LOCKED]";
+                var endTag = "[/PRICE_LOCKED]";
+                var startIdx = ghiChu.IndexOf(startTag);
+                var endIdx = ghiChu.IndexOf(endTag);
+                
+                if (startIdx >= 0 && endIdx > startIdx)
+                {
+                    var jsonStart = startIdx + startTag.Length;
+                    var jsonLength = endIdx - jsonStart;
+                    var json = ghiChu.Substring(jsonStart, jsonLength);
+                    
+                    var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+                    if (data != null && data.ContainsKey("cuoi"))
+                    {
+                        var cuoiValue = data["cuoi"];
+                        if (cuoiValue is System.Text.Json.JsonElement element)
+                        {
+                            if (element.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            {
+                                return element.GetDecimal();
+                            }
+                        }
+                        else if (decimal.TryParse(cuoiValue?.ToString(), out var price))
+                        {
+                            return price;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Không thể parse PRICE_LOCKED từ GhiChu");
+            }
+            
+            return null;
+        }
+
         private async Task RecomputeInvoiceAndBookingTotal(HoaDon hoaDon)
         {
             if (hoaDon == null) return;
@@ -1528,6 +1850,45 @@ namespace Hotel_System.API.Controllers
 
             if (booking == null) return;
 
+            // ========== ƯU TIÊN DÙNG GIÁ ĐÃ CHỐT TỪ GHICHU ==========
+            var lockedPrice = TryGetLockedPriceFromNote(hoaDon.GhiChu);
+            if (lockedPrice.HasValue)
+            {
+                _logger.LogInformation("[RecomputeInvoice] Sử dụng giá đã chốt từ GhiChu: {LockedPrice}đ cho hóa đơn {InvoiceId}", 
+                    lockedPrice.Value, hoaDon.IdhoaDon);
+                hoaDon.TongTien = lockedPrice.Value;
+                
+                // Cập nhật trạng thái thanh toán dựa trên số tiền đã trả
+                decimal paidSoFar = hoaDon.TienThanhToan ?? 0m;
+                decimal depositAmount = booking.TienCoc ?? 0m;
+                
+                if (depositAmount > 0 && paidSoFar < depositAmount)
+                {
+                    paidSoFar = depositAmount;
+                    hoaDon.TienThanhToan = paidSoFar;
+                }
+                
+                decimal remaining = lockedPrice.Value - paidSoFar;
+                hoaDon.TrangThaiThanhToan = (remaining > 1000m) ? 1 : 2;
+                
+                // Cập nhật tổng tiền booking
+                decimal totalBookingAmount = booking.HoaDons?.Sum(h => h.TongTien) ?? lockedPrice.Value;
+                booking.TongTien = totalBookingAmount;
+                
+                if (hoaDon.TrangThaiThanhToan == 2)
+                {
+                    bool allPaid = booking.HoaDons?.All(h => h.TrangThaiThanhToan == 2) ?? true;
+                    if (allPaid) booking.TrangThaiThanhToan = 2;
+                }
+                else booking.TrangThaiThanhToan = 1;
+                
+                await _context.SaveChangesAsync();
+                return; // ✅ KHÔNG TÍNH LẠI GIÁ NỮA
+            }
+            
+            // ========== NẾU KHÔNG CÓ GIÁ CHỐT, MỚI TÍNH LẠI ==========
+            _logger.LogInformation("[RecomputeInvoice] Không tìm thấy giá chốt, tính lại từ đầu cho hóa đơn {InvoiceId}", hoaDon.IdhoaDon);
+            
             decimal roomVal = (decimal)(hoaDon.TienPhong ?? 0);
             decimal serviceVal = hoaDon.Cthddvs?
                 .Where(c => string.IsNullOrEmpty(c.TrangThai) || c.TrangThai == "Hoạt động" || c.TrangThai == "new")
@@ -1968,6 +2329,27 @@ namespace Hotel_System.API.Controllers
             var message = $"{description.Replace(" ", "")}_{invoiceId}";
 
             return $"https://img.vietqr.io/image/{bankCode}-{accountNo}-compact2.png?amount={amountStr}&addInfo={Uri.EscapeDataString(message)}&accountName={Uri.EscapeDataString(accountName)}";
+        }
+
+        // Helper method to extract PRICE_LOCKED JSON from GhiChu
+        private string ExtractPriceLockedJson(string ghiChu)
+        {
+            if (string.IsNullOrEmpty(ghiChu))
+                return null;
+
+            const string startTag = "[PRICE_LOCKED]";
+            const string endTag = "[/PRICE_LOCKED]";
+
+            var startIndex = ghiChu.IndexOf(startTag);
+            if (startIndex == -1)
+                return null;
+
+            startIndex += startTag.Length;
+            var endIndex = ghiChu.IndexOf(endTag, startIndex);
+            if (endIndex == -1)
+                return null;
+
+            return ghiChu.Substring(startIndex, endIndex - startIndex).Trim();
         }
     }
 }

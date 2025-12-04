@@ -219,7 +219,7 @@ const PaymentPage: React.FC = () => {
           tienCoc = DEPOSIT_AMOUNT;
         } else {
           paymentStatus = "paid";
-          amountPaid = Math.round(grandTotal);
+          amountPaid = Math.round(displayedGrandTotal);
           trangThaiThanhToan = 2; // 2 = Đã thanh toán
           phuongThucThanhToan = 2;
           tienCoc = 0;
@@ -227,7 +227,7 @@ const PaymentPage: React.FC = () => {
       } else {
         // Các phương thức khác (credit-card, momo) = đã thanh toán
         paymentStatus = "paid";
-        amountPaid = Math.round(grandTotal);
+        amountPaid = Math.round(displayedGrandTotal);
         trangThaiThanhToan = 2;
         phuongThucThanhToan = 2;
         tienCoc = 0;
@@ -269,7 +269,7 @@ const PaymentPage: React.FC = () => {
         IDDatPhong: invoiceInfo.idDatPhong,
         TienPhong: totalPrice,
         SoLuongNgay: nights,
-        TongTien: Math.round(grandTotal),
+        TongTien: Math.round(displayedGrandTotal),
         TienCoc: tienCoc,
         TrangThaiThanhToan: trangThaiThanhToan,
         PhuongThucThanhToan: phuongThucThanhToan,

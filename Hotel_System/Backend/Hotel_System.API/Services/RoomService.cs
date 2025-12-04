@@ -187,9 +187,9 @@ namespace Hotel_System.API.Services
                     {
                         response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
                     }
-                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    else if ((promo.LoaiGiamGia == "amount" || promo.LoaiGiamGia == "fixed") && promo.GiaTriGiam.HasValue)
                     {
-                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                        response.DiscountedPrice = Math.Max(0, r.BasePricePerNight - promo.GiaTriGiam.Value);
                     }
                 }
 
@@ -311,9 +311,9 @@ namespace Hotel_System.API.Services
                     {
                         response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
                     }
-                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    else if ((promo.LoaiGiamGia == "amount" || promo.LoaiGiamGia == "fixed") && promo.GiaTriGiam.HasValue)
                     {
-                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                        response.DiscountedPrice = Math.Max(0, r.BasePricePerNight - promo.GiaTriGiam.Value);
                     }
                 }
 
