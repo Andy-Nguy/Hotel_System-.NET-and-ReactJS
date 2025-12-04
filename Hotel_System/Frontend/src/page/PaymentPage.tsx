@@ -79,6 +79,7 @@ const PaymentPage: React.FC = () => {
   const [invoiceInfoState, setInvoiceInfoState] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [redeemPoints, setRedeemPoints] = useState<number>(0);
+  const [redeemMode, setRedeemMode] = useState<'no' | 'part' | 'all'>('no');
   const [promoCode, setPromoCode] = useState<string>("");
   const [expandedSummary, setExpandedSummary] = useState(true);
   const [depositOption, setDepositOption] = useState<"deposit" | "full">(
@@ -283,6 +284,8 @@ const PaymentPage: React.FC = () => {
         }${paymentRef ? ` | Mã GD: ${paymentRef}` : ""}`,
         PaymentGateway:
           selectedMethod === "bank-transfer" ? "VietQR" : selectedMethod,
+        // Include redeem points if any selected
+        RedeemPoints: redeemPoints > 0 ? redeemPoints : undefined,
         Services: (bookingInfo.selectedServices || [])
           .filter((svc: any) => svc && svc.serviceId && svc.price) // Ensure object exists and has required fields
           .map((svc: any) => ({
@@ -329,7 +332,7 @@ const PaymentPage: React.FC = () => {
           paymentStatus: paymentStatus,
           amountPaid: amountPaid,
           depositAmount: depositAmount,
-          totalAmount: Math.round(grandTotal),
+          totalAmount: Math.round(displayedGrandTotal),
           idHoaDon: result.idHoaDon,
         })
       );
@@ -390,6 +393,10 @@ const PaymentPage: React.FC = () => {
   const subtotal = totalPrice + servicesTotal;
   const tax = subtotal * 0.1;
   const grandTotal = subtotal + tax;
+  // Points conversion (100 VND per point)
+  const POINT_VALUE = 100;
+  const discountFromPoints = (redeemPoints || 0) * POINT_VALUE;
+  const displayedGrandTotal = Math.max(0, grandTotal - discountFromPoints);
 
   const paymentMethods = [
     {
@@ -614,18 +621,9 @@ const PaymentPage: React.FC = () => {
                 border: "1px solid #f0f0f0",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginBottom: 16,
-                }}
-              >
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                 <TagOutlined style={{ color: "#dfa974" }} />
-                <Text strong style={{ color: "#2c3e50" }}>
-                  Mã khuyến mãi
-                </Text>
+                <Text strong style={{ color: "#2c3e50" }}>Mã khuyến mãi</Text>
               </div>
 
               <Input.Search
@@ -637,10 +635,101 @@ const PaymentPage: React.FC = () => {
                 style={{ marginBottom: 12 }}
               />
 
-              <Text type="secondary" style={{ fontSize: 13, color: "#7f8c8d" }}>
-                Bạn có điểm tích lũy?{" "}
-                <a style={{ color: "#dfa974" }}>Đăng nhập</a> để sử dụng
-              </Text>
+              {/* Loyalty / points usage (Option B) */}
+              {profile ? (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #f0f0f0" }}>
+                  <Title level={5} style={{ margin: "0 0 8px 0", color: "#2c3e50" }}>Sử dụng điểm tích lũy</Title>
+
+                  <Text style={{ display: "block", marginBottom: 8 }}>
+                    Điểm hiện có: <Text strong style={{ color: "#dfa974" }}>{(profile?.TichDiem ?? profile?.tichDiem ?? 0).toLocaleString()} điểm</Text>
+                  </Text>
+
+                  <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+                    Bạn muốn sử dụng điểm như thế nào?
+                  </Text>
+
+                  <Radio.Group
+                    value={redeemMode}
+                    onChange={(e) => {
+                      const val = e.target.value as 'no' | 'part' | 'all';
+                      if (val === 'no') {
+                        setRedeemMode('no');
+                        setRedeemPoints(0);
+                      } else if (val === 'all') {
+                        setRedeemMode('all');
+                        const pts = profile?.TichDiem ?? profile?.tichDiem ?? 0;
+                        setRedeemPoints(pts);
+                      } else {
+                        // part
+                        setRedeemMode('part');
+                        // keep existing redeemPoints (user will enter if 0)
+                        if (!redeemPoints) setRedeemPoints(0);
+                      }
+                    }}
+                  >
+                    <Space direction="vertical">
+                      <Radio value="no">Không dùng điểm</Radio>
+                      <Radio value="part">Dùng một phần</Radio>
+                      <Radio value="all">Dùng tất cả điểm</Radio>
+                    </Space>
+                  </Radio.Group>
+
+                  {/** Input only when using a part of points */}
+                  {(redeemMode === 'part' && (profile?.TichDiem ?? profile?.tichDiem ?? 0) > 0) && (
+                    <div style={{ marginTop: 12 }}>
+                      {/** compute caps **/}
+                      {/** 1 point = POINT_VALUE VND, cannot redeem more than 50% of grandTotal **/}
+                      {
+                        (() => {
+                          const POINT_VALUE = 100;
+                          const maxByAmount = Math.floor((grandTotal * 0.5) / POINT_VALUE);
+                          const currentPts = profile?.TichDiem ?? profile?.tichDiem ?? 0;
+                          const maxAllowed = Math.max(0, Math.min(currentPts, maxByAmount));
+                          return (
+                            <>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <Text strong style={{ color: "#2c3e50" }}>Số điểm bạn muốn sử dụng</Text>
+                                <Text type="secondary" style={{ fontSize: 12 }}>(Số nguyên)</Text>
+                              </div>
+
+                              <InputNumber
+                                min={0}
+                                max={maxAllowed}
+                                step={1}
+                                value={redeemPoints}
+                                onChange={(v: any) => {
+                                  const n = Number(v) || 0;
+                                  if (n < 0) setRedeemPoints(0);
+                                  else if (n > maxAllowed) setRedeemPoints(maxAllowed);
+                                  else setRedeemPoints(Math.floor(n));
+                                }}
+                                style={{ width: 200, marginTop: 8 }}
+                              />
+
+                              <div style={{ marginTop: 8 }}>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  1 điểm = 100đ giảm giá · Không được vượt quá số điểm bạn đang có · Điểm sử dụng sẽ được trừ khi thanh toán thành công
+                                </Text>
+                                <div>
+                                  <Text type="secondary" style={{ fontSize: 12 }}>
+                                    Giới hạn tối đa theo hóa đơn: {maxByAmount.toLocaleString()} điểm (50% tổng tiền)
+                                  </Text>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()
+                      }
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #f0f0f0" }}>
+                  <Text style={{ display: "block", marginBottom: 8 }}>
+                    Bạn có điểm tích luỹ? <Button type="link" onClick={() => (window.location.href = "/login")}>Đăng nhập để sử dụng</Button>
+                  </Text>
+                </div>
+              )}
             </Card>
 
             {/* Security Notice */}
@@ -889,9 +978,44 @@ const PaymentPage: React.FC = () => {
                     <Text strong style={{ fontSize: 16, color: "#2c3e50" }}>
                       Tổng cộng
                     </Text>
-                    <Text strong style={{ fontSize: 20, color: "#dfa974" }}>
-                      {Math.round(grandTotal).toLocaleString()}đ
-                    </Text>
+                    <div style={{ textAlign: "right" }}>
+                      {discountFromPoints > 0 ? (
+                        <>
+                          <div style={{ marginBottom: 6 }}>
+                            <Text type="secondary">Tổng trước giảm</Text>
+                            <div>
+                              <Text
+                                style={{
+                                  textDecoration: "line-through",
+                                  color: "#999",
+                                  display: "block",
+                                  fontSize: 16,
+                                }}
+                              >
+                                {Math.round(grandTotal).toLocaleString()}đ
+                              </Text>
+                            </div>
+                          </div>
+
+                          <div style={{ marginBottom: 6 }}>
+                            <Text type="secondary">Giảm từ điểm</Text>
+                            <div>
+                              <Text strong style={{ color: "#fa541c" }}>
+                                -{Math.round(discountFromPoints).toLocaleString()}đ
+                              </Text>
+                            </div>
+                          </div>
+
+                          <Text strong style={{ fontSize: 20, color: "#dfa974" }}>
+                            {Math.round(displayedGrandTotal).toLocaleString()}đ
+                          </Text>
+                        </>
+                      ) : (
+                        <Text strong style={{ fontSize: 20, color: "#dfa974" }}>
+                          {Math.round(grandTotal).toLocaleString()}đ
+                        </Text>
+                      )}
+                    </div>
                   </div>
                 </Space>
 
@@ -1020,13 +1144,25 @@ const PaymentPage: React.FC = () => {
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
+                        alignItems: "center",
                         width: "100%",
+                        gap: 12,
                       }}
                     >
                       <span>Thanh toán đủ</span>
-                      <Text strong style={{ color: "#dfa974" }}>
-                        {Math.round(grandTotal).toLocaleString()}đ
-                      </Text>
+                      <div style={{ textAlign: "right" }}>
+                        {discountFromPoints > 0 ? (
+                          <>
+                            <Text strong style={{ color: "#dfa974", fontSize: 14 }}>
+                              {Math.round(displayedGrandTotal).toLocaleString()}đ
+                            </Text>
+                          </>
+                        ) : (
+                          <Text strong style={{ color: "#dfa974", fontSize: 14 }}>
+                            {Math.round(displayedGrandTotal).toLocaleString()}đ
+                          </Text>
+                        )}
+                      </div>
                     </div>
                     <Text
                       type="secondary"
@@ -1051,7 +1187,7 @@ const PaymentPage: React.FC = () => {
                 src={`https://img.vietqr.io/image/bidv-8639699999-print.png?amount=${
                   depositOption === "deposit"
                     ? DEPOSIT_AMOUNT
-                    : Math.round(grandTotal)
+                    : Math.round(displayedGrandTotal)
                 }&addInfo=${paymentRef}&accountName=ROBINS VILLA HOTEL`}
                 alt="QR Code"
                 style={{ width: "100%", maxWidth: 280, height: "auto" }}
@@ -1095,26 +1231,31 @@ const PaymentPage: React.FC = () => {
                 >
                   <Text type="secondary">Số tiền</Text>
                   <div>
-                    <Text strong style={{ marginRight: 8, color: "#dfa974" }}>
-                      {(depositOption === "deposit"
-                        ? DEPOSIT_AMOUNT
-                        : Math.round(grandTotal)
-                      ).toLocaleString()}
-                      đ
-                    </Text>
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<CopyOutlined />}
-                      onClick={() =>
-                        copyToClipboard(
-                          (depositOption === "deposit"
-                            ? DEPOSIT_AMOUNT
-                            : Math.round(grandTotal)
-                          ).toString()
-                        )
-                      }
-                    />
+                    {depositOption === "deposit" ? (
+                      <>
+                        <Text strong style={{ marginRight: 8, color: "#dfa974" }}>
+                          {DEPOSIT_AMOUNT.toLocaleString()}đ
+                        </Text>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={() => copyToClipboard(DEPOSIT_AMOUNT.toString())}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Text strong style={{ marginRight: 8, color: "#dfa974" }}>
+                          {Math.round(displayedGrandTotal).toLocaleString()}đ
+                        </Text>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={() => copyToClipboard(Math.round(displayedGrandTotal).toString())}
+                        />
+                      </>
+                    )}
                   </div>
                 </div>
                 <div
