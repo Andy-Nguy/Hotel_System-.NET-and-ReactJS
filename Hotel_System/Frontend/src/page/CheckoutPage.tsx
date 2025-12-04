@@ -754,6 +754,14 @@ const CheckoutPage: React.FC = () => {
                             <Text strong>Phòng {sr.roomNumber}</Text>
                             <br />
                             <Text>{sr.room.tenPhong || sr.room.soPhong}</Text>
+                            {sr.room.promotionName && (
+                              <>
+                                <br />
+                                <Text style={{ fontSize: 12, color: "#52c41a" }}>
+                                  🎉 {sr.room.promotionName}
+                                </Text>
+                              </>
+                            )}
                             <br />
                             <Text type="secondary" style={{ fontSize: 12 }}>
                               {(() => {
