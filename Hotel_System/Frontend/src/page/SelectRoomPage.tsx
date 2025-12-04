@@ -121,6 +121,16 @@ const SelectRoomPage: React.FC = () => {
       return;
     }
 
+    // Debug: Log room data to check discountedPrice
+    console.log("Selected room data:", {
+      idphong: room.idphong,
+      tenPhong: room.tenPhong,
+      basePricePerNight: room.basePricePerNight,
+      giaCoBanMotDem: room.giaCoBanMotDem,
+      discountedPrice: room.discountedPrice,
+      promotionName: room.promotionName,
+    });
+
     // Thêm phòng vào danh sách đã chọn
     const newSelectedRooms = [
       ...selectedRooms,
@@ -365,9 +375,28 @@ const SelectRoomPage: React.FC = () => {
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
+                        alignItems: "flex-start",
                       }}
                     >
-                      <Text strong>Phòng {i + 1}</Text>
+                      <div style={{ flex: 1 }}>
+                        <Text strong>Phòng {i + 1}</Text>
+                        {selected && (
+                          <>
+                            <br />
+                            <Text type="secondary" style={{ fontSize: "13px" }}>
+                              {selected.room.tenPhong || selected.room.roomNumber || `Phòng ${selected.room.idphong}`}
+                            </Text>
+                            {selected.room.promotionName && (
+                              <>
+                                <br />
+                                <Text style={{ fontSize: "12px", color: "#52c41a" }}>
+                                  🎉 {selected.room.promotionName}
+                                </Text>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
                       {selected && (
                         <div style={{ textAlign: "right" }}>
                           {selected.room.discountedPrice &&
@@ -413,6 +442,7 @@ const SelectRoomPage: React.FC = () => {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        marginTop: 4,
                       }}
                     >
                       <Text type="secondary">

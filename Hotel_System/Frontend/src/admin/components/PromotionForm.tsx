@@ -487,7 +487,6 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                     { label: "Phòng", value: "room" },
                     { label: "Dịch Vụ", value: "service" },
                     { label: "Combo Dịch Vụ", value: "combo" },
-                    { label: "Khách Hàng", value: "customer" },
                   ]}
                   onChange={() => {
                     // Only reset when creating new promotion, not when editing

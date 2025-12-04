@@ -114,8 +114,6 @@ const PromotionList: React.FC<PromotionListProps> = ({
         return <Tag color="purple">Dịch Vụ</Tag>;
       case "combo":
         return <Tag color="cyan">Combo</Tag>;
-      case "customer":
-        return <Tag color="gold">Khách Hàng</Tag>;
       default:
         return <Tag>Không xác định</Tag>;
     }
@@ -294,7 +292,6 @@ const PromotionList: React.FC<PromotionListProps> = ({
               { label: "Phòng", value: "room" },
               { label: "Dịch Vụ", value: "service" },
               { label: "Combo", value: "combo" },
-              { label: "Khách Hàng", value: "customer" },
             ]}
           />
         </Col>

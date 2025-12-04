@@ -219,7 +219,7 @@ const PromotionManager: React.FC = () => {
         >
           {activeTab === "list" && (
             <>
-              <button
+              {/* <button
                 onClick={handleCreateNew}
                 style={{
                   padding: "8px 14px",
@@ -232,7 +232,7 @@ const PromotionManager: React.FC = () => {
                 }}
               >
                 + Thêm Khuyến Mãi
-              </button>
+              </button> */}
             </>
           )}
         </div>
