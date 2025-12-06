@@ -32,10 +32,33 @@ const DetailComboCard: React.FC<Props> = ({ visible, combo, onClose }) => {
   let savingPercent = 0;
 
   if (combo.comboPrice !== undefined) {
-    // If comboPrice is provided, use it as saving amount
-    tietKiem = combo.comboPrice;
-    giaCombo = originalPrice - tietKiem;
-    savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
+    // Interpret combo.comboPrice by loaiGiamGia when possible.
+    // If loaiGiamGia === 'percent' then combo.comboPrice is percent; if 'amount' it's VND.
+    const val = Number(combo.comboPrice);
+    const kind = (combo.loaiGiamGia || combo.LoaiGiamGia || '').toString().toLowerCase();
+    if (kind === 'percent') {
+      const pct = val;
+      giaCombo = Math.round(originalPrice * (1 - pct / 100));
+      tietKiem = originalPrice - giaCombo;
+      savingPercent = pct;
+    } else if (kind === 'amount') {
+      const amt = val;
+      giaCombo = Math.max(0, Math.round(originalPrice - amt));
+      tietKiem = Math.min(amt, originalPrice);
+      savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
+    } else {
+      // guess: <=100 -> percent, else -> amount
+      if (val > 0 && val <= 100) {
+        const pct = val;
+        giaCombo = Math.round(originalPrice * (1 - pct / 100));
+        tietKiem = originalPrice - giaCombo;
+        savingPercent = pct;
+      } else {
+        tietKiem = val;
+        giaCombo = Math.max(0, Math.round(originalPrice - tietKiem));
+        savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
+      }
+    }
   } else if (combo.loaiGiamGia && combo.giaTriGiam !== undefined && combo.giaTriGiam !== null) {
     // Calculate from discount type and value
     const discountValue = Number(combo.giaTriGiam);
