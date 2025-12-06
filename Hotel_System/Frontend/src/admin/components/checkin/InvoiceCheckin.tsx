@@ -1,6 +1,6 @@
 // src/components/checkout/InvoiceModal.tsx
 import React from 'react';
-import { Modal, Button, Descriptions, Table, Tag, message } from 'antd';
+import { Modal, Button, message } from 'antd';
 
 interface Props {
   visible: boolean;
@@ -56,7 +56,7 @@ const getInvoiceId = (data: any): string | null => {
 
   return null;
 };
-const InvoiceModal: React.FC<Props> = ({
+const InvoiceCheckin: React.FC<Props> = ({
   visible,
   invoiceData,
   paymentRow,
@@ -128,10 +128,40 @@ const InvoiceModal: React.FC<Props> = ({
   const combinedServices = [...serverServices, ...clientServices];
   const serviceTotal = combinedServices.reduce((s: number, sv: any) => s + Number(sv.thanhTien ?? 0), 0);
 
-  // TỔNG CUỐI CỦA KHÁCH (ÁP VAT 10%)
-  const subTotal = roomTotal + serviceTotal; // trước VAT
-  const vat = Math.round(subTotal * 0.1);
-  const finalTotal = Math.round(subTotal + vat); // TỔNG CỘNG toàn bộ (gồm VAT)
+  // ===== KIỂM TRA CÓ GIA HẠN KHÔNG =====
+  // Nếu có gia hạn (GhiChu chứa "Gia hạn" hoặc "gia hạn"), lấy TongTien từ server
+  const ghiChu = invoiceData?.GhiChu ?? invoiceData?.ghiChu ?? 
+                 invoiceData?.invoices?.[0]?.GhiChu ?? invoiceData?.invoices?.[0]?.ghiChu ?? 
+                 invoiceData?.HoaDon?.GhiChu ?? '';
+  const hasExtendFee = typeof ghiChu === 'string' && 
+                       (ghiChu.toLowerCase().includes('gia hạn') || ghiChu.toLowerCase().includes('gia han'));
+
+  // Lấy TongTien từ server (đã bao gồm phí gia hạn nếu có)
+  const serverTongTien = Number(
+    invoiceData?.TongTien ?? invoiceData?.tongTien ?? 
+    invoiceData?.invoices?.[0]?.TongTien ?? invoiceData?.invoices?.[0]?.tongTien ??
+    invoiceData?.HoaDon?.TongTien ?? invoiceData?.HoaDon?.tongTien ??
+    invoiceData?.money?.total ??
+    paymentRow?.TongTien ?? 0
+  );
+
+  // TỔNG CUỐI CỦA KHÁCH
+  let finalTotal: number;
+  let subTotal: number;
+  let vat: number;
+
+  if (hasExtendFee && serverTongTien > 0) {
+    // Nếu có gia hạn, dùng TongTien từ server (đã bao gồm VAT và phí gia hạn)
+    finalTotal = Math.round(serverTongTien);
+    // Tính ngược lại subTotal và VAT từ finalTotal
+    subTotal = Math.round(finalTotal / 1.1);
+    vat = finalTotal - subTotal;
+  } else {
+    // Không có gia hạn, tính bình thường
+    subTotal = roomTotal + serviceTotal; // trước VAT
+    vat = Math.round(subTotal * 0.1);
+    finalTotal = Math.round(subTotal + vat); // TỔNG CỘNG toàn bộ (gồm VAT)
+  }
 
   // Tiền cọc
   const deposit = Number(invoiceData?.money?.deposit ?? invoiceData?.TienCoc ?? 0);
@@ -156,10 +186,10 @@ const InvoiceModal: React.FC<Props> = ({
 
   return (
     <Modal
-      title={invoiceData ? `Hóa đơn - ${invoiceId ?? ''}` : 'Hóa đơn'}
+      title="Thanh toán"
       open={visible}
       onCancel={onClose}
-      width={900}
+      width={500}
       centered
       footer={[
         <Button key="close" onClick={onClose}>Đóng</Button>,
@@ -172,151 +202,81 @@ const InvoiceModal: React.FC<Props> = ({
       ]}
     >
       {invoiceData ? (
-        <div>
-          {/* Header khách sạn */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 18 }}>Khách sạn Robins Villa</div>
-              <div style={{ color: '#6b7280' }}>Địa chỉ: Số 1, Đường ABC, Quận XYZ</div>
-              <div style={{ color: '#6b7280' }}>Hotline: 1900-xxxx</div>
+        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+          {/* Icon thành công */}
+          <div style={{ 
+            width: 80, 
+            height: 80, 
+            borderRadius: '50%', 
+            background: '#52c41a', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            margin: '0 auto 24px'
+          }}>
+            <span style={{ fontSize: 40, color: '#fff' }}>✓</span>
+          </div>
+
+          {/* Thông báo chính */}
+          <div style={{ fontSize: 24, fontWeight: 700, color: '#1f2937', marginBottom: 16 }}>
+            Thanh toán thành công
+          </div>
+
+          {/* Số tiền vừa thanh toán (needToPay - số tiền khách cần trả, sẽ được cộng dồn vào TienThanhToan) */}
+          <div style={{ 
+            fontSize: 32, 
+            fontWeight: 700, 
+            color: '#52c41a',
+            marginBottom: 24
+          }}>
+            🟢 Đã thanh toán {needToPay.toLocaleString()}đ
+          </div>
+
+          {/* Thông tin phụ */}
+          <div style={{ 
+            background: '#f0f9ff', 
+            borderRadius: 8, 
+            padding: '16px 24px',
+            marginBottom: 16
+          }}>
+            <div style={{ color: '#0369a1', fontSize: 16 }}>
+              <strong>Mã đặt phòng:</strong> {bookingId}
             </div>
-            <div style={{ textAlign: 'right' }}>
-                <div><strong>Ngày:</strong> {invoiceDateStr}</div>
+            <div style={{ color: '#0369a1', fontSize: 16, marginTop: 8 }}>
+              <strong>Khách hàng:</strong> {customerName}
             </div>
           </div>
 
-          <Descriptions bordered column={2} size="middle">
-            <Descriptions.Item label="Khách hàng">
-              {customerName}
-            </Descriptions.Item>
-            <Descriptions.Item label="Email">
-              {customerEmail}
-            </Descriptions.Item>
-            <Descriptions.Item label="Mã đặt phòng">
-              {bookingId}
-            </Descriptions.Item>
-            <Descriptions.Item label="Nhận phòng">
-              {(typeof checkinDate === 'string' && checkinDate.slice) ? checkinDate.slice(0, 10) : checkinDate}
-            </Descriptions.Item>
-            <Descriptions.Item label="Trả phòng">
-              {(typeof checkoutDate === 'string' && checkoutDate.slice) ? checkoutDate.slice(0, 10) : checkoutDate}
-            </Descriptions.Item>
-          </Descriptions>
-
-          {/* Bảng phòng */}
-          <div style={{ marginTop: 16 }}>
-              <Table
-              size="small"
-              pagination={false}
-              dataSource={normalized}
-              rowKey="ID"
-              columns={[
-                {
-                  title: 'Phòng',
-                  render: (_: any, r: any) => (
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{r.TenPhong}</div>
-                      {r.SoPhong && <div style={{ color: '#64748b' }}>Phòng {r.SoPhong}</div>}
-                      {r.hasPromotion && (
-                        <Tag color="orange" style={{ marginTop: 4 }}>
-                          KHUYẾN MÃI -{r.promoAmount.toLocaleString()} đ
-                        </Tag>
-                      )}
-                    </div>
-                  ),
-                },
-                { title: 'Số đêm', dataIndex: 'SoDem', align: 'center' },
-                { title: 'Giá/đêm', dataIndex: 'GiaPhong', align: 'right', render: (v: any) => Number(v ?? 0).toLocaleString() + ' đ' },
-                {
-                  title: 'Thành tiền',
-                  align: 'right',
-                  render: (_: any, r: any) => (
-                    <div>
-                      {r.promoAmount > 0 && (
-                        <div style={{ textDecoration: 'line-through', color: '#888' }}>
-                          {r.ThanhTien.toLocaleString()} đ
-                        </div>
-                      )}
-                      <strong>{r.discounted.toLocaleString()} đ</strong>
-                    </div>
-                  ),
-                },
-              ]}
-            />
+          {/* Trạng thái lưu trú */}
+          <div style={{ 
+            fontSize: 16, 
+            color: '#059669',
+            fontWeight: 500
+          }}>
+            ✨ Lưu trú vẫn tiếp tục
           </div>
 
-          {/* Dịch vụ */}
-          {combinedServices.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <h4>Dịch vụ sử dụng</h4>
-              <Table
-                size="small"
-                pagination={false}
-                dataSource={combinedServices}
-                rowKey={(r: any, i?: number) => String(i ?? 0)}
-                columns={[
-                  { title: 'Dịch vụ', dataIndex: 'tenDichVu' },
-                  { title: 'Đơn giá', dataIndex: 'donGia', align: 'right', render: (v: any) => Number(v ?? 0).toLocaleString() + ' đ' },
-                  { title: 'Thành tiền', dataIndex: 'thanhTien', align: 'right', render: (v: any) => Number(v ?? 0).toLocaleString() + ' đ' },
-                ]}
-              />
+          {/* Ghi chú nếu có gia hạn */}
+          {hasExtendFee && (
+            <div style={{ 
+              marginTop: 16,
+              padding: '8px 16px',
+              background: '#fef3c7',
+              borderRadius: 6,
+              color: '#92400e',
+              fontSize: 14
+            }}>
+              📌 Đã bao gồm phí gia hạn
             </div>
           )}
-
-          {/* Tổng kết */}
-          <div style={{ marginTop: 24, textAlign: 'right' }}>
-            <div style={{ width: 400, display: 'inline-block' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16 }}>
-                <span>Tổng tiền phòng:</span>
-                <strong>{roomTotal.toLocaleString()} đ</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16 }}>
-                <span>Tiền dịch vụ:</span>
-                <strong>{serviceTotal.toLocaleString()} đ</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16 }}>
-                <span>Tạm tính (chưa VAT):</span>
-                <strong>{subTotal.toLocaleString()} đ</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16 }}>
-                <span>Thuế VAT (10%):</span>
-                <strong>{vat.toLocaleString()} đ</strong>
-              </div>
-              <div style={{ borderTop: '2px solid #000', margin: '12px 0' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 20, fontWeight: 700 }}>
-                <span>TỔNG CỘNG:</span>
-                <span style={{ color: '#d4380d' }}>{finalTotal.toLocaleString()} đ</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                <span>Tiền cọc:</span>
-                <strong>- {deposit.toLocaleString()} đ</strong>
-              </div>
-              {previousPayment > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Tiền thanh toán trước:</span>
-                  <strong>- {previousPayment.toLocaleString()} đ</strong>
-                </div>
-              )}
-              {alreadyPaid > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 600 }}>
-                  <span>Đã thanh toán cọc:</span>
-                  <strong>- {alreadyPaid.toLocaleString()} đ</strong>
-                </div>
-              )}
-              {needToPay > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700, color: '#d4380d', marginTop: 8 }}>
-                  <span>ĐÃ THANH TOÁN:</span>
-                  <strong>{needToPay.toLocaleString()} đ</strong>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       ) : (
-        <div>Không có dữ liệu hóa đơn</div>
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#6b7280' }}>
+          Không có dữ liệu hóa đơn
+        </div>
       )}
     </Modal>
   );
 };
 
-export default InvoiceModal;
+export default InvoiceCheckin;

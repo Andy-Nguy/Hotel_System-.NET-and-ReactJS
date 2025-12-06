@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import checkinApi from '../../../api/checkinApi';
 import { Button, Space, Tag, Segmented } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import DataTable from "../DataTable";
@@ -42,6 +43,100 @@ const CheckinTable: React.FC<Props> = ({
   onViewChange,
   summaryMap = {},
 }) => {
+  const [detailsMap, setDetailsMap] = useState<Record<string, any[]>>({});
+
+  // Fetch chi tiết đặt phòng cho các dòng chưa có
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const idsToFetch = (data || [])
+          .filter((d) => {
+            const hasDetails =
+              Array.isArray((d as any)?.ChiTietDatPhongs) &&
+              (d as any).ChiTietDatPhongs.length > 0;
+            return !hasDetails && d?.IddatPhong && !detailsMap[d.IddatPhong];
+          })
+          .map((d) => d.IddatPhong);
+
+        for (const id of idsToFetch) {
+          try {
+            const json = await checkinApi.getBookingById(id);
+            if (!mounted) return;
+            const detailLines = json?.ChiTietDatPhongs ?? json?.chiTietDatPhongs ?? json?.chiTietDatPhongs ?? null;
+            if (Array.isArray(detailLines) && detailLines.length > 0) {
+              setDetailsMap((prev) => ({ ...prev, [id]: detailLines }));
+            }
+          } catch (e) {
+            console.warn("[CheckinTable] fetch detail failed", id, e);
+          }
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [data]);
+
+  // Helper: rút trích thông tin phòng linh hoạt từ một item chi tiết
+  const extractRoomInfo = (it: any) => {
+    const ten =
+      it?.TenPhong ??
+      it?.tenPhong ??
+      it?.Phong?.TenPhong ??
+      it?.Phong?.tenPhong ??
+      it?.TenLoaiPhong ??
+      it?.tenLoaiPhong ??
+      it?.LoaiPhong?.TenLoaiPhong ??
+      it?.LoaiPhong?.tenLoaiPhong ??
+      it?.LoaiPhong?.TenLoai ??
+      it?.LoaiPhong?.tenLoai ??
+      it?.Phong?.LoaiPhong?.TenLoaiPhong ??
+      it?.Phong?.LoaiPhong?.TenLoai ??
+      null;
+
+    const so =
+      it?.SoPhong ??
+      it?.soPhong ??
+      it?.Phong?.SoPhong ??
+      it?.Phong?.soPhong ??
+      it?.Phong?.SoPhongNumber ??
+      it?.Phong?.roomNumber ??
+      null;
+
+    const idPhong =
+      it?.IDPhong ??
+      it?.IdPhong ??
+      it?.idPhong ??
+      it?.Phong?.Idphong ??
+      it?.Phong?.IDPhong ??
+      null;
+
+    return { ten, so, idPhong };
+  };
+
+  // Helper: hợp nhất nguồn chi tiết (detailsMap -> row -> summaryMap)
+  const getRoomLines = (row: BookingRow): any[] => {
+    const id = row.IddatPhong;
+    // 1) Đã fetch từ API
+    const fromCache = detailsMap?.[id];
+    if (Array.isArray(fromCache) && fromCache.length > 0) return fromCache;
+
+    // 2) Có sẵn trong row
+    const fromRow =
+      (row as any)?.ChiTietDatPhongs ?? (row as any)?.chiTietDatPhongs ?? [];
+    if (Array.isArray(fromRow) && fromRow.length > 0) return fromRow;
+
+    // 3) Fallback thêm: từ summaryMap (nếu parent truyền)
+    const sum = summaryMap?.[id];
+    const sumItems = sum?.items ?? [];
+    if (Array.isArray(sumItems) && sumItems.length > 0) return sumItems;
+
+    return [];
+  };
+
   const columns: ColumnsType<BookingRow> = [
     {
       title: "Mã đặt phòng",
@@ -60,6 +155,56 @@ const CheckinTable: React.FC<Props> = ({
           </div>
         </div>
       ),
+    },
+    {
+      title: "Phòng",
+      key: "rooms",
+      render: (_: any, r: BookingRow) => {
+        const details: any[] = getRoomLines(r);
+
+        if (Array.isArray(details) && details.length > 0) {
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {details.map((it, idx) => {
+                const { ten, so, idPhong } = extractRoomInfo(it);
+                const primary =
+                  ten ?? (so ? `Phòng ${so}` : idPhong ? String(idPhong) : "-");
+                // Nếu có cả tên và số phòng thì thêm dòng phụ để rõ ràng
+                const secondary = so
+                  ? `Phòng ${so}`
+                  : idPhong && (!ten || String(idPhong) !== String(ten))
+                  ? String(idPhong)
+                  : null;
+
+                return (
+                  <div key={idx}>
+                    <div style={{ fontWeight: 600 }}>{primary}</div>
+                    {secondary && (
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
+                        {secondary}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+
+        // Fallback: single room fields
+        const ten = (r as any)?.TenPhong ?? (r as any)?.tenPhong ?? null;
+        const so = (r as any)?.SoPhong ?? (r as any)?.soPhong ?? null;
+        return (
+          <div>
+            <div style={{ fontWeight: 600 }}>
+              {ten ?? (so ? `Phòng ${so}` : "-")}
+            </div>
+            {so && (
+              <div style={{ fontSize: 12, color: "#64748b" }}>{`Phòng ${so}`}</div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: "Nhận",
@@ -101,11 +246,12 @@ const CheckinTable: React.FC<Props> = ({
         return (
           <Space>
             <Button onClick={() => onAddService?.(r)}>Thêm dịch vụ</Button>
-            {typeof onViewInvoice === "function" && (
+            {/* Nếu cần mở form thanh toán trước checkin, bật lại nút dưới */}
+            {/* {typeof onViewInvoice === "function" && (
               <Button type="default" onClick={() => onViewInvoice?.(r)}>
-                Xem chi tiết
+                Thanh toán
               </Button>
-            )}
+            )} */}
           </Space>
         );
       },
