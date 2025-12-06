@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Button, Space, Tag, Segmented } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import DataTable from "../DataTable";
@@ -48,9 +48,126 @@ const CheckoutTable: React.FC<Props> = ({
   const [disabledMap, setDisabledMap] = React.useState<Record<string, boolean>>({});
   // track when overdue fee has been paid for a booking (local UX state)
   const [overduePaidMap, setOverduePaidMap] = React.useState<Record<string, boolean>>({});
+  const [detailsMap, setDetailsMap] = useState<Record<string, any[]>>({});
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const idsToFetch = (data || [])
+        .filter(d => {
+          const hasDetails = Array.isArray((d as any)?.ChiTietDatPhongs) && (d as any).ChiTietDatPhongs.length > 0;
+          return !hasDetails && d?.IddatPhong && !detailsMap[d.IddatPhong];
+        })
+        .map(d => d.IddatPhong);
+
+      for (const id of idsToFetch) {
+        try {
+          const res = await fetch(`/api/DatPhong/${id}`);
+          if (!mounted) return;
+          if (!res.ok) continue;
+          const json = await res.json();
+          const detailLines = json?.ChiTietDatPhongs ?? json?.chiTietDatPhongs ?? null;
+          if (Array.isArray(detailLines) && detailLines.length > 0) {
+            setDetailsMap(prev => ({ ...prev, [id]: detailLines }));
+          }
+        } catch (e) {
+          console.warn('[CheckoutTable] fetch detail failed', id, e);
+        }
+      }
+    })();
+    return () => { mounted = false; };
+  }, [data, detailsMap]);
+
   const columns: ColumnsType<BookingRow> = [
     { title: 'Mã đặt phòng', dataIndex: 'IddatPhong', key: 'IddatPhong', width: 160 },
     { title: 'Khách hàng', key: 'customer', render: (_, r) => (<div>{r.TenKhachHang}<div style={{fontSize:12,color:'#64748b'}}>{r.EmailKhachHang}</div></div>) },
+    {
+      title: 'Phòng',
+      key: 'rooms',
+      render: (_: any, r: BookingRow) => {
+        // Ưu tiên lấy từ detailsMap (đã fetch chi tiết), fallback dữ liệu có sẵn trong row
+        const details: any[] =
+          (detailsMap && (detailsMap as any)[r.IddatPhong]) ??
+          (r as any)?.ChiTietDatPhongs ??
+          (r as any)?.chiTietDatPhongs ??
+          [];
+
+        // Hàm trợ giúp: lấy TenPhong/SoPhong/IDPhong từ nhiều shape khác nhau
+        const extractRoomInfo = (it: any) => {
+          // Try several possible fields for a human-friendly room name / room-type name
+          const ten =
+            it?.TenPhong ??
+            it?.tenPhong ??
+            it?.Phong?.TenPhong ??
+            it?.Phong?.tenPhong ??
+            it?.TenLoaiPhong ??
+            it?.tenLoaiPhong ??
+            it?.LoaiPhong?.TenLoaiPhong ??
+            it?.LoaiPhong?.tenLoaiPhong ??
+            it?.LoaiPhong?.TenLoai ??
+            it?.LoaiPhong?.tenLoai ??
+            it?.Phong?.LoaiPhong?.TenLoaiPhong ??
+            it?.Phong?.LoaiPhong?.TenLoai ??
+            null;
+
+          // ID phòng fallback nếu thiếu SoPhong
+          const idPhong =
+            it?.IDPhong ??
+            it?.IdPhong ??
+            it?.idPhong ??
+            it?.Phong?.Idphong ??
+            it?.Phong?.IDPhong ??
+            null;
+
+          const so =
+            it?.SoPhong ??
+            it?.soPhong ??
+            it?.Phong?.SoPhong ??
+            it?.Phong?.soPhong ??
+            it?.Phong?.SoPhongNumber ??
+            it?.Phong?.roomNumber ??
+            null;
+
+          return { ten, so, idPhong };
+        };
+
+        if (Array.isArray(details) && details.length > 0) {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {details.map((it, idx) => {
+                const { ten, so, idPhong } = extractRoomInfo(it);
+                const primary = ten ?? (so ? `Phòng ${so}` : (idPhong ? String(idPhong) : '-'));
+                const secondary = so
+                  ? `Phòng ${so}`
+                  : (idPhong && (!ten || String(idPhong) !== String(ten)) ? String(idPhong) : null);
+
+                return (
+                  <div key={idx}>
+                    <div style={{ fontWeight: 600 }}>{primary}</div>
+                    {secondary && <div style={{ fontSize: 12, color: '#64748b' }}>{secondary}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+
+        // Fallback: hiển thị tên/phòng từ cột tổng hợp nếu chưa có chi tiết
+        const ten = (r as any)?.TenPhong ?? (r as any)?.tenPhong ?? null;
+        const so = (r as any)?.SoPhong ?? (r as any)?.soPhong ?? null;
+        if (ten || so) {
+          return (
+            <div>
+              <div style={{ fontWeight: 600 }}>{ten ?? (so ? `Phòng ${so}` : '-')}</div>
+              {so && <div style={{ fontSize: 12, color: '#64748b' }}>{`Phòng ${so}`}</div>}
+            </div>
+          );
+        }
+
+        // Nếu chưa có dữ liệu chi tiết và cũng không có tổng hợp → chờ fetch
+        return <div style={{ color: '#94a3b8' }}>Đang tải...</div>;
+      }
+    },
     { title: 'Nhận', dataIndex: 'NgayNhanPhong', key: 'NgayNhanPhong', width: 120 },
     { title: 'Trả', dataIndex: 'NgayTraPhong', key: 'NgayTraPhong', width: 120 },
     { title: 'Tổng tiền', dataIndex: 'TongTien', key: 'TongTien', align: 'right', render: (v) => Number(v).toLocaleString() + ' đ' },

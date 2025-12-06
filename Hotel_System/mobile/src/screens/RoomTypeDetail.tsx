@@ -183,7 +183,7 @@ const RoomTypeDetail: React.FC = () => {
         <View style={styles.priceSection}>
           <Text style={styles.priceLabel}>Giá/đêm:</Text>
           <Text style={styles.price}>
-            ${Number(item.giaCoBanMotDem || 0).toLocaleString()}
+            {Number(item.giaCoBanMotDem || 0).toLocaleString('vi-VN')} đ
           </Text>
         </View>
 

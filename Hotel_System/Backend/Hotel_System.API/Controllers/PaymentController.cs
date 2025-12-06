@@ -890,5 +890,50 @@ public async Task<IActionResult> GetInvoicePdf(string id)
         }
     }
 }
+
+        // POST: api/Payment/refund
+        // Records a confirmed refund and appends a booking history entry (LichSuDatPhong)
+        [HttpPost("refund")]
+        public async Task<IActionResult> Refund([FromBody] RefundRequest req)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new { message = "Yêu cầu hoàn tiền không hợp lệ", errors = ModelState });
+            }
+
+            try
+            {
+                var hoaDon = await _context.HoaDons
+                    .Include(h => h.IddatPhongNavigation)
+                    .FirstOrDefaultAsync(h => h.IdhoaDon == req.IdHoaDon);
+
+                if (hoaDon == null)
+                    return NotFound(new { message = "Không tìm thấy hóa đơn" });
+
+                // Create booking history entry recording the refund confirmation
+                var ghiChu = $"Hoàn tiền {req.RefundAmount:N0} đ | Phương thức: {req.RefundMethod ?? "N/A"} | Lý do: {req.Reason} | Hóa đơn: {hoaDon.IdhoaDon}";
+
+                var ls = new Models.LichSuDatPhong
+                {
+                    IddatPhong = hoaDon.IddatPhong ?? string.Empty,
+                    NgayCapNhat = DateTime.UtcNow,
+                    GhiChu = ghiChu
+                };
+
+                _context.LichSuDatPhongs.Add(ls);
+
+                // Append refund note to the invoice for traceability
+                hoaDon.GhiChu = string.IsNullOrWhiteSpace(hoaDon.GhiChu) ? ghiChu : hoaDon.GhiChu + " | " + ghiChu;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Hoàn tiền đã được ghi nhận", idLichSu = ls.IdlichSu });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi xử lý hoàn tiền cho hóa đơn {InvoiceId}", req.IdHoaDon);
+                return StatusCode(500, new { message = "Lỗi khi xử lý hoàn tiền", error = ex.Message });
+            }
+        }
     }
 }

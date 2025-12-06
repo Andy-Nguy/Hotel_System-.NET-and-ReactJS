@@ -76,7 +76,7 @@ export const checkoutApi = {
   addServiceToInvoice: async (payload: {
     IDDatPhong: string | number;
     DichVu: Array<{
-      IddichVu: string | number;
+      IddichVu?: string | number | null;
       TienDichVu?: number;
       DonGia?: number;
       TenDichVu?: string;
@@ -100,13 +100,13 @@ export const checkoutApi = {
   },
 
   // 7. Thực hiện gia hạn
-  extendStay: async (payload: {
+    extendStay: async (payload: {
     IddatPhong: string;
-    ExtendType: 1 | 2; // 1 = SameDay, 2 = ExtraNight
-    NewCheckoutHour?: number; // 15, 18, 24
+    ExtendType: 1 | 2; 
+    NewCheckoutHour?: number; 
     ExtraNights?: number;
     NewRoomId?: string;
-    PaymentMethod: 1 | 2; // 1 = Tiền mặt, 2 = QR
+    PaymentMethod: 1 | 2 | 3;
     Note?: string;
   }) => {
     const res = await axiosClient.post(`/Checkout/extend`, payload);

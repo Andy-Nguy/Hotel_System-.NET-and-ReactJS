@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   LineChartComponent,
   BarChartComponent,
+  AreaChartComponent,
   PieChartComponent,
 } from "../components/Chart";
 import {
@@ -18,8 +19,10 @@ import {
   message,
   Spin,
 } from "antd";
+import { BarChartOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { Dayjs } from "dayjs";
+import ReportDashboard from "./ReportDashboard";
 
 // Use centralized API configuration
 import { API_CONFIG } from "../../api/config";
@@ -104,6 +107,7 @@ interface DetailedReportData {
 
 const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [showReportDashboard, setShowReportDashboard] = useState(false);
   const [kpiData, setKpiData] = useState<KPIData | null>(null);
   const [revenueChartData, setRevenueChartData] = useState<RevenueChartData[]>(
     []
@@ -202,6 +206,24 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  const occupancyChartData = React.useMemo(() => {
+    // Take first 15 days (or fewer) and map to day number + occupied count
+    try {
+      const sorted = [...occupancyData].sort((a, b) => {
+        const da = dayjs(a.date);
+        const db = dayjs(b.date);
+        return da.isBefore(db) ? -1 : da.isAfter(db) ? 1 : 0;
+      });
+      return sorted.slice(0, 15).map((d) => {
+        const parsed = dayjs(d.date);
+        const dayNum = parsed.isValid() ? parsed.date() : d.date;
+        return { day: dayNum, occupied: (d as any).occupancyRate ?? (d as any).occupied ?? 0 };
+      });
+    } catch (e) {
+      return (occupancyData || []).slice(0, 15).map((d, i) => ({ day: i + 1, occupied: (d as any).occupancyRate ?? (d as any).occupied ?? 0 }));
+    }
+  }, [occupancyData]);
 
   // Column definitions for detailed reports
   const reportColumns: ColumnsType<DetailedReportData> = useMemo(() => {
@@ -302,7 +324,15 @@ const Dashboard: React.FC = () => {
 
   return (
     <>
-      <Spin spinning={loading}>
+      {showReportDashboard ? (
+        <div>
+          <Button onClick={() => setShowReportDashboard(false)} style={{ marginBottom: 16 }}>
+            ← Quay lại Dashboard
+          </Button>
+          <ReportDashboard />
+        </div>
+      ) : (
+        <Spin spinning={loading}>
         {/* Cấp 1: KPI Blocks */}
         <div
           style={{
@@ -315,6 +345,16 @@ const Dashboard: React.FC = () => {
           }}
         >
           <h2 style={{ marginBottom: 16 }}>Tổng quan</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div></div>
+            <Button
+              type="primary"
+              icon={<BarChartOutlined />}
+              onClick={() => setShowReportDashboard(true)}
+            >
+              📊 Báo cáo chi tiết
+            </Button>
+          </div>
           <Row gutter={16}>
             <Col xs={24} sm={12} md={6}>
               <Card>
@@ -405,6 +445,24 @@ const Dashboard: React.FC = () => {
           </Row>
         </div>
 
+        {/* Charts: daily revenue, occupancy, customer origin */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 8px 24px rgba(2,6,23,0.06)', marginBottom: 24 }}>
+          <h2 style={{ marginBottom: 16 }}>Biểu đồ</h2>
+          <Row gutter={16}>
+            <Col xs={24} lg={12}>
+              <Card title="Doanh thu (30 ngày)" style={{ marginBottom: 12 }}>
+                <LineChartComponent data={revenueChartData} />
+              </Card>
+            </Col>
+            <Col xs={24} lg={12}>
+              <Card title="Occupancy Rate (1 → 15)" style={{ marginBottom: 12 }}>
+                <AreaChartComponent data={occupancyChartData as any} dataKey="occupied" xKey="day" />
+              </Card>
+            </Col>
+          </Row>
+          {/* Pie moved to detailed report page */}
+        </div>
+
         {/* Cấp 3: Detailed Reports */}
         <div
           style={{
@@ -472,7 +530,8 @@ const Dashboard: React.FC = () => {
             size="small"
           />
         </div>
-      </Spin>
+        </Spin>
+      )}
     </>
   );
 };

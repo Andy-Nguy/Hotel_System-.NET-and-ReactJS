@@ -8,7 +8,9 @@ export const BASE_URLS: string[] = [
   "https://hotelsystem-net-and-reactjs-production.up.railway.app",
 ];
 
-export const DEFAULT_BASE_URL = BASE_URLS[1];
+// Use local development URL when running in the RN dev environment (__DEV__ is true).
+// This makes the mobile app call your local backend by default during development.
+export const DEFAULT_BASE_URL = typeof __DEV__ !== "undefined" && __DEV__ ? BASE_URLS[0] : BASE_URLS[1];
 
 // Helper to build a full URL from a path
 import { Platform } from "react-native";

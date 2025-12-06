@@ -12,13 +12,14 @@ namespace Hotel_System.API.Services
 {
     /// <summary>
     /// Background service that marks bookings as overdue (TrangThai = 5)
-    /// when the expected checkout datetime (NgayTraPhong + 12:00) has passed
+    /// when the expected checkout datetime (NgayTraPhong + 12:00 or extended hour) has passed
     /// and the guest still hasn't checked out (TrangThai == 3).
     ///
     /// Business rule:
     /// - Phòng đang sử dụng: TrangThai == 3
     /// - Ngày trả phòng dự kiến: NgayTraPhong <= hôm nay
-    /// - Thời điểm hiện tại: Now > NgayTraPhong + 12:00
+    /// - Thời điểm hiện tại: Now > NgayTraPhong + Giờ checkout hiệu lực
+    ///   (12:00 nếu không gia hạn, hoặc "Gia hạn đến HH:mm" nếu có)
     /// => Đánh dấu Quá hạn + Cộng phí trả phòng muộn vào TongTien (KHÔNG lưu CTHDDV, phí phạt không VAT).
     ///
     /// Service chạy định kỳ (mặc định mỗi 5 phút).
@@ -79,11 +80,12 @@ namespace Hotel_System.API.Services
                         {
                             try
                             {
-                                // Chuẩn checkout = NgayTraPhong + 12:00
+                                // Checkout chuẩn = NgayTraPhong + giờ hiệu lực (12:00 hoặc "Gia hạn đến HH:mm")
                                 DateTime standardCheckout;
                                 try
                                 {
-                                    standardCheckout = dp.NgayTraPhong.ToDateTime(new TimeOnly(12, 0));
+                                    var effTime = GetEffectiveCheckoutTime(dp);
+                                    standardCheckout = dp.NgayTraPhong.ToDateTime(effTime);
                                 }
                                 catch
                                 {
@@ -91,7 +93,7 @@ namespace Hotel_System.API.Services
                                     standardCheckout = dp.NgayTraPhong.ToDateTime(TimeOnly.MinValue);
                                 }
 
-                                // Nếu đã quá 12:00 ngày trả phòng mà vẫn Đang sử dụng → Quá hạn
+                                // Nếu đã quá giờ checkout hiệu lực mà vẫn Đang sử dụng → Quá hạn
                                 if (now > standardCheckout && dp.TrangThai == 3)
                                 {
                                     dp.TrangThai = 5; // Quá hạn
@@ -141,6 +143,49 @@ namespace Hotel_System.API.Services
             }
 
             _logger.LogInformation("OverdueMonitorService stopping");
+        }
+
+        /// <summary>
+        /// Lấy giờ checkout hiệu lực cho booking:
+        /// - Nếu hóa đơn mới nhất có "Gia hạn đến HH:mm" thì dùng HH:mm
+        /// - Ngược lại dùng 12:00
+        /// </summary>
+        private TimeOnly GetEffectiveCheckoutTime(DatPhong booking)
+        {
+            var defaultTime = new TimeOnly(12, 0);
+
+            try
+            {
+                if (booking.HoaDons == null || !booking.HoaDons.Any())
+                    return defaultTime;
+
+                var latest = booking.HoaDons
+                    .OrderByDescending(h => h.NgayLap)
+                    .FirstOrDefault();
+
+                if (latest == null || string.IsNullOrWhiteSpace(latest.GhiChu))
+                    return defaultTime;
+
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    latest.GhiChu,
+                    @"Gia hạn đến\s+(\d{1,2}):(\d{2})",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                if (!match.Success)
+                    return defaultTime;
+
+                if (int.TryParse(match.Groups[1].Value, out var hour) &&
+                    int.TryParse(match.Groups[2].Value, out var minute))
+                {
+                    return new TimeOnly(hour, minute);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return defaultTime;
         }
 
         /// <summary>

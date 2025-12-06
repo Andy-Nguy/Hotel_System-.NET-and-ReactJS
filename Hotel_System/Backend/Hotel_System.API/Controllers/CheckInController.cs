@@ -329,18 +329,99 @@ namespace Hotel_System.API.Controllers
             try
             {
                 // Check availability for the requested dates
+                // Use DateTime values for the RoomService call, but use DateOnly for DB overlap checks
                 var checkInDt = booking.NgayNhanPhong.ToDateTime(new TimeOnly(0, 0));
                 var checkOutDt = booking.NgayTraPhong.ToDateTime(new TimeOnly(0, 0));
                 var available = await _roomService.CheckAvailableRoomsAsync(checkInDt, checkOutDt, booking.SoNguoi ?? 1);
+                var checkInDateOnly = booking.NgayNhanPhong;
+                var checkOutDateOnly = booking.NgayTraPhong;
                 var found = available.FirstOrDefault(r => string.Equals(r.RoomId, req.NewRoomId, StringComparison.OrdinalIgnoreCase));
                 if (found == null)
                 {
                     return BadRequest(new { message = "Phòng được chọn không còn trống cho khoảng thời gian này." });
                 }
 
-                // Compute price difference based on base nightly price (fallback to 0)
-                decimal oldPrice = booking.IdphongNavigation?.GiaCoBanMotDem ?? 0m;
-                decimal newPrice = newRoom.GiaCoBanMotDem ?? 0m;
+                // Additional safety checks: ensure the room entity is actually marked as empty
+                // in the `Phongs` table (TrangThai == "Trống") and that there are no
+                // overlapping bookings for this room with active statuses.
+                // Business rule: DatPhong.TrangThai == 0 or 4 are considered empty/cancelled,
+                // so only treat bookings with other statuses as blockers.
+                try
+                {
+                    // Normalize textual room status (trim to protect against stored whitespace)
+                    if (!string.IsNullOrWhiteSpace(newRoom.TrangThai) && !string.Equals(newRoom.TrangThai.Trim(), "Trống", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return BadRequest(new { message = $"Phòng {newRoom.TenPhong ?? req.NewRoomId} không đang ở trạng thái 'Trống'. Vui lòng chọn phòng khác." });
+                    }
+
+                    var hasBlockingBooking = await _context.DatPhongs.AnyAsync(dp => dp.Idphong == req.NewRoomId
+                                                                                     && dp.NgayNhanPhong < checkOutDateOnly
+                                                                                     && dp.NgayTraPhong > checkInDateOnly
+                                                                                     && !(new int[] { 0, 4 }).Contains(dp.TrangThai));
+                    if (hasBlockingBooking)
+                    {
+                        return BadRequest(new { message = "Phòng được chọn có đặt phòng chồng lấn (không phải trạng thái 0 hoặc 4). Vui lòng chọn phòng khác." });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Lỗi khi kiểm tra trạng thái phòng mới {NewRoom} cho đặt phòng {BookingId}", req.NewRoomId, id);
+                    // Proceeding cautiously: if the check fails unexpectedly, block the reassignment to avoid data corruption
+                    return BadRequest(new { message = "Không thể xác thực trạng thái phòng mới. Vui lòng thử lại." });
+                }
+
+                // Compute price difference based on applied nightly price (consider active promotions)
+                decimal oldBasePrice = booking.IdphongNavigation?.GiaCoBanMotDem ?? 0m;
+                decimal newBasePrice = newRoom.GiaCoBanMotDem ?? 0m;
+
+                decimal oldAppliedPrice = oldBasePrice;
+                decimal newAppliedPrice = newBasePrice;
+                try
+                {
+                    var promoToday = DateOnly.FromDateTime(DateTime.Now);
+                    // check promo for new room
+                    var newPromo = await _context.KhuyenMaiPhongs
+                        .Include(k => k.IdkhuyenMaiNavigation)
+                        .Where(k => k.Idphong == newRoom.Idphong && k.IsActive &&
+                                    k.IdkhuyenMaiNavigation.TrangThai == "active" &&
+                                    k.IdkhuyenMaiNavigation.NgayBatDau <= promoToday &&
+                                    k.IdkhuyenMaiNavigation.NgayKetThuc >= promoToday)
+                        .OrderByDescending(k => k.IdkhuyenMaiNavigation.GiaTriGiam)
+                        .FirstOrDefaultAsync();
+                    if (newPromo != null && newPromo.IdkhuyenMaiNavigation != null && newPromo.IdkhuyenMaiNavigation.GiaTriGiam.HasValue)
+                    {
+                        var promo = newPromo.IdkhuyenMaiNavigation;
+                        if (promo.LoaiGiamGia == "percent") newAppliedPrice = Math.Round(newBasePrice * (1 - promo.GiaTriGiam.Value / 100m));
+                        else if (promo.LoaiGiamGia == "fixed") newAppliedPrice = Math.Max(0, newBasePrice - promo.GiaTriGiam.Value);
+                    }
+
+                    // check promo for old room (booking may already have promo applied)
+                    var oldRoomIdForPromo = booking.Idphong;
+                    if (!string.IsNullOrWhiteSpace(oldRoomIdForPromo))
+                    {
+                        var oldPromo = await _context.KhuyenMaiPhongs
+                            .Include(k => k.IdkhuyenMaiNavigation)
+                            .Where(k => k.Idphong == oldRoomIdForPromo && k.IsActive &&
+                                        k.IdkhuyenMaiNavigation.TrangThai == "active" &&
+                                        k.IdkhuyenMaiNavigation.NgayBatDau <= promoToday &&
+                                        k.IdkhuyenMaiNavigation.NgayKetThuc >= promoToday)
+                            .OrderByDescending(k => k.IdkhuyenMaiNavigation.GiaTriGiam)
+                            .FirstOrDefaultAsync();
+                        if (oldPromo != null && oldPromo.IdkhuyenMaiNavigation != null && oldPromo.IdkhuyenMaiNavigation.GiaTriGiam.HasValue)
+                        {
+                            var op = oldPromo.IdkhuyenMaiNavigation;
+                            if (op.LoaiGiamGia == "percent") oldAppliedPrice = Math.Round(oldBasePrice * (1 - op.GiaTriGiam.Value / 100m));
+                            else if (op.LoaiGiamGia == "fixed") oldAppliedPrice = Math.Max(0, oldBasePrice - op.GiaTriGiam.Value);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to evaluate promotions when reassigning room {BookingId}", id);
+                }
+
+                decimal oldPrice = oldAppliedPrice;
+                decimal newPrice = newAppliedPrice;
                 int nights = booking.SoDem ?? 1;
                 var deltaPerNight = newPrice - oldPrice;
 
@@ -403,16 +484,32 @@ namespace Hotel_System.API.Controllers
                         if (!string.IsNullOrWhiteSpace(ct.IDPhong) && ct.IDPhong == oldRoomId)
                         {
                             ct.IDPhong = req.NewRoomId;
-                            // update price if new room has a base price
-                            if (newRoom.GiaCoBanMotDem.HasValue)
-                            {
-                                ct.GiaPhong = newRoom.GiaCoBanMotDem.Value;
-                            }
+                                        // update price: prefer applied (discounted) price when available
+                                        ct.GiaPhong = (decimal)(newAppliedPrice);
                             // recalc line total
                             ct.ThanhTien = ct.SoDem * ct.GiaPhong;
                         }
                     }
                 }
+
+                // ===== CẬP NHẬT TRẠNG THÁI PHÒNG =====
+                // Phòng cũ: đổi thành "Trống"
+                if (booking.IdphongNavigation != null)
+                {
+                    booking.IdphongNavigation.TrangThai = "Trống";
+                }
+                else
+                {
+                    // Nếu navigation chưa load, load trực tiếp từ DB
+                    var oldRoomEntity = await _context.Phongs.FindAsync(oldRoomId);
+                    if (oldRoomEntity != null)
+                    {
+                        oldRoomEntity.TrangThai = "Trống";
+                    }
+                }
+
+                // Phòng mới: đổi thành "Đang sử dụng"
+                newRoom.TrangThai = "Đang sử dụng";
 
                 // Add an audit log entry
                 var log = new LichSuDatPhong
@@ -423,52 +520,102 @@ namespace Hotel_System.API.Controllers
                 };
                 _context.LichSuDatPhongs.Add(log);
 
-                // If the new room is more expensive, update the existing invoice for this booking
-                // rather than creating a new one. This keeps the customer's invoice consolidated.
+                // ===== CẬP NHẬT HÓA ĐƠN =====
+                // Persist updated line-item prices (discounted applied price) into DB and
+                // recompute the existing invoice so the stored invoice values reflect discounts.
                 string? createdInvoiceId = null;
-                if (totalDelta > 0)
+                // declare refundAmount here so it is in scope for the return statement below
+                decimal? refundAmount = null;
+                try
                 {
-                    try
+                    var existingInvoice = booking.HoaDons?.OrderByDescending(h => h.NgayLap).FirstOrDefault();
+                    if (existingInvoice != null)
                     {
-                        var deltaWithVat = Math.Round(totalDelta * 1.1m, 0, MidpointRounding.AwayFromZero);
+                        // Tính lại TienPhong từ ChiTietDatPhongs (đã cập nhật giá mới)
+                        decimal newTienPhongDecimal = booking.ChiTietDatPhongs?.Sum(ct => ct.ThanhTien) ?? 0m;
+                        existingInvoice.TienPhong = (int?)Math.Round(newTienPhongDecimal);
 
-                        // Prefer updating the latest invoice for this booking if present
-                        var existingInvoice = booking.HoaDons?.OrderByDescending(h => h.NgayLap).FirstOrDefault();
-                        if (existingInvoice != null)
+                        // Tính lại TongTien = (TienPhong + TienDichVu) * 1.1 (VAT 10%)
+                        decimal serviceVal = 0m;
+                        try
                         {
-                            // Add delta to base room amount and VAT-inclusive total
-                            existingInvoice.TienPhong = (existingInvoice.TienPhong ?? 0) + (int?)Math.Round((double)totalDelta);
-                            // TongTien is a non-nullable decimal in the model — add delta directly
-                            existingInvoice.TongTien = existingInvoice.TongTien + deltaWithVat;
-                            // Mark as unpaid/needs payment confirmation
+                            await _context.Entry(existingInvoice).Collection(h => h.Cthddvs).LoadAsync();
+                            serviceVal = existingInvoice.Cthddvs?
+                                .Where(c => string.IsNullOrEmpty(c.TrangThai) || c.TrangThai == "Hoạt động" || c.TrangThai == "new")
+                                .Sum(c => c.TienDichVu ?? 0m) ?? 0m;
+                        }
+                        catch { }
+
+                        decimal tongTienMoi = Math.Round((newTienPhongDecimal + serviceVal) * 1.1m, 0, MidpointRounding.AwayFromZero);
+                        existingInvoice.TongTien = tongTienMoi;
+
+                        // Cập nhật booking.TongTien cho khớp
+                        booking.TongTien = tongTienMoi;
+
+                        // If the new room is more expensive, mark unpaid as before
+                        if (totalDelta > 0)
+                        {
                             existingInvoice.TrangThaiThanhToan = 1;
-                            // Keep TienThanhToan as-is (frontend/admin will compute remaining due)
-                            createdInvoiceId = existingInvoice.IdhoaDon;
+                            booking.TrangThaiThanhToan = 1;
                         }
-                        else
-                        {
-                            // THEO YÊU CẦU MỚI:
-                            // Không tạo hóa đơn mới khi đổi phòng.
-                            // Chỉ cập nhật Booking.TongTien & trạng thái thanh toán ở trên.
-                            _logger.LogWarning(
-                                "ReassignRoom: booking {Id} không có hóa đơn cũ để cập nhật khi đổi phòng. " +
-                                "Theo nghiệp vụ mới: KHÔNG tạo hóa đ��n mới. Chênh lệch {Delta} sẽ phản ánh trong TongTien của đặt phòng.",
-                                booking.IddatPhong,
-                                totalDelta
-                            );
 
-                            // createdInvoiceId để nguyên null, frontend không phụ thuộc giá trị này.
+                        // If the new room is cheaper, prepare a refund request/note so front-end
+                        // can surface a refund form or let accounting process it.
+                        if (totalDelta < 0)
+                        {
+                            // totalDelta is negative (new cheaper). totalDeltaWithVat contains VAT-adjusted delta.
+                            var refund = Math.Abs(totalDeltaWithVat);
+                            refundAmount = Math.Round(refund, 0, MidpointRounding.AwayFromZero);
+
+                            // Append a clear note to the invoice so accountants can find it
+                            var note = existingInvoice.GhiChu ?? string.Empty;
+                            note += $" | Yêu cầu hoàn tiền: {refundAmount:N0} đ (Đổi phòng {oldRoomId} -> {req.NewRoomId})";
+                            existingInvoice.GhiChu = note;
+
+                            // Add an audit record for bookkeeping/operation trace
+                            _context.LichSuDatPhongs.Add(new LichSuDatPhong
+                            {
+                                IddatPhong = booking.IddatPhong,
+                                NgayCapNhat = DateTime.UtcNow,
+                                GhiChu = $"Yêu cầu hoàn tiền {refundAmount:N0} đ do đổi phòng: {oldRoomId} -> {req.NewRoomId}"
+                            });
+
+                            _logger.LogInformation("[ReassignRoom] Refund required for booking {BookingId}: {Amount}", booking.IddatPhong, refundAmount);
                         }
+
+                        createdInvoiceId = existingInvoice.IdhoaDon;
+
+                        _logger.LogInformation(
+                            "[ReassignRoom] Cập nhật hóa đơn {InvoiceId}: TienPhong={TienPhong}, TongTien={TongTien}, Refund={Refund}",
+                            existingInvoice.IdhoaDon, existingInvoice.TienPhong, existingInvoice.TongTien, refundAmount);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _logger.LogWarning(ex, "Không thể cập nhật hoá đơn chênh lệch khi đổi phòng cho {Id}", id);
+                        _logger.LogWarning(
+                            "ReassignRoom: booking {Id} không có hóa đơn cũ để cập nhật khi đổi phòng. " +
+                            "Theo nghiệp vụ hiện tại: KHÔNG tạo hóa đơn mới. Chênh lệch {Delta} sẽ phản ánh trong DatPhong.TongTien.",
+                            booking.IddatPhong,
+                            totalDelta
+                        );
                     }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Không thể cập nhật hoá đơn chênh lệch khi đổi phòng cho {Id}", id);
                 }
 
                 await _context.SaveChangesAsync();
 
-                return Ok(new { message = "Đổi phòng thành công.", bookingId = booking.IddatPhong, newRoom = req.NewRoomId, priceDelta = totalDelta, tongTien = booking.TongTien, invoiceId = createdInvoiceId });
+                return Ok(new {
+                    message = "Đổi phòng thành công.",
+                    bookingId = booking.IddatPhong,
+                    newRoom = req.NewRoomId,
+                    priceDelta = totalDelta,
+                    tongTien = booking.TongTien,
+                    invoiceId = createdInvoiceId,
+                    // refundAmount (VAT-inclusive) when applicable
+                    refundAmount = refundAmount
+                });
             }
             catch (Exception ex)
             {

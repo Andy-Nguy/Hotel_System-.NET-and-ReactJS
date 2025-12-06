@@ -10,6 +10,7 @@ import { getRooms, findAvailableRooms } from '../../api/roomsApi';
 import CheckoutTable from '../components/checkout/CheckoutTable';
 import PaymentModal from '../components/checkout/PaymentModal';
 import InvoiceModal from '../components/checkout/InvoiceModal';
+import ExtendInvoiceModal from '../components/checkout/ExtendInvoiceModal';
 import InvoiceModalWithLateFee from '../components/checkout/InvoiceModalWithLateFee';
 import ServicesSelector from '../../components/ServicesSelector';
 
@@ -152,6 +153,94 @@ const CheckoutManager: React.FC = () => {
     }
   };
 
+  // === HELPERS: persist bookings that were extended today (so UI shows "Đã gia hạn trong ngày") ===
+  const getExtendedBookingsKey = () => {
+    const dateStr = dayjs().format('YYYY-MM-DD');
+    return `extended_bookings_${dateStr}`;
+  };
+
+  const loadExtendedBookingsFromStorage = (): string[] => {
+    try {
+      const key = getExtendedBookingsKey();
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch (e) {
+      console.warn('[loadExtendedBookingsFromStorage] failed', e);
+    }
+    return [];
+  };
+
+  const saveExtendedBookingsToStorage = (ids: string[]) => {
+    try {
+      const key = getExtendedBookingsKey();
+      localStorage.setItem(key, JSON.stringify(ids || []));
+      cleanupOldExtendedBookingsKeys();
+    } catch (e) {
+      console.warn('[saveExtendedBookingsToStorage] failed', e);
+    }
+  };
+
+  const cleanupOldExtendedBookingsKeys = () => {
+    try {
+      const keys: string[] = Object.keys(localStorage || {}).filter(k => k && k.startsWith('extended_bookings_'));
+      const today = dayjs().format('YYYY-MM-DD');
+      for (const key of keys) {
+        const dateStr = key.replace('extended_bookings_', '');
+        if (dateStr !== today) {
+          try { localStorage.removeItem(key); } catch {}
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const [extendedBookingIds, setExtendedBookingIds] = useState<string[]>(() => loadExtendedBookingsFromStorage());
+  useEffect(() => {
+    if (extendedBookingIds && extendedBookingIds.length > 0) saveExtendedBookingsToStorage(extendedBookingIds);
+  }, [extendedBookingIds]);
+
+  const markBookingAsExtended = (bookingId: string | null | undefined) => {
+    if (!bookingId) return;
+    setExtendedBookingIds(prev => {
+      const updated = Array.from(new Set([...(prev || []), String(bookingId)]));
+      try { saveExtendedBookingsToStorage(updated); } catch {}
+      return updated;
+    });
+  };
+
+  const detectExtendInSummary = (s: any) => {
+    if (!s) return false;
+    const money = s?.money ?? {};
+    const backendExtend = Number(money.extendFee ?? money.extend ?? money.extra ?? money.phiGiaHan ?? 0);
+    if (backendExtend > 0) return true;
+    // check notes
+    const notes = [] as string[];
+    if (s?.GhiChu) notes.push(String(s.GhiChu));
+    if (s?.ghiChu) notes.push(String(s.ghiChu));
+    if (s?.HoaDon?.GhiChu) notes.push(String(s.HoaDon.GhiChu));
+    if (Array.isArray(s?.invoices) && s.invoices.length > 0) {
+      const inv = s.invoices[0];
+      if (inv?.GhiChu) notes.push(String(inv.GhiChu));
+      if (inv?.ghiChu) notes.push(String(inv.ghiChu));
+    }
+    const norm = notes.join('\n').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (norm.includes('gia han') || norm.includes('gia hạn') || norm.includes('gia-han')) return true;
+    // fallback: compute diff
+    const roomTotal = Number(money.roomTotal ?? NaN);
+    const serviceTotal = Number(money.serviceTotal ?? NaN);
+    const vat = Number(money.vat ?? NaN);
+    const totalSrv = Number(money.tongTien ?? NaN);
+    if (!isNaN(totalSrv) && !isNaN(roomTotal) && !isNaN(serviceTotal)) {
+      const sub = roomTotal + serviceTotal;
+      const base = Math.round((!isNaN(vat) && vat > 0) ? (sub + vat) : Math.round(sub * 1.1));
+      if (totalSrv - base > 1000) return true;
+    }
+    return false;
+  };
+
   useEffect(() => { load(); }, []);
 
   // Khi chuyển sang tab Quá hạn, tự động load summary cho các booking quá hạn
@@ -198,6 +287,8 @@ const CheckoutManager: React.FC = () => {
   const [form] = Form.useForm();
 
   const openPaymentModal = async (row: BookingRow) => {
+    // If an extend form is open, hide it before showing the payment modal
+    try { setExtendVisible(false); resetExtendState(); } catch {}
     setPaymentRow(row);
     setPaymentModalVisible(true);
     setSummaryLoading(true);
@@ -244,6 +335,73 @@ const CheckoutManager: React.FC = () => {
     return fresh;
   };
 
+  // Build a normalized invoiceData object from server summary and optional booking row
+  const buildInvoiceDataFromSummary = (sum: any | null, row?: any) => {
+    if (!sum && !row) return null;
+    const dp = sum?.DatPhong ?? sum?.datPhong ?? null;
+    const customer =
+      sum?.customer ??
+      sum?.Customer ??
+      dp?.TenKhachHang ??
+      dp?.tenKhachHang ??
+      (row && (row.TenKhachHang ?? row.tenKhachHang)) ??
+      null;
+
+    const dates = sum?.dates ?? (dp ? { checkin: dp.NgayNhanPhong, checkout: dp.NgayTraPhong } : null);
+
+    const room = sum?.room ?? (dp
+      ? { id: dp?.Idphong ?? dp?.idphong, tenPhong: dp?.TenPhong ?? dp?.idphongNavigation?.TenPhong, soPhong: dp?.SoPhong ?? dp?.idphongNavigation?.SoPhong }
+      : row ? { id: row.Idphong, tenPhong: row.TenPhong, soPhong: row.SoPhong } : null);
+
+    let baseItems: any[] = [];
+    if (Array.isArray(sum?.items) && sum.items.length > 0) baseItems = sum.items;
+    else if (Array.isArray(dp?.ChiTietDatPhongs) && dp.ChiTietDatPhongs.length > 0) baseItems = dp.ChiTietDatPhongs;
+    else if (Array.isArray(row?.ChiTietDatPhongs) && row.ChiTietDatPhongs.length > 0) baseItems = row.ChiTietDatPhongs;
+    else if (row) {
+      baseItems = [{
+        TenPhong: row.TenPhong ?? room?.tenPhong ?? 'Phòng',
+        SoPhong: row.SoPhong ?? room?.soPhong ?? undefined,
+        SoDem: Number(row.SoDem ?? 1),
+        GiaPhong: Math.round((row.TongTien ?? 0) / Math.max(1, row.SoDem ?? 1)),
+        ThanhTien: row.TongTien ?? 0
+      }];
+    }
+
+    const normalizedItems = (baseItems || []).map((it: any, idx: number) => ({
+      ID: it?.id ?? it?.IDChiTiet ?? idx,
+      TenPhong: it?.TenPhong ?? it?.tenPhong ?? it?.Phong?.TenPhong ?? it?.Phong?.tenPhong ?? (it?.SoPhong ? `Phòng ${it.SoPhong}` : 'Phòng'),
+      SoPhong: it?.SoPhong ?? it?.soPhong ?? it?.Phong?.SoPhong ?? it?.Phong?.soPhong ?? null,
+      SoDem: Number(it?.soDem ?? it?.SoDem ?? it?.Slngay ?? 1),
+      GiaPhong: Number(it?.giaPhong ?? it?.GiaPhong ?? it?.Gia ?? 0),
+      ThanhTien: Number(it?.thanhTien ?? it?.ThanhTien ?? it?.Tien ?? 0)
+    }));
+
+    const serverServices = Array.isArray(sum?.services) ? sum.services : [];
+    const bookingServices = Array.isArray(dp?.services) ? dp.services : [];
+    const mergedServices = [...serverServices, ...bookingServices, ...(selectedServices || [])];
+
+    const merged: any = {
+      customer,
+      dates,
+      Room: room,
+      items: normalizedItems,
+      invoiceRoomDetails: normalizedItems,
+      services: mergedServices.length > 0 ? mergedServices : null,
+      promotions: sum?.promotions ?? (dp ? dp?.promotions ?? null : null),
+      money: sum?.money ?? (dp ? dp?.money ?? null : null),
+      invoices: sum?.invoices ?? null
+    };
+
+    const firstInv = (sum?.invoices && Array.isArray(sum.invoices) && sum.invoices.length > 0) ? sum.invoices[0] : null;
+    if (firstInv) {
+      merged.IDHoaDon = merged.IDHoaDon ?? (firstInv.id ?? firstInv.IDHoaDon ?? firstInv.IdhoaDon ?? firstInv.idHoaDon ?? null);
+      merged.idHoaDon = merged.idHoaDon ?? merged.IDHoaDon;
+      merged.HoaDon = merged.HoaDon ?? firstInv;
+    }
+
+    return merged;
+  };
+
   const [qrModalVisible, setQrModalVisible] = useState(false);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null);
@@ -276,10 +434,23 @@ const CheckoutManager: React.FC = () => {
   const [extendType, setExtendType] = useState<1 | 2>(1); // 1 = SameDay, 2 = ExtraNight
   const [selectedExtendHour, setSelectedExtendHour] = useState<number>(15);
   const [extraNights, setExtraNights] = useState<number>(1);
-  const [extendPaymentMethod, setExtendPaymentMethod] = useState<1 | 2>(1);
+  const [extendPaymentMethod, setExtendPaymentMethod] = useState<1 | 2 | 3>(1);
   const [extendNote, setExtendNote] = useState<string>('');
   const [extendSubmitting, setExtendSubmitting] = useState(false);
+  const [extendInvoiceModalVisible, setExtendInvoiceModalVisible] = useState(false);
+  const [extendInvoiceData, setExtendInvoiceData] = useState<any | null>(null);
+  const [extendFlowPending, setExtendFlowPending] = useState(false); // true when QR/pay pending for extend
+  // When a room-change extend is performed, backend may create the new booking/invoice
+  // but we should only show the extend invoice after the operator completes the old booking.
+  // Store pending extend results keyed by old booking id so `completeCheckout` can show them.
+  const [pendingExtendResults, setPendingExtendResults] = useState<Record<string, any>>({});
+  // When backend requires payment before completing a room-change extend,
+  // we store the payload here and open the payment modal for the old invoice.
+  const [pendingExtendPayload, setPendingExtendPayload] = useState<any | null>(null);
+  const [pendingExtendOldInvoiceId, setPendingExtendOldInvoiceId] = useState<string | null>(null);
 
+  // State for rendering a local confirm modal for room-change extend (avoid Modal.confirm stacking issues)
+  const [roomChangeConfirmVisible, setRoomChangeConfirmVisible] = useState(false);
   const handleAddService = (row: BookingRow) => {
     setPaymentRow(row);
     setSelectedServices([]);
@@ -408,6 +579,7 @@ const CheckoutManager: React.FC = () => {
             setPaymentInvoiceId(hoaDonId);
             // persist for later retrieval
             setQrMap((prev) => ({ ...(prev || {}), [String(paymentRow.IddatPhong)]: { qrUrl: paymentUrl ?? undefined, hoaDonId: hoaDonId ?? undefined } }));
+            try { setExtendVisible(false); resetExtendState(); } catch {}
             setQrModalVisible(true);
           } catch (err: any) {
             console.error('payQr failed', err);
@@ -431,8 +603,11 @@ const CheckoutManager: React.FC = () => {
               msg.success('Cập nhật hóa đơn & thanh toán thành công');
               try {
                 const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
-                setInvoiceData(fresh);
+                setInvoiceData(buildInvoiceDataFromSummary(fresh, paymentRow));
                 setSummary(mergeFreshSummary(summary, fresh));
+                try {
+                  if (detectExtendInSummary(fresh)) markBookingAsExtended(paymentRow?.IddatPhong);
+                } catch (e) {}
               } catch (e) {
                 console.warn('Failed to reload summary', e);
               }
@@ -472,8 +647,9 @@ const CheckoutManager: React.FC = () => {
           msg.success('Cập nhật hóa đơn & thanh toán thành công');
           try {
             const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
-            setInvoiceData(fresh);
+            setInvoiceData(buildInvoiceDataFromSummary(fresh, paymentRow));
             setSummary(mergeFreshSummary(summary, fresh));
+            try { if (detectExtendInSummary(fresh)) markBookingAsExtended(paymentRow?.IddatPhong); } catch (e) {}
           } catch (e) {
             console.warn('Failed to reload summary', e);
           }
@@ -522,7 +698,7 @@ const CheckoutManager: React.FC = () => {
           IDDatPhong: paymentRow.IddatPhong,
           PhuongThucThanhToan: method,
           // Tiền mặt (1) -> Gửi trạng thái 2 (Đã thanh toán). QR (2) -> Gửi 1 (Chờ)
-          TrangThaiThanhToan: method === 2 ? 1 : 2,
+          TrangThaiThanhToan: method === 1 ? 2 : 1,
           GhiChu: vals.GhiChu ?? '',
           TongTien: invoiceAmountToUse,
           TienPhong: Math.round(roomTotalForCalc),
@@ -546,16 +722,17 @@ const CheckoutManager: React.FC = () => {
               // update summary/invoiceData from server but preserve previously-paid if server shows 0
             try {
               const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
-              if (fresh) {
+            if (fresh) {
                 const prevPaid = Number(summary?.money?.paidAmount ?? 0);
                 const freshPaid = Number(fresh?.money?.paidAmount ?? 0);
                 if ((isNaN(freshPaid) || freshPaid === 0) && prevPaid > 0) {
                   fresh.money = { ...fresh.money, paidAmount: prevPaid };
                 }
                 setSummary(fresh);
-                setInvoiceData(fresh);
+                setInvoiceData(buildInvoiceDataFromSummary(fresh, paymentRow));
               }
             } catch (e) { /* ignore */ }
+            try { setExtendVisible(false); resetExtendState(); } catch {}
             setQrModalVisible(true);
           } catch (e: any) {
             console.error('payQr after createInvoice failed', e);
@@ -565,8 +742,9 @@ const CheckoutManager: React.FC = () => {
           msg.success('Thanh toán thành công');
           try {
             const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
-            setInvoiceData(fresh);
+            setInvoiceData(buildInvoiceDataFromSummary(fresh, paymentRow));
             setSummary(fresh);
+            try { if (detectExtendInSummary(fresh)) markBookingAsExtended(paymentRow?.IddatPhong); } catch (e) {}
             try { window.dispatchEvent(new CustomEvent('booking:services-updated', { detail: { id: paymentRow.IddatPhong } })); } catch {}
           } catch (e) { }
           setInvoiceModalVisible(true);
@@ -575,6 +753,78 @@ const CheckoutManager: React.FC = () => {
 
       setPaymentModalVisible(false);
       form.resetFields();
+      // If there's a pending extend that requested payment first, resume it now
+      if (pendingExtendPayload) {
+        try {
+          message.loading('Đang hoàn tất thao tác gia hạn sau khi thanh toán...');
+          const resumeResult = await checkoutApi.extendStay(pendingExtendPayload);
+          // Clear pending state immediately to avoid retries
+          setPendingExtendPayload(null);
+          setPendingExtendOldInvoiceId(null);
+
+          if (resumeResult?.Success || resumeResult?.success) {
+              const desc = resumeResult.ExtendDescription ?? resumeResult.extendDescription ?? '';
+              const fee = resumeResult.TotalExtendFee ?? resumeResult.totalExtendFee ?? 0;
+              const hoaDonId = resumeResult.NewInvoiceId ?? resumeResult.newInvoiceId ?? resumeResult.HoaDonId ?? resumeResult.hoaDonid;
+              const qr = resumeResult.QrUrl ?? resumeResult.qrUrl;
+
+              // If this was a room-change extend, DO NOT show the invoice/QR immediately.
+              // Store the extend result as pending and show it only after the operator
+              // completes the old booking (completeCheckout). This enforces the
+              // required flow: pay old booking -> complete checkout -> show extend.
+              if (pendingExtendPayload?.IsRoomChange) {
+                try {
+                  const oldId = String(pendingExtendPayload?.IddatPhong ?? pendingExtendPayload?.Iddatphong ?? pendingExtendPayload?.iddatPhong ?? pendingExtendPayload?.iddatphong);
+                  setPendingExtendResults(prev => ({ ...(prev || {}), [oldId]: { ...(resumeResult || {}), qrUrl: qr ?? null, hoaDonId: hoaDonId ?? null, requiresQr: !!qr } }));
+                  message.info('Gia hạn đã tạo. Vui lòng hoàn tất trả phòng cũ để hiển thị hóa đơn/giao dịch gia hạn.');
+                } catch (e) {
+                  // Fallback to showing immediately if storing fails
+                  if (qr) {
+                    // Ensure extend form/modal is closed before showing QR
+                    try { setExtendVisible(false); resetExtendState(); } catch {}
+                    setQrUrl(qr);
+                    setPaymentInvoiceId(hoaDonId);
+                    setExtendInvoiceData(resumeResult);
+                    setExtendFlowPending(true);
+                    setQrModalVisible(true);
+                  } else {
+                    // Ensure extend form/modal is closed before showing invoice
+                    try { setExtendVisible(false); resetExtendState(); } catch {}
+                    try { setPaymentRow(paymentRow ?? null); } catch {}
+                    setExtendInvoiceData(resumeResult);
+                    setExtendInvoiceModalVisible(true);
+                  }
+                }
+              } else {
+                // Non room-change extend: show immediately as before
+                if (pendingExtendPayload?.PaymentMethod === 2 && qr) {
+                  try { setExtendVisible(false); resetExtendState(); } catch {}
+                  setQrUrl(qr);
+                  setPaymentInvoiceId(hoaDonId);
+                  setExtendInvoiceData(resumeResult);
+                  setExtendFlowPending(true);
+                  setQrModalVisible(true);
+                } else {
+                  try { setExtendVisible(false); resetExtendState(); } catch {}
+                  try { setPaymentRow(paymentRow ?? null); } catch {}
+                  setExtendInvoiceData(resumeResult);
+                  setExtendInvoiceModalVisible(true);
+                }
+              }
+
+              notification.success({ message: 'Gia hạn hoàn tất', description: desc || `Phí: ${Number(fee).toLocaleString()}đ`, placement: 'topRight' });
+              try { await load(); } catch {}
+            } else {
+              message.error(resumeResult?.Message ?? resumeResult?.message ?? 'Không thể hoàn tất gia hạn sau khi thanh toán');
+            }
+        } catch (err: any) {
+          console.error('Resume extend after payment failed', err);
+          message.error(err?.message || 'Không thể hoàn tất gia hạn sau khi thanh toán');
+        } finally {
+          setPendingExtendPayload(null);
+          setPendingExtendOldInvoiceId(null);
+        }
+      }
       // After payment: for 'checkout' keep the booking visible until invoice close;
       // for 'overdue' DO NOT reload the bookings list here so the room remains visible
       // — operator will press "Xác nhận trả phòng" (complete) when ready.
@@ -670,7 +920,7 @@ const CheckoutManager: React.FC = () => {
         console.debug('[handleServiceModalAdd] fresh summary after add-service', paymentRow.IddatPhong, fresh);
         setSummary(mergeFreshSummary(summary, fresh));
         // also update invoice modal data so checkout invoice form shows new services immediately
-        setInvoiceData(fresh);
+        setInvoiceData(buildInvoiceDataFromSummary(fresh, paymentRow));
         // notify other components that services/invoice changed for this booking
         try { window.dispatchEvent(new CustomEvent('booking:services-updated', { detail: { id: paymentRow.IddatPhong } })); } catch {}
       }
@@ -774,15 +1024,17 @@ const CheckoutManager: React.FC = () => {
   const markPaid = async (row: BookingRow) => {
     // Open the payment modal so the operator can choose cash or QR and submit once —
     // this removes the extra confirm dialog and lets the modal handle creating invoice / showing QR.
+    try { setExtendVisible(false); resetExtendState(); } catch {}
     setPaymentRow(row);
-    try {
+      try {
       const sum = await checkoutApi.getSummary(row.IddatPhong);
       setSummary(mergeFreshSummary(summary, sum));
-      setInvoiceData(sum);
+      setInvoiceData(buildInvoiceDataFromSummary(sum, row));
     } catch {
       // keep existing summary to preserve previously-paid amounts
       setInvoiceData(null);
     }
+    try { setExtendVisible(false); resetExtendState(); } catch {}
     setPaymentModalVisible(true);
   };
 
@@ -797,11 +1049,13 @@ const CheckoutManager: React.FC = () => {
       setServicesTotal(0);
 
       // Mở PaymentModal dựa trên dữ liệu server
+      try { setExtendVisible(false); resetExtendState(); } catch {}
       setPaymentRow(row);
       setSummary(mergeFreshSummary(summary, sum));
-      setInvoiceData(sum);
+      setInvoiceData(buildInvoiceDataFromSummary(sum, row));
       // If we're in the Overdue view, force the late-fee invoice form to be used when modal opens
       if (viewMode === 'overdue') setForceLateFeeInvoice(true);
+      try { setExtendVisible(false); resetExtendState(); } catch {}
       setPaymentModalVisible(true);
 
       // If we've previously generated a QR for this booking, show it so operator can re-use it
@@ -811,6 +1065,7 @@ const CheckoutManager: React.FC = () => {
         if (existing?.qrUrl) {
           setQrUrl(existing.qrUrl ?? null);
           setPaymentInvoiceId(existing.hoaDonId ?? null);
+          try { setExtendVisible(false); resetExtendState(); } catch {}
           setQrModalVisible(true);
         }
       } catch {}
@@ -845,18 +1100,86 @@ const CheckoutManager: React.FC = () => {
       setExtendBookingDetail(detail || row);
       
       // Gọi API kiểm tra khả năng gia hạn
-      const availability = await checkoutApi.checkExtendAvailability(row.IddatPhong);
+      const rawAvailability = await checkoutApi.checkExtendAvailability(row.IddatPhong);
+      
+      // Normalize response (API trả về camelCase, frontend dùng PascalCase)
+      const nextBookingRaw = rawAvailability?.nextBooking ?? rawAvailability?.NextBooking ?? null;
+      const availability = {
+        CanExtend: rawAvailability?.canExtend ?? rawAvailability?.CanExtend ?? false,
+        CanExtendSameRoom: rawAvailability?.canExtendSameRoom ?? rawAvailability?.CanExtendSameRoom ?? false,
+        HasNextBooking: rawAvailability?.hasNextBooking ?? rawAvailability?.HasNextBooking ?? false,
+        Message: rawAvailability?.message ?? rawAvailability?.Message ?? '',
+        NextBooking: nextBookingRaw ? {
+          IddatPhong: nextBookingRaw?.iddatPhong ?? nextBookingRaw?.IddatPhong ?? '',
+          CustomerName: nextBookingRaw?.customerName ?? nextBookingRaw?.CustomerName ?? 'Khách',
+          CheckinDate: nextBookingRaw?.checkinDate ?? nextBookingRaw?.CheckinDate ?? null,
+        } : null,
+        AvailableRooms: (rawAvailability?.availableRooms ?? rawAvailability?.AvailableRooms ?? []).map((room: any) => ({
+          Idphong: room?.idphong ?? room?.Idphong ?? room?.roomId ?? '',
+          TenPhong: room?.tenPhong ?? room?.TenPhong ?? room?.roomName ?? '',
+          SoPhong: room?.soPhong ?? room?.SoPhong ?? room?.roomNumber ?? '',
+          TenLoaiPhong: room?.tenLoaiPhong ?? room?.TenLoaiPhong ?? room?.roomTypeName ?? '',
+          GiaMotDem: room?.giaMotDem ?? room?.GiaMotDem ?? room?.basePricePerNight ?? 0,
+          UrlAnhPhong: (() => {
+            const raw = room?.urlAnhPhong ?? room?.UrlAnhPhong ?? room?.roomImageUrl ?? room?.roomImageUrl ?? '';
+            if (!raw) return '';
+            // Absolute URLs or root-relative paths should be used as-is
+            if (raw.startsWith('http') || raw.startsWith('/')) return raw;
+            // If API returned only filename (e.g. "presidential-suite-501.webp"), prefix with expected folder
+            if (raw.includes('/img/')) return raw;
+            return `/img/room/${raw}`;
+          })(),
+          SoNguoiToiDa: room?.soNguoiToiDa ?? room?.SoNguoiToiDa ?? room?.maxOccupancy ?? 2,
+          TrangThai: room?.TrangThai ?? room?.trangThai ?? room?.status ?? '',
+          PromotionName: room?.promotionName ?? room?.PromotionName ?? null,
+          DiscountPercent: room?.discountPercent ?? room?.DiscountPercent ?? null,
+          DiscountedPrice: room?.discountedPrice ?? room?.DiscountedPrice ?? null,
+          Description: room?.description ?? room?.Description ?? room?.moTa ?? room?.MoTa ?? null,
+        })),
+        SameDayOptions: (rawAvailability?.sameDayOptions ?? rawAvailability?.SameDayOptions ?? []).map((opt: any) => ({
+          Hour: opt?.hour ?? opt?.Hour,
+          Description: opt?.description ?? opt?.Description,
+          Percentage: opt?.percentage ?? opt?.Percentage,
+          Fee: opt?.fee ?? opt?.Fee,
+          FeeWithVat: opt?.feeWithVat ?? opt?.FeeWithVat,
+        })),
+        ExtraNightRate: rawAvailability?.extraNightRate ?? rawAvailability?.ExtraNightRate ?? 0,
+        ExtraNightRateWithVat: rawAvailability?.extraNightRateWithVat ?? rawAvailability?.ExtraNightRateWithVat ?? 0,
+        // Thêm field kiểm tra đã gia hạn trong ngày chưa
+        HasSameDayExtended: rawAvailability?.hasSameDayExtended ?? rawAvailability?.HasSameDayExtended ?? false,
+      };
+      
+      console.log('Extend availability:', availability); // Debug log
       setExtendAvailability(availability);
       
+      // Nếu đã gia hạn trong ngày rồi, auto-select "Thêm đêm"
+      if (availability.HasSameDayExtended) {
+        setExtendType(2); // Force to ExtraNight
+      }
+      
       // Nếu có danh sách phòng trống từ API
-      if (availability?.AvailableRooms) {
-        setAvailableRooms(availability.AvailableRooms);
+      if (availability?.AvailableRooms?.length > 0) {
+        // Client-side safety: chỉ lấy những phòng có trạng thái "Trống" nếu thông tin trạng thái có sẵn
+        const filtered = (availability.AvailableRooms || []).filter((r: any) => {
+          const status = (r.TrangThai ?? r.trangThai ?? r.status ?? '').toString().trim().toLowerCase();
+          return status === 'trống';
+        });
+        if (filtered.length !== (availability.AvailableRooms || []).length) {
+          console.warn('Filtered out rooms that are not empty from extend availability list');
+        }
+        setAvailableRooms(filtered);
       } else {
         // Fallback: tìm phòng trống
         const guests = detail?.SoNguoi ?? detail?.soNguoi ?? 1;
         const extendCheckout = dayjs().add(1, 'day').format('YYYY-MM-DD');
         const available = await findAvailableRooms(dayjs().format('YYYY-MM-DD'), extendCheckout, guests);
-        setAvailableRooms(available || []);
+        // Fallback safety: only keep rooms reported as 'Trống' by rooms API
+        const fallbackFiltered = (available || []).filter((r: any) => {
+          const status = (r.TrangThai ?? r.trangThai ?? r.status ?? '').toString().trim().toLowerCase();
+          return status === 'trống';
+        });
+        if (fallbackFiltered.length !== (available || []).length) console.warn('Fallback: filtered out non-empty rooms');
+        setAvailableRooms(fallbackFiltered || []);
       }
     } catch (e: any) {
       message.error(e?.message || 'Không thể tải thông tin gia hạn');
@@ -869,19 +1192,41 @@ const CheckoutManager: React.FC = () => {
   const calculateExtendFee = () => {
     if (!extendAvailability) return { fee: 0, feeWithVat: 0, description: '' };
     
+    // Nếu đổi phòng, dùng giá phòng mới; nếu không, dùng giá phòng cũ
+    let roomRate = extendAvailability.ExtraNightRate || 0;
+    let roomRateWithVat = extendAvailability.ExtraNightRateWithVat || 0;
+    
+    if (selectedRoomId && availableRooms.length > 0) {
+      const selectedRoom = availableRooms.find((r: any) => 
+        (r.Idphong ?? r.idphong ?? r.RoomId ?? r.roomId) === selectedRoomId
+      );
+      if (selectedRoom) {
+        const newRoomPrice = selectedRoom.GiaMotDem ?? selectedRoom.giaMotDem ?? 
+                            selectedRoom.GiaCoBanMotDem ?? selectedRoom.giaCoBanMotDem ?? 
+                            selectedRoom.basePricePerNight ?? 0;
+        roomRate = newRoomPrice;
+        roomRateWithVat = Math.round(newRoomPrice * 1.10);
+      }
+    }
+    
     if (extendType === 1) {
-      // Gia hạn trong ngày
+      // Gia hạn trong ngày - tính theo % giá phòng (mới nếu đổi phòng)
       const option = extendAvailability.SameDayOptions?.find((o: any) => o.Hour === selectedExtendHour);
       if (option) {
+        // Nếu đổi phòng, tính lại phí theo giá phòng mới
+        if (selectedRoomId && availableRooms.length > 0) {
+          const percentage = option.Percentage / 100;
+          const fee = Math.round(roomRate * percentage);
+          const feeWithVat = Math.round(fee * 1.10);
+          return { fee, feeWithVat, description: option.Description };
+        }
         return { fee: option.Fee, feeWithVat: option.FeeWithVat, description: option.Description };
       }
     } else {
-      // Gia hạn qua đêm
-      const rate = extendAvailability.ExtraNightRate || 0;
-      const rateWithVat = extendAvailability.ExtraNightRateWithVat || 0;
+      // Gia hạn qua đêm - dùng giá phòng mới nếu đổi phòng
       return { 
-        fee: rate * extraNights, 
-        feeWithVat: rateWithVat * extraNights, 
+        fee: roomRate * extraNights, 
+        feeWithVat: roomRateWithVat * extraNights, 
         description: `Thêm ${extraNights} đêm` 
       };
     }
@@ -890,13 +1235,29 @@ const CheckoutManager: React.FC = () => {
 
   // Thực hiện gia hạn
   const doExtend = async () => {
+    console.log('[doExtend] Called. extendBookingId=', extendBookingId, 'selectedRoomId=', selectedRoomId, 'CanExtendSameRoom=', extendAvailability?.CanExtendSameRoom);
+    
     if (!extendBookingId) return message.warning('Không có booking để gia hạn');
     
-    // Nếu cần chuyển phòng nhưng chưa chọn phòng
-    if (!extendAvailability?.CanExtendSameRoom && !selectedRoomId) {
-      return message.warning('Vui lòng chọn phòng mới để gia hạn');
+    // TRƯỜNG HỢP 1: Đổi phòng → Bắt buộc checkout trước, tạo booking mới
+    // Nếu có selectedRoomId HOẶC nếu CanExtendSameRoom = false (buộc phải đổi phòng) và có phòng để chọn
+    const isRoomChange = !!selectedRoomId || (!extendAvailability?.CanExtendSameRoom && availableRooms.length > 0 && !!selectedRoomId);
+    console.log('[doExtend] isRoomChange=', isRoomChange);
+    
+    if (isRoomChange) {
+      console.log('[doExtend] Opening confirm dialog for room change (state-driven modal)...');
+      // Use state-driven modal instead of Modal.confirm to guarantee it's rendered within the component
+      setRoomChangeConfirmVisible(true);
+      return;
     }
     
+    // TRƯỜNG HỢP 2: Không đổi phòng (gia hạn giờ trong ngày) → Cộng phí vào hóa đơn cũ
+    console.log('[doExtend] No room change, calling doExtendSameRoom...');
+    await doExtendSameRoom();
+  };
+  
+  // Gia hạn KHÔNG đổi phòng - cộng phí vào hóa đơn cũ
+  const doExtendSameRoom = async () => {
     setExtendSubmitting(true);
     try {
       const payload: any = {
@@ -904,6 +1265,7 @@ const CheckoutManager: React.FC = () => {
         ExtendType: extendType,
         PaymentMethod: extendPaymentMethod,
         Note: extendNote || undefined,
+        IsRoomChange: false, // Không đổi phòng
       };
       
       if (extendType === 1) {
@@ -912,30 +1274,270 @@ const CheckoutManager: React.FC = () => {
         payload.ExtraNights = extraNights;
       }
       
-      if (selectedRoomId) {
-        payload.NewRoomId = selectedRoomId;
-      }
-      
       const result = await checkoutApi.extendStay(payload);
       
-      if (result?.Success) {
-        notification.success({
-          message: 'Gia hạn thành công',
-          description: `${result.ExtendDescription}. Phí: ${Number(result.TotalExtendFee).toLocaleString()}đ`,
-          placement: 'topRight',
-          duration: 5
-        });
-        
-        // Nếu thanh toán QR, hiển thị QR
-        if (extendPaymentMethod === 2 && result.QrUrl) {
-          setQrUrl(result.QrUrl);
-          setPaymentInvoiceId(result.HoaDonId);
-          setQrModalVisible(true);
-        }
+      if (result?.Success || result?.success) {
+        const desc = result.ExtendDescription ?? result.extendDescription ?? '';
+        const fee = result.TotalExtendFee ?? result.totalExtendFee ?? 0;
+        const hoaDonId = result.HoaDonId ?? result.hoaDonId;
+        const bookingId = result.IddatPhong ?? result.iddatPhong ?? extendBookingId;
+        const isPaidNow = result.IsPaidNow ?? result.isPaidNow ?? false;
+        const paymentStatus = result.PaymentStatus ?? result.paymentStatus ?? '';
         
         // Đóng modal gia hạn
         setExtendVisible(false);
         resetExtendState();
+
+        // Immediately update local UI state for the booking so the new totals appear instantly
+          try {
+          // Use returned fields from API when present
+          const newBookingTotal = result.TongTienBooking ?? result.tongTienBooking ?? result.TongTienBooking ?? null;
+          const bookingPaymentStatus = result.BookingTrangThaiThanhToan ?? result.bookingTrangThaiThanhToan ?? null;
+          const newCheckoutRaw = result.NewCheckout ?? result.newCheckout ?? result.NewCheckoutDate ?? result.newCheckoutDate ?? null;
+          const newCheckoutStr = newCheckoutRaw ? String(newCheckoutRaw).slice(0, 10) : null;
+
+          setData(prev => (prev || []).map(b => {
+            if ((b.IddatPhong ?? '') === (bookingId ?? '')) {
+              // compute new SoDem if we have new checkout date and original checkin
+              let newSoDem = b.SoDem;
+              if (newCheckoutStr && b.NgayNhanPhong) {
+                try {
+                  const checkin = String(b.NgayNhanPhong).slice(0,10);
+                  const nights = Math.max(1, dayjs(newCheckoutStr).diff(dayjs(checkin), 'day'));
+                  newSoDem = nights;
+                } catch (dErr) {
+                  // fallback: keep existing
+                }
+              }
+
+              return {
+                ...b,
+                TongTien: newBookingTotal != null ? Number(newBookingTotal) : b.TongTien,
+                TrangThaiThanhToan: bookingPaymentStatus != null ? Number(bookingPaymentStatus) : b.TrangThaiThanhToan,
+                NgayTraPhong: newCheckoutStr ?? b.NgayTraPhong,
+                SoDem: newSoDem
+              } as BookingRow;
+            }
+            return b;
+          }));
+        } catch (uiErr) {
+          console.warn('Failed to update booking row UI after extend', uiErr);
+        }
+
+        // Also attempt to fetch fresh summary (best-effort) to keep detailed modal and invoice modal consistent
+        let freshSummary: any = null;
+        try { freshSummary = await checkoutApi.getSummary(bookingId); } catch (e) { console.warn('Không lấy được summary sau gia hạn', e); }
+
+        // Update summaryMap and global invoice/summary state immediately if we got a fresh summary
+        if (freshSummary) {
+          setSummaryMap(prev => ({ ...(prev || {}), [bookingId]: freshSummary }));
+          try {
+            // Update the invoice modal data and payment summary so any open invoice modal shows the updated fees
+            setInvoiceData(buildInvoiceDataFromSummary(freshSummary, data.find((b: BookingRow) => b.IddatPhong === bookingId)));
+            setSummary(mergeFreshSummary(summary, freshSummary));
+            try { if (detectExtendInSummary(freshSummary)) markBookingAsExtended(bookingId); } catch (e) {}
+          } catch (inner) {
+            console.warn('Failed to set invoiceData/summary after freshSummary', inner);
+          }
+        }
+
+        // Tìm paymentRow tương ứng (from updated data)
+        const bookingRow = (data.find((b: BookingRow) => b.IddatPhong === bookingId) || paymentRow);
+        
+        // Nếu thanh toán QR, hiển thị QR trước
+        const qrUrl = result.QrUrl ?? result.qrUrl;
+        if (extendPaymentMethod === 2 && qrUrl) {
+          try { setExtendVisible(false); resetExtendState(); } catch {}
+          setQrUrl(qrUrl);
+          setPaymentInvoiceId(hoaDonId);
+          setQrModalVisible(true);
+          // Mark that extend flow is pending so after QR confirm we open ExtendInvoiceModal
+          setExtendFlowPending(true);
+          setExtendInvoiceData(result);
+          setPaymentRow(bookingRow);
+        } else if (extendPaymentMethod === 3) {
+          // Thanh toán sau: vẫn mở ExtendInvoiceModal nhưng hiển thị trạng thái chưa thanh toán
+          notification.success({
+            message: 'Gia hạn thành công (Thanh toán sau)',
+            description: `${desc}. Phí: ${Number(fee).toLocaleString()}đ đã cộng vào hóa đơn. Khách sẽ thanh toán khi checkout.`,
+            placement: 'topRight',
+            duration: 6
+          });
+          try { setExtendVisible(false); resetExtendState(); } catch {}
+          try { setExtendVisible(false); resetExtendState(); } catch {}
+          setPaymentRow(bookingRow);
+          setExtendInvoiceData(result);
+          setExtendInvoiceModalVisible(true);
+        } else {
+          // Tiền mặt (PaymentMethod = 1): mở ExtendInvoiceModal luôn
+          notification.success({
+            message: 'Gia hạn thành công',
+            description: `${desc}. Phí: ${Number(fee).toLocaleString()}đ (đã thanh toán & cộng vào hóa đơn)`,
+            placement: 'topRight',
+            duration: 5
+          });
+          
+          setPaymentRow(bookingRow);
+          setExtendInvoiceData(result);
+          setExtendInvoiceModalVisible(true);
+          try { if (Number(fee) > 0) markBookingAsExtended(bookingId); } catch (e) {}
+        }
+        
+        // Emit event để cập nhật rooms
+        try {
+          const rooms = await getRooms();
+          window.dispatchEvent(new CustomEvent('rooms:refreshed', { detail: { rooms } }));
+        } catch (err) {
+          // ignore
+        }
+        // Refresh booking list so UI reflects any booking-state changes (e.g., checkout date moved)
+        try {
+          await load();
+
+          // If this was an ExtraNight extend and the new checkout date is no longer today,
+          // remove the booking from the current list when in the "checkout" view so it disappears.
+          try {
+            const newCheckoutRaw = result.NewCheckout ?? result.newCheckout ?? result.NewCheckoutDate ?? result.newCheckoutDate ?? null;
+            if (extendType === 2 && newCheckoutRaw) {
+              const todayStr = dayjs().format('YYYY-MM-DD');
+              const newCheckoutStr = String(newCheckoutRaw).slice(0, 10);
+              if (viewMode === 'checkout' && newCheckoutStr !== todayStr) {
+                // For QR payment (PaymentMethod = 2) we should NOT remove the booking until
+                // the operator confirms payment (presses "Đã thanh toán"). Only remove when
+                // payment is not QR or it was already paid immediately.
+                const paidNow = result.IsPaidNow ?? result.isPaidNow ?? false;
+                const pm = result.PaymentMethod ?? result.paymentMethod ?? extendPaymentMethod;
+                if (pm !== 2 || paidNow) {
+                  setData(prev => (prev || []).filter(b => (b.IddatPhong ?? '') !== (bookingId ?? '')));
+                  setSummaryMap(prev => {
+                    const updated = { ...(prev || {}) };
+                    delete updated[bookingId];
+                    return updated;
+                  });
+                } else {
+                  // QR pending: keep booking visible. Optionally mark it as having a pending QR payment.
+                  setData(prev => (prev || []).map(b => {
+                    if ((b.IddatPhong ?? '') === (bookingId ?? '')) {
+                      return { ...b, TrangThaiThanhToan: 1 } as BookingRow;
+                    }
+                    return b;
+                  }));
+                }
+              }
+            }
+          } catch (innerErr) {
+            console.warn('Error checking new checkout after extend', innerErr);
+          }
+        } catch (e) { console.warn('Failed to reload bookings after extend', e); }
+      } else {
+        message.error(result?.Message ?? result?.message ?? 'Gia hạn thất bại');
+      }
+    } catch (e: any) {
+      message.error(e?.message || 'Gia hạn thất bại');
+    } finally {
+      setExtendSubmitting(false);
+    }
+  };
+  
+  // Gia hạn CÓ đổi phòng - checkout cũ + tạo booking mới + hóa đơn mới
+  const doExtendWithRoomChange = async () => {
+    setExtendSubmitting(true);
+    let payload: any = null;
+    try {
+      // Lấy thông tin phòng mới
+      const newRoom = availableRooms.find((r: any) => 
+        (r.Idphong ?? r.idphong ?? r.RoomId ?? r.roomId) === selectedRoomId
+      );
+      
+      if (!newRoom) {
+        message.error('Không tìm thấy thông tin phòng mới');
+        setExtendSubmitting(false);
+        return;
+      }
+      
+      payload = {
+        IddatPhong: extendBookingId,
+        ExtendType: extendType,
+        PaymentMethod: extendPaymentMethod,
+        Note: extendNote || undefined,
+        IsRoomChange: true, // Có đổi phòng
+        NewRoomId: selectedRoomId,
+        NewRoomInfo: {
+          Idphong: newRoom.Idphong ?? newRoom.idphong ?? newRoom.roomId,
+          TenPhong: newRoom.TenPhong ?? newRoom.tenPhong ?? newRoom.roomName,
+          GiaMotDem: newRoom.GiaMotDem ?? newRoom.giaMotDem ?? newRoom.basePricePerNight,
+          TenLoaiPhong: newRoom.TenLoaiPhong ?? newRoom.tenLoaiPhong ?? newRoom.roomTypeName,
+        }
+      };
+      
+      if (extendType === 1) {
+        payload.NewCheckoutHour = selectedExtendHour;
+      } else {
+        payload.ExtraNights = extraNights;
+      }
+      
+      const result = await checkoutApi.extendStay(payload);
+      
+      if (result?.Success || result?.success) {
+        const desc = result.ExtendDescription ?? result.extendDescription ?? '';
+        const fee = result.TotalExtendFee ?? result.totalExtendFee ?? 0;
+        const newBookingId = result.NewBookingId ?? result.newBookingId;
+        const newInvoiceId = result.NewInvoiceId ?? result.newInvoiceId;
+        
+        notification.success({
+          message: 'Đổi phòng & Gia hạn thành công',
+          description: (
+            <div>
+              <div>{desc}</div>
+              <div>Phí gia hạn: {Number(fee).toLocaleString()}đ</div>
+              {newBookingId && <div>Booking mới: {newBookingId}</div>}
+              {newInvoiceId && <div>Hóa đơn mới: {newInvoiceId}</div>}
+            </div>
+          ),
+          placement: 'topRight',
+          duration: 8
+        });
+        
+        // Close the extend modal first to avoid modal stacking issues, then show the
+        // appropriate UI for the new booking/invoice (QR or invoice modal).
+        try {
+          setExtendVisible(false);
+          resetExtendState();
+        } catch {}
+
+        // If payment is QR and server provided a QR url, show QR modal first
+        const qrUrl = result.QrUrl ?? result.qrUrl;
+        const hoaDonId = result.NewInvoiceId ?? result.newInvoiceId ?? result.HoaDonId ?? result.hoaDonId;
+        if (extendPaymentMethod === 2 && qrUrl) {
+          // QR: keep extend data and mark the extend flow as pending so after QR confirm
+          // we open the ExtendInvoiceModal rather than the regular InvoiceModal.
+          setExtendInvoiceData(result);
+          setQrUrl(qrUrl);
+          setPaymentInvoiceId(hoaDonId);
+          setExtendFlowPending(true);
+          try { setPaymentRow({ IddatPhong: extendBookingId } as any); } catch {}
+          setQrModalVisible(true);
+        } else {
+          // Cash or pay-later: DO NOT show the ExtendInvoiceModal immediately.
+          // Instead store the result and show it after the operator completes the old booking.
+          try {
+            if (extendBookingId) {
+              setPendingExtendResults(prev => ({ ...(prev || {}), [String(extendBookingId)]: result }));
+              message.info('Gia hạn đã tạo. Vui lòng hoàn tất trả phòng cũ để hiện hóa đơn gia hạn.');
+              } else {
+              // Fallback: if we don't have old booking id, show immediately
+              try { setExtendVisible(false); resetExtendState(); } catch {}
+              try { setPaymentRow({ IddatPhong: extendBookingId } as any); } catch {}
+              setExtendInvoiceData(result);
+              setExtendInvoiceModalVisible(true);
+            }
+            try { if (Number(fee) > 0) markBookingAsExtended(extendBookingId); } catch (e) {}
+          } catch (storeErr) {
+            // If storing fails for any reason, show the extend invoice immediately
+            setExtendInvoiceData(result);
+            setExtendInvoiceModalVisible(true);
+          }
+        }
         
         // Refresh data
         await load();
@@ -948,10 +1550,73 @@ const CheckoutManager: React.FC = () => {
           // ignore
         }
       } else {
-        message.error(result?.Message || 'Gia hạn thất bại');
+        message.error(result?.Message ?? result?.message ?? 'Đổi phòng & gia hạn thất bại');
       }
     } catch (e: any) {
-      message.error(e?.message || 'Gia hạn thất bại');
+      // If backend returned a 400 and indicates payment is required before extend,
+      // prepare the payment modal for the old booking/invoice and store the payload
+      // so we can retry the extend after payment completes.
+      console.error('doExtendWithRoomChange error', e);
+      const data = e?.response?.data ?? e?.data ?? null;
+      if (data && data.requirePaymentBeforeExtend) {
+        const remaining = data.remaining ?? 0;
+        const oldInvoiceId = data.oldInvoiceId ?? null;
+        message.info('Booking cũ còn tiền chưa thanh toán — mở form thanh toán để hoàn tất trước khi đổi phòng.');
+        // Save pending payload so submitPayment can resume extend after successful payment
+        setPendingExtendPayload(payload);
+        setPendingExtendOldInvoiceId(oldInvoiceId ?? null);
+        // Open payment modal for the OLD booking (extendBookingId is the old booking)
+        const bookingRow = data && data.oldBookingId ? data.oldBookingId : extendBookingId;
+        const row = data && data.oldBookingId ? data.oldBookingId : extendBookingId;
+        try {
+          const targetRow = data && data.oldBookingId ? data.oldBookingId : extendBookingId;
+        } catch {}
+        // Find booking row in current data
+        const oldRow = data && data.oldBookingId ? data.oldBookingId : (data && data.iddatPhong ? data.iddatPhong : extendBookingId);
+        const found = data && data.iddatPhong ? data.iddatPhong : extendBookingId;
+        // Use existing utilities to open payment modal
+        const existingRow = data && data.iddatPhong ? data.iddatPhong : extendBookingId;
+        const bookingObj = data && data.iddatPhong ? data.iddatPhong : extendBookingId;
+        // Try to find full BookingRow object in `data` state
+        const bookingRowObj = (data && data.iddatPhong) ? (data.iddatPhong) : (data && data.oldBookingId) ? (data.oldBookingId) : (data && data.oldInvoiceId) ? paymentRow : null;
+        // Fallback: find by extendBookingId
+        const rowObj = (data && data.iddatPhong) ? data.iddatPhong : extendBookingId;
+        const resolvedRow = (data && data.iddatPhong) ? data.iddatPhong : extendBookingId;
+        // Find booking in current `data` state
+        const bookingToPay = (data && data.iddatPhong)
+          ? data.iddatPhong
+          : data && data.oldInvoiceId
+            ? data.oldInvoiceId
+            : extendBookingId;
+        const foundRowObj = (data && data.iddatPhong)
+          ? data.iddatPhong
+          : (data && data.oldInvoiceId)
+            ? data.oldInvoiceId
+            : extendBookingId;
+        // Simplify: lookup booking in current list by id
+        const bookingObjFound = data.find ? data.find((b: any) => b.IddatPhong === extendBookingId) : null;
+        // Open payment modal for the old booking
+        try {
+          if (bookingObjFound) {
+            await openPaymentModal(bookingObjFound as BookingRow);
+          } else {
+            // fallback - load summary and set paymentRow manually
+            const tmp: BookingRow = { IddatPhong: extendBookingId!, TongTien: 0, TrangThai: 3, TrangThaiThanhToan: 1 } as any;
+            setPaymentRow(tmp);
+            setSummaryLoading(true);
+            try { const sum = await checkoutApi.getSummary(extendBookingId!); setSummary(mergeFreshSummary(summary, sum)); setInvoiceData(buildInvoiceDataFromSummary(sum, data.find((b: BookingRow) => b.IddatPhong === extendBookingId))); } catch { }
+            setSummaryLoading(false);
+            setPaymentModalVisible(true);
+          }
+        } catch (openErr) {
+          console.warn('Failed to open payment modal for pending extend', openErr);
+          setPaymentModalVisible(true);
+        }
+        setExtendSubmitting(false);
+        return;
+      }
+
+      message.error(e?.message || 'Đổi phòng & gia hạn thất bại');
     } finally {
       setExtendSubmitting(false);
     }
@@ -1158,6 +1823,36 @@ const shouldUseLateFeeModal =
               )}
             </div>
           </Modal>
+
+          {/* Confirm modal for room-change extend (rendered inside component to avoid stacking issues) */}
+          <Modal
+            title="Xác nhận đổi phòng và gia hạn"
+            open={roomChangeConfirmVisible}
+            centered
+            zIndex={1500}
+            onOk={async () => {
+              try {
+                console.log('[roomChangeConfirm] User confirmed room change. Calling doExtendWithRoomChange...');
+                setRoomChangeConfirmVisible(false);
+                await doExtendWithRoomChange();
+              } catch (err) {
+                console.error('[roomChangeConfirm] doExtendWithRoomChange failed', err);
+              }
+            }}
+            onCancel={() => setRoomChangeConfirmVisible(false)}
+            okText="Xác nhận trả phòng & đổi phòng"
+            cancelText="Hủy"
+          >
+            <div>
+              <p>Để gia hạn với phòng mới, hệ thống sẽ:</p>
+              <ol>
+                <li><strong>Trả phòng hiện tại</strong> và xuất hóa đơn cho booking cũ</li>
+                <li><strong>Tạo booking mới</strong> cho phòng đã chọn</li>
+                <li><strong>Xuất hóa đơn mới</strong> cho phần gia hạn</li>
+              </ol>
+              <p style={{ color: '#cf1322', marginTop: 12 }}>Bạn có muốn tiếp tục?</p>
+            </div>
+          </Modal>
           <Modal
             title="Thanh toán online - Quét mã QR" 
             open={qrModalVisible}
@@ -1186,6 +1881,7 @@ const shouldUseLateFeeModal =
                       try {
                         const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
                         setInvoiceData(fresh);
+                        try { if (detectExtendInSummary(fresh)) markBookingAsExtended(paymentRow?.IddatPhong); } catch (e) {}
                       } catch { /* ignore */ }
                     } else {
                       message.warning({ content: 'Không nhận được phản hồi xác nhận từ server', key, duration: 3 });
@@ -1202,7 +1898,15 @@ const shouldUseLateFeeModal =
                   const isOverdueBooking = Number(paymentRow?.TrangThai ?? invoiceData?.TrangThai ?? 0) === 5;
                   if (isOverdueBooking && viewMode === 'overdue') setForceLateFeeInvoice(true);
 
-                  setInvoiceModalVisible(true);
+                  // If this QR was for an extend flow, open the ExtendInvoiceModal with the data we saved
+                          if (extendFlowPending && extendInvoiceData) {
+                                    try { setExtendVisible(false); resetExtendState(); } catch {}
+                                    try { setPaymentRow(extendInvoiceData?.paymentRow ?? paymentRow ?? null); } catch {}
+                                    setExtendInvoiceModalVisible(true);
+                                    setExtendFlowPending(false);
+                                  } else {
+                                    setInvoiceModalVisible(true);
+                                  }
                   form.resetFields();
                   if (viewMode !== 'overdue') {
                     setPaymentRow(null);
@@ -1291,6 +1995,23 @@ const shouldUseLateFeeModal =
       setInvoiceModalVisible(false);
       setForceLateFeeInvoice(false);
       await load();
+      // After completing checkout for this booking, if there is a pending extend result
+      // created earlier for this booking (room-change), show the ExtendInvoiceModal now.
+      try {
+        const pending = pendingExtendResults?.[String(id)];
+        if (pending) {
+          try { setExtendVisible(false); resetExtendState(); } catch {}
+          try { setPaymentRow(pending?.paymentRow ?? { IddatPhong: id } as any); } catch {}
+          setExtendInvoiceData(pending);
+          setExtendInvoiceModalVisible(true);
+          // clean up pending
+          setPendingExtendResults(prev => {
+            const copy = { ...(prev || {}) };
+            delete copy[String(id)];
+            return copy;
+          });
+        }
+      } catch (e) { console.warn('Failed to show pending extend invoice after completeCheckout', e); }
     } else {
       throw new Error('Không có id để hoàn tất trả phòng');
     }
@@ -1343,12 +2064,39 @@ const shouldUseLateFeeModal =
                       msg.success('Hoàn tất trả phòng');
                       setInvoiceModalVisible(false);
                       await load();
+                      // show pending extend invoice if exists for this booking
+                      try {
+                        const pending = pendingExtendResults?.[String(id)];
+                        if (pending) {
+                          try { setExtendVisible(false); resetExtendState(); } catch {}
+                          try { setPaymentRow(pending?.paymentRow ?? { IddatPhong: id } as any); } catch {}
+                          setExtendInvoiceData(pending);
+                          setExtendInvoiceModalVisible(true);
+                          setPendingExtendResults(prev => {
+                            const copy = { ...(prev || {}) };
+                            delete copy[String(id)];
+                            return copy;
+                          });
+                        }
+                      } catch (e) { console.warn('Failed to show pending extend invoice after completeCheckout', e); }
                     } else { throw new Error('Không có id để hoàn tất trả phòng'); }
                   } catch (e: any) { message.error(e?.message || 'Hoàn tất thất bại'); }
                 }}
               />
             )
           }
+
+          {/* Extend invoice modal shown after a successful same-room extend */}
+          <ExtendInvoiceModal
+            visible={extendInvoiceModalVisible}
+            extendData={extendInvoiceData}
+            onClose={async () => {
+              setExtendInvoiceModalVisible(false);
+              setExtendInvoiceData(null);
+              setPaymentRow(null);
+              try { await load(); } catch {};
+            }}
+          />
 
           {/* Modal Gia hạn phòng */}
           <Modal
@@ -1406,14 +2154,26 @@ const shouldUseLateFeeModal =
                 {/* Loại gia hạn */}
                 {extendAvailability?.CanExtend && (
                   <>
+                    {/* Thông báo đã gia hạn trong ngày */}
+                    {extendAvailability?.HasSameDayExtended && (
+                      <div style={{ marginBottom: 16, padding: 12, background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8 }}>
+                        <div style={{ fontWeight: 600, color: '#d48806' }}>⚠️ Đã gia hạn trong ngày</div>
+                        <div style={{ fontSize: 13, marginTop: 4 }}>
+                          Booking này đã được gia hạn trong ngày 1 lần. Bạn chỉ có thể chọn <strong>"Thêm đêm"</strong> để tiếp tục gia hạn.
+                        </div>
+                      </div>
+                    )}
+                    
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ fontWeight: 600, marginBottom: 8 }}>Loại gia hạn:</div>
                       <Space>
                         <Button 
                           type={extendType === 1 ? 'primary' : 'default'}
-                          onClick={() => setExtendType(1)}
+                          onClick={() => !extendAvailability?.HasSameDayExtended && setExtendType(1)}
+                          disabled={extendAvailability?.HasSameDayExtended}
+                          title={extendAvailability?.HasSameDayExtended ? 'Đã gia hạn trong ngày, không thể gia hạn thêm' : ''}
                         >
-                          Trong ngày (Late checkout)
+                          Trong ngày (Late checkout) {extendAvailability?.HasSameDayExtended && '✓'}
                         </Button>
                         <Button 
                           type={extendType === 2 ? 'primary' : 'default'}
@@ -1524,18 +2284,25 @@ const shouldUseLateFeeModal =
                     {/* Phương thức thanh toán */}
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ fontWeight: 600, marginBottom: 8 }}>Phương thức thanh toán:</div>
-                      <Space>
+                      <Space wrap>
                         <Button 
                           type={extendPaymentMethod === 1 ? 'primary' : 'default'}
                           onClick={() => setExtendPaymentMethod(1)}
                         >
-                          💵 Tiền mặt
+                          💵 Tiền mặt (thanh toán ngay)
                         </Button>
                         <Button 
                           type={extendPaymentMethod === 2 ? 'primary' : 'default'}
                           onClick={() => setExtendPaymentMethod(2)}
                         >
                           📱 QR / Online
+                        </Button>
+                        <Button 
+                          type={extendPaymentMethod === 3 ? 'primary' : 'default'}
+                          onClick={() => setExtendPaymentMethod(3)}
+                          style={{ borderColor: extendPaymentMethod === 3 ? '#faad14' : undefined, color: extendPaymentMethod === 3 ? '#fff' : '#d48806', background: extendPaymentMethod === 3 ? '#faad14' : undefined }}
+                        >
+                          ⏳ Thanh toán sau (khi checkout)
                         </Button>
                       </Space>
                     </div>
