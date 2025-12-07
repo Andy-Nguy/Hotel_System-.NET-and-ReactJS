@@ -1,6 +1,6 @@
-import { DEFAULT_BASE_URL } from "../config/apiConfig";
+import { API_CONFIG } from "../config/apiConfig";
 
-const API_BASE = `${DEFAULT_BASE_URL}/api/TienNghiPhong`;
+const API_BASE = `${API_CONFIG.CURRENT}/api/TienNghiPhong`;
 
 export interface Amenity {
   idtienNghi: string;
