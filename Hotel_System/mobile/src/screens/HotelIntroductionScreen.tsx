@@ -11,6 +11,7 @@ import {
   FlatList,
   ActivityIndicator,
   Platform,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS, FONTS, SIZES } from "../constants/theme";
@@ -85,6 +86,17 @@ const HotelIntroductionScreen: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Image Viewer State
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerImages, setViewerImages] = useState<any[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+
+  const openViewer = (images: any[], index: number) => {
+    setViewerImages(images);
+    setViewerIndex(index);
+    setViewerVisible(true);
+  };
+
   useEffect(() => {
     const fetchServices = async () => {
       try {
@@ -120,16 +132,27 @@ const HotelIntroductionScreen: React.FC = () => {
     </View>
   );
 
-  const renderHotelGallery = (images: any[]) => (
-    <View style={styles.hotelGrid}>
-      <Image source={images[0]} style={styles.hotelMainImg} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hotelSubGridScroll}>
-        {images.slice(1).map((img, index) => (
-          <Image key={index} source={img} style={styles.hotelSubImg} />
-        ))}
-      </ScrollView>
-    </View>
-  );
+  const renderHotelGallery = (images: any[]) => {
+    const fullHotelImages = [
+      require("../assets/img/gallery/Hotel/1.png"),
+      ...images,
+    ];
+
+    return (
+      <View style={styles.hotelGrid}>
+        <TouchableOpacity onPress={() => openViewer(fullHotelImages, 1)}>
+          <Image source={images[0]} style={styles.hotelMainImg} />
+        </TouchableOpacity>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hotelSubGridScroll}>
+          {images.slice(1).map((img, index) => (
+            <TouchableOpacity key={index} onPress={() => openViewer(fullHotelImages, index + 2)}>
+              <Image source={img} style={styles.hotelSubImg} />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
 
   const renderAmenitiesGallery = (images: any[]) => {
     // Group into chunks of 3 for the mosaic pattern (1 Large + 2 Small)
@@ -140,20 +163,35 @@ const HotelIntroductionScreen: React.FC = () => {
 
     return (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.amenityScroll}>
-        {chunks.map((chunk, chunkIndex) => (
-          <View key={chunkIndex} style={styles.amenityMosaicChunk}>
-            {/* Large Image */}
-            {chunk[0] && <Image source={chunk[0]} style={styles.amenityMosaicLarge} />}
-            
-            {/* Column of 2 Small Images */}
-            {(chunk[1] || chunk[2]) && (
-              <View style={styles.amenityMosaicColumn}>
-                {chunk[1] && <Image source={chunk[1]} style={styles.amenityMosaicSmall} />}
-                {chunk[2] && <Image source={chunk[2]} style={styles.amenityMosaicSmall} />}
-              </View>
-            )}
-          </View>
-        ))}
+        {chunks.map((chunk, chunkIndex) => {
+          const baseIndex = chunkIndex * 3;
+          return (
+            <View key={chunkIndex} style={styles.amenityMosaicChunk}>
+              {/* Large Image */}
+              {chunk[0] && (
+                <TouchableOpacity onPress={() => openViewer(images, baseIndex)}>
+                  <Image source={chunk[0]} style={styles.amenityMosaicLarge} />
+                </TouchableOpacity>
+              )}
+              
+              {/* Column of 2 Small Images */}
+              {(chunk[1] || chunk[2]) && (
+                <View style={styles.amenityMosaicColumn}>
+                  {chunk[1] && (
+                    <TouchableOpacity onPress={() => openViewer(images, baseIndex + 1)}>
+                      <Image source={chunk[1]} style={styles.amenityMosaicSmall} />
+                    </TouchableOpacity>
+                  )}
+                  {chunk[2] && (
+                    <TouchableOpacity onPress={() => openViewer(images, baseIndex + 2)}>
+                      <Image source={chunk[2]} style={styles.amenityMosaicSmall} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
     );
   };
@@ -161,11 +199,52 @@ const HotelIntroductionScreen: React.FC = () => {
   const renderDiningGallery = (images: any[]) => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.diningScroll}>
       {images.map((img, index) => (
-        <Image key={index} source={img} style={styles.diningImg} />
+        <TouchableOpacity key={index} onPress={() => openViewer(images, index)}>
+          <Image source={img} style={styles.diningImg} />
+        </TouchableOpacity>
       ))}
     </ScrollView>
   );
+  const renderImageViewer = () => (
+    <Modal
+      visible={viewerVisible}
+      transparent={true}
+      onRequestClose={() => setViewerVisible(false)}
+      animationType="fade"
+    >
+      <View style={styles.viewerContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="black" />
+        
+        {/* Close Button */}
+        <TouchableOpacity
+          style={styles.viewerCloseBtn}
+          onPress={() => setViewerVisible(false)}
+        >
+          <Ionicons name="close" size={28} color="white" />
+        </TouchableOpacity>
 
+        {/* Image List */}
+        <FlatList
+          data={viewerImages}
+          horizontal
+          pagingEnabled
+          initialScrollIndex={viewerIndex}
+          getItemLayout={(_, index) => ({
+            length: width,
+            offset: width * index,
+            index,
+          })}
+          keyExtractor={(_, index) => index.toString()}
+          renderItem={({ item }) => (
+            <View style={styles.viewerImageContainer}>
+              <Image source={item} style={styles.viewerImage} />
+            </View>
+          )}
+          showsHorizontalScrollIndicator={false}
+        />
+      </View>
+    </Modal>
+  );
   const renderGallerySection = (section: typeof GALLERY_SECTIONS[0]) => {
     switch (section.id) {
       case "hotel":
@@ -188,11 +267,23 @@ const HotelIntroductionScreen: React.FC = () => {
       >
         {/* Hero Section */}
         <View style={styles.heroContainer}>
-          <Image
-            source={require("../assets/img/gallery/Hotel/1.png")}
-            style={styles.heroImage}
-          />
-          <View style={styles.heroOverlay}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => {
+              const fullHotelImages = [
+                require("../assets/img/gallery/Hotel/1.png"),
+                ...GALLERY_SECTIONS[0].images,
+              ];
+              openViewer(fullHotelImages, 0);
+            }}
+            style={{ width: "100%", height: "100%" }}
+          >
+            <Image
+              source={require("../assets/img/gallery/Hotel/1.png")}
+              style={styles.heroImage}
+            />
+          </TouchableOpacity>
+          <View style={styles.heroOverlay} pointerEvents="none">
             <View style={styles.heroContent}>
               <Text style={styles.heroSubtitle}>CHÀO MỪNG ĐẾN VỚI</Text>
               <Text style={styles.heroTitle}>ROBIN'S VILLA</Text>
@@ -313,7 +404,7 @@ const HotelIntroductionScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-
+      {renderImageViewer()}
     </View>
   );
 };
@@ -571,7 +662,33 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     fontStyle: "italic",
   },
-
+  
+  // Image Viewer
+  viewerContainer: {
+    flex: 1,
+    backgroundColor: "black",
+    justifyContent: "center",
+  },
+  viewerCloseBtn: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 50 : 30,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 20,
+  },
+  viewerImageContainer: {
+    width: width,
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  viewerImage: {
+    width: "100%",
+    height: "80%",
+    resizeMode: "contain",
+  },
 });
 
 export default HotelIntroductionScreen;
