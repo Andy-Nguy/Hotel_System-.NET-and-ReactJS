@@ -4,6 +4,7 @@ using Hotel_System.API.Models;
 using Hotel_System.API.Services;
 using Hotel_System.API.DTOs;
 using Microsoft.AspNetCore.Hosting;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using System.IO;
 
@@ -15,15 +16,81 @@ namespace Hotel_System.API.Controllers
     {
         private readonly HotelSystemContext _context;
         private readonly RoomService _roomService;
-          private readonly IWebHostEnvironment _env;
-                // Status values that users are allowed to set via API (case-insensitive)
-                private static readonly HashSet<string> UserEditableStatuses = new(StringComparer.OrdinalIgnoreCase) { "Trống", "Bảo trì" };
+        private readonly RoomImageService _imageService;
+        private readonly IWebHostEnvironment _env;
+        // Status values that users are allowed to set via API (case-insensitive)
+        private static readonly HashSet<string> UserEditableStatuses = new(StringComparer.OrdinalIgnoreCase) { "Trống", "Bảo trì" };
 
-        public PhongController(HotelSystemContext context, RoomService roomService, IWebHostEnvironment env)
+        public PhongController(HotelSystemContext context, RoomService roomService, RoomImageService imageService, IWebHostEnvironment env)
         {
             _context = context;
             _roomService = roomService;
+            _imageService = imageService;
             _env = env;
+        }
+
+        // Normalize incoming image strings: accept
+        // - plain filename: "room-101-a0.jpg"
+        // - relative URL: "/img/room/room-101-a0.jpg" or "img/room/room-101-a0.jpg"
+        // - data URL: "data:image/jpeg;base64,..." -> will be decoded, saved to wwwroot/img/room and replaced with generated filename
+        private async Task<List<string>> NormalizeAndPersistImageInputsAsync(List<string> inputs, string roomId)
+        {
+            if (inputs == null) return new List<string>();
+
+            var folder = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "room");
+            if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+
+            var outList = new List<string>();
+
+            for (int i = 0; i < inputs.Count; i++)
+            {
+                var raw = inputs[i] ?? string.Empty;
+                var v = raw.Trim();
+                if (string.IsNullOrEmpty(v)) throw new ArgumentException($"Image at index {i} cannot be empty");
+
+                if (v.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                {
+                    // data:[<mediatype>][;base64],<data>
+                    var comma = v.IndexOf(',');
+                    if (comma <= 0) throw new ArgumentException($"Invalid data URL at index {i}");
+                    var meta = v.Substring(5, comma - 5); // after 'data:' up to comma
+                    // meta example: image/jpeg;base64
+                    var semi = meta.IndexOf(';');
+                    var mime = semi > 0 ? meta.Substring(0, semi) : meta;
+                    string ext = ".jpg";
+                    switch (mime.ToLowerInvariant())
+                    {
+                        case "image/jpeg":
+                        case "image/jpg": ext = ".jpg"; break;
+                        case "image/png": ext = ".png"; break;
+                        case "image/webp": ext = ".webp"; break;
+                        default: ext = ".jpg"; break;
+                    }
+
+                    var base64 = v.Substring(comma + 1);
+                    byte[] bytes;
+                    try { bytes = Convert.FromBase64String(base64); }
+                    catch (Exception) { throw new ArgumentException($"Invalid base64 data at image index {i}"); }
+
+                    var generated = _imageService.GenerateFilename(roomId, i, ext);
+                    var destPath = Path.Combine(folder, generated);
+                    await System.IO.File.WriteAllBytesAsync(destPath, bytes);
+                    outList.Add(generated);
+                }
+                else if (v.Contains("/") || v.Contains("\\"))
+                {
+                    // treat as a path/URL, extract filename
+                    var name = Path.GetFileName(v);
+                    if (string.IsNullOrEmpty(name)) throw new ArgumentException($"Invalid image path at index {i}");
+                    outList.Add(name);
+                }
+                else
+                {
+                    outList.Add(v);
+                }
+            }
+
+            return outList;
         }
 
         [HttpGet]
@@ -97,7 +164,8 @@ namespace Hotel_System.API.Controllers
                                 ? "Bảo trì"
                                 : (occupiedRoomIds.Contains(r.Idphong) ? "Đang sử dụng" 
                                    : (bookedRoomIds.Contains(r.Idphong) ? "Đã đặt" : "Trống")),
-                    UrlAnhPhong = ResolveImageUrl(r.UrlAnhPhong),
+                    // Map UrlAnhPhong array: resolve each image URL, then take first as primary
+                    UrlAnhPhong = ResolveImageUrls(r.UrlAnhPhong),
                     // Add amenities
                     amenities = r.TienNghiPhongs
                         .Select(tnp => new {
@@ -186,6 +254,25 @@ namespace Hotel_System.API.Controllers
 
             // Last resort: return a relative path under /img/room using provided filename
             return "/img/room/" + fileName;
+        }
+
+        /// <summary>
+        /// Resolve image URLs: convert each filename/path in the stored list to a proper relative URL.
+        /// Returns a list of resolved URLs (can be empty). This enables clients to receive all images,
+        /// not only the primary image.
+        /// </summary>
+        private List<string> ResolveImageUrls(List<string>? images)
+        {
+            var outUrls = new List<string>();
+            if (images == null || images.Count == 0) return outUrls;
+
+            foreach (var img in images)
+            {
+                var resolved = ResolveImageUrl(img);
+                if (!string.IsNullOrWhiteSpace(resolved)) outUrls.Add(resolved);
+            }
+
+            return outUrls;
         }
         // POST: api/Phong/check-available-rooms-duyanh
         [HttpPost("check-available-rooms")]
@@ -278,6 +365,25 @@ namespace Hotel_System.API.Controllers
             if (payload == null) return BadRequest("Invalid payload");
             if (string.IsNullOrWhiteSpace(payload.Idphong)) payload.Idphong = Guid.NewGuid().ToString();
 
+            // Validate images array (must have at least 1 primary image)
+            try
+            {
+                _imageService.ValidateImageArray(payload.UrlAnhPhong, "UrlAnhPhong");
+                // Validate filename pattern if Idphong is present
+                if (!string.IsNullOrWhiteSpace(payload.Idphong))
+                {
+                    for (int i = 0; i < payload.UrlAnhPhong.Count; i++)
+                    {
+                        var fname = payload.UrlAnhPhong[i];
+                        _imageService.ValidateFilenameForRoom(fname, payload.Idphong, i);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+
             // Ensure stored status is one of allowed values for user-editable state.
             if (string.IsNullOrWhiteSpace(payload.TrangThai))
             {
@@ -322,6 +428,30 @@ namespace Hotel_System.API.Controllers
             if (payload.GiaCoBanMotDem.HasValue) existing.GiaCoBanMotDem = payload.GiaCoBanMotDem;
             if (payload.XepHangSao.HasValue) existing.XepHangSao = payload.XepHangSao;
 
+            // Update images if provided (validate against business rules)
+            if (payload.UrlAnhPhong != null && payload.UrlAnhPhong.Count > 0)
+            {
+                try
+                {
+                    // Normalize inputs (allow data URLs and paths)
+                    payload.UrlAnhPhong = await NormalizeAndPersistImageInputsAsync(payload.UrlAnhPhong, existing.Idphong);
+                    _imageService.ValidateImageArray(payload.UrlAnhPhong, "UrlAnhPhong");
+                    // Validate filenames if existing Id available
+                    if (!string.IsNullOrWhiteSpace(existing.Idphong))
+                    {
+                        for (int i = 0; i < payload.UrlAnhPhong.Count; i++)
+                        {
+                            _imageService.ValidateFilenameForRoom(payload.UrlAnhPhong[i], existing.Idphong, i);
+                        }
+                    }
+                    existing.UrlAnhPhong = payload.UrlAnhPhong;
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+            }
+
             // Only allow user-updatable statuses (Trống, Bảo trì). System-managed statuses cannot be manually changed.
             if (!string.IsNullOrWhiteSpace(payload.TrangThai))
             {
@@ -345,8 +475,6 @@ namespace Hotel_System.API.Controllers
                 existing.TrangThai = trimmed;
             }
 
-            if (payload.UrlAnhPhong != null) existing.UrlAnhPhong = payload.UrlAnhPhong;
-
             _context.Phongs.Update(existing);
             await _context.SaveChangesAsync();
 
@@ -365,6 +493,347 @@ namespace Hotel_System.API.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        /// <summary>
+        /// POST: api/Phong/{id}/images/add
+        /// Add a new image to room's image array.
+        /// Body: { "imageUrl": "filename.webp" }
+        /// </summary>
+        [HttpPost("{id}/images/add")]
+        public async Task<IActionResult> AddImage(string id, [FromBody] dynamic request)
+        {
+            var room = await _context.Phongs.FindAsync(id);
+            if (room == null) return NotFound();
+
+            string imageUrl = request?.imageUrl;
+            if (string.IsNullOrWhiteSpace(imageUrl))
+                return BadRequest(new { error = "imageUrl is required" });
+
+            try
+            {
+                room.UrlAnhPhong = _imageService.AddImage(room.UrlAnhPhong, imageUrl);
+                _context.Phongs.Update(room);
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Image added", images = room.UrlAnhPhong, count = room.UrlAnhPhong.Count });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// PUT: api/Phong/{id}/images
+        /// Update the entire images array. Body: [ { "u": "room-101-a0.jpg" }, ... ]
+        /// Backend will validate array length 1..6, index 0 present and non-empty, each element has key 'u' and filename contains no path separators.
+        /// File name must follow convention room-{id}-a{index}.ext where index matches its position in the array.
+        /// </summary>
+        [HttpPut("{id}/images")]
+        public async Task<IActionResult> UpdateImages(string id, [FromBody] List<ImageDto> images)
+        {
+            var room = await _context.Phongs.FindAsync(id);
+            if (room == null) return NotFound();
+
+            if (images == null || images.Count == 0)
+                return BadRequest(new { error = "Images array is required and must contain at least one image (primary)" });
+
+            if (images.Count > 6)
+                return BadRequest(new { error = "Images array cannot contain more than 6 images" });
+
+            // Validate each element has 'u' and proper filename
+            var newList = new List<string>();
+            for (int i = 0; i < images.Count; i++)
+            {
+                var item = images[i];
+                if (item == null)
+                    return BadRequest(new { error = $"Image at index {i} must include property 'u' with non-empty filename" });
+
+                string? fname = null;
+                try
+                {
+                    var je = item.u;
+                    if (je.ValueKind == JsonValueKind.String)
+                    {
+                        fname = je.GetString();
+                    }
+                    else if (je.ValueKind == JsonValueKind.Array)
+                    {
+                        // take first non-empty string in the array
+                        foreach (var el in je.EnumerateArray())
+                        {
+                            if (el.ValueKind == JsonValueKind.String)
+                            {
+                                var s = el.GetString();
+                                if (!string.IsNullOrWhiteSpace(s))
+                                {
+                                    fname = s;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    else if (je.ValueKind == JsonValueKind.Object)
+                    {
+                        // In case u is nested, try to find string properties
+                        foreach (var prop in je.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == JsonValueKind.String)
+                            {
+                                var s = prop.Value.GetString();
+                                if (!string.IsNullOrWhiteSpace(s))
+                                {
+                                    fname = s;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    fname = null;
+                }
+
+                if (string.IsNullOrWhiteSpace(fname))
+                    return BadRequest(new { error = $"Image at index {i} must include property 'u' with non-empty filename" });
+
+                fname = fname.Trim();
+                try
+                {
+                    _imageService.ValidateFilenameForRoom(fname, id, i);
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+
+                newList.Add(fname);
+            }
+
+            // Guarantee primary image exists
+            if (string.IsNullOrWhiteSpace(newList[0]))
+                return BadRequest(new { error = "Primary image (index 0) cannot be empty" });
+
+            // Persist the new list (server stores list of filenames)
+            room.UrlAnhPhong = newList;
+            _context.Phongs.Update(room);
+            await _context.SaveChangesAsync();
+
+            // Return stored images as array of objects { u: filename }
+            var result = room.UrlAnhPhong.Select(f => new { u = f }).ToList();
+            return Ok(new { message = "Images updated", images = result });
+        }
+
+        /// <summary>
+        /// POST: api/Phong/{id}/images/upload?action=add|replacePrimary|replaceAt&index=2
+        /// Accepts multipart/form-data with file field named 'file'. Returns generated filename.
+        /// </summary>
+        [HttpPost("{id}/images/upload")]
+        public async Task<IActionResult> UploadImage(string id, [FromQuery] string action = "add", [FromQuery] int? index = null)
+        {
+            var room = await _context.Phongs.FindAsync(id);
+            if (room == null) return NotFound();
+
+            var file = Request.Form?.Files?.FirstOrDefault();
+            if (file == null || file.Length == 0)
+                return BadRequest(new { error = "No file provided" });
+
+            // Determine target index
+            int targetIndex;
+            if (action == "replacePrimary")
+            {
+                targetIndex = 0;
+            }
+            else if (action == "replaceAt")
+            {
+                if (!index.HasValue) return BadRequest(new { error = "index query parameter required for replaceAt" });
+                targetIndex = index.Value;
+                if (targetIndex <= 0) return BadRequest(new { error = "replaceAt index must be > 0" });
+                if (targetIndex >= room.UrlAnhPhong.Count) return BadRequest(new { error = "replaceAt index out of range" });
+            }
+            else // default 'add'
+            {
+                targetIndex = room.UrlAnhPhong.Count; // append
+                if (room.UrlAnhPhong.Count >= 6)
+                    return BadRequest(new { error = "Cannot add more than 6 images" });
+            }
+
+            // Validate extension
+            var origExt = Path.GetExtension(file.FileName)?.ToLowerInvariant() ?? ".jpg";
+            try
+            {
+                var generated = _imageService.GenerateFilename(id, targetIndex, origExt);
+
+                // Save file to wwwroot/img/room
+                var folder = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "room");
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                var destPath = Path.Combine(folder, generated);
+
+                // Save/overwrite
+                await using (var stream = System.IO.File.Create(destPath))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                return Ok(new { filename = generated });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// DELETE: api/Phong/{id}/images/{imageIndex}
+        /// Remove an image at specified index (cannot delete index 0).
+        /// </summary>
+        [HttpDelete("{id}/images/{imageIndex}")]
+        public async Task<IActionResult> RemoveImage(string id, int imageIndex)
+        {
+            var room = await _context.Phongs.FindAsync(id);
+            if (room == null) return NotFound();
+
+            try
+            {
+                // Determine the filename to delete
+                string? toDelete = null;
+                if (imageIndex >= 0 && imageIndex < room.UrlAnhPhong.Count)
+                {
+                    toDelete = room.UrlAnhPhong[imageIndex];
+                }
+
+                room.UrlAnhPhong = _imageService.RemoveImage(room.UrlAnhPhong, imageIndex);
+
+                // Delete file from disk if it exists and is not referenced anymore
+                if (!string.IsNullOrWhiteSpace(toDelete))
+                {
+                    // If no other reference to this filename in array, remove file
+                    if (!room.UrlAnhPhong.Contains(toDelete))
+                    {
+                        var folder = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "room");
+                        var path = Path.Combine(folder, toDelete);
+                        if (System.IO.File.Exists(path))
+                        {
+                            System.IO.File.Delete(path);
+                        }
+                    }
+                }
+                _context.Phongs.Update(room);
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Image removed", images = room.UrlAnhPhong, count = room.UrlAnhPhong.Count });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// PUT: api/Phong/{id}/images/primary
+        /// Replace the primary image (index 0).
+        /// Body: { "imageUrl": "newimage.webp" }
+        /// </summary>
+        [HttpPut("{id}/images/primary")]
+        public async Task<IActionResult> ReplacePrimaryImage(string id, [FromBody] dynamic request)
+        {
+            var room = await _context.Phongs.FindAsync(id);
+            if (room == null) return NotFound();
+
+            string imageUrl = request?.imageUrl;
+            if (string.IsNullOrWhiteSpace(imageUrl))
+                return BadRequest(new { error = "imageUrl is required" });
+
+            try
+            {
+                // Remember old primary for possible deletion
+                var oldPrimary = room.UrlAnhPhong.Count > 0 ? room.UrlAnhPhong[0] : null;
+
+                room.UrlAnhPhong = _imageService.ReplacePrimaryImage(room.UrlAnhPhong, imageUrl);
+
+                // If oldPrimary is different and no longer referenced, delete file
+                if (!string.IsNullOrWhiteSpace(oldPrimary) && !room.UrlAnhPhong.Contains(oldPrimary))
+                {
+                    var folder = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "room");
+                    var path = Path.Combine(folder, oldPrimary);
+                    if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+                }
+                _context.Phongs.Update(room);
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Primary image replaced", images = room.UrlAnhPhong, count = room.UrlAnhPhong.Count });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// PUT: api/Phong/{id}/images/{imageIndex}
+        /// Replace an image at specified index.
+        /// Body: { "imageUrl": "newimage.webp" }
+        /// </summary>
+        [HttpPut("{id}/images/{imageIndex}")]
+        public async Task<IActionResult> ReplaceImage(string id, int imageIndex, [FromBody] dynamic request)
+        {
+            var room = await _context.Phongs.FindAsync(id);
+            if (room == null) return NotFound();
+
+            string imageUrl = request?.imageUrl;
+            if (string.IsNullOrWhiteSpace(imageUrl))
+                return BadRequest(new { error = "imageUrl is required" });
+
+            try
+            {
+                string? oldImage = null;
+                if (imageIndex >= 0 && imageIndex < room.UrlAnhPhong.Count)
+                {
+                    oldImage = room.UrlAnhPhong[imageIndex];
+                }
+
+                room.UrlAnhPhong = _imageService.ReplaceImage(room.UrlAnhPhong, imageIndex, imageUrl);
+
+                if (!string.IsNullOrWhiteSpace(oldImage) && !room.UrlAnhPhong.Contains(oldImage))
+                {
+                    var folder = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "room");
+                    var path = Path.Combine(folder, oldImage);
+                    if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+                }
+                _context.Phongs.Update(room);
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Image replaced", images = room.UrlAnhPhong, count = room.UrlAnhPhong.Count });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// PUT: api/Phong/{id}/images/reorder
+        /// Reorder images in array. Primary image (index 0) cannot be moved.
+        /// Body: { "fromIndex": 2, "toIndex": 1 }
+        /// </summary>
+        [HttpPut("{id}/images/reorder")]
+        public async Task<IActionResult> ReorderImages(string id, [FromBody] dynamic request)
+        {
+            var room = await _context.Phongs.FindAsync(id);
+            if (room == null) return NotFound();
+
+            int fromIndex = request?.fromIndex;
+            int toIndex = request?.toIndex;
+
+            try
+            {
+                room.UrlAnhPhong = _imageService.ReorderImages(room.UrlAnhPhong, fromIndex, toIndex);
+                _context.Phongs.Update(room);
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Images reordered", images = room.UrlAnhPhong, count = room.UrlAnhPhong.Count });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
         }
 
         // GET: api/Phong/top-rooms-2025?top=5

@@ -47,7 +47,10 @@ export interface Room {
   discountPercent?: number | null;
   xepHangSao?: number | null;
   trangThai?: string | null;
-  urlAnhPhong?: string | null;
+  /** Image URLs array (1-6 images). Index 0 is primary/banner image. */
+  urlAnhPhong?: string[] | null;
+  // Legacy single image field (for backward compat during migration)
+  urlAnhPhong_backup?: string | null;
   // Thêm trường tenLoaiPhong từ API (đã join)
   tenLoaiPhong?: string | null;
 }
@@ -122,19 +125,32 @@ export async function getRooms(): Promise<Room[]> {
   const data = await fetchApi("/Phong");
 
   // Tự động chuẩn hóa PascalCase (C#) sang camelCase (JS)
-  const normalizedRooms: Room[] = (data as any[]).map((r) => ({
-    idphong: r.idphong ?? r.Idphong,
-    idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
-    tenPhong: r.tenPhong ?? r.TenPhong,
-    tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong, // Lấy từ controller
-    soPhong: r.soPhong ?? r.SoPhong,
-    moTa: r.moTa ?? r.MoTa,
-    soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa,
-    giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
-    xepHangSao: r.xepHangSao ?? r.XepHangSao,
-    trangThai: r.trangThai ?? r.TrangThai,
-    urlAnhPhong: r.urlAnhPhong ?? r.UrlAnhPhong,
-  }));
+  const normalizedRooms: Room[] = (data as any[]).map((r) => {
+    // Normalize image array
+    let images: string[] | null = null;
+    const rawImages = r.urlAnhPhong ?? r.UrlAnhPhong;
+    if (Array.isArray(rawImages)) {
+      // Backend returned array
+      images = rawImages;
+    } else if (typeof rawImages === "string" && rawImages) {
+      // Single image (legacy), wrap in array
+      images = [rawImages];
+    }
+
+    return {
+      idphong: r.idphong ?? r.Idphong,
+      idloaiPhong: r.idloaiPhong ?? r.IdloaiPhong,
+      tenPhong: r.tenPhong ?? r.TenPhong,
+      tenLoaiPhong: r.tenLoaiPhong ?? r.TenLoaiPhong,
+      soPhong: r.soPhong ?? r.SoPhong,
+      moTa: r.moTa ?? r.MoTa,
+      soNguoiToiDa: r.soNguoiToiDa ?? r.SoNguoiToiDa,
+      giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
+      xepHangSao: r.xepHangSao ?? r.XepHangSao,
+      trangThai: r.trangThai ?? r.TrangThai,
+      urlAnhPhong: images,
+    };
+  });
 
   return normalizedRooms;
 }
@@ -443,4 +459,84 @@ export async function postCheckAvailableRooms(
   );
 
   return normalizedRooms;
+}
+
+// === IMAGE MANAGEMENT ===
+
+/**
+ * Add a new image to room's image array.
+ * @param roomId Room ID
+ * @param imageUrl Image filename or relative URL (e.g., "filename.webp")
+ */
+export async function addRoomImage(roomId: string, imageUrl: string): Promise<any> {
+  const url = `${API_BASE}/Phong/${roomId}/images/add`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageUrl }),
+  });
+  if (!res.ok) throw new Error(`Failed to add image: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Remove an image at specified index (cannot delete index 0).
+ * @param roomId Room ID
+ * @param imageIndex Index to remove (1+)
+ */
+export async function removeRoomImage(roomId: string, imageIndex: number): Promise<any> {
+  const url = `${API_BASE}/Phong/${roomId}/images/${imageIndex}`;
+  const res = await fetch(url, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Failed to remove image: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Replace the primary image (index 0).
+ * @param roomId Room ID
+ * @param imageUrl New image filename or relative URL
+ */
+export async function replacePrimaryRoomImage(roomId: string, imageUrl: string): Promise<any> {
+  const url = `${API_BASE}/Phong/${roomId}/images/primary`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageUrl }),
+  });
+  if (!res.ok) throw new Error(`Failed to replace primary image: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Replace an image at specific index.
+ * @param roomId Room ID
+ * @param imageIndex Index to replace
+ * @param imageUrl New image filename or relative URL
+ */
+export async function replaceRoomImage(roomId: string, imageIndex: number, imageUrl: string): Promise<any> {
+  const url = `${API_BASE}/Phong/${roomId}/images/${imageIndex}`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageUrl }),
+  });
+  if (!res.ok) throw new Error(`Failed to replace image: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Reorder images. Primary image (index 0) cannot be moved.
+ * @param roomId Room ID
+ * @param fromIndex Current index
+ * @param toIndex Target index
+ */
+export async function reorderRoomImages(roomId: string, fromIndex: number, toIndex: number): Promise<any> {
+  const url = `${API_BASE}/Phong/${roomId}/images/reorder`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fromIndex, toIndex }),
+  });
+  if (!res.ok) throw new Error(`Failed to reorder images: ${res.status}`);
+  return res.json();
 }

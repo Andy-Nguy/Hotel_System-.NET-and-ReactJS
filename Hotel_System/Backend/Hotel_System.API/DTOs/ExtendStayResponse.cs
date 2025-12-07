@@ -115,7 +115,7 @@ namespace Hotel_System.API.DTOs
         public string? SoPhong { get; set; }
         public string? TenLoaiPhong { get; set; }
         public decimal GiaMotDem { get; set; }
-        public string? UrlAnhPhong { get; set; }
+        public List<string>? UrlAnhPhong { get; set; }
         public int? SoNguoiToiDa { get; set; }
     }
 

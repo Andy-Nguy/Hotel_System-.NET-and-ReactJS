@@ -1,25 +1,28 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { getAmenitiesForRoom } from "../../api/amenticsApi";
 import ReviewPreview from "./ReviewPreview";
 import { API_CONFIG } from "../../api/config";
+import { Modal, Button } from "antd";
+import type { Room } from "../../../../Frontend/src/api/roomsApi";
+import type { Promotion } from "../../../../Frontend/src/api/promotionApi";
+import { getAllPromotions } from "../../../../Frontend/src/api/promotionApi";
+import dayjs from "dayjs";
+
 const BACKEND_BASE = `${API_CONFIG.CURRENT}/api`;
+
+// ==================================================================
+// HELPER FUNCTION: RESOLVE IMAGE URL (GIỮ NGUYÊN)
+// ==================================================================
 
 function resolveImageUrl(u?: string | null) {
   if (!u) return undefined;
   const s = String(u).trim();
   if (!s) return undefined;
   if (s.startsWith("http") || s.startsWith("//")) return s;
-  // If already an absolute URL or protocol-relative, return as-is
-  if (s.startsWith("/img")) return s; // already a relative img path
-  if (s.startsWith("/")) return s; // other relative path
-  // otherwise treat as filename stored in backend img/room
+  if (s.startsWith("/img")) return s;
+  if (s.startsWith("/")) return s;
   return `/img/room/${s}`;
 }
-import { Modal, Button } from "antd";
-import type { Room } from "../../../../Frontend/src/api/roomsApi";
-import type { Promotion } from "../../../../Frontend/src/api/promotionApi";
-import { getAllPromotions } from "../../../../Frontend/src/api/promotionApi";
-import dayjs from "dayjs";
 
 type Props = {
   visible: boolean;
@@ -27,6 +30,611 @@ type Props = {
   onClose: () => void;
   onBook: (room: Room) => void;
 };
+
+// ==================================================================
+// IMAGE PREVIEW MODAL (GIỐNG KIỂU PROMOTIONSECTION)
+// ==================================================================
+
+const ImagePreviewModal: React.FC<{
+  images: string[];
+  initialIndex?: number;
+  visible: boolean;
+  onClose: () => void;
+}> = ({ images, initialIndex = 0, visible, onClose }) => {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [isAutoPlay, setIsAutoPlay] = useState(true);
+  const [scale, setScale] = useState(1);
+  const [translateX, setTranslateX] = useState(0);
+  const [translateY, setTranslateY] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{ x: number; y: number } | null>(null);
+  const translateStartRef = useRef<{ x: number; y: number } | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [rotation, setRotation] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+
+  useEffect(() => {
+    setCurrentIndex(initialIndex);
+  }, [initialIndex, visible]);
+
+  // Auto-play carousel
+  useEffect(() => {
+    if (!isAutoPlay || images.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % images.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [isAutoPlay, images.length]);
+
+  if (!visible) return null;
+
+  const normImages = images.length > 0 ? images : ["/img/room/room-1.jpg"];
+  const currentImage = normImages[currentIndex];
+
+  const goToImage = (idx: number) => {
+    setIsAutoPlay(false);
+    setCurrentIndex(idx);
+    // reset zoom/pan when switching image
+    setScale(1);
+    setTranslateX(0);
+    setTranslateY(0);
+    setRotation(0);
+    setFlipped(false);
+  };
+
+  const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    if (!imgRef.current) return;
+    const rect = imgRef.current.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    const delta = e.deltaY;
+    const factor = delta > 0 ? 0.9 : 1.1; // scroll down = zoom out, up = zoom in
+    const newScale = clamp(scale * factor, 1, 4);
+    if (newScale === scale) return;
+
+    // adjust translate so zoom focuses around pointer
+    const relX = offsetX - rect.width / 2;
+    const relY = offsetY - rect.height / 2;
+    const scaleRatio = newScale / scale;
+
+    setTranslateX((tx) => tx - relX * (scaleRatio - 1));
+    setTranslateY((ty) => ty - relY * (scaleRatio - 1));
+    setScale(newScale);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (scale <= 1) return;
+    e.preventDefault();
+    setIsPanning(true);
+    panStartRef.current = { x: e.clientX, y: e.clientY };
+    translateStartRef.current = { x: translateX, y: translateY };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning || !panStartRef.current || !translateStartRef.current) return;
+    e.preventDefault();
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    setTranslateX(translateStartRef.current.x + dx);
+    setTranslateY(translateStartRef.current.y + dy);
+  };
+
+  const endPan = () => {
+    setIsPanning(false);
+    panStartRef.current = null;
+    translateStartRef.current = null;
+  };
+
+  const handleDoubleClick = () => {
+    // reset zoom
+    setScale(1);
+    setTranslateX(0);
+    setTranslateY(0);
+  };
+
+  const rotateClockwise = () => {
+    setRotation((r) => (r + 90) % 360);
+  };
+
+  const toggleFlip = () => {
+    setFlipped((f) => !f);
+  };
+
+  const zoomIn = () => {
+    setIsAutoPlay(false);
+    setScale((s) => clamp(s * 1.2, 1, 4));
+  };
+
+  const zoomOut = () => {
+    setIsAutoPlay(false);
+    setScale((s) => clamp(s / 1.2, 1, 4));
+    if (scale <= 1.05) {
+      // reset pan when returning to 1
+      setTranslateX(0);
+      setTranslateY(0);
+    }
+  };
+
+
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.98)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 20000,
+        padding: "20px 0",
+      }}
+      onClick={onClose}
+    >
+      {/* Main Container */}
+      <div
+        style={{
+          position: "relative",
+          maxWidth: "90vw",
+          maxHeight: "80vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#1a1a1a",
+          borderRadius: 12,
+          overflow: "hidden",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Main Image */}
+        <div
+          ref={containerRef}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={(e) => {
+            e.preventDefault();
+            endPan();
+          }}
+          onMouseLeave={(e) => {
+            e.preventDefault();
+            endPan();
+          }}
+          onDoubleClick={handleDoubleClick}
+          style={{
+            position: "relative",
+            width: "100%",
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#000",
+            overflow: "hidden",
+            cursor: isPanning ? "grabbing" : scale > 1 ? "grab" : "zoom-in",
+          }}
+        >
+          {/* Toolbar (rotate / flip / download / zoom) */}
+          <div
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 64,
+              display: "flex",
+              gap: 8,
+              zIndex: 20,
+              background: "rgba(0,0,0,0.35)",
+              padding: "6px",
+              borderRadius: 8,
+              alignItems: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              title="Zoom out"
+              onClick={zoomOut}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 6,
+                border: "none",
+                background: "rgba(255,255,255,0.08)",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              −
+            </button>
+            <button
+              title="Zoom in"
+              onClick={zoomIn}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 6,
+                border: "none",
+                background: "rgba(255,255,255,0.08)",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              +
+            </button>
+            <button
+              title="Rotate"
+              onClick={rotateClockwise}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 6,
+                border: "none",
+                background: "rgba(255,255,255,0.08)",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              ↻
+            </button>
+            <button
+              title="Flip horizontal"
+              onClick={toggleFlip}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 6,
+                border: "none",
+                background: flipped ? "#f59e0b" : "rgba(255,255,255,0.08)",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              ⇋
+            </button>
+            {/* download removed per request */}
+          </div>
+
+          <img
+            ref={imgRef}
+            src={currentImage}
+            alt="preview"
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+              display: "block",
+              animation: "fadeIn 0.3s ease-in-out",
+              transform: `translate(${translateX}px, ${translateY}px) rotate(${rotation}deg) scale(${scale}) scaleX(${flipped ? -1 : 1})`,
+              transition: isPanning ? "none" : "transform 0.15s ease",
+            }}
+          />
+
+          {/* Close Button - Top Right */}
+          <button
+            onClick={onClose}
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              background: "rgba(255,255,255,0.95)",
+              border: "none",
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 24,
+              color: "#000",
+              fontWeight: "bold",
+              transition: "all 0.2s ease",
+              zIndex: 10,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#fff";
+              e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.4)";
+              e.currentTarget.style.transform = "scale(1.1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.95)";
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+          >
+            ✕
+          </button>
+
+          {/* Navigation arrows removed per request */}
+
+          {/* Counter Badge - Bottom Left */}
+          {normImages.length > 1 && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: 16,
+                left: 16,
+                background: "rgba(0,0,0,0.75)",
+                color: "white",
+                padding: "8px 14px",
+                borderRadius: 24,
+                fontSize: 13,
+                fontWeight: 600,
+                backdropFilter: "blur(10px)",
+                zIndex: 10,
+              }}
+            >
+              {currentIndex + 1} / {normImages.length}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Thumbnails */}
+        {normImages.length > 1 && (
+          <div
+            style={{
+              width: "100%",
+              background: "#1a1a1a",
+              padding: "12px 16px",
+              display: "flex",
+              gap: 10,
+              justifyContent: "center",
+              alignItems: "center",
+              overflowX: "auto",
+              borderTop: "1px solid #333",
+            }}
+          >
+            {normImages.map((imgUrl, idx) => (
+              <button
+                key={idx}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goToImage(idx);
+                }}
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: 6,
+                  overflow: "hidden",
+                  cursor: "pointer",
+                  border: idx === currentIndex ? "3px solid #f59e0b" : "2px solid #444",
+                  background: "none",
+                  padding: 0,
+                  transition: "all 0.3s ease",
+                  flexShrink: 0,
+                  boxShadow: idx === currentIndex ? "0 0 12px rgba(245,158,11,0.5)" : "none",
+                }}
+                onMouseEnter={(e) => {
+                  if (idx !== currentIndex) {
+                    e.currentTarget.style.borderColor = "#f59e0b";
+                    e.currentTarget.style.transform = "scale(1.08)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (idx !== currentIndex) {
+                    e.currentTarget.style.borderColor = "#444";
+                    e.currentTarget.style.transform = "scale(1)";
+                  }
+                }}
+              >
+                <img
+                  src={imgUrl}
+                  alt={`thumbnail-${idx}`}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    opacity: idx === currentIndex ? 1 : 0.7,
+                  }}
+                />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* CSS Animation */}
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0.8;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// ==================================================================
+// COMPONENT HIỂN THỊ HÌNH ẢNH (ĐÃ CẬP NHẬT CAROUSEL VÀ THUMBNAILS)
+// ==================================================================
+
+// ==================================================================
+// COMPONENT HIỂN THỊ HÌNH ẢNH (ĐÃ CẬP NHẬT CAROUSEL VÀ THUMBNAILS)
+// ==================================================================
+
+type DetailImageProps = { srcHint?: string | null | string[]; alt?: string };
+
+const DetailImage: React.FC<DetailImageProps> = ({ srcHint, alt }) => {
+  const defaultJpg = "/img/room/room-1.jpg";
+  const [index, setIndex] = useState(0);
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Hàm trích xuất và chuẩn hóa nguồn ảnh từ chuỗi/mảng
+  const makeCandidates = (u?: string | null) => {
+    const out: string[] = [];
+    if (!u) return out;
+    const parts = String(u)
+      .split(/[,|;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    
+    for (const p of parts) {
+      if (p.startsWith("http") || p.startsWith("//") || p.startsWith("/img") || p.startsWith("/")) {
+        out.push(p);
+      } else {
+        out.push(`/img/room/${p}`);
+      }
+    }
+    return out;
+  };
+  
+  // Xử lý srcHint (bao gồm cả trường hợp mảng mới)
+  const gallerySources = (() => {
+    if (!srcHint) return [defaultJpg];
+    
+    let resolved: string[] = [];
+    if (Array.isArray(srcHint)) {
+      for (const img of srcHint) {
+        resolved.push(...makeCandidates(img));
+      }
+    } else {
+      resolved.push(...makeCandidates(srcHint));
+    }
+    const uniqueSources = Array.from(new Set(resolved));
+    return uniqueSources.length ? uniqueSources : [defaultJpg];
+  })();
+
+  // Logic Timer (5 giây - auto-advance tắt khi modal mở)
+  useEffect(() => {
+    if (gallerySources.length <= 1) return;
+    
+    // Tắt auto-advance khi modal preview mở
+    if (showPreview) return;
+
+    const intervalId = setInterval(() => {
+      setIndex((prevIndex) => (prevIndex + 1) % gallerySources.length);
+    }, 5000); // 5000ms = 5 giây
+
+    return () => clearInterval(intervalId);
+  }, [gallerySources.length, showPreview]);
+
+  const displaySrc = gallerySources[index] ?? defaultJpg;
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        backgroundColor: "#f8f9fa",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+      }}
+      onClick={() => setShowPreview(true)}
+    >
+      {/* Ảnh chính */}
+      <img
+        src={displaySrc}
+        alt={alt}
+        crossOrigin="anonymous"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+
+      {/* Ảnh con (Thumbnails) ở góc phải */}
+      {gallerySources.length > 1 && (
+        <div
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            maxHeight: "calc(100% - 32px)",
+            overflowY: "auto",
+            zIndex: 10,
+            padding: 5,
+            borderRadius: 8,
+            background: "rgba(0,0,0,0.4)",
+          }}
+        >
+          {gallerySources.map((imgUrl, idx) => (
+            <div
+              key={idx}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIndex(idx);
+              }}
+              style={{
+                width: 70,
+                height: 50,
+                borderRadius: 6,
+                overflow: "hidden",
+                cursor: "pointer",
+                border: idx === index 
+                  ? "3px solid #f59e0b"
+                  : "1px solid #fff",
+                boxShadow: idx === index ? "0 0 0 1px #f59e0b" : "none",
+                flexShrink: 0,
+              }}
+            >
+              <img
+                src={imgUrl}
+                alt={`thumbnail-${idx}`}
+                style={{ 
+                  width: "100%", 
+                  height: "100%", 
+                  objectFit: "cover",
+                  opacity: idx === index ? 1 : 0.8,
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Progress indicator */}
+      {gallerySources.length > 1 && (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: 16,
+            transform: "translateX(-50%)",
+            background: "rgba(0,0,0,0.6)",
+            color: "#fff",
+            padding: "6px 12px",
+            borderRadius: 20,
+            fontSize: 14,
+          }}
+        >
+          {index + 1} / {gallerySources.length}
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      <ImagePreviewModal
+        images={gallerySources}
+        initialIndex={index}
+        visible={showPreview}
+        onClose={() => setShowPreview(false)}
+      />
+    </div>
+  );
+};
+
+// ==================================================================
+// COMPONENT DETAIL ROOM (ĐÃ CẬP NHẬT LOGIC HIỂN THỊ GIÁ)
+// ==================================================================
 
 const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
   if (!room) return null;
@@ -250,7 +858,7 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
           </button>
         </div>
 
-        {/* === ROW 2: FULL-BLEED IMAGE (Giữ nguyên 16:9) === */}
+        {/* === ROW 2: FULL-BLEED IMAGE (ĐÃ CẬP NHẬT) === */}
         <div
           style={{
             width: "100%",
@@ -269,16 +877,13 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
             }}
           >
             <DetailImage
-              srcHint={room.urlAnhPhong}
+              srcHint={Array.isArray(room.urlAnhPhong) ? room.urlAnhPhong : room.urlAnhPhong ?? undefined}
               alt={room.tenPhong || "phong"}
             />
           </div>
         </div>
 
         {/* === ROW 3: ROOM INFORMATION (Thêm lại padding) === */}
-        {/* Vì margin âm đã "ăn" mất padding, chúng ta phải 
-					thêm padding 24px trở lại cho khu vực nội dung
-				*/}
         <div style={{ padding: 24 }}>
           <div
             style={{
@@ -332,53 +937,91 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
                 </div>
               )}
 
+              {/* === PHẦN HIỂN THỊ GIÁ ĐÃ ĐIỀU CHỈNH === */}
               <div>
                 <div style={{ color: "#666", marginBottom: 6 }}>Giá: </div>
                 {room.giaCoBanMotDem != null ? (
                   <div
-                    style={{ display: "flex", alignItems: "baseline", gap: 12 }}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                    }}
                   >
-                    <div
-                      style={{
-                        fontSize: 26,
-                        fontWeight: 800,
-                        color: "rgb(216, 152, 96)",
-                        lineHeight: 1,
-                      }}
-                    >
-                      {room.giaCoBanMotDem.toLocaleString("vi-VN")}
-                      <span
-                        style={{ fontSize: 14, fontWeight: 600, marginLeft: 8 }}
-                      >
-                        ₫/đêm
-                      </span>
-                    </div>
-                    {promotion && room.giaCoBanMotDem != null && (
+                    {promotion && room.giaCoBanMotDem != null ? (
+                      <>
+                        {/* Giá gốc (Gạch ngang, màu xám) */}
+                        <div
+                          style={{
+                            fontSize: 18,
+                            fontWeight: 500,
+                            color: "#9ca3af",
+                            textDecoration: "line-through",
+                            lineHeight: 1,
+                          }}
+                        >
+                          {room.giaCoBanMotDem.toLocaleString("vi-VN")}
+                          <span style={{ fontSize: 13, marginLeft: 5 }}>₫/đêm</span>
+                        </div>
+
+                        {/* Giá Khuyến mãi (Màu xanh lá đậm, font lớn) */}
+                        <div
+                          style={{
+                            fontSize: 28,
+                            fontWeight: 700,
+                            color: "#059669", 
+                            lineHeight: 1,
+                          }}
+                        >
+                          {(promotion.loaiGiamGia === "percent"
+                            ? Math.max(
+                                0,
+                                Math.round(
+                                  (room.giaCoBanMotDem || 0) *
+                                    (1 - (promotion.giaTriGiam || 0) / 100)
+                                )
+                              )
+                            : Math.max(
+                                0,
+                                Math.round(
+                                  (room.giaCoBanMotDem || 0) -
+                                    (promotion.giaTriGiam || 0)
+                                )
+                              )
+                          ).toLocaleString("vi-VN")}
+                          <span
+                            style={{
+                              fontSize: 16,
+                              fontWeight: 600,
+                              color: "#111827",
+                              marginLeft: 8,
+                            }}
+                          >
+                            ₫/đêm
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      // 2. GIÁ GỐC (KHÔNG CÓ KHUYẾN MÃI)
                       <div
                         style={{
-                          marginLeft: 4,
-                          color: "#6b7280",
-                          fontWeight: 600,
+                          fontSize: 28,
+                          fontWeight: 700,
+                          color: "#111827",
+                          lineHeight: 1,
                         }}
                       >
-                        Giá sau khuyến mãi:{" "}
-                        {(promotion.loaiGiamGia === "percent"
-                          ? Math.max(
-                              0,
-                              Math.round(
-                                (room.giaCoBanMotDem || 0) *
-                                  (1 - (promotion.giaTriGiam || 0) / 100)
-                              )
-                            )
-                          : Math.max(
-                              0,
-                              Math.round(
-                                (room.giaCoBanMotDem || 0) -
-                                  (promotion.giaTriGiam || 0)
-                              )
-                            )
-                        ).toLocaleString("vi-VN")}
-                        ₫/đêm
+                        {room.giaCoBanMotDem.toLocaleString("vi-VN")}
+                        <span
+                          style={{
+                            fontSize: 16,
+                            fontWeight: 600,
+                            color: "#4b5563",
+                            marginLeft: 8,
+                          }}
+                        >
+                          ₫/đêm
+                        </span>
                       </div>
                     )}
                   </div>
@@ -388,6 +1031,7 @@ const DetailRoom: React.FC<Props> = ({ visible, room, onClose, onBook }) => {
                   </div>
                 )}
               </div>
+              {/* === KẾT THÚC PHẦN GIÁ ĐÃ ĐIỀU CHỈNH === */}
             </div>
 
             <div>
@@ -490,233 +1134,3 @@ function AmenitiesForRoom({ roomId }: { roomId?: string | null }) {
 }
 
 export default DetailRoom;
-
-// ==================================================================
-// COMPONENT HIỂN THỊ HÌNH ẢNH (BÊN TRONG ROW 2)
-// (Không thay đổi)
-// ==================================================================
-
-type DetailImageProps = { srcHint?: string | null; alt?: string };
-
-const DetailImage: React.FC<DetailImageProps> = ({ srcHint, alt }) => {
-  const BACKEND_BASE =
-    ((import.meta as any).env?.VITE_API_BASE as string) ||
-    "https://localhost:5001";
-  const defaultJpg = "/img/room/room-1.jpg";
-
-  const makeVariant = (base: string, ext: string) => {
-    try {
-      const idx = base.lastIndexOf(".");
-      if (idx > base.lastIndexOf("/")) return base.substring(0, idx) + ext;
-    } catch {}
-    return base + ext;
-  };
-
-  const makeCandidates = (u?: string | null) => {
-    const out: string[] = [];
-    if (!u) return out;
-    // allow comma/pipe-separated list of images
-    const parts = String(u)
-      .split(/[,|;]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (parts.length > 1) {
-      for (const p of parts) {
-        out.push(...makeCandidates(p));
-      }
-      return out;
-    }
-
-    const s = parts[0] ?? "";
-    if (!s) return out;
-
-    // Preserve original format: do not add forced .webp/.jpg variants first
-    if (s.startsWith("http") || s.startsWith("//")) {
-      out.push(s);
-      return out;
-    }
-    if (s.startsWith("/img")) {
-      out.push(s);
-      return out;
-    }
-    if (s.startsWith("/")) {
-      out.push(s);
-      return out;
-    }
-    // filename only -> prefer /img/room/<file>
-    out.push(`/img/room/${s}`);
-    return out;
-  };
-
-  // Build a list of image candidates for gallery
-  const gallerySources = (() => {
-    if (!srcHint) return [defaultJpg];
-    const parts = String(srcHint)
-      .split(/[,|;]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (parts.length <= 1) {
-      const candidates = makeCandidates(srcHint);
-      return candidates.length ? candidates : [defaultJpg];
-    }
-    // if multiple parts, resolve each to at least one candidate
-    const out: string[] = [];
-    for (const p of parts) {
-      const c = makeCandidates(p);
-      if (c.length) out.push(c[0]);
-    }
-    return out.length ? out : [defaultJpg];
-  })();
-
-  const [index, setIndex] = useState(0);
-  const [loadedSrcs, setLoadedSrcs] = useState<Record<string, boolean>>({});
-  const [displaySrc, setDisplaySrc] = useState<string>(
-    gallerySources[0] ?? defaultJpg
-  );
-
-  useEffect(() => {
-    // preload all gallery sources (first available wins for each slot)
-    let canceled = false;
-    const preload = async () => {
-      const results: Record<string, boolean> = {};
-      for (const s of gallerySources) {
-        try {
-          await new Promise<void>((res, rej) => {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => res();
-            img.onerror = () => rej(new Error("failed"));
-            img.src = s;
-          });
-          results[s] = true;
-          if (!canceled && !displaySrc) setDisplaySrc(s);
-        } catch {
-          results[s] = false;
-        }
-      }
-      if (!canceled) {
-        setLoadedSrcs(results);
-        // ensure current index points to a valid loaded src or fallback
-        const cur =
-          gallerySources[index] && results[gallerySources[index]]
-            ? gallerySources[index]
-            : gallerySources.find((ss) => results[ss]) ?? defaultJpg;
-        setDisplaySrc(cur);
-      }
-    };
-    preload();
-    return () => {
-      canceled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [srcHint]);
-
-  useEffect(() => {
-    // update display when index changes
-    const s = gallerySources[index] ?? defaultJpg;
-    setDisplaySrc(
-      loadedSrcs[s]
-        ? s
-        : gallerySources.find((ss) => loadedSrcs[ss]) ?? defaultJpg
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, loadedSrcs]);
-
-  const prev = () =>
-    setIndex((i) => (i - 1 + gallerySources.length) % gallerySources.length);
-  const next = () => setIndex((i) => (i + 1) % gallerySources.length);
-
-  return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        overflow: "hidden",
-        backgroundColor: "#f8f9fa",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <img
-        src={displaySrc}
-        alt={alt}
-        crossOrigin="anonymous"
-        style={{
-          maxWidth: "100%",
-          maxHeight: "100%",
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          display: "block",
-        }}
-      />
-
-      {/* Prev/Next controls */}
-      {gallerySources.length > 1 && (
-        <>
-          <button
-            onClick={prev}
-            aria-label="Prev"
-            style={{
-              position: "absolute",
-              left: 16,
-              top: "50%",
-              transform: "translateY(-50%)",
-              background: "rgba(0,0,0,0.6)",
-              color: "#fff",
-              border: "none",
-              padding: "12px 16px",
-              borderRadius: 4,
-              cursor: "pointer",
-              fontSize: 16,
-              fontWeight: "bold",
-            }}
-          >
-            ‹
-          </button>
-          <button
-            onClick={next}
-            aria-label="Next"
-            style={{
-              position: "absolute",
-              right: 16,
-              top: "50%",
-              transform: "translateY(-50%)",
-              background: "rgba(0,0,0,0.6)",
-              color: "#fff",
-              border: "none",
-              padding: "12px 16px",
-              borderRadius: 4,
-              cursor: "pointer",
-              fontSize: 16,
-              fontWeight: "bold",
-            }}
-          >
-            ›
-          </button>
-        </>
-      )}
-
-      {/* Progress indicator */}
-      {gallerySources.length > 1 && (
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            bottom: 16,
-            transform: "translateX(-50%)",
-            background: "rgba(0,0,0,0.6)",
-            color: "#fff",
-            padding: "6px 12px",
-            borderRadius: 20,
-            fontSize: 14,
-          }}
-        >
-          {index + 1} / {gallerySources.length}
-        </div>
-      )}
-    </div>
-  );
-};

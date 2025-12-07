@@ -59,6 +59,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 // Room service
 builder.Services.AddScoped<RoomService>();
+// Room image service (manages multiple images per room)
+builder.Services.AddScoped<RoomImageService>();
 // Email service
 builder.Services.AddScoped<IEmailService, EmailService>();
 // Nhân viên service (quản lý nhân viên cho admin)

@@ -138,7 +138,7 @@ namespace Hotel_System.API.Services
                     RoomNumber = p.SoPhong,
                     Description = p.MoTa ?? "",
                     BasePricePerNight = p.GiaCoBanMotDem ?? 0,
-                    RawImageUrl = p.UrlAnhPhong,
+                    RawImageUrls = p.UrlAnhPhong,
                     RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong ?? "" : "",
                     MaxOccupancy = p.SoNguoiToiDa ?? 0
                 })
@@ -171,7 +171,7 @@ namespace Hotel_System.API.Services
                     RoomNumber = r.RoomNumber,
                     Description = r.Description,
                     BasePricePerNight = r.BasePricePerNight,
-                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomImageUrl = ResolveImageUrl((r.RawImageUrls != null && r.RawImageUrls.Count > 0) ? r.RawImageUrls[0] : null) ?? "",
                     RoomTypeName = r.RoomTypeName,
                     MaxOccupancy = r.MaxOccupancy
                 };
@@ -262,7 +262,7 @@ namespace Hotel_System.API.Services
                     RoomNumber = p.SoPhong,
                     Description = p.MoTa ?? "",
                     BasePricePerNight = p.GiaCoBanMotDem ?? 0,
-                    RawImageUrl = p.UrlAnhPhong,
+                    RawImageUrls = p.UrlAnhPhong,
                     RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong ?? "" : "",
                     MaxOccupancy = p.SoNguoiToiDa ?? 0
                 })
@@ -295,7 +295,7 @@ namespace Hotel_System.API.Services
                     RoomNumber = r.RoomNumber,
                     Description = r.Description,
                     BasePricePerNight = r.BasePricePerNight,
-                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomImageUrl = ResolveImageUrl((r.RawImageUrls != null && r.RawImageUrls.Count > 0) ? r.RawImageUrls[0] : null) ?? "",
                     RoomTypeName = r.RoomTypeName,
                     MaxOccupancy = r.MaxOccupancy
                 };
