@@ -75,6 +75,8 @@ const SelectRoomPage: React.FC = () => {
             discountedPrice: room.discountedPrice,
             promotionName: room.promotionName,
             discountPercent: room.discountPercent,
+            urlAnhPhong: room.urlAnhPhong,
+            urlAnhPhongType: Array.isArray(room.urlAnhPhong) ? "array" : typeof room.urlAnhPhong,
           });
         });
         setAvailableRooms(parsed);
@@ -162,7 +164,22 @@ const SelectRoomPage: React.FC = () => {
   };
 
   const handleOpenDetail = (room: any) => {
-    setSelectedForDetail(room);
+    // Ensure the room passed to DetailRoom contains the expected image field
+    // DetailRoom expects `urlAnhPhong` to be either a string or an array of strings.
+    const normalized = { ...room };
+    if (!normalized.urlAnhPhong) {
+      // fallback checks for common alternatives from API/raw payload
+      normalized.urlAnhPhong =
+        room.roomImageUrl ?? room.RoomImageUrl ?? room.imageUrl ?? room.images ?? room.Images ?? room.__raw?.roomImageUrl ?? room.__raw?.RoomImageUrl ?? undefined;
+    }
+    // If images are provided as a comma/semicolon separated string, keep as-is;
+    // DetailImage will split and normalize values. If it's an array, pass through.
+    console.log("🖼️ handleOpenDetail - Passing to DetailRoom:", {
+      tenPhong: normalized.tenPhong,
+      urlAnhPhong: normalized.urlAnhPhong,
+      urlAnhPhongType: Array.isArray(normalized.urlAnhPhong) ? "array" : typeof normalized.urlAnhPhong,
+    });
+    setSelectedForDetail(normalized);
     setDetailVisible(true);
   };
 

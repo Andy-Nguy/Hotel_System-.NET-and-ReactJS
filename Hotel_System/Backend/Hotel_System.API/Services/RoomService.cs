@@ -172,6 +172,10 @@ namespace Hotel_System.API.Services
                     Description = r.Description,
                     BasePricePerNight = r.BasePricePerNight,
                     RoomImageUrl = ResolveImageUrl((r.RawImageUrls != null && r.RawImageUrls.Count > 0) ? r.RawImageUrls[0] : null) ?? "",
+                    // Add multiple images for carousel/thumbnails in frontend
+                    RoomImageUrls = (r.RawImageUrls != null && r.RawImageUrls.Count > 0) 
+                        ? r.RawImageUrls.Select(img => ResolveImageUrl(img) ?? "").Where(u => !string.IsNullOrEmpty(u)).ToList()
+                        : new List<string>(),
                     RoomTypeName = r.RoomTypeName,
                     MaxOccupancy = r.MaxOccupancy
                 };
@@ -296,6 +300,10 @@ namespace Hotel_System.API.Services
                     Description = r.Description,
                     BasePricePerNight = r.BasePricePerNight,
                     RoomImageUrl = ResolveImageUrl((r.RawImageUrls != null && r.RawImageUrls.Count > 0) ? r.RawImageUrls[0] : null) ?? "",
+                    // Add multiple images for carousel/thumbnails in frontend
+                    RoomImageUrls = (r.RawImageUrls != null && r.RawImageUrls.Count > 0) 
+                        ? r.RawImageUrls.Select(img => ResolveImageUrl(img) ?? "").Where(u => !string.IsNullOrEmpty(u)).ToList()
+                        : new List<string>(),
                     RoomTypeName = r.RoomTypeName,
                     MaxOccupancy = r.MaxOccupancy
                 };
