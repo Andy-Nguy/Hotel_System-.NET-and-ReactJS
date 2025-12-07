@@ -19,12 +19,13 @@ import BookingsScreen from "../screens/BookingsScreen";
 import OffersScreen from "../screens/OffersScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import BlogDetailScreen from "../screens/BlogDetailScreen";
+import HotelIntroductionScreen from "../screens/HotelIntroductionScreen";
 
 export type TabParamList = {
   HomeTab: undefined;
   Book: undefined;
   Trips: undefined;
-  Wishlists: undefined;
+  About: undefined;
   Account: undefined;
 };
 
@@ -174,15 +175,15 @@ const BottomTabNavigator: React.FC = () => {
       />
 
       <Tab.Screen
-        name="Wishlists"
-        component={OffersScreen}
+        name="About"
+        component={HotelIntroductionScreen}
         options={{
           tabBarIcon: ({ focused, color }) => (
             <TabIcon
               focused={focused}
               color={color}
-              iconName={focused ? "heart" : "heart-outline"}
-              label="Favorite"
+              iconName={focused ? "information-circle" : "information-circle-outline"}
+              label="About"
             />
           ),
         }}
