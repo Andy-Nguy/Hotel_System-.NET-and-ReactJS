@@ -1,4 +1,4 @@
-import { DEFAULT_BASE_URL, buildApiUrl } from "../config/apiConfig";
+import { API_CONFIG, buildApiUrl } from "../config/apiConfig";
 
 const API_BASE = buildApiUrl("/api/khuyenmai");
 
@@ -42,7 +42,7 @@ export interface Promotion {
 function normalizeImagePath(imagePath?: string): string | null {
   if (!imagePath) return null;
   if (imagePath.startsWith("http")) return imagePath;
-  return `${DEFAULT_BASE_URL}${imagePath}`;
+  return `${API_CONFIG.CURRENT}${imagePath}`;
 }
 
 // ============================================

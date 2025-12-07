@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DEFAULT_BASE_URL } from "../config/apiConfig";
-const BASE_URL = DEFAULT_BASE_URL;
+import { API_CONFIG } from "../config/apiConfig";
+const BASE_URL = API_CONFIG.CURRENT;
 
 // Type definitions
 export type RegisterRequest = {
