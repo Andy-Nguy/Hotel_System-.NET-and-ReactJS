@@ -14,6 +14,8 @@ interface Props {
   servicesTotal?: number;
   onCancel: () => void;
   onSubmit: () => void; 
+  // Indicates the booking/invoice has a confirmed extension (gia hạn)
+  isExtended?: boolean;
 }
 
 const PaymentModal: React.FC<Props> = ({
@@ -25,6 +27,8 @@ const PaymentModal: React.FC<Props> = ({
   form,
   onCancel,
   onSubmit
+  ,
+  isExtended = false
 }) => {
   // Tổng tiền phòng: đọc từ summary
   const roomTotal = Number(summary?.money?.roomTotal ?? 0);
@@ -478,24 +482,72 @@ const PaymentModal: React.FC<Props> = ({
     total = subTotal + vat + lateFee;
   }
 
-  // Detect extend fee: ONLY from backend; no guess when overdue; fallback only if note indicates extension
+  // Detect extend fee:
+  // 1) Prefer explicit backend value `summary.money.extendFee` when present
+  // 2) If not present and booking is not overdue, but `extendPercent` is available
+  //    compute fee as `perNightRate * (extendPercent/100)` then apply VAT (x1.1)
+  // 3) Otherwise fall back to previous heuristic: diff between server total and computed basic
   let ef = Number(summary?.money?.extendFee ?? 0);
   if (isOverdueBooking) {
     ef = 0;
-  } else if ((!ef || ef <= 0) && hasExtendNote) {
-    const computedBasic = Math.round((roomTotal + (serviceTotalServerPreferred > 0 ? serviceTotalServerPreferred : serviceTotalFromCombined)) * 1.1);
-    const possibleTotal = totalFromServer > 0 ? totalFromServer : NaN;
-    if (!isNaN(possibleTotal) && possibleTotal > 0) {
-      const diff = possibleTotal - computedBasic;
-      if (diff > 1000) ef = diff;
+  } else {
+    if ((!ef || ef <= 0) && extendPercent != null) {
+      // Derive a per-night room rate.
+      // Strategy:
+      // 1) Prefer an item with both `giaPhong` (or `gia`) and `soDem` > 0.
+      // 2) Otherwise prefer the item with the maximum `giaPhong`/`gia`.
+      // 3) Fallback to `roomTotal / totalNights` if total nights available, else `roomTotal`.
+      let perNight = 0;
+      try {
+        const items = Array.isArray(summary?.items) ? summary.items : [];
+        // try to find a best candidate
+        let candidate: any = null;
+        for (const it of items) {
+          const gp = Number(it?.giaPhong ?? it?.gia ?? 0) || 0;
+          const nights = Number(it?.soDem ?? it?.soNgay ?? it?.soNgayO ?? 0) || 0;
+          if (gp > 0 && nights > 0) {
+            candidate = it;
+            break;
+          }
+          if (!candidate) candidate = it;
+        }
+        if (candidate) {
+          perNight = Number(candidate?.giaPhong ?? candidate?.gia ?? 0) || 0;
+          const nights = Number(candidate?.soDem ?? candidate?.soNgay ?? candidate?.soNgayO ?? 0) || 0;
+          if ((perNight === 0 || perNight <= 0) && nights > 0) {
+            perNight = Math.round(Number(roomTotal) / nights);
+          }
+        }
+        if (!perNight || perNight <= 0) {
+          // try global total nights
+          const totalNights = items.reduce((acc: number, it: any) => acc + (Number(it?.soDem ?? it?.soNgay ?? 0) || 0), 0);
+          if (totalNights > 0) {
+            perNight = Math.round(Number(roomTotal) / totalNights);
+          }
+        }
+        if (!perNight || perNight <= 0) {
+          perNight = Math.round(Number(roomTotal));
+        }
+      } catch (e) {
+        perNight = Math.round(Number(roomTotal));
+      }
+
+      const feeBeforeVat = Math.round(perNight * (Number(extendPercent) / 100));
+      const feeWithVat = Math.round(feeBeforeVat * 1.1);
+      ef = feeWithVat;
+    } else if ((!ef || ef <= 0) && hasExtendNote) {
+      const computedBasic = Math.round((roomTotal + (serviceTotalServerPreferred > 0 ? serviceTotalServerPreferred : serviceTotalFromCombined)) * 1.1);
+      const possibleTotal = totalFromServer > 0 ? totalFromServer : NaN;
+      if (!isNaN(possibleTotal) && possibleTotal > 0) {
+        const diff = possibleTotal - computedBasic;
+        if (diff > 1000) ef = diff;
+      }
     }
   }
   let extendFee = ef;
 
-  // Do NOT double-count: only add extendFee to total when server did not include it, not overdue
-  if (extendFee > 0 && totalFromServer <= 0 && !isOverdueBooking) {
-    total = (total || 0) + Number(extendFee);
-  }
+  // Do NOT add a separate extendFee to totals here. The room total should reflect
+  // any extension (display-only change below). Avoid double-counting.
 
   // Đã thanh toán & Cần thanh toán
   const deposit = Number(summary?.money?.deposit ?? 0);
@@ -503,10 +555,24 @@ const PaymentModal: React.FC<Props> = ({
   const effectiveTotal = totalFromServer > 0 ? totalFromServer : total;
 
   let needToPay: number;
+  // Prefer any server-provided remaining amount (authoritative). If not available,
+  // prefer invoice-level remaining (`soTienConLai`) when present. Otherwise compute.
+  const invoiceRemaining = Number(
+    (Array.isArray(summary?.invoices) && summary.invoices.length > 0
+      ? summary.invoices[0]?.soTienConLai ?? summary.invoices[0]?.soTienConLai
+      : undefined) ?? 0
+  );
+
   if (isOverdueBooking) {
     needToPay = Math.max(0, Math.round(Number(total ?? 0) - Number(paid ?? 0) - Number(deposit ?? 0)));
   } else {
-    needToPay = serverRemaining > 0 ? serverRemaining : Math.max(0, effectiveTotal - deposit - paidExcludingDepositRaw);
+    if (serverRemaining > 0) {
+      needToPay = serverRemaining;
+    } else if (invoiceRemaining > 0) {
+      needToPay = invoiceRemaining;
+    } else {
+      needToPay = Math.max(0, effectiveTotal - deposit - paidExcludingDepositRaw);
+    }
   }
 
   // Khi mở modal, set default method & ghi chú
@@ -595,13 +661,14 @@ const PaymentModal: React.FC<Props> = ({
                 <strong>{paymentRow?.NgayTraPhong?.slice(0, 10)}</strong>
               </div>
             </div>
-              {/* Badge: indicate booking has extend fee if present */}
-              {Number(extendFee) > 0 && (
+              {/* Badge: indicate booking has been extended (based on notes or percent),
+                  even if backend returned no separate extendFee value. */}
+              {(!isOverdueBooking && (hasExtendNote || extendPercent != null || extendDurationLabel)) && (
                 <div style={{ marginTop: 8 }}>
                   <Tag color="gold" style={{ fontWeight: 700 }}>ĐÃ GIA HẠN</Tag>
                 </div>
               )}
-              {(extendDurationLabel || extendPercent !== null) && Number(extendFee) > 0 && (
+              {(extendDurationLabel || extendPercent !== null) && (hasExtendNote || extendPercent != null || extendDurationLabel) && (
                 <div style={{ marginTop: 8, color: '#92400e' }}>
                   {extendDurationLabel && (
                     <div style={{ fontSize: 12 }}>Thời gian gia hạn: {extendDurationLabel}</div>
@@ -697,7 +764,11 @@ const PaymentModal: React.FC<Props> = ({
                 marginBottom: 8
               }}
             >
-              <span>Tiền phòng:</span>
+              <span>
+                {(!isOverdueBooking && (hasExtendNote || extendPercent != null || extendDurationLabel))
+                  ? `Tiền phòng (gồm ${extendDurationLabel ? `Gia hạn đến ${extendDurationLabel}` : 'gia hạn'}${extendPercent != null ? ` (${Number(extendPercent)}%)` : ''}):`
+                  : 'Tiền phòng:'}
+              </span>
               <strong>{roomTotal.toLocaleString()} đ</strong>
             </div>
             <div
@@ -737,13 +808,8 @@ const PaymentModal: React.FC<Props> = ({
                 <strong style={{ color: '#d4380d' }}>+ {Number(lateFee).toLocaleString()} đ</strong>
               </div>
             )}
-            {/* Show extend fee (phí gia hạn) ONLY when detected and NOT overdue */}
-            {!isOverdueBooking && Number(extendFee) > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ color: '#d48806' }}>Phí gia hạn (đã gồm VAT):</span>
-                <strong style={{ color: '#d48806' }}>+ {Number(extendFee).toLocaleString()} đ</strong>
-              </div>
-            )}
+            {/* We no longer show a separate extend fee row. If booking is extended,
+                indicate it in the room label instead (roomTotal remains authoritative). */}
             <Divider />
             <div
               style={{

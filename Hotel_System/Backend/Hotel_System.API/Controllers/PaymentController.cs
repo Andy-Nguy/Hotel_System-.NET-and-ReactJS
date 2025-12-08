@@ -385,6 +385,7 @@ namespace Hotel_System.API.Controllers
                         {
                             IdhoaDon = idHoaDon,
                             IddichVu = serviceId,  // Always set with valid service ID
+                            IdChiTiet = svc.IdChiTiet,
                             IdkhuyenMaiCombo = comboId,
                             TienDichVu = tienDichVu,
                             ThoiGianThucHien = thoiGianThucHien,
@@ -925,9 +926,67 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                 // Append refund note to the invoice for traceability
                 hoaDon.GhiChu = string.IsNullOrWhiteSpace(hoaDon.GhiChu) ? ghiChu : hoaDon.GhiChu + " | " + ghiChu;
 
+                // IMPORTANT: deduct the refunded amount from the invoice's recorded paid amount
+                try
+                {
+                    decimal currentPaid = hoaDon.TienThanhToan ?? 0m;
+                    // Treat the refund amount from the client as VAT-inclusive (already includes VAT).
+                    // Do NOT auto-convert it to VAT-inclusive to avoid double-applying VAT.
+                    decimal refund = Math.Round(req.RefundAmount, 0);
+                    var newPaid = currentPaid - refund;
+                    if (newPaid < 0m) newPaid = 0m;
+
+                    // Ensure stored paid amount is VAT-inclusive and does not exceed invoice total
+                    if (hoaDon.TongTien > 0m && newPaid > hoaDon.TongTien)
+                    {
+                        _logger.LogWarning("Refund resulted in newPaid ({NewPaid}) > TongTien ({TongTien}) for invoice {Invoice}. Capping to TongTien.", newPaid, hoaDon.TongTien, hoaDon.IdhoaDon);
+                        newPaid = hoaDon.TongTien;
+                    }
+
+                    hoaDon.TienThanhToan = newPaid;
+
+                    // Recalculate invoice payment status using VAT-inclusive TongTien
+                    if (hoaDon.TongTien > 0m)
+                    {
+                        var remaining = hoaDon.TongTien - (hoaDon.TienThanhToan ?? 0m);
+                        if (remaining <= 0m)
+                        {
+                            hoaDon.TrangThaiThanhToan = 2; // paid
+                        }
+                        else
+                        {
+                            hoaDon.TrangThaiThanhToan = 1; // pending
+                        }
+                    }
+
+                    // Recalculate booking-level payment status (sum over invoices)
+                    try
+                    {
+                        var booking = await _context.DatPhongs
+                            .Include(d => d.HoaDons)
+                            .FirstOrDefaultAsync(d => d.IddatPhong == hoaDon.IddatPhong);
+
+                        if (booking != null)
+                        {
+                            decimal totalInvoices = booking.HoaDons?.Sum(h => h.TongTien) ?? 0m;
+                            decimal totalPaid = booking.HoaDons?.Sum(h => h.TienThanhToan ?? 0m) ?? 0m;
+                            var remainingAll = Math.Max(0m, totalInvoices - totalPaid);
+                            booking.TrangThaiThanhToan = remainingAll > 0m ? 1 : 2;
+                        }
+                    }
+                    catch (Exception ex2)
+                    {
+                        _logger.LogWarning(ex2, "Failed to recalc booking payment status after refund for invoice {InvoiceId}", hoaDon.IdhoaDon);
+                    }
+                }
+                catch (Exception exCalc)
+                {
+                    _logger.LogWarning(exCalc, "Failed to apply refund arithmetic for invoice {InvoiceId}", hoaDon.IdhoaDon);
+                }
+
                 await _context.SaveChangesAsync();
 
-                return Ok(new { success = true, message = "Hoàn tiền đã được ghi nhận", idLichSu = ls.IdlichSu });
+                return Ok(new { success = true, message = "Hoàn tiền đã được ghi nhận và cập nhật vào hóa đơn", idLichSu = ls.IdlichSu });
             }
             catch (Exception ex)
             {

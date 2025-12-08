@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import checkinApi from '../../../api/checkinApi';
-import { Button, Space, Tag, Segmented } from "antd";
+import FormService from './FormService';
+import checkoutApi from '../../../api/checkout.Api';
+import * as serviceApi from '../../../api/serviceApi';
+import { Button, Space, Tag, Segmented, Card, Form, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import DataTable from "../DataTable";
 
@@ -257,7 +260,200 @@ const CheckinTable: React.FC<Props> = ({
       },
     },
   ];
+  // Helper: format money
+  const fmt = (n: any) => (n == null ? "-" : Number(n).toLocaleString() + " đ");
 
+  // Service viewer state
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerServices, setViewerServices] = useState<any[]>([]);
+  const [viewerBookingId, setViewerBookingId] = useState<string | null>(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerForm] = Form.useForm();
+
+  const openServiceViewer = async (row: BookingRow) => {
+    try {
+      setViewerLoading(true);
+      // Do NOT call parent invoice/payment handler here.
+      // Opening the service viewer should not open the payment/invoice form.
+
+      const id = (row as any).IddatPhong ?? (row as any).IdDatPhong ?? row.IddatPhong;
+      const summary = await checkoutApi.getSummary(id as any);
+      const services = summary?.data?.services ?? summary?.services ?? summary?.DichVu ?? summary?.dichVu ?? [];
+
+      const mapped = Array.isArray(services)
+        ? services.map((s: any, idx: number) => {
+            const qty = Number(s?.SoLuong ?? s?.SoLuongDichVu ?? s?.Qty ?? 1) || 1;
+            // Prefer explicit unit price fields, otherwise derive from TienDichVu / qty
+            const unitCandidate = s?.DonGia ?? s?.donGia ?? s?.DonGiaDichVu ?? s?.Gia ?? s?.gia;
+            const unit = unitCandidate != null
+              ? Number(unitCandidate)
+              : (s?.TienDichVu != null ? Math.round(Number(s.TienDichVu) / qty) : 0);
+            const amount = s?.TienDichVu ?? s?.thanhTien ?? (unit * qty);
+            return {
+              serviceId: s?.IddichVu ?? s?.iddichVu ?? s?.IdDichVu ?? s?.Id ?? null,
+              serviceName: s?.TenDichVu ?? s?.serviceName ?? null,
+              quantity: qty,
+              price: Number(unit),
+              amount: Number(amount),
+              GhiChu: s?.GhiChu ?? s?.Note ?? ''
+            };
+          })
+        : [];
+
+      // If all amounts are zero (or no services), try a fallback: fetch booking with Cthddvs to get real TienDichVu
+      let finalMapped = mapped;
+      const totalAmount = mapped.reduce((a: number, b: any) => a + Number(b.amount || 0), 0);
+      if (totalAmount === 0) {
+        try {
+          const booking = await checkinApi.getBookingById(id as any);
+          const hoaDons = booking?.HoaDons ?? booking?.hoaDons ?? booking?.invoices ?? [];
+          const lines: any[] = [];
+          if (Array.isArray(hoaDons)) {
+            hoaDons.forEach((h: any) => {
+              const cth = h?.Cthddvs ?? h?.cthddvs ?? h?.Cthddv ?? h?.cthddv ?? [];
+              if (Array.isArray(cth)) {
+                cth.forEach((c: any) => {
+                  lines.push({
+                    serviceName: c?.IddichVuNavigation?.TenDichVu ?? c?.TenDichVu ?? c?.IddichVu ?? c?.TenCombo ?? 'Dịch vụ',
+                    quantity: Number(c?.SoLuong ?? c?.SoLuongDichVu ?? 1),
+                    price: Number(c?.TienDichVu ?? c?.donGia ?? 0),
+                    amount: Number(c?.TienDichVu ?? c?.thanhTien ?? 0),
+                    GhiChu: c?.GhiChu ?? ''
+                  });
+                });
+              }
+            });
+          }
+
+          if (lines.length > 0) finalMapped = lines.map((x, i) => ({ key: i, ...x }));
+        } catch (e) {
+          // ignore fallback error
+        }
+      }
+
+      // Enrich service names by fetching service details for any serviceId present and missing name
+      try {
+        const idsToFetch = Array.from(new Set(mapped.filter(m => m.serviceId && !m.serviceName).map(m => String(m.serviceId))));
+        if (idsToFetch.length > 0) {
+          const fetches = await Promise.all(idsToFetch.map(id => serviceApi.getServiceById(id).catch(() => null)));
+          const svcMap: Record<string, any> = {};
+          idsToFetch.forEach((id, i) => { if (fetches[i]) svcMap[id] = fetches[i]; });
+          finalMapped = finalMapped.map((m: any) => {
+            if ((!m.serviceName || m.serviceName.toString().startsWith('Dịch vụ')) && m.serviceId && svcMap[String(m.serviceId)]) {
+              return { ...m, serviceName: svcMap[String(m.serviceId)].tenDichVu ?? svcMap[String(m.serviceId)].tenDichVu ?? svcMap[String(m.serviceId)].tenDichVu };
+            }
+            return m;
+          });
+        }
+      } catch (e) {
+        // ignore enrichment errors
+      }
+
+      setViewerServices(mapped);
+      setViewerServices(finalMapped);
+      setViewerBookingId(String(id ?? ''));
+      // set form fields for viewer
+      viewerForm.setFieldsValue({ amount: finalMapped.reduce((a: any, b: any) => a + Number(b.amount || 0), 0), GhiChu: '' });
+      setViewerVisible(true);
+    } catch (e: any) {
+      message.error(e?.message || 'Không thể tải chi tiết dịch vụ');
+    } finally {
+      setViewerLoading(false);
+    }
+  };
+
+  // Render card UI for "using" view, keep table for other views
+  if (viewMode === "using") {
+    return (
+      <div>
+        <div style={{ marginBottom: 16 }}>
+          <Segmented
+            value={viewMode}
+            onChange={(v) => onViewChange?.(v as "using" | "checkin")}
+            options={[{ label: "Đang sử dụng", value: "using" }]}
+          />
+        </div>
+
+        {(data || []).map((row) => {
+          const roomLines = getRoomLines(row);
+          const totalRooms = Array.isArray(roomLines) && roomLines.length > 0 ? roomLines.length : 1;
+
+          return (
+            <div key={row.IddatPhong} style={{ border: "1px solid #e6e6e6", padding: 16, marginBottom: 18, borderRadius: 8, background: "#ffffff" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800 }}>{(row as any).TenKhachHang ?? "Khách"}</div>
+                  <div style={{ color: "#64748b", fontSize: 14 }}>
+                    Check-in: {row.NgayNhanPhong ?? "-"} &nbsp;•&nbsp; Trả: {row.NgayTraPhong ?? "-"}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <div style={{ textAlign: "right", marginRight: 8 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{totalRooms} phòng</div>
+                    <div style={{ fontSize: 14, color: "#64748b", fontWeight: 600 }}>Tổng: {fmt(row.TongTien)}</div>
+                  </div>
+
+                  <Space>
+                    <Button type="primary" size="large" onClick={() => onPay?.(row)}>Thanh toán</Button>
+                    <Button size="large" onClick={() => onAddService?.(row)}>Thêm phòng</Button>
+                  </Space>
+                </div>
+              </div>
+
+              {/* Cards per room */}
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {((roomLines && roomLines.length > 0) ? roomLines : [null]).map((it: any, idx: number) => {
+                  const { ten, so } = extractRoomInfo(it || {});
+                  const primary = ten ?? (so ? `Phòng ${so}` : `#${idx + 1}`);
+
+                  // price extraction heuristic
+                  const price = it?.DonGia ?? it?.Gia ?? it?.GiaPhong ?? it?.Price ?? null;
+
+                  return (
+                    <Card key={idx} hoverable style={{ width: 340, padding: 16, borderRadius: 8, boxShadow: "0 6px 18px rgba(15,23,42,0.06)" }}>
+                      <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 4 }}>{primary}</div>
+                      <div style={{ fontSize: 13, color: "#64748b", marginBottom: 10 }}>Check-in: {row.NgayNhanPhong ?? "-"}</div>
+
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
+                        <div style={{ fontSize: 14 }}>
+                          <div style={{ marginBottom: 6 }}>Giá: {price ? `${Number(price).toLocaleString()} đ/đêm` : "-"}</div>
+                          <div>Trạng thái: <Tag color="green" style={{ fontSize: 12, padding: '2px 8px' }}>Đang ở</Tag></div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 13, color: "#64748b" }}>Số khách</div>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>{it?.SoKhach ?? (it?.SoNguoi ?? "-")}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 12 }}>
+                        <Button type="primary" onClick={() => onAddService?.(row)} style={{ minWidth: 140 }}>Thêm dịch vụ</Button>
+                        <Button onClick={() => openServiceViewer(row)} style={{ minWidth: 140 }}>Xem chi tiết dịch vụ</Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+        {/* Service viewer modal (read-only) */}
+        <FormService
+          visible={viewerVisible}
+          selectedServices={viewerServices}
+          servicesTotal={viewerServices.reduce((a, b) => a + Number(b.amount || 0), 0)}
+          form={viewerForm}
+          onCancel={() => setViewerVisible(false)}
+          onSubmit={async () => setViewerVisible(false)}
+          bookingId={viewerBookingId ?? undefined}
+          readOnly={true}
+        />
+      </div>
+    );
+  }
+
+  // Fallback: original table view (e.g., checkin view)
   return (
     <div>
       <div style={{ marginBottom: 12 }}>
