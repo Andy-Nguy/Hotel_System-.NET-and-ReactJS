@@ -26,9 +26,6 @@ namespace Hotel_System.API.Controllers
         public string IddichVu { get; set; } = string.Empty;
         public decimal? TienDichVu { get; set; }
 
-        // Optional: ID of the corresponding ChiTietDatPhong (booking detail)
-        public int? IdChiTiet { get; set; }
-
         public string? TenDichVu { get; set; }
         public decimal? DonGia { get; set; }
         public decimal? TongTien { get; set; }
@@ -867,7 +864,6 @@ namespace Hotel_System.API.Controllers
                         {
                             IdhoaDon = hoaDon.IdhoaDon,
                             IddichVu = dichVuId,
-                            IdChiTiet = item.IdChiTiet,
                             IdkhuyenMaiCombo = comboId,
                             TienDichVu = Math.Round(unitToStore, 0, MidpointRounding.AwayFromZero),
                             IdkhuyenMai = null,
@@ -1023,7 +1019,7 @@ namespace Hotel_System.API.Controllers
                     tienPhong = hoaDon!.TienPhong,
                     tongTien = hoaDon!.TongTien,
                     tienThanhToan = hoaDon!.TienThanhToan,
-                    trangThaiThanhToan = ComputePaymentStatus(hoaDon!)
+                    trangThaiThanhToan = hoaDon!.TrangThaiThanhToan
                 };
 
                 return Ok(new
@@ -1125,7 +1121,6 @@ namespace Hotel_System.API.Controllers
                             {
                                 IdhoaDon = existingInvoice.IdhoaDon,
                                 IddichVu = svc.IddichVu,
-                                IdChiTiet = svc.IdChiTiet,
                                 TienDichVu = Math.Round(tienDichVu),
                                 ThoiGianThucHien = svc.ThoiGianThucHien ?? DateTime.Now,
                                 TrangThai = "Hoạt động"
@@ -1187,7 +1182,7 @@ namespace Hotel_System.API.Controllers
                         tongTien = existingInvoice.TongTien,
                         tienCoc = existingInvoice.TienCoc,
                         tienThanhToan = existingInvoice.TienThanhToan,
-                        trangThaiThanhToan = ComputePaymentStatus(existingInvoice),
+                        trangThaiThanhToan = existingInvoice.TrangThaiThanhToan,
                         paymentUrl = paymentUrlExisting,
                         soTienConLai = soTienConLaiExisting
                     });
@@ -1237,7 +1232,6 @@ namespace Hotel_System.API.Controllers
                         {
                             IdhoaDon = newIdHoaDon,
                             IddichVu = svc.IddichVu,
-                            IdChiTiet = svc.IdChiTiet,
                             TienDichVu = Math.Round(tienDichVu),
                             ThoiGianThucHien = svc.ThoiGianThucHien ?? DateTime.Now,
                             TrangThai = "Hoạt động"
@@ -2148,15 +2142,6 @@ namespace Hotel_System.API.Controllers
             await _context.SaveChangesAsync();
         }
 
-        // Compute derived payment status from amounts to avoid returning stale DB values
-        private int ComputePaymentStatus(HoaDon hoaDon)
-        {
-            if (hoaDon == null) return 1;
-            decimal tong = hoaDon.TongTien;
-            decimal paid = hoaDon.TienThanhToan ?? 0m;
-            return ((tong - paid) > 1000m) ? 1 : 2;
-        }
-
         private async Task SendReviewReminderEmail(string idDatPhong, string email, string hoTen)
         {
             try
@@ -2712,7 +2697,7 @@ namespace Hotel_System.API.Controllers
                         IdhoaDon = hoaDon.IdhoaDon,
                         TongTien = hoaDon.TongTien,
                         TienThanhToan = hoaDon.TienThanhToan,
-                        TrangThaiThanhToan = ComputePaymentStatus(hoaDon),
+                        TrangThaiThanhToan = hoaDon.TrangThaiThanhToan,
                         GhiChu = hoaDon.GhiChu,
                         Cthddvs = hoaDon.Cthddvs?.Select(c => new { c.IdhoaDon, c.IddichVu, c.TienDichVu, c.ThoiGianThucHien, c.TrangThai })
                     }

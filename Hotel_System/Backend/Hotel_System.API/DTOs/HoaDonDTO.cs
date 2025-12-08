@@ -61,8 +61,6 @@ public class ServiceLineDto
     public string? Idphong { get; set; }
     public int? SoPhong { get; set; }
     public DateTime? ThoiGianThucHien { get; set; }
-    // Optional: map booking detail id
-    public int? IdChiTiet { get; set; }
 }
 
 
@@ -188,8 +186,6 @@ public class ServiceLineRequest
     /// </summary>
     public string? ThoiGianBatDau { get; set; }
     public string? ThoiGianKetThuc { get; set; }
-    // Optional: related booking detail id
-    public int? IdChiTiet { get; set; }
 }
 
 /// <summary>

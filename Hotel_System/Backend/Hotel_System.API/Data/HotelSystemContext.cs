@@ -156,7 +156,6 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.TienDichVu)
                 .HasDefaultValue(0m)
                 .HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.IdChiTiet).HasColumnName("IDChiTiet");
             // The database schema for CTHDDV does not include an IDKhuyenMai column.
             // Keep the model property for application-side use but prevent EF Core
             // from mapping it (and therefore querying a non-existent column).
@@ -177,10 +176,6 @@ public partial class HotelSystemContext : DbContext
             entity.HasOne(d => d.IdhoaDonNavigation).WithMany(p => p.Cthddvs)
                 .HasForeignKey(d => d.IdhoaDon)
                 .HasConstraintName("FK_CTHDDV_HoaDon");
-
-            entity.HasOne(d => d.IdChiTietNavigation).WithMany()
-                .HasForeignKey(d => d.IdChiTiet)
-                .HasConstraintName("FK_CTHDDV_ChiTietDatPhong");
         });
 
         modelBuilder.Entity<ChiTietDatPhong>(entity =>

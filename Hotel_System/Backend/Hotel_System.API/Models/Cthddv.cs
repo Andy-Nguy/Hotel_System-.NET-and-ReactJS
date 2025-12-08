@@ -13,9 +13,6 @@ public partial class Cthddv
 
     public decimal? TienDichVu { get; set; }
 
-    // Optional FK to the booking detail (ChiTietDatPhong.IDChiTiet)
-    public int? IdChiTiet { get; set; }
-
     // Applied promotion id (optional) for audit/tracking
     public string? IdkhuyenMai { get; set; }
     
@@ -34,7 +31,4 @@ public partial class Cthddv
     public virtual HoaDon IdhoaDonNavigation { get; set; } = null!;
     
     public virtual KhuyenMaiCombo? IdkhuyenMaiComboNavigation { get; set; }
-    
-    // Navigation to booking detail
-    public virtual ChiTietDatPhong? IdChiTietNavigation { get; set; }
 }

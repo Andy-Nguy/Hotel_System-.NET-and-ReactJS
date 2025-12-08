@@ -385,7 +385,6 @@ namespace Hotel_System.API.Controllers
                         {
                             IdhoaDon = idHoaDon,
                             IddichVu = serviceId,  // Always set with valid service ID
-                            IdChiTiet = svc.IdChiTiet,
                             IdkhuyenMaiCombo = comboId,
                             TienDichVu = tienDichVu,
                             ThoiGianThucHien = thoiGianThucHien,
