@@ -29,8 +29,8 @@ namespace Hotel_System.API.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<OverdueMonitorService> _logger;
 
-        // Run every 5 minutes
-        private readonly TimeSpan _interval = TimeSpan.FromMinutes(5);
+        // Run every 10 seconds (short interval for prompt overdue detection)
+        private readonly TimeSpan _interval = TimeSpan.FromSeconds(10);
 
         public OverdueMonitorService(
             IServiceScopeFactory scopeFactory,
@@ -40,9 +40,68 @@ namespace Hotel_System.API.Services
             _logger = logger;
         }
 
+        private async Task NormalizeExistingOverdues(HotelSystemContext db, CancellationToken stoppingToken)
+        {
+            try
+            {
+                var overdueBookings = await db.DatPhongs
+                    .Include(d => d.HoaDons)
+                    .Where(d => d.TrangThai == 5)
+                    .ToListAsync(stoppingToken);
+
+                if (!overdueBookings.Any()) return;
+
+                _logger.LogInformation("OverdueMonitorService: normalizing {count} existing overdue booking(s)", overdueBookings.Count);
+
+                foreach (var dp in overdueBookings)
+                {
+                    try
+                    {
+                        if (dp.HoaDons != null)
+                        {
+                            // For overdue bookings, force all invoices and booking-level status to 1 (Chưa thanh toán)
+                            foreach (var h in dp.HoaDons)
+                            {
+                                try
+                                {
+                                    h.TrangThaiThanhToan = 1;
+                                }
+                                catch { }
+                            }
+
+                            dp.TrangThaiThanhToan = 1;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "OverdueMonitorService: failed to normalize booking {id}", dp.IddatPhong);
+                    }
+                }
+
+                await db.SaveChangesAsync(stoppingToken);
+                _logger.LogInformation("OverdueMonitorService: normalization complete");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "OverdueMonitorService: normalization error");
+            }
+        }
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("OverdueMonitorService started");
+            // On startup, ensure any existing bookings already marked as overdue
+            // have their invoice and booking payment statuses normalized.
+            try
+            {
+                using var startScope = _scopeFactory.CreateScope();
+                var startDb = startScope.ServiceProvider.GetRequiredService<HotelSystemContext>();
+                await NormalizeExistingOverdues(startDb, stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "OverdueMonitorService: failed to normalize existing overdues on startup");
+            }
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -262,9 +321,26 @@ namespace Hotel_System.API.Services
                 latestInvoice.TongTien = grandTotal;
                 dp.TongTien = grandTotal;
 
-                // Đặt trạng thái thanh toán = 1 (Chưa thanh toán) vì có thêm phí
-                latestInvoice.TrangThaiThanhToan = 1;
-                dp.TrangThaiThanhToan = 1;
+                // For overdue booking, force all invoices and booking-level payment status to 1 (Chưa thanh toán)
+                if (dp.HoaDons != null)
+                {
+                    foreach (var h in dp.HoaDons)
+                    {
+                        try
+                        {
+                            h.TrangThaiThanhToan = 1;
+                        }
+                        catch { /* ignore per-invoice errors */ }
+                    }
+
+                    dp.TrangThaiThanhToan = 1;
+                }
+                else
+                {
+                    // Fallback: mark latest and booking as unpaid
+                    latestInvoice.TrangThaiThanhToan = 1;
+                    dp.TrangThaiThanhToan = 1;
+                }
 
                 // Thêm ghi chú
                 latestInvoice.GhiChu = (latestInvoice.GhiChu ?? string.Empty)

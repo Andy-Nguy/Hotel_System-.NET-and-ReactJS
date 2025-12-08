@@ -1023,7 +1023,7 @@ namespace Hotel_System.API.Controllers
                     tienPhong = hoaDon!.TienPhong,
                     tongTien = hoaDon!.TongTien,
                     tienThanhToan = hoaDon!.TienThanhToan,
-                    trangThaiThanhToan = hoaDon!.TrangThaiThanhToan
+                    trangThaiThanhToan = ComputePaymentStatus(hoaDon!)
                 };
 
                 return Ok(new
@@ -1187,7 +1187,7 @@ namespace Hotel_System.API.Controllers
                         tongTien = existingInvoice.TongTien,
                         tienCoc = existingInvoice.TienCoc,
                         tienThanhToan = existingInvoice.TienThanhToan,
-                        trangThaiThanhToan = existingInvoice.TrangThaiThanhToan,
+                        trangThaiThanhToan = ComputePaymentStatus(existingInvoice),
                         paymentUrl = paymentUrlExisting,
                         soTienConLai = soTienConLaiExisting
                     });
@@ -2148,6 +2148,15 @@ namespace Hotel_System.API.Controllers
             await _context.SaveChangesAsync();
         }
 
+        // Compute derived payment status from amounts to avoid returning stale DB values
+        private int ComputePaymentStatus(HoaDon hoaDon)
+        {
+            if (hoaDon == null) return 1;
+            decimal tong = hoaDon.TongTien;
+            decimal paid = hoaDon.TienThanhToan ?? 0m;
+            return ((tong - paid) > 1000m) ? 1 : 2;
+        }
+
         private async Task SendReviewReminderEmail(string idDatPhong, string email, string hoTen)
         {
             try
@@ -2703,7 +2712,7 @@ namespace Hotel_System.API.Controllers
                         IdhoaDon = hoaDon.IdhoaDon,
                         TongTien = hoaDon.TongTien,
                         TienThanhToan = hoaDon.TienThanhToan,
-                        TrangThaiThanhToan = hoaDon.TrangThaiThanhToan,
+                        TrangThaiThanhToan = ComputePaymentStatus(hoaDon),
                         GhiChu = hoaDon.GhiChu,
                         Cthddvs = hoaDon.Cthddvs?.Select(c => new { c.IdhoaDon, c.IddichVu, c.TienDichVu, c.ThoiGianThucHien, c.TrangThai })
                     }
