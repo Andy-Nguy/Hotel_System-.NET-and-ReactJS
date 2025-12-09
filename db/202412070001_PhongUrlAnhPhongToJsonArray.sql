@@ -13,3 +13,6 @@ ADD CONSTRAINT phong_urlanhphong_array_valid CHECK (
     AND (UrlAnhPhong->0->>'u') IS NOT NULL
     AND trim(UrlAnhPhong->0->>'u') <> ''
 );
+
+ALTER TABLE HoaDon
+ADD COLUMN DiemSuDung INT DEFAULT 0;
