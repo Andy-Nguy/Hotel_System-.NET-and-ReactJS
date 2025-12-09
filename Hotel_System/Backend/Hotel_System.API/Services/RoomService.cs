@@ -138,7 +138,7 @@ namespace Hotel_System.API.Services
                     RoomNumber = p.SoPhong,
                     Description = p.MoTa ?? "",
                     BasePricePerNight = p.GiaCoBanMotDem ?? 0,
-                    RawImageUrl = p.UrlAnhPhong,
+                    RawImageUrls = p.UrlAnhPhong,
                     RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong ?? "" : "",
                     MaxOccupancy = p.SoNguoiToiDa ?? 0
                 })
@@ -171,7 +171,11 @@ namespace Hotel_System.API.Services
                     RoomNumber = r.RoomNumber,
                     Description = r.Description,
                     BasePricePerNight = r.BasePricePerNight,
-                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomImageUrl = ResolveImageUrl((r.RawImageUrls != null && r.RawImageUrls.Count > 0) ? r.RawImageUrls[0] : null) ?? "",
+                    // Add multiple images for carousel/thumbnails in frontend
+                    RoomImageUrls = (r.RawImageUrls != null && r.RawImageUrls.Count > 0) 
+                        ? r.RawImageUrls.Select(img => ResolveImageUrl(img) ?? "").Where(u => !string.IsNullOrEmpty(u)).ToList()
+                        : new List<string>(),
                     RoomTypeName = r.RoomTypeName,
                     MaxOccupancy = r.MaxOccupancy
                 };
@@ -187,9 +191,9 @@ namespace Hotel_System.API.Services
                     {
                         response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
                     }
-                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    else if ((promo.LoaiGiamGia == "amount" || promo.LoaiGiamGia == "fixed") && promo.GiaTriGiam.HasValue)
                     {
-                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                        response.DiscountedPrice = Math.Max(0, r.BasePricePerNight - promo.GiaTriGiam.Value);
                     }
                 }
 
@@ -262,7 +266,7 @@ namespace Hotel_System.API.Services
                     RoomNumber = p.SoPhong,
                     Description = p.MoTa ?? "",
                     BasePricePerNight = p.GiaCoBanMotDem ?? 0,
-                    RawImageUrl = p.UrlAnhPhong,
+                    RawImageUrls = p.UrlAnhPhong,
                     RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong ?? "" : "",
                     MaxOccupancy = p.SoNguoiToiDa ?? 0
                 })
@@ -295,7 +299,11 @@ namespace Hotel_System.API.Services
                     RoomNumber = r.RoomNumber,
                     Description = r.Description,
                     BasePricePerNight = r.BasePricePerNight,
-                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomImageUrl = ResolveImageUrl((r.RawImageUrls != null && r.RawImageUrls.Count > 0) ? r.RawImageUrls[0] : null) ?? "",
+                    // Add multiple images for carousel/thumbnails in frontend
+                    RoomImageUrls = (r.RawImageUrls != null && r.RawImageUrls.Count > 0) 
+                        ? r.RawImageUrls.Select(img => ResolveImageUrl(img) ?? "").Where(u => !string.IsNullOrEmpty(u)).ToList()
+                        : new List<string>(),
                     RoomTypeName = r.RoomTypeName,
                     MaxOccupancy = r.MaxOccupancy
                 };
@@ -311,9 +319,9 @@ namespace Hotel_System.API.Services
                     {
                         response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
                     }
-                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    else if ((promo.LoaiGiamGia == "amount" || promo.LoaiGiamGia == "fixed") && promo.GiaTriGiam.HasValue)
                     {
-                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                        response.DiscountedPrice = Math.Max(0, r.BasePricePerNight - promo.GiaTriGiam.Value);
                     }
                 }
 

@@ -15,9 +15,10 @@ import {
   Alert,
 } from "antd";
 import { UploadOutlined, EyeOutlined } from "@ant-design/icons";
+import blogApi from "../../api/blogApi";
 
 interface BlogFormData {
-  id?: string;
+  id?: number;
   title: string;
   category: string;
   type: "internal" | "external";
@@ -88,12 +89,7 @@ const BlogEdit: React.FC = () => {
 
     const fetchBlog = async () => {
       try {
-        const res = await fetch(`/api/blog/${blogId}`);
-        if (!res.ok) {
-          message.error("❌ Không tải được bài viết");
-          return;
-        }
-        const data = await res.json();
+        const data = await blogApi.getBlogBySlug(blogId);
         const initialData = {
           id: data.id,
           title: data.title || "",
@@ -117,7 +113,7 @@ const BlogEdit: React.FC = () => {
         setFormData(initialData);
       } catch (e) {
         console.error("Fetch error:", e);
-        message.error("❌ Lỗi khi tải bài viết");
+        message.error("❌ Không tải được bài viết");
       } finally {
         setLoading(false);
       }
@@ -132,42 +128,17 @@ const BlogEdit: React.FC = () => {
     if (!file || !formData) return;
     setUploading(true);
     try {
-      // Delete old image first if it exists and is a local path
-      if (formData.image && formData.image.startsWith("/img/blog/")) {
-        try {
-          await fetch(
-            `/api/blog/delete-image?path=${encodeURIComponent(formData.image)}`,
-            {
-              method: "DELETE",
-            }
-          );
-        } catch (e) {
-          console.warn("Failed to delete old image:", e);
-        }
-      }
-
-      const formDataUpload = new FormData();
-      formDataUpload.append("file", file);
-
       const title = formData.title || "";
-      const res = await fetch(
-        `/admin/blogs/upload-image?title=${encodeURIComponent(
-          title
-        )}&type=banner`,
-        {
-          method: "POST",
-          body: formDataUpload,
-        }
-      );
-
-      if (res.ok) {
-        const data = await res.json();
-        setFormData((prev) => (prev ? { ...prev, image: data.url } : null));
-        message.success("✔️ Ảnh cover được upload thành công");
+      // If existing cover is a local server path, upload replacing same filename
+      if (formData.image && formData.image.startsWith("/img/blog/")) {
+        const replacePath = formData.image; // backend will overwrite this file
+          const data = await blogApi.uploadBlogImage(file, title, "banner", replacePath);
+          setFormData((prev) => (prev ? { ...prev, image: data.url } : null));
       } else {
-        const err = await res.text();
-        message.error(`❌ Upload ảnh thất bại: ${err}`);
+          const data = await blogApi.uploadBlogImage(file, title, "banner");
+          setFormData((prev) => (prev ? { ...prev, image: data.url } : null));
       }
+      message.success("✔️ Ảnh cover được upload thành công");
     } catch (e) {
       console.error("Upload error:", e);
       message.error("❌ Lỗi upload ảnh cover");
@@ -180,34 +151,17 @@ const BlogEdit: React.FC = () => {
     if (!file || !formData) return;
     setUploading(true);
     try {
-      const formDataUpload = new FormData();
-      formDataUpload.append("file", file);
-
       const title = formData.title || "blog";
-      const res = await fetch(
-        `/admin/blogs/upload-image?title=${encodeURIComponent(
-          title
-        )}&type=gallery`,
-        {
-          method: "POST",
-          body: formDataUpload,
-        }
+      const data = await blogApi.uploadBlogImage(file, title, "gallery");
+      setFormData((prev) =>
+        prev
+          ? {
+              ...prev,
+              images: [...(prev.images || []), data.url],
+            }
+          : null
       );
-
-      if (res.ok) {
-        const data = await res.json();
-        setFormData((prev) =>
-          prev
-            ? {
-                ...prev,
-                images: [...(prev.images || []), data.url],
-              }
-            : null
-        );
-        message.success("✔️ Ảnh được thêm vào gallery");
-      } else {
-        message.error("❌ Upload ảnh gallery thất bại");
-      }
+      message.success("✔️ Ảnh được thêm vào gallery");
     } catch (e) {
       console.error("Gallery upload error:", e);
       message.error("❌ Lỗi upload ảnh gallery");
@@ -467,27 +421,16 @@ const BlogEdit: React.FC = () => {
         status: formData.status || originalData.status || "DRAFT",
       };
 
-      const res = await fetch(`/api/blog/${formData.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        message.success("✔️ Cập nhật bài viết thành công!");
-        // Navigate back to BlogManager
-        setTimeout(() => {
-          navigateToManager();
-        }, 1500);
-      } else {
-        const errData = await res.json();
-        const errorMsg =
-          errData.error || errData.message || "Lỗi không xác định";
-        message.error(`❌ ${errorMsg}`);
-      }
-    } catch (e) {
+      await blogApi.updateBlog(Number(formData.id), payload as any);
+      message.success("✔️ Cập nhật bài viết thành công!");
+      // Navigate back to BlogManager
+      setTimeout(() => {
+        navigateToManager();
+      }, 1500);
+    } catch (e: any) {
       console.error("Submit error:", e);
-      message.error("❌ Lỗi cập nhật bài viết. Vui lòng thử lại.");
+      const errorMsg = e.response?.data?.error || e.message || "Lỗi không xác định";
+      message.error(`❌ ${errorMsg}`);
     } finally {
       setSubmitting(false);
     }
@@ -498,25 +441,15 @@ const BlogEdit: React.FC = () => {
     if (!formData || !formData.id) return;
     setSubmitting(true);
     try {
-      const payload: any = { id: formData.id, status: newStatus };
-      const res = await fetch(`/api/blog/${formData.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        message.success("Cập nhật trạng thái thành công");
-        setFormData((prev) =>
-          prev ? { ...prev, status: newStatus as any } : prev
-        );
-        return;
-      }
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(
-        errData.error || errData.message || "Lỗi cập nhật trạng thái"
+      const payload: any = { id: Number(formData.id), status: newStatus };
+      await blogApi.updateBlog(Number(formData.id), payload);
+      message.success("Cập nhật trạng thái thành công");
+      setFormData((prev) =>
+        prev ? { ...prev, status: newStatus as any } : prev
       );
     } catch (e: any) {
-      message.error(`Lỗi: ${e.message}`);
+      const errorMsg = e.response?.data?.error || e.message || "Lỗi cập nhật trạng thái";
+      message.error(`Lỗi: ${errorMsg}`);
     } finally {
       setSubmitting(false);
     }

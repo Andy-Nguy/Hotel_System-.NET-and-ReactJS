@@ -1,13 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Room,
   getRooms,
   getRoomTypes,
-  createRoom,
   updateRoom,
   deleteRoom,
   RoomType,
 } from "../../api/roomsApi";
+
+// --- START: HELPER FUNCTIONS ---
 
 const statusColor = (s?: string | null) => {
   if (!s) return "#6b7280";
@@ -29,6 +30,410 @@ const statusEmoji = (s?: string | null) => {
   return "⚪";
 };
 
+// Module-level helper so all nested components can use it.
+const extractPrimary = (val: any): string => {
+  if (!val) return "/img/room/default.webp";
+  try {
+    if (typeof val === "string") return val;
+    if (Array.isArray(val)) {
+      if (val.length === 0) return "/img/room/default.webp";
+      return extractPrimary(val[0]);
+    }
+    if (typeof val === "object") {
+      const u = (val as any).u;
+      if (!u) return "/img/room/default.webp";
+      return extractPrimary(u);
+    }
+  } catch (e) {
+    return "/img/room/default.webp";
+  }
+  return "/img/room/default.webp";
+};
+
+// Helper để chuẩn hóa mảng ảnh từ dữ liệu phòng
+const normalizeImages = (urlAnhPhong: any): string[] => {
+  const images = Array.isArray(urlAnhPhong)
+    ? urlAnhPhong
+    : typeof urlAnhPhong === 'string' ? [urlAnhPhong] : [];
+  return images.filter(url => typeof url === 'string' && url.trim() !== '');
+};
+
+// --- END: HELPER FUNCTIONS ---
+
+// ----------------------------------------------------------------------
+// --- START: IMAGE PREVIEW MODAL ---
+
+const ImagePreviewModal: React.FC<{
+  images: string[];
+  initialIndex?: number;
+  alt: string;
+  visible: boolean;
+  onClose: () => void;
+}> = ({ images, initialIndex = 0, alt, visible, onClose }) => {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  
+  useEffect(() => {
+    setCurrentIndex(initialIndex);
+  }, [initialIndex, visible]);
+
+  if (!visible) return null;
+
+  const normalizedImages = images.length > 0 ? images : ["/img/room/default.webp"];
+  const currentImage = normalizedImages[currentIndex];
+
+  const goToPrevious = () => {
+    setCurrentIndex((prev) => 
+      prev === 0 ? normalizedImages.length - 1 : prev - 1
+    );
+  };
+
+  const goToNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % normalizedImages.length);
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.9)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 2000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          position: "relative",
+          maxWidth: "90vw",
+          maxHeight: "90vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Main Image */}
+        <img
+          src={currentImage}
+          alt={alt}
+          style={{
+            maxWidth: "100%",
+            maxHeight: "100%",
+            objectFit: "contain",
+          }}
+        />
+
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute",
+            top: 20,
+            right: 20,
+            background: "rgba(255,255,255,0.2)",
+            border: "none",
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 24,
+            color: "white",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.3)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+          }}
+        >
+          ✕
+        </button>
+
+        {/* Navigation Arrows */}
+        {normalizedImages.length > 1 && (
+          <>
+            <button
+              onClick={(e) => { e.stopPropagation(); goToPrevious(); }}
+              style={{
+                position: "absolute",
+                left: 20,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "rgba(255,255,255,0.2)",
+                border: "none",
+                width: 50,
+                height: 50,
+                borderRadius: "50%",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 28,
+                color: "white",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(255,255,255,0.3)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+              }}
+            >
+              ◀
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); goToNext(); }}
+              style={{
+                position: "absolute",
+                right: 20,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "rgba(255,255,255,0.2)",
+                border: "none",
+                width: 50,
+                height: 50,
+                borderRadius: "50%",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 28,
+                color: "white",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(255,255,255,0.3)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+              }}
+            >
+              ▶
+            </button>
+          </>
+        )}
+
+        {/* Counter Badge */}
+        {normalizedImages.length > 1 && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 20,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "rgba(0,0,0,0.6)",
+              color: "white",
+              padding: "8px 16px",
+              borderRadius: 20,
+              fontSize: 14,
+              fontWeight: 600,
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            {currentIndex + 1} / {normalizedImages.length}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- END: IMAGE PREVIEW MODAL ---
+
+// --- START: CAROUSEL COMPONENT ---
+
+const RoomImageCarousel: React.FC<{
+  images: string[];
+  height?: number;
+  alt: string;
+}> = ({ images, height = 320, alt }) => {
+  const normalizedImages = images.length > 0 ? images : ["/img/room/default.webp"];
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Auto-advance carousel every 3 seconds (paused when preview is open)
+  useEffect(() => {
+    if (normalizedImages.length <= 1 || showPreview) return;
+    const intervalId = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % normalizedImages.length);
+    }, 3000);
+    return () => clearInterval(intervalId);
+  }, [normalizedImages.length, showPreview]);
+
+  const currentImage = normalizedImages[currentImageIndex];
+
+  const goToImage = (idx: number) => {
+    setCurrentImageIndex(idx);
+  };
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        marginBottom: 24,
+      }}
+    >
+      {/* Main Carousel Container */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: height,
+          borderRadius: 12,
+          overflow: "hidden",
+          backgroundColor: "#f3f4f6",
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundImage:
+            "linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)",
+          backgroundSize: "20px 20px",
+          backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
+          cursor: "pointer",
+        }}
+        onClick={() => setShowPreview(true)}
+      >
+        {/* Main Image */}
+        <img
+          src={currentImage}
+          alt={alt}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: "center",
+            display: "block",
+            margin: 0,
+            padding: 0,
+            border: "none",
+            outline: "none",
+          }}
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+            const container = e.currentTarget.parentElement;
+            if (container && !container.querySelector(".placeholder")) {
+              const placeholder = document.createElement("div");
+              placeholder.className = "placeholder";
+              placeholder.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                color: #d1d5db;
+                font-size: 72px;
+              `;
+              placeholder.innerHTML = "🏨";
+              container.appendChild(placeholder);
+            }
+          }}
+        />
+
+        {/* Counter Badge */}
+        {normalizedImages.length > 1 && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 12,
+              right: 12,
+              background: "rgba(0,0,0,0.6)",
+              color: "white",
+              padding: "6px 12px",
+              borderRadius: 20,
+              fontSize: 12,
+              fontWeight: 600,
+              backdropFilter: "blur(8px)",
+              zIndex: 15,
+            }}
+          >
+            {currentImageIndex + 1} / {normalizedImages.length}
+          </div>
+        )}
+      </div>
+
+      {/* Thumbnail Navigation (chỉ hiển thị khi > 1 ảnh) */}
+      {normalizedImages.length > 1 && (
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            marginTop: 12,
+            justifyContent: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          {normalizedImages.map((imgUrl, idx) => (
+            <button
+              key={idx}
+              onClick={() => goToImage(idx)}
+              style={{
+                width: 70,
+                height: 50,
+                borderRadius: 8,
+                overflow: "hidden",
+                border: idx === currentImageIndex 
+                  ? "3px solid #3b82f6" 
+                  : "1px solid #d1d5db",
+                padding: 0,
+                cursor: "pointer",
+                background: "transparent",
+                transition: "all 0.2s ease",
+                boxShadow: idx === currentImageIndex 
+                  ? "0 0 0 2px #f0f9ff" 
+                  : "0 1px 3px rgba(0,0,0,0.08)",
+              }}
+              onMouseEnter={(e) => {
+                if (idx !== currentImageIndex) {
+                  e.currentTarget.style.borderColor = "#9ca3af";
+                  e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.12)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (idx !== currentImageIndex) {
+                  e.currentTarget.style.borderColor = "#d1d5db";
+                  e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.08)";
+                }
+              }}
+            >
+              <img
+                src={extractPrimary(imgUrl)}
+                alt={`thumb-${idx}`}
+                style={{ 
+                  width: "100%", 
+                  height: "100%", 
+                  objectFit: "cover",
+                  opacity: idx === currentImageIndex ? 1 : 0.7,
+                }}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      <ImagePreviewModal
+        images={normalizedImages}
+        initialIndex={currentImageIndex}
+        alt={alt}
+        visible={showPreview}
+        onClose={() => setShowPreview(false)}
+      />
+    </div>
+  );
+};
+
+// --- END: CAROUSEL COMPONENT ---
+// ----------------------------------------------------------------------
+
 const RoomSection: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [types, setTypes] = useState<RoomType[]>([]);
@@ -42,9 +447,7 @@ const RoomSection: React.FC = () => {
   // detail modal
   const [showDetail, setShowDetail] = useState(false);
   const [detailRoom, setDetailRoom] = useState<Room | null>(null);
-  // when opening detail we may want to start in edit mode immediately
   const [detailStartEditing, setDetailStartEditing] = useState(false);
-  // status modal removed: we use a simple toggle that persists directly to the API
 
   const load = async () => {
     setLoading(true);
@@ -63,7 +466,6 @@ const RoomSection: React.FC = () => {
   useEffect(() => {
     load();
   }, []);
-  // No custom event listener: use direct toggle function instead
 
   const filtered = rooms.filter((r) => {
     if (typeFilter && String(r.idloaiPhong) !== String(typeFilter))
@@ -89,6 +491,7 @@ const RoomSection: React.FC = () => {
     setDetailStartEditing(edit);
     setShowDetail(true);
   };
+  
 
   const saveDetail = async (updated: Room) => {
     try {
@@ -117,8 +520,6 @@ const RoomSection: React.FC = () => {
       alert("Lỗi khi xóa phòng");
     }
   };
-
-  // status is toggled inline via quickToggleStatus; no separate save handler needed
 
   return (
     <div>
@@ -211,7 +612,7 @@ const RoomSection: React.FC = () => {
             <div
               style={{
                 position: "relative",
-                height: 220,
+                height: 200,
                 width: "100%",
                 overflow: "hidden",
                 backgroundColor: "#f3f4f6",
@@ -225,7 +626,7 @@ const RoomSection: React.FC = () => {
               }}
             >
               <img
-                src={r.urlAnhPhong ?? "/img/room/default.webp"}
+                src={extractPrimary(r.urlAnhPhong)}
                 alt={r.tenPhong ?? ""}
                 style={{
                   position: "absolute",
@@ -262,8 +663,8 @@ const RoomSection: React.FC = () => {
                       left: 50%;
                       transform: translate(-50%, -50%);
                       text-align: center;
-                      color: #9ca3af;
-                      font-size: 48px;
+                      color: #d1d5db;
+                      font-size: 44px;
                     `;
                     placeholder.innerHTML = "🏨";
                     container.appendChild(placeholder);
@@ -453,100 +854,384 @@ const RoomSection: React.FC = () => {
   );
 };
 
+// ----------------------------------------------------------------------
+// --- START: DETAIL MODAL COMPONENT ---
+
 const RoomDetailModal: React.FC<{
   room: Room;
   types: RoomType[];
   initialEdit?: boolean;
   onClose: () => void;
   onSave: (r: Room) => void;
-  onToggleStatus?: (r: Room) => void;
 }> = ({ room, types, initialEdit, onClose, onSave }) => {
   const [form, setForm] = useState<Room>({ ...room });
   const [isEditing, setIsEditing] = useState(initialEdit ?? false);
 
   useEffect(() => {
     setForm({ ...room });
-    // if modal opened with initialEdit true, reflect it
     if (initialEdit) setIsEditing(true);
   }, [room, initialEdit]);
 
   // image editor state & helpers
-  const [imageUrlInput, setImageUrlInput] = useState<string>(
-    form.urlAnhPhong ?? ""
-  );
-  useEffect(() => {
-    setImageUrlInput(form.urlAnhPhong ?? "");
-  }, [form.urlAnhPhong]);
+  const [imageUrlInput, setImageUrlInput] = useState<string>("");
 
-  const handleImageFile = (file?: File) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setForm((prev) => ({ ...prev, urlAnhPhong: result }));
+  const ImageEditor: React.FC = () => {
+    const images = normalizeImages(form.urlAnhPhong);
+    
+    const handleRemoveImage = (index: number) => {
+      if (index === 0) {
+        alert("Không thể xóa ảnh chính. Vui lòng thay thế trước.");
+        return;
+      }
+      setForm((prev) => ({
+        ...prev,
+        urlAnhPhong: prev.urlAnhPhong?.filter((_, i) => i !== index) ?? [],
+      }));
     };
-    reader.readAsDataURL(file);
-  };
 
-  const ImageEditor: React.FC = () => (
-    <div style={{ marginBottom: 16 }}>
-      <label style={{ display: "block", fontWeight: 600, marginBottom: 8 }}>
-        Hình ảnh phòng
-      </label>
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const fileActionRef = useRef<{ type: 'add' | 'replace' | 'replaceAt'; index?: number } | null>(null);
+
+    const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const action = fileActionRef.current;
+        if (action && action.type === 'replace') {
+          // replace primary
+          setForm((prev) => {
+            const updated = Array.isArray(prev.urlAnhPhong) ? [...prev.urlAnhPhong] : [];
+            if (updated.length === 0) updated.push(result);
+            else updated[0] = result;
+            return { ...prev, urlAnhPhong: updated };
+          });
+        } else if (action && action.type === 'replaceAt' && typeof action.index === 'number') {
+          const idx = action.index;
+          setForm((prev) => {
+            const updated = Array.isArray(prev.urlAnhPhong) ? [...prev.urlAnhPhong] : [];
+            while (updated.length <= idx) updated.push("");
+            updated[idx] = result;
+            return { ...prev, urlAnhPhong: updated };
+          });
+        } else {
+          // add
+          setForm((prev) => ({
+            ...prev,
+            urlAnhPhong: [...(Array.isArray(prev.urlAnhPhong) ? prev.urlAnhPhong : []), result],
+          }));
+        }
+        fileActionRef.current = null;
+        setImageUrlInput("");
+      };
+      reader.readAsDataURL(f);
+
+      // reset so same file can be chosen again if needed
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    return (
+      <div style={{ marginBottom: 24 }}>
         <div
           style={{
-            width: 160,
-            height: 100,
-            borderRadius: 8,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 16,
+          }}
+        >
+          <label style={{ display: "block", fontWeight: 700, fontSize: 15, color: "#1f2937" }}>
+            🖼️ Hình ảnh phòng
+          </label>
+          <span
+            style={{
+              fontSize: 13,
+              color: "#6b7280",
+              background: "#f3f4f6",
+              padding: "4px 12px",
+              borderRadius: 20,
+              fontWeight: 600,
+            }}
+          >
+            {images.length} / 6
+          </span>
+        </div>
+
+        {/* Main Image Preview */}
+        <div
+          style={{
+            width: "100%",
+            height: 180,
+            borderRadius: 10,
             overflow: "hidden",
             background: "#f3f4f6",
-            flex: "0 0 160px",
+            marginBottom: 16,
+            border: "2px solid #e5e7eb",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
           <img
-            src={form.urlAnhPhong ?? "/img/room/default.webp"}
-            alt="preview"
+            src={extractPrimary(form.urlAnhPhong)}
+            alt="primary"
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+              const container = e.currentTarget.parentElement;
+              if (container && !container.querySelector(".placeholder")) {
+                const placeholder = document.createElement("div");
+                placeholder.className = "placeholder";
+                placeholder.style.cssText = `
+                  position: absolute;
+                  color: #d1d5db;
+                  font-size: 48px;
+                `;
+                placeholder.innerHTML = "🏨";
+                container.appendChild(placeholder);
+              }
+            }}
           />
         </div>
-        <div style={{ flex: 1 }}>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => handleImageFile(e.target.files?.[0])}
-          />
-          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-            <input
-              placeholder="Hoặc dán URL ảnh"
-              value={imageUrlInput}
-              onChange={(e) => setImageUrlInput(e.target.value)}
-              style={{
-                flex: 1,
-                padding: 8,
-                borderRadius: 8,
-                border: "1px solid #d1d5db",
-              }}
-            />
-            <button
-              onClick={() =>
-                setForm((prev) => ({ ...prev, urlAnhPhong: imageUrlInput }))
+
+        {/* Action Buttons */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={onFileInputChange}
+        />
+
+        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+          <button
+            onClick={() => {
+              fileActionRef.current = { type: 'replace' };
+              fileInputRef.current?.click();
+            }}
+            style={{
+              flex: 1,
+              padding: "10px 16px",
+              borderRadius: 8,
+              background: "#f59e0b",
+              color: "#fff",
+              border: "none",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontSize: 14,
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#d97706";
+              e.currentTarget.style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#f59e0b";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
+            🔄 Thay ảnh chính
+          </button>
+
+          <button
+            onClick={() => {
+              fileActionRef.current = { type: 'add' };
+              fileInputRef.current?.click();
+            }}
+            disabled={images.length >= 6}
+            style={{
+              flex: 1,
+              padding: "10px 16px",
+              borderRadius: 8,
+              background: images.length >= 6 ? "#d1d5db" : "#10b981",
+              color: "#fff",
+              border: "none",
+              fontWeight: 600,
+              cursor: images.length >= 6 ? "not-allowed" : "pointer",
+              fontSize: 14,
+              transition: "all 0.2s ease",
+              opacity: images.length >= 6 ? 0.6 : 1,
+            }}
+            onMouseEnter={(e) => {
+              if (images.length < 6) {
+                e.currentTarget.style.background = "#059669";
+                e.currentTarget.style.transform = "translateY(-1px)";
               }
+            }}
+            onMouseLeave={(e) => {
+              if (images.length < 6) {
+                e.currentTarget.style.background = "#10b981";
+                e.currentTarget.style.transform = "translateY(0)";
+              }
+            }}
+          >
+            ➕ Thêm ảnh ({images.length < 6 ? 6 - images.length : 0})
+          </button>
+        </div>
+
+        {/* Image Gallery Grid */}
+        {images.length > 0 && (
+          <div>
+            <p
               style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                background: "#1e40af",
-                color: "#fff",
-                border: "none",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#6b7280",
+                marginBottom: 10,
+                marginTop: 0,
               }}
             >
-              Dùng URL
-            </button>
+              Danh sách ảnh
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))",
+                gap: 10,
+              }}
+            >
+              {images.map((img, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: 90,
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    background: "#f3f4f6",
+                    border: idx === 0 ? "2px solid #3b82f6" : "1px solid #e5e7eb",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                >
+                  <img
+                    src={extractPrimary(img)}
+                    alt={`image-${idx}`}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                  
+                  {/* Primary Badge */}
+                  {idx === 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 2,
+                        left: 2,
+                        background: "#3b82f6",
+                        color: "white",
+                        fontSize: 10,
+                        padding: "2px 6px",
+                        borderRadius: 3,
+                        fontWeight: 700,
+                      }}
+                    >
+                      Chính
+                    </div>
+                  )}
+
+                  {/* Action Buttons (hiện khi hover) */}
+                  {idx > 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        background: "rgba(0,0,0,0.6)",
+                        display: "flex",
+                        gap: 4,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: 0,
+                        transition: "opacity 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = "1";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = "0";
+                      }}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fileActionRef.current = { type: 'replaceAt', index: idx };
+                          fileInputRef.current?.click();
+                        }}
+                        title="Thay thế ảnh này"
+                        style={{
+                          background: "#1e40af",
+                          color: "white",
+                          border: "none",
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          cursor: "pointer",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transition: "all 0.2s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#1e3a8a";
+                          e.currentTarget.style.transform = "scale(1.1)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#1e40af";
+                          e.currentTarget.style.transform = "scale(1)";
+                        }}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveImage(idx);
+                        }}
+                        title="Xóa ảnh này"
+                        style={{
+                          background: "#ef4444",
+                          color: "white",
+                          border: "none",
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          cursor: "pointer",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transition: "all 0.2s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#dc2626";
+                          e.currentTarget.style.transform = "scale(1.1)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#ef4444";
+                          e.currentTarget.style.transform = "scale(1)";
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div
@@ -590,67 +1275,12 @@ const RoomDetailModal: React.FC<{
 
         {/* Content */}
         <div style={{ padding: 24 }}>
-          {/* Room Image */}
-          <div
-            style={{
-              width: "100%",
-              height: 280,
-              borderRadius: 12,
-              overflow: "hidden",
-              marginBottom: 20,
-              border: "2px solid #e5e7eb",
-              backgroundColor: "#f3f4f6",
-              position: "relative",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundImage:
-                "linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)",
-              backgroundSize: "20px 20px",
-              backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
-            }}
-          >
-            <img
-              src={form.urlAnhPhong ?? "/img/room/default.webp"}
-              alt={form.tenPhong ?? ""}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                objectPosition: "center",
-                display: "block",
-                margin: 0,
-                padding: 0,
-                border: "none",
-                outline: "none",
-                backgroundColor: "#f3f4f6",
-              }}
-              onError={(e) => {
-                // If image fails to load, show placeholder
-                e.currentTarget.style.display = "none";
-                const container = e.currentTarget.parentElement;
-                if (container && !container.querySelector(".placeholder")) {
-                  const placeholder = document.createElement("div");
-                  placeholder.className = "placeholder";
-                  placeholder.style.cssText = `
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    text-align: center;
-                    color: #9ca3af;
-                    font-size: 64px;
-                  `;
-                  placeholder.innerHTML = "🏨";
-                  container.appendChild(placeholder);
-                }
-              }}
-            />
-          </div>
-
+          {/* Room Image Carousel (UPDATED) */}
+          <RoomImageCarousel 
+            images={normalizeImages(form.urlAnhPhong)} 
+            alt={form.tenPhong ?? "Ảnh phòng"}
+          />
+          
           {/* Room Info Display */}
           <div
             style={{
@@ -1051,7 +1681,5 @@ const RoomDetailModal: React.FC<{
     </div>
   );
 };
-
-// StatusModal removed — status is toggled inline via badge or detail button.
 
 export default RoomSection;

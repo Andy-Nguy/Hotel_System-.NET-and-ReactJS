@@ -25,6 +25,9 @@ public partial class HoaDon
 
     public string? GhiChu { get; set; }
 
+    // Điểm đã sử dụng cho hóa đơn (không lưu lịch sử điểm, chỉ cập nhật trường này)
+    public int? DiemSuDung { get; set; }
+
     public virtual ICollection<Cthddv> Cthddvs { get; set; } = new List<Cthddv>();
 
     public virtual DatPhong IddatPhongNavigation { get; set; } = null!;

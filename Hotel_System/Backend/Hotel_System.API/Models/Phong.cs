@@ -23,7 +23,12 @@ public partial class Phong
 
     public string? TrangThai { get; set; }
 
-    public string? UrlAnhPhong { get; set; }
+    /// <summary>
+    /// JSON array of room images (1-6 images).
+    /// Index 0 is the primary/banner image and is mandatory.
+    /// Stored as JSONB in PostgreSQL; string array in memory.
+    /// </summary>
+    public List<string> UrlAnhPhong { get; set; } = new();
 
     public virtual ICollection<DanhGium> DanhGia { get; set; } = new List<DanhGium>();
 

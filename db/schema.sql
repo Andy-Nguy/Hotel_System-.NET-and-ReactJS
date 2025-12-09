@@ -493,10 +493,13 @@ CREATE TABLE DanhGia (
     IDDanhGia INT IDENTITY(1,1) PRIMARY KEY,
     IDKhachHang INT NOT NULL,
     IDPhong NVARCHAR(50) NOT NULL,
+    IDDatPhong NVARCHAR(50) NOT NULL,
     SoSao TINYINT NOT NULL CHECK (SoSao BETWEEN 1 AND 5),
     TieuDe NVARCHAR(200),
     NoiDung NVARCHAR(MAX),
     IsAnonym BIT DEFAULT 0,
+    isresponded BIT DEFAULT 0,
+    isapproved BIT DEFAULT 0,
     created_at DATETIME2 DEFAULT (GETDATE()),
     updated_at DATETIME2 DEFAULT (GETDATE()),
     CONSTRAINT FK_DanhGia_KhachHang FOREIGN KEY (IDKhachHang)
@@ -504,6 +507,9 @@ CREATE TABLE DanhGia (
         ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT FK_DanhGia_Phong FOREIGN KEY (IDPhong)
         REFERENCES Phong(IDPhong)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT FK_DanhGia_DatPhong FOREIGN KEY (IDDatPhong)
+        REFERENCES DatPhong(IDDatPhong)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -532,7 +538,7 @@ ADD
 
 ALTER TABLE KhuyenMai
 ADD LoaiKhuyenMai VARCHAR(20) NOT NULL
-CHECK (LoaiKhuyenMai IN ('room','service','combo','room_service', 'customer'))
+CHECK (LoaiKhuyenMai IN ('room','service','combo', 'customer'))
 DEFAULT 'room';
 
 
