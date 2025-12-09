@@ -2353,8 +2353,8 @@ namespace Hotel_System.API.Controllers
             // ===== LẤY DANH SÁCH PHÒNG TRỐNG CHỈ TỪ BẢNG DatPhong =====
             // Phòng trống = KHÔNG có booking với status 1, 2, 3, 5 (hoạt động/chưa thanh toán/đang sử dụng/quá hạn)
             // Phòng có booking với status 0 (hủy) hoặc 4 (hoàn tất) = được coi là trống
-            var checkinDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1)); // Tomorrow
-            var checkoutDate = DateOnly.FromDateTime(DateTime.Today.AddDays(2)); // Day after tomorrow
+            var checkinDate = DateOnly.FromDateTime(DateTime.Today); // Hôm nay
+            var checkoutDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1)); // Ngày mai
 
             // Lấy danh sách tất cả phòng từ bảng Phongs
             var allRooms = await _context.Phongs
@@ -2362,9 +2362,10 @@ namespace Hotel_System.API.Controllers
                 .ToListAsync();
 
             // Lấy danh sách phòng đang có booking HOẠT ĐỘNG (status 1, 2, 3, 5) trong khoảng thời gian check
+            // Overlap condition: booking.NgayNhanPhong < checkoutDate AND booking.NgayTraPhong > checkinDate
             var bookedRoomIds = await _context.DatPhongs
                 .Where(b => (b.TrangThai == 1 || b.TrangThai == 2 || b.TrangThai == 3 || b.TrangThai == 5))
-                .Where(b => !(b.NgayTraPhong <= checkinDate || b.NgayNhanPhong >= checkoutDate))
+                .Where(b => b.NgayNhanPhong < checkoutDate && b.NgayTraPhong > checkinDate)
                 .Select(b => b.Idphong)
                 .Distinct()
                 .ToListAsync();
@@ -3216,15 +3217,17 @@ namespace Hotel_System.API.Controllers
             var checkinDate = DateOnly.FromDateTime(checkin);
             var checkoutDate = DateOnly.FromDateTime(checkout);
 
-            // Lấy danh sách phòng đang có booking (không bị hủy, chưa hoàn tất)
+            // Lấy danh sách phòng đang có booking HOẠT ĐỘNG (status 1,2,3,5) trong khoảng thời gian này
+            // Status 0 (canceled) và 4 (completed) không được coi là booking hoạt động
+            // Overlap condition: booking.NgayNhanPhong < checkoutDate AND booking.NgayTraPhong > checkinDate
             var bookedRoomIds = await _context.DatPhongs
-                .Where(b => b.TrangThai != 0 && b.TrangThai != 4) // Không bị hủy, chưa hoàn tất
-                .Where(b => !(b.NgayTraPhong <= checkinDate || b.NgayNhanPhong >= checkoutDate))
+                .Where(b => new int[] { 1, 2, 3, 5 }.Contains(b.TrangThai)) // Chỉ booking hoạt động
+                .Where(b => b.NgayNhanPhong < checkoutDate && b.NgayTraPhong > checkinDate) // Overlapping date range
                 .Select(b => b.Idphong)
                 .Distinct()
                 .ToListAsync();
 
-            // Chỉ lấy phòng TRỐNG (TrangThai = "Trống"), không đang sử dụng
+            // Lấy phòng KHÔNG nằm trong danh sách phòng có booking hoạt động, và không phải phòng hiện tại
             var roomsQuery = await _context.Phongs
                 .Include(p => p.IdloaiPhongNavigation)
                 .Where(p => !bookedRoomIds.Contains(p.Idphong))

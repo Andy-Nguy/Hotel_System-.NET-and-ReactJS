@@ -1337,29 +1337,16 @@ const handleForceCancelSubmit = async (data: {
         setExtendType(2); // Force to ExtraNight
       }
       
-      // Nếu có danh sách phòng trống từ API
+      // Hiển thị phòng trống từ API checkExtendAvailability
+      // Backend đã kiểm tra DatPhong bookings, chỉ trả về phòng không có booking hoạt động
       if (availability?.AvailableRooms?.length > 0) {
-        // Client-side safety: chỉ lấy những phòng có trạng thái "Trống" nếu thông tin trạng thái có sẵn
-        const filtered = (availability.AvailableRooms || []).filter((r: any) => {
-          const status = (r.TrangThai ?? r.trangThai ?? r.status ?? '').toString().trim().toLowerCase();
-          return status === 'trống';
-        });
-        if (filtered.length !== (availability.AvailableRooms || []).length) {
-          console.warn('Filtered out rooms that are not empty from extend availability list');
-        }
-        setAvailableRooms(filtered);
+        setAvailableRooms(availability.AvailableRooms);
       } else {
-        // Fallback: tìm phòng trống
+        // Fallback: tìm phòng trống nếu API không trả về
         const guests = detail?.SoNguoi ?? detail?.soNguoi ?? 1;
         const extendCheckout = dayjs().add(1, 'day').format('YYYY-MM-DD');
         const available = await findAvailableRooms(dayjs().format('YYYY-MM-DD'), extendCheckout, guests);
-        // Fallback safety: only keep rooms reported as 'Trống' by rooms API
-        const fallbackFiltered = (available || []).filter((r: any) => {
-          const status = (r.TrangThai ?? r.trangThai ?? r.status ?? '').toString().trim().toLowerCase();
-          return status === 'trống';
-        });
-        if (fallbackFiltered.length !== (available || []).length) console.warn('Fallback: filtered out non-empty rooms');
-        setAvailableRooms(fallbackFiltered || []);
+        setAvailableRooms(available || []);
       }
     } catch (e: any) {
       message.error(e?.message || 'Không thể tải thông tin gia hạn');
@@ -1381,7 +1368,9 @@ const handleForceCancelSubmit = async (data: {
         (r.Idphong ?? r.idphong ?? r.RoomId ?? r.roomId) === selectedRoomId
       );
       if (selectedRoom) {
-        const newRoomPrice = selectedRoom.GiaMotDem ?? selectedRoom.giaMotDem ?? 
+        // Dùng giá SAU GIẢM GIÁ (DiscountedPrice), không phải giá gốc
+        const newRoomPrice = selectedRoom.DiscountedPrice ?? selectedRoom.discountedPrice ?? 
+                            selectedRoom.GiaMotDem ?? selectedRoom.giaMotDem ?? 
                             selectedRoom.GiaCoBanMotDem ?? selectedRoom.giaCoBanMotDem ?? 
                             selectedRoom.basePricePerNight ?? 0;
         roomRate = newRoomPrice;
@@ -1393,7 +1382,7 @@ const handleForceCancelSubmit = async (data: {
       // Gia hạn trong ngày - tính theo % giá phòng (mới nếu đổi phòng)
       const option = extendAvailability.SameDayOptions?.find((o: any) => o.Hour === selectedExtendHour);
       if (option) {
-        // Nếu đổi phòng, tính lại phí theo giá phòng mới
+        // Nếu đổi phòng, tính lại phí theo giá phòng mới (sau giảm giá)
         if (selectedRoomId && availableRooms.length > 0) {
           const percentage = option.Percentage / 100;
           const fee = Math.round(roomRate * percentage);
@@ -1403,7 +1392,7 @@ const handleForceCancelSubmit = async (data: {
         return { fee: option.Fee, feeWithVat: option.FeeWithVat, description: option.Description };
       }
     } else {
-      // Gia hạn qua đêm - dùng giá phòng mới nếu đổi phòng
+      // Gia hạn qua đêm - dùng giá phòng mới nếu đổi phòng (sau giảm giá)
       return { 
         fee: roomRate * extraNights, 
         feeWithVat: roomRateWithVat * extraNights, 
