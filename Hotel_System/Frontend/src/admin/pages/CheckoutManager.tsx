@@ -6,12 +6,12 @@ import dayjs, { Dayjs } from 'dayjs';
 import checkoutApi from '../../api/checkout.Api';
 import reviewApi from '../../api/review.Api';
 import { getRooms, findAvailableRooms } from '../../api/roomsApi';
+import { cancelBooking } from '../../api/bookingApi';
 
 import CheckoutTable from '../components/checkout/CheckoutTable';
 import PaymentModal from '../components/checkout/PaymentModal';
-import InvoiceModal from '../components/checkout/InvoiceModal';
-import ExtendInvoiceModal from '../components/checkout/ExtendInvoiceModal';
-import InvoiceModalWithLateFee from '../components/checkout/InvoiceModalWithLateFee';
+import UnifiedInvoiceModal from '../components/checkout/UnifiedInvoiceModal';
+import ForceCheckoutCancelModal from '../components/checkout/ForceCheckoutCancelModal';
 import ServicesSelector from '../../components/ServicesSelector';
 
 export interface BookingRow {
@@ -379,6 +379,19 @@ const CheckoutManager: React.FC = () => {
         const mergedMoney = { ...fresh.money, paidAmount: prevPaid };
         return { ...fresh, money: mergedMoney };
       }
+      // If this booking was previously marked as extended, preserve any
+      // extend-fee reported locally even if the fresh server summary lacks it.
+      try {
+        const prevExtend = Number(prev?.money?.extendFee ?? prev?.money?.ExtendFee ?? prev?.money?.extend ?? prev?.money?.phiGiaHan ?? 0);
+        const freshExtend = Number(fresh?.money?.extendFee ?? fresh?.money?.ExtendFee ?? fresh?.money?.extend ?? fresh?.money?.phiGiaHan ?? 0);
+        const bookingId = prev?.DatPhong?.IddatPhong ?? prev?.datPhong?.IddatPhong ?? fresh?.DatPhong?.IddatPhong ?? fresh?.datPhong?.IddatPhong ?? null;
+        if (prevExtend > 0 && (isNaN(freshExtend) || freshExtend === 0) && bookingId && extendedBookingIds.includes(String(bookingId))) {
+          const mergedMoney = { ...fresh.money, extendFee: prevExtend, ExtendFee: prevExtend, extend: prevExtend, phiGiaHan: prevExtend };
+          return { ...fresh, money: mergedMoney };
+        }
+      } catch {
+        // ignore extend preservation errors and fall through to return fresh
+      }
     } catch {
       // ignore and return fresh
     }
@@ -455,15 +468,20 @@ const CheckoutManager: React.FC = () => {
   const [qrModalVisible, setQrModalVisible] = useState(false);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null);
+  const [qrExpectedAmount, setQrExpectedAmount] = useState<number | null>(null);
   // Persist QR links per booking so we can retrieve them later (useful for overdue flow)
   const [qrMap, setQrMap] = useState<Record<string, { qrUrl?: string; hoaDonId?: string }>>({});
   const [retrieveQrModalVisible, setRetrieveQrModalVisible] = useState(false);
   const [retrieveBookingId, setRetrieveBookingId] = useState<string>('');
 
-  const [forceLateFeeInvoice, setForceLateFeeInvoice] = useState(false);
-  const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
+  // Unified modal state - thay thế tất cả modal cũ
+  const [unifiedModalVisible, setUnifiedModalVisible] = useState(false);
   const [invoiceData, setInvoiceData] = useState<any | null>(null);
   const [refreshAfterInvoiceClose, setRefreshAfterInvoiceClose] = useState(false);
+  const [isExtendedInvoice, setIsExtendedInvoice] = useState(false);
+  const [isOverdueInvoice, setIsOverdueInvoice] = useState(false);
+  const [extendInvoiceData, setExtendInvoiceData] = useState<any | null>(null);
+  
   // Services state
   
   const [serviceModalVisible, setServiceModalVisible] = useState(false);
@@ -480,6 +498,12 @@ const CheckoutManager: React.FC = () => {
   const [availableRooms, setAvailableRooms] = useState<any[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+
+  // State for force checkout cancel modal
+  const [forceCancelModalVisible, setForceCancelModalVisible] = useState(false);
+  const [forceCancelBookingRow, setForceCancelBookingRow] = useState<BookingRow | null>(null);
+  const [forceCancelData, setForceCancelData] = useState<any | null>(null);
+  const [forceCancelLoading, setForceCancelLoading] = useState(false);
   
   // State mới cho gia hạn đầy đủ
   const [extendAvailability, setExtendAvailability] = useState<any | null>(null);
@@ -489,17 +513,13 @@ const CheckoutManager: React.FC = () => {
   const [extendPaymentMethod, setExtendPaymentMethod] = useState<1 | 2 | 3>(1);
   const [extendNote, setExtendNote] = useState<string>('');
   const [extendSubmitting, setExtendSubmitting] = useState(false);
-  const [extendInvoiceModalVisible, setExtendInvoiceModalVisible] = useState(false);
-  const [extendInvoiceData, setExtendInvoiceData] = useState<any | null>(null);
   const [extendFlowPending, setExtendFlowPending] = useState(false); // true when QR/pay pending for extend
-  // When a room-change extend is performed, backend may create the new booking/invoice
-  // but we should only show the extend invoice after the operator completes the old booking.
-  // Store pending extend results keyed by old booking id so `completeCheckout` can show them.
-  const [pendingExtendResults, setPendingExtendResults] = useState<Record<string, any>>({});
   // When backend requires payment before completing a room-change extend,
   // we store the payload here and open the payment modal for the old invoice.
   const [pendingExtendPayload, setPendingExtendPayload] = useState<any | null>(null);
   const [pendingExtendOldInvoiceId, setPendingExtendOldInvoiceId] = useState<string | null>(null);
+  // Store results of pending extend operations keyed by old booking id
+  const [pendingExtendResults, setPendingExtendResults] = useState<Record<string, any>>({});
 
   // State for rendering a local confirm modal for room-change extend (avoid Modal.confirm stacking issues)
   const [roomChangeConfirmVisible, setRoomChangeConfirmVisible] = useState(false);
@@ -508,7 +528,7 @@ const CheckoutManager: React.FC = () => {
     setSelectedServices([]);
     setServicesTotal(0);
     setServiceModalVisible(true);
-    setForceLateFeeInvoice(true);
+    setIsOverdueInvoice(true);
   };
 
   const handleServicesChange = (services: any[], total: number) => {
@@ -523,9 +543,9 @@ const CheckoutManager: React.FC = () => {
       try {
         setPaymentRow(row);
         setInvoiceData(null);
-        // Reset forceLateFeeInvoice when viewing invoice in checkout mode
-        // (so we use normal form, not gia hạn form)
-        setForceLateFeeInvoice(false);
+        // Reset overdue/extended flags when viewing invoice in checkout mode
+        setIsOverdueInvoice(false);
+        setIsExtendedInvoice(false);
 
         let sum: any = null;
         try { sum = await checkoutApi.getSummary(row.IddatPhong); } catch { sum = null; }
@@ -595,7 +615,9 @@ const CheckoutManager: React.FC = () => {
 
         setInvoiceData(merged);
         console.debug('[onViewInvoice] invoiceData prepared for', row.IddatPhong, merged);
-        setInvoiceModalVisible(true);
+        setIsExtendedInvoice(Boolean(row && (extendedBookingIds.includes(String(row?.IddatPhong)) || detectExtendInSummary(merged))));
+        setIsOverdueInvoice(Number(row?.TrangThai ?? 0) === 5);
+        setUnifiedModalVisible(true);
       } catch (err) {
         message.error('Không thể mở hóa đơn');
       }
@@ -632,6 +654,7 @@ const CheckoutManager: React.FC = () => {
             const hoaDonId = resp?.idHoaDon ?? existingInvoiceId ?? null;
             setQrUrl(paymentUrl);
             setPaymentInvoiceId(hoaDonId);
+            setQrExpectedAmount(Number(needToPay ?? 0));
             // persist for later retrieval
             setQrMap((prev) => ({ ...(prev || {}), [String(paymentRow.IddatPhong)]: { qrUrl: paymentUrl ?? undefined, hoaDonId: hoaDonId ?? undefined } }));
             try { setExtendVisible(false); resetExtendState(); } catch {}
@@ -644,6 +667,9 @@ const CheckoutManager: React.FC = () => {
           // --- TIỀN MẶT (SỬA) ---
           // Xác định booking quá hạn chỉ dựa vào TrangThai === 5
           const isOverdueBooking = Number(paymentRow?.TrangThai ?? 0) === 5;
+          // `fresh` will hold the latest summary loaded from server. Declare
+          // it in the outer scope so we can reference it after try/catch blocks.
+          let fresh: any = null;
 
           // If overdue: call confirmPaid with IsOverdue to have backend persist late-fee and finalize payment.
           if (isOverdueBooking) {
@@ -657,7 +683,7 @@ const CheckoutManager: React.FC = () => {
 
               msg.success('Cập nhật hóa đơn & thanh toán thành công');
               try {
-                const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+                fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
                 setInvoiceData(buildInvoiceDataFromSummary(fresh, paymentRow));
                 setSummary(mergeFreshSummary(summary, fresh));
                 try {
@@ -666,7 +692,9 @@ const CheckoutManager: React.FC = () => {
               } catch (e) {
                 console.warn('Failed to reload summary', e);
               }
-              setInvoiceModalVisible(true);
+              setIsExtendedInvoice(Boolean(paymentRow && (extendedBookingIds.includes(String(paymentRow?.IddatPhong)) || detectExtendInSummary(fresh))));
+              setIsOverdueInvoice(Number(paymentRow?.TrangThai ?? 0) === 5);
+              setUnifiedModalVisible(true);
             } catch (e: any) {
               message.error(e?.message || 'Thanh toán thất bại');
             }
@@ -701,17 +729,22 @@ const CheckoutManager: React.FC = () => {
 
           msg.success('Cập nhật hóa đơn & thanh toán thành công');
           try {
-            const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+            fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
             setInvoiceData(buildInvoiceDataFromSummary(fresh, paymentRow));
             setSummary(mergeFreshSummary(summary, fresh));
             try { if (detectExtendInSummary(fresh)) markBookingAsExtended(paymentRow?.IddatPhong); } catch (e) {}
           } catch (e) {
             console.warn('Failed to reload summary', e);
           }
-          setInvoiceModalVisible(true);
+          setIsExtendedInvoice(Boolean(paymentRow && (extendedBookingIds.includes(String(paymentRow?.IddatPhong)) || detectExtendInSummary(fresh))));
+          setIsOverdueInvoice(Number(paymentRow?.TrangThai ?? 0) === 5);
+          setUnifiedModalVisible(true);
         }
       } else {
         // NẾU CHƯA CÓ HÓA ĐƠN -> TẠO MỚI (Giữ nguyên)
+        // Declare `fresh` here as well so later code (outside nested try)
+        // can reference the updated summary.
+        let fresh: any = null;
         // Backend CreateInvoice mới đã sửa để nếu Status=2 thì TienThanhToan=TongTien
         const formTienPhong = Number(vals.TienPhong ?? 0);
         const formTongTien = Number(vals.TongTien ?? 0);
@@ -775,11 +808,12 @@ const CheckoutManager: React.FC = () => {
             const paymentUrl = payResp?.paymentUrl ?? payResp?.qr ?? null;
             setQrUrl(paymentUrl);
             setPaymentInvoiceId(hoaDonId);
+            setQrExpectedAmount(Number(remainingToPay ?? 0));
             // persist for later retrieval
             setQrMap((prev) => ({ ...(prev || {}), [String(paymentRow.IddatPhong)]: { qrUrl: paymentUrl ?? undefined, hoaDonId: hoaDonId ?? undefined } }));
             // update summary/invoiceData from server but preserve previously-paid if server shows 0
             try {
-              const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+              fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
               if (fresh) {
                 const prevPaid = Number(summary?.money?.paidAmount ?? 0);
                 const freshPaid = Number(fresh?.money?.paidAmount ?? 0);
@@ -799,13 +833,15 @@ const CheckoutManager: React.FC = () => {
         } else {
           msg.success('Thanh toán thành công');
           try {
-            const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+            fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
             setInvoiceData(buildInvoiceDataFromSummary(fresh, paymentRow));
             setSummary(fresh);
             try { if (detectExtendInSummary(fresh)) markBookingAsExtended(paymentRow?.IddatPhong); } catch (e) {}
             try { window.dispatchEvent(new CustomEvent('booking:services-updated', { detail: { id: paymentRow.IddatPhong } })); } catch {}
           } catch (e) { }
-          setInvoiceModalVisible(true);
+          setIsExtendedInvoice(Boolean(paymentRow && (extendedBookingIds.includes(String(paymentRow?.IddatPhong)) || detectExtendInSummary(fresh))));
+          setIsOverdueInvoice(Number(paymentRow?.TrangThai ?? 0) === 5);
+          setUnifiedModalVisible(true);
         }
       }
 
@@ -826,48 +862,30 @@ const CheckoutManager: React.FC = () => {
             const hoaDonId = resumeResult.NewInvoiceId ?? resumeResult.newInvoiceId ?? resumeResult.HoaDonId ?? resumeResult.hoaDonid;
             const qr = resumeResult.QrUrl ?? resumeResult.qrUrl;
 
-            // If this was a room-change extend, DO NOT show the invoice/QR immediately.
-            // Store the extend result as pending and show it only after the operator
-            // completes the old booking (completeCheckout). This enforces the
-            // required flow: pay old booking -> complete checkout -> show extend.
-            if (pendingExtendPayload?.IsRoomChange) {
-              try {
-                const oldId = String(pendingExtendPayload?.IddatPhong ?? pendingExtendPayload?.Iddatphong ?? pendingExtendPayload?.iddatPhong ?? pendingExtendPayload?.iddatphong);
-                setPendingExtendResults(prev => ({ ...(prev || {}), [oldId]: { ...(resumeResult || {}), qrUrl: qr ?? null, hoaDonId: hoaDonId ?? null, requiresQr: !!qr } }));
-                message.info('Gia hạn đã tạo. Vui lòng hoàn tất trả phòng cũ để hiển thị hóa đơn/giao dịch gia hạn.');
-              } catch (e) {
-                // Fallback to showing immediately if storing fails
-                if (qr) {
-                  // Ensure extend form/modal is closed before showing QR
-                  try { setExtendVisible(false); resetExtendState(); } catch {}
-                  setQrUrl(qr);
-                  setPaymentInvoiceId(hoaDonId);
-                  setExtendInvoiceData(resumeResult);
-                  setExtendFlowPending(true);
-                  setQrModalVisible(true);
-                } else {
-                  // Ensure extend form/modal is closed before showing invoice
-                  try { setExtendVisible(false); resetExtendState(); } catch {}
-                  try { setPaymentRow(paymentRow ?? null); } catch {}
-                  setExtendInvoiceData(resumeResult);
-                  setExtendInvoiceModalVisible(true);
-                }
-              }
+            // For both room-change and same-room extends: show the extend invoice modal directly
+            // Backend has already completed the old booking, so we can show the new extend invoice immediately
+            try { setExtendVisible(false); resetExtendState(); } catch {}
+            
+            // Attach PaymentMethod to extendInvoiceData for payment status display in modal
+            const extendDataWithPayment = {
+              ...resumeResult,
+              PaymentMethod: pendingExtendPayload?.PaymentMethod ?? 1
+            };
+            
+            // Show extend invoice in unified modal
+            setExtendInvoiceData(extendDataWithPayment);
+            setIsExtendedInvoice(true);
+            setIsOverdueInvoice(false);
+            
+            if (qr && pendingExtendPayload?.PaymentMethod === 2) {
+              // If QR payment is pending, also show QR modal
+              setQrUrl(qr);
+              setPaymentInvoiceId(hoaDonId);
+              setExtendFlowPending(true);
+              setQrModalVisible(true);
             } else {
-              // Non room-change extend: show immediately as before
-              if (pendingExtendPayload?.PaymentMethod === 2 && qr) {
-                try { setExtendVisible(false); resetExtendState(); } catch {}
-                setQrUrl(qr);
-                setPaymentInvoiceId(hoaDonId);
-                setExtendInvoiceData(resumeResult);
-                setExtendFlowPending(true);
-                setQrModalVisible(true);
-              } else {
-                try { setExtendVisible(false); resetExtendState(); } catch {}
-                try { setPaymentRow(paymentRow ?? null); } catch {}
-                setExtendInvoiceData(resumeResult);
-                setExtendInvoiceModalVisible(true);
-              }
+              // Show invoice modal directly (cash payment or no QR)
+              setUnifiedModalVisible(true);
             }
 
             notification.success({ message: 'Gia hạn hoàn tất', description: desc || `Phí: ${Number(fee).toLocaleString()}đ`, placement: 'topRight' });
@@ -972,10 +990,12 @@ const CheckoutManager: React.FC = () => {
       setServiceModalVisible(false);
       setSelectedServices([]);
       setServicesTotal(0);
-      // Reset invoice modal state to avoid showing stale gia hạn data
-      setInvoiceModalVisible(false);
+      // Reset invoice modal state to avoid showing stale data
+      setUnifiedModalVisible(false);
       setInvoiceData(null);
-      setForceLateFeeInvoice(false);
+      setIsOverdueInvoice(false);
+      setIsExtendedInvoice(false);
+      setExtendInvoiceData(null);
       
       // refresh summary and bookings list
       if (paymentRow) {
@@ -1073,7 +1093,9 @@ const CheckoutManager: React.FC = () => {
           }
 
           setInvoiceData(merged);
-          setInvoiceModalVisible(true);
+          setIsExtendedInvoice(Boolean(row && (extendedBookingIds.includes(String(row?.IddatPhong)) || detectExtendInSummary(merged))));
+          setIsOverdueInvoice(Number(row?.TrangThai ?? 0) === 5);
+          setUnifiedModalVisible(true);
           message.success({ content: 'Mở form hóa đơn để kiểm tra trước khi hoàn tất trả phòng', key, duration: 2 });
         } catch (e: any) {
           message.error({ content: e?.message || 'Không thể tải dữ liệu hóa đơn', key, duration: 3 });
@@ -1117,7 +1139,7 @@ const CheckoutManager: React.FC = () => {
 
       // Nếu booking có trạng thái 5 thì luôn xem là quá hạn -> bật form late-fee
       if (Number(row.TrangThai ?? 0) === 5) {
-        setForceLateFeeInvoice(true);
+        setIsOverdueInvoice(true);
       }
 
       try { setExtendVisible(false); resetExtendState(); } catch {}
@@ -1143,7 +1165,100 @@ const CheckoutManager: React.FC = () => {
     }
   };
 
-  // Mở modal gia hạn cho booking quá hạn hoặc đang sử dụng
+// Hủy lưu trú do quá hạn (FORCE CHECKOUT CANCEL)
+const handleCancelOverdue = async (row: BookingRow) => {
+  try {
+    // Check if current time is after 1 PM (13:00)
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    if (currentHour < 13) {
+      message.warning('Chỉ có thể hủy lưu trú từ 13:00 (1 PM) trở đi');
+      return;
+    }
+
+    // Open force cancel modal with booking data
+    setForceCancelBookingRow(row);
+    setForceCancelLoading(true);
+    
+    try {
+      // Fetch summary data for the modal
+      const sum = await checkoutApi.getSummary(row.IddatPhong);
+      setForceCancelData(sum);
+    } catch (e) {
+      console.warn('[handleCancelOverdue] failed to fetch summary', e);
+      setForceCancelData(null);
+    } finally {
+      setForceCancelLoading(false);
+    }
+    
+    setForceCancelModalVisible(true);
+  } catch (e) {
+    console.error('[handleCancelOverdue]', e);
+    message.error('Không thể mở form hủy lưu trú');
+  }
+};
+
+// Handle force cancel modal submission
+const handleForceCancelSubmit = async (data: {
+  bookingId: string;
+  reason: string;
+  depositHandling: 'refund' | 'partial' | 'keep';
+  depositPartialAmount?: number;
+  notes?: string;
+}) => {
+  try {
+    // Call backend API to force cancel booking with all the data
+    const resp = await fetch(`/api/Checkout/force-cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bookingId: data.bookingId,
+        reason: data.reason,
+        depositHandling: data.depositHandling,
+        depositPartialAmount: data.depositPartialAmount,
+        notes: data.notes,
+      }),
+    });
+    
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.message || `HTTP ${resp.status}`);
+    }
+
+    const result = await resp.json();
+    // Show a clear confirmation modal and a brief toast
+    try {
+      Modal.success({
+        title: 'Hủy lưu trú thành công',
+        content: (
+          <div>
+            <div>Đã hủy lưu trú cho đặt phòng <b>{data.bookingId}</b>.</div>
+            <div>Email thông báo đã được gửi cho khách (nếu có địa chỉ email).</div>
+          </div>
+        )
+      });
+    } catch (e) {
+      // fallback to toast if Modal fails
+      message.success('Hủy lưu trú thành công.');
+    }
+    
+    // Close modal
+    setForceCancelModalVisible(false);
+    setForceCancelBookingRow(null);
+    setForceCancelData(null);
+    
+    // Close any open payment modal
+    try { setPaymentModalVisible(false); setPaymentRow(null); setInvoiceData(null); } catch {}
+    
+    // Reload table
+    await load();
+  } catch (e: any) {
+    message.error(e?.message || 'Không thể hủy lưu trú');
+  }
+};
+
+// Mở modal gia hạn cho booking quá hạn hoặc đang sử dụng
   const handleExtend = async (row: BookingRow) => {
     try {
       setExtendBookingId(row.IddatPhong);
@@ -1432,7 +1547,9 @@ const CheckoutManager: React.FC = () => {
           try { setExtendVisible(false); resetExtendState(); } catch {}
           setPaymentRow(bookingRow);
           setExtendInvoiceData(result);
-          setExtendInvoiceModalVisible(true);
+          setIsExtendedInvoice(true);
+          setIsOverdueInvoice(false);
+          setUnifiedModalVisible(true);
         } else {
           // Tiền mặt (PaymentMethod = 1): mở ExtendInvoiceModal luôn
           notification.success({
@@ -1444,7 +1561,9 @@ const CheckoutManager: React.FC = () => {
           
           setPaymentRow(bookingRow);
           setExtendInvoiceData(result);
-          setExtendInvoiceModalVisible(true);
+          setIsExtendedInvoice(true);
+          setIsOverdueInvoice(false);
+          setUnifiedModalVisible(true);
           try { if (Number(fee) > 0) markBookingAsExtended(bookingId); } catch (e) {}
         }
         
@@ -1594,13 +1713,17 @@ const CheckoutManager: React.FC = () => {
               try { setExtendVisible(false); resetExtendState(); } catch {}
               try { setPaymentRow({ IddatPhong: extendBookingId } as any); } catch {}
               setExtendInvoiceData(result);
-              setExtendInvoiceModalVisible(true);
+              setIsExtendedInvoice(true);
+              setIsOverdueInvoice(false);
+              setUnifiedModalVisible(true);
             }
             try { if (Number(fee) > 0) markBookingAsExtended(extendBookingId); } catch (e) {}
           } catch (storeErr) {
             // If storing fails for any reason, show the extend invoice immediately
             setExtendInvoiceData(result);
-            setExtendInvoiceModalVisible(true);
+            setIsExtendedInvoice(true);
+            setIsOverdueInvoice(false);
+            setUnifiedModalVisible(true);
           }
         }
         
@@ -1797,34 +1920,7 @@ const CheckoutManager: React.FC = () => {
     });
   }, [due, viewMode, summaryMap, lateFeeMap]);
 
-  const shouldUseLateFeeModal =
-    // Nếu đã bật cờ (từ luồng Thanh toán phí quá hạn hoặc QR) thì luôn dùng form late-fee
-    forceLateFeeInvoice
-    // Hoặc nếu dữ liệu thể hiện rõ là booking Quá hạn / có phí muộn
-    || (
-      Number(invoiceData?.TrangThai ?? paymentRow?.TrangThai ?? 0) === 5
-      || Number(
-           invoiceData?.money?.lateFee ??
-           (paymentRow as any)?.TienPhuPhi ??
-           (paymentRow as any)?.tienPhuPhi ??
-           0
-         ) > 0
-      || (Array.isArray(paymentRow?.ChiTietDatPhongs) &&
-          paymentRow.ChiTietDatPhongs.some((s: any) =>
-            /trả phòng muộn|phí trả phòng muộn|phu.?phi.?tra phong muon/i
-              .test(String(s.tenDichVu ?? s.TenDichVu ?? s.dichVu ?? ''))
-          ))
-      || (Array.isArray(invoiceData?.services) &&
-          invoiceData.services.some((s: any) =>
-            /trả phòng muộn|phí trả phòng muộn|phu.?phi.?tra phong muon/i
-              .test(String(s.tenDichVu ?? s.TenDichVu ?? s.ten ?? ''))
-          ))
-      || (Array.isArray(invoiceData?.items) &&
-          invoiceData.items.some((s: any) =>
-            /trả phòng muộn|phí trả phòng muộn|phu.?phi.?tra phong muon/i
-              .test(String(s.tenDichVu ?? s.TenDichVu ?? s.dichVu ?? s.TenDichVu ?? ''))
-          ))
-    );
+  // shouldUseLateFeeModal logic is no longer needed - now using isOverdueInvoice flag in UnifiedInvoiceModal
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -1854,6 +1950,7 @@ const CheckoutManager: React.FC = () => {
                 onComplete={completeCheckout}
                 onAddService={handleAddService}
                 onPayOverdue={handlePayOverdue}
+                onCancelOverdue={handleCancelOverdue}
                 onViewInvoice={onViewInvoice}
                 onExtend={handleExtend}
                 viewInvoiceIds={viewInvoiceIds}
@@ -1873,6 +1970,19 @@ const CheckoutManager: React.FC = () => {
               servicesTotal={servicesTotal}
               onCancel={() => { setPaymentModalVisible(false); setPaymentRow(null); form.resetFields(); }}
               onSubmit={submitPayment}
+            />
+
+            <ForceCheckoutCancelModal
+              visible={forceCancelModalVisible}
+              bookingId={forceCancelBookingRow?.IddatPhong ?? null}
+              bookingData={forceCancelData}
+              loading={forceCancelLoading}
+              onSubmit={handleForceCancelSubmit}
+              onCancel={() => {
+                setForceCancelModalVisible(false);
+                setForceCancelBookingRow(null);
+                setForceCancelData(null);
+              }}
             />
 
             <Modal
@@ -1940,9 +2050,21 @@ const CheckoutManager: React.FC = () => {
                       // Xác định booking quá hạn chỉ dựa vào TrangThai === 5
                       const isOverdueBooking = Number(paymentRow?.TrangThai ?? 0) === 5;
                       
+                      // compute an amount to confirm: prefer the expected QR amount stored
+                      // when we created the QR; otherwise compute remaining from summary
+                      const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+                      const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+                      const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+                      const deposit = Number(summary?.money?.deposit ?? 0);
+                      const paidExcl = Math.max(0, daTra - deposit);
+                      const computedNeed = serverRemaining > 0 ? serverRemaining : Math.max(0, tongTien - deposit - paidExcl);
+
+                      const amountToConfirm = Number(qrExpectedAmount ?? 0) > 0 ? Number(qrExpectedAmount) : computedNeed;
+
                       const payload: any = {
                         IsOnline: true,
-                        IsOverdue: isOverdueBooking
+                        IsOverdue: isOverdueBooking,
+                        Amount: Math.round(amountToConfirm)
                       };
                       if (paymentInvoiceId) payload.HoaDonId = paymentInvoiceId;
 
@@ -1950,9 +2072,35 @@ const CheckoutManager: React.FC = () => {
                       if (resp !== null) {
                         message.success({ content: 'Xác nhận thanh toán thành công', key, duration: 2 });
                         try {
-                          const fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+                          let fresh = await checkoutApi.getSummary(paymentRow.IddatPhong);
+                          // If backend hasn't reflected the online payment yet, apply
+                          // the expected QR amount locally so the UI shows paid state.
+                          try {
+                            const expected = Number(qrExpectedAmount ?? 0);
+                            const serverPaid = Number(fresh?.money?.paidAmount ?? fresh?.invoices?.[0]?.tienThanhToan ?? 0);
+                            if (expected > 0 && (isNaN(serverPaid) || serverPaid < expected)) {
+                              // merge into money.paidAmount and invoice.tienThanhToan
+                              const prevPaid = Number(fresh?.money?.paidAmount ?? 0) || 0;
+                              fresh.money = { ...(fresh.money || {}), paidAmount: prevPaid + expected };
+                              if (Array.isArray(fresh.invoices) && fresh.invoices.length > 0) {
+                                fresh.invoices[0].tienThanhToan = (Number(fresh.invoices[0].tienThanhToan ?? 0) || 0) + expected;
+                              }
+                              // also recalc remaining if present
+                              try {
+                                const tong = Number(fresh?.money?.tongTien ?? fresh?.money?.total ?? 0);
+                                if (!isNaN(tong)) {
+                                  fresh.money.soTienConLai = Math.max(0, tong - (fresh.money.paidAmount || 0));
+                                }
+                              } catch {}
+                            }
+                          } catch (e) {
+                            // ignore merge errors
+                          }
                           setInvoiceData(fresh);
                           try { if (detectExtendInSummary(fresh)) markBookingAsExtended(paymentRow?.IddatPhong); } catch (e) {}
+                          try { setQrExpectedAmount(null); } catch {}
+                          // clear expected amount after applying it
+                          try { setQrExpectedAmount(null); } catch {}
                         } catch { /* ignore */ }
                       } else {
                         message.warning({ content: 'Không nhận được phản hồi xác nhận từ server', key, duration: 3 });
@@ -1967,17 +2115,19 @@ const CheckoutManager: React.FC = () => {
                     setPaymentModalVisible(false);
 
                     const isOverdueBooking = Number(paymentRow?.TrangThai ?? invoiceData?.TrangThai ?? 0) === 5;
-                    if (isOverdueBooking) setForceLateFeeInvoice(true);
-
-                    // If this QR was for an extend flow, open the ExtendInvoiceModal with the data we saved
+                    
+                    // If this QR was for an extend flow, open the UnifiedInvoiceModal with extend data
                     if (extendFlowPending && extendInvoiceData) {
                       try { setExtendVisible(false); resetExtendState(); } catch {}
                       try { setPaymentRow(extendInvoiceData?.paymentRow ?? paymentRow ?? null); } catch {}
-                      setExtendInvoiceModalVisible(true);
+                      setIsExtendedInvoice(true);
+                      setIsOverdueInvoice(false);
                       setExtendFlowPending(false);
                     } else {
-                      setInvoiceModalVisible(true);
+                      setIsExtendedInvoice(Boolean(paymentRow && (extendedBookingIds.includes(String(paymentRow?.IddatPhong)) || detectExtendInSummary(invoiceData))));
+                      setIsOverdueInvoice(isOverdueBooking);
                     }
+                    setUnifiedModalVisible(true);
                     form.resetFields();
                     if (viewMode !== 'overdue') {
                       setPaymentRow(null);
@@ -1998,27 +2148,34 @@ const CheckoutManager: React.FC = () => {
               ) : (<div>Không tìm thấy liên kết thanh toán</div>)}
             </Modal>
 
-            {shouldUseLateFeeModal ? (
-              <InvoiceModalWithLateFee
-                visible={invoiceModalVisible}
-                invoiceData={invoiceData}
-                paymentRow={paymentRow}
-                selectedServices={selectedServices}
-                servicesTotal={servicesTotal}
-                onClose={async () => {
-                  setInvoiceModalVisible(false);
-                  setInvoiceData(null);
-                  setSelectedServices([]);
-                  setServicesTotal(0);
-                  setForceLateFeeInvoice(false); // reset cờ
-                  if (refreshAfterInvoiceClose) {
-                    await load();
-                    setRefreshAfterInvoiceClose(false);
-                  }
-                }}
-                onComplete={async (id) => {
-                  try {
-                    if (typeof id !== 'undefined' && id !== null) {
+            {/* Unified invoice modal for all scenarios: normal, overdue, and extend */}
+            <UnifiedInvoiceModal
+              visible={unifiedModalVisible}
+              invoiceData={invoiceData}
+              paymentRow={paymentRow}
+              selectedServices={selectedServices}
+              isExtended={isExtendedInvoice}
+              isOverdue={isOverdueInvoice}
+              extendData={extendInvoiceData}
+              onClose={async () => {
+                setUnifiedModalVisible(false);
+                setInvoiceData(null);
+                setSelectedServices([]);
+                setServicesTotal(0);
+                setIsExtendedInvoice(false);
+                setIsOverdueInvoice(false);
+                setExtendInvoiceData(null);
+                setPaymentRow(null);
+                if (refreshAfterInvoiceClose) {
+                  await load();
+                  setRefreshAfterInvoiceClose(false);
+                }
+              }}
+              onComplete={async (id) => {
+                try {
+                  if (typeof id !== 'undefined' && id !== null) {
+                    // For extend mode, no need to call confirmPaid/completeCheckout
+                    if (!extendInvoiceData) {
                       try {
                         const hoaDonId =
                           invoiceData?.IDHoaDon ??
@@ -2027,27 +2184,18 @@ const CheckoutManager: React.FC = () => {
                           invoiceData?.HoaDon?.IdhoaDon ??
                           null;
 
-                        // 👉 BẤT KỂ ONLINE HAY TIỀN MẶT:
-                        // Khi bấm "Hoàn tất trả phòng" ở tab Quá hạn, ta coi như đã thu đủ tiền.
-                        // Gọi ConfirmPaid với Amount = remaining để backend set TienThanhToan = TongTien
-                        try {
-                          // Compute remaining amount (canonical total minus paid excluding deposit)
-                          const total = Number(invoiceData?.money?.tongTien ?? invoiceData?.HoaDon?.TongTien ?? invoiceData?.TongTien ?? 0);
-                          const paidAmount = Number(invoiceData?.money?.paidAmount ?? invoiceData?.HoaDon?.TienThanhToan ?? invoiceData?.invoices?.[0]?.tienThanhToan ?? 0);
-                          const deposit = Number(invoiceData?.money?.deposit ?? 0);
-                          const paidExclDeposit = Math.max(0, paidAmount - deposit);
-                          const remaining = Math.round(Math.max(0, total - paidExclDeposit));
+                        const total = Number(invoiceData?.money?.tongTien ?? invoiceData?.HoaDon?.TongTien ?? invoiceData?.TongTien ?? 0);
+                        const paidAmount = Number(invoiceData?.money?.paidAmount ?? invoiceData?.HoaDon?.TienThanhToan ?? invoiceData?.invoices?.[0]?.tienThanhToan ?? 0);
+                        const deposit = Number(invoiceData?.money?.deposit ?? 0);
+                        const paidExclDeposit = Math.max(0, paidAmount - deposit);
+                        const remaining = Math.round(Math.max(0, total - paidExclDeposit));
 
-                          const payload: any = hoaDonId ? { HoaDonId: hoaDonId, Amount: remaining } : { Amount: remaining };
-                          await checkoutApi.confirmPaid(id, payload);
-                        } catch (e) {
-                          console.warn('[onComplete] confirmPaid (full) failed', e);
-                        }
+                        const payload: any = hoaDonId ? { HoaDonId: hoaDonId, Amount: remaining } : { Amount: remaining };
+                        await checkoutApi.confirmPaid(id, payload);
                       } catch (e) {
-                        console.warn('[onComplete] confirmPaid (full) failed', e);
+                        console.warn('[onComplete] confirmPaid failed', e);
                       }
 
-                      // Sau khi chốt thanh toán full, hoàn tất trả phòng
                       await checkoutApi.completeCheckout(id);
 
                       if (paymentRow && paymentRow.EmailKhachHang) {
@@ -2060,110 +2208,18 @@ const CheckoutManager: React.FC = () => {
                       }
 
                       msg.success('Hoàn tất trả phòng');
-                      setInvoiceModalVisible(false);
-                      setForceLateFeeInvoice(false);
-                      await load();
-                      // After completing checkout for this booking, if there is a pending extend result
-                      // created earlier for this booking (room-change), show the ExtendInvoiceModal now.
-                      try {
-                        const pending = pendingExtendResults?.[String(id)];
-                        if (pending) {
-                          try { setExtendVisible(false); resetExtendState(); } catch {}
-                          try { setPaymentRow(pending?.paymentRow ?? { IddatPhong: id } as any); } catch {}
-                          setExtendInvoiceData(pending);
-                          setExtendInvoiceModalVisible(true);
-                          // clean up pending
-                          setPendingExtendResults(prev => {
-                            const copy = { ...(prev || {}) };
-                            delete copy[String(id)];
-                            return copy;
-                          });
-                        }
-                      } catch (e) { console.warn('Failed to show pending extend invoice after completeCheckout', e); }
-                    } else {
-                      throw new Error('Không có id để hoàn tất trả phòng');
-                  }
-                  } catch (e: any) {
-                    message.error(e?.message || 'Hoàn tất thất bại');
-                  }
-                }}
-              />
-            ) : (
-              <InvoiceModal
-                visible={invoiceModalVisible}
-                invoiceData={invoiceData}
-                paymentRow={paymentRow}
-                selectedServices={selectedServices}
-                servicesTotal={servicesTotal}
-                isExtended={Boolean(paymentRow && (extendedBookingIds.includes(String(paymentRow?.IddatPhong)) || detectExtendInSummary(invoiceData || summary)))}
-                onClose={async () => {
-                  setInvoiceModalVisible(false);
-                  setInvoiceData(null);
-                  setSelectedServices([]);
-                  setServicesTotal(0);
-                  setForceLateFeeInvoice(false);
-                  if (refreshAfterInvoiceClose) {
+                    }
+
+                    setUnifiedModalVisible(false);
+                    setIsExtendedInvoice(false);
+                    setIsOverdueInvoice(false);
                     await load();
-                    setRefreshAfterInvoiceClose(false);
+                  } else {
+                    throw new Error('Không có id để hoàn tất trả phòng');
                   }
-                }}
-                onComplete={async (id) => {
-                  try {
-                    if (typeof id !== 'undefined' && id !== null) {
-                      try {
-                        const hoaDonId = invoiceData?.IDHoaDon ?? invoiceData?.idHoaDon ?? invoiceData?.IDHoaDon ?? null;
-
-                        const total = Number(invoiceData?.money?.tongTien ?? invoiceData?.HoaDon?.TongTien ?? invoiceData?.TongTien ?? 0);
-                        const paidAmount = Number(invoiceData?.money?.paidAmount ?? invoiceData?.HoaDon?.TienThanhToan ?? invoiceData?.invoices?.[0]?.tienThanhToan ?? 0);
-                        const deposit = Number(invoiceData?.money?.deposit ?? 0);
-                        const paidExclDeposit = Math.max(0, paidAmount - deposit);
-                        const remaining = Math.round(Math.max(0, total - paidExclDeposit));
-
-                        if (hoaDonId) {
-                          await checkoutApi.confirmPaid(id, { HoaDonId: hoaDonId, Amount: remaining });
-                        } else {
-                          await checkoutApi.confirmPaid(id, { Amount: remaining });
-                        }
-                      } catch (e) { console.warn('[onComplete] confirmPaid failed', e); }
-                      
-                      await checkoutApi.completeCheckout(id);
-                      if (paymentRow && paymentRow.EmailKhachHang) {
-                        try { await reviewApi.sendReviewEmail(paymentRow.IddatPhong, paymentRow.EmailKhachHang); message.info('Email cảm ơn kèm liên kết đánh giá đã được gửi tới khách hàng'); } catch (emailErr: any) { console.warn('Failed to send review email:', emailErr); }
-                      }
-                      msg.success('Hoàn tất trả phòng');
-                      setInvoiceModalVisible(false);
-                      await load();
-                      // show pending extend invoice if exists for this booking
-                      try {
-                        const pending = pendingExtendResults?.[String(id)];
-                        if (pending) {
-                          try { setExtendVisible(false); resetExtendState(); } catch {}
-                          try { setPaymentRow(pending?.paymentRow ?? { IddatPhong: id } as any); } catch {}
-                          setExtendInvoiceData(pending);
-                          setExtendInvoiceModalVisible(true);
-                          setPendingExtendResults(prev => {
-                            const copy = { ...(prev || {}) };
-                            delete copy[String(id)];
-                            return copy;
-                          });
-                        }
-                      } catch (e) { console.warn('Failed to show pending extend invoice after completeCheckout', e); }
-                    } else { throw new Error('Không có id để hoàn tất trả phòng'); }
-                  } catch (e: any) { message.error(e?.message || 'Hoàn tất thất bại'); }
-                }}
-              />
-            )
-            }
-
-            {/* Extend invoice modal shown after a successful same-room extend */}
-            <ExtendInvoiceModal
-              visible={extendInvoiceModalVisible}
-              extendData={extendInvoiceData}
-              onClose={async () => {
-                setExtendInvoiceModalVisible(false);
-                setExtendInvoiceData(null);
-                setPaymentRow(null);
-                try { await load(); } catch {};
+                } catch (e: any) {
+                  message.error(e?.message || 'Hoàn tất thất bại');
+                }
               }}
             />
 
@@ -2311,7 +2367,11 @@ const CheckoutManager: React.FC = () => {
                             renderItem={(item: any) => {
                               const id = item.Idphong ?? item.idphong ?? item.RoomId;
                               const isSelected = selectedRoomId === id;
-                              const price = item.GiaMotDem ?? item.giaCoBanMotDem ?? 0;
+                              const basePrice = item.GiaMotDem ?? item.giaCoBanMotDem ?? 0;
+                              const discountedPrice = item.DiscountedPrice ?? basePrice;
+                              const promotionName = item.PromotionName;
+                              const discountPercent = item.DiscountPercent;
+                              const hasDiscount = discountedPrice < basePrice;
 
                               return (
                                 <List.Item 
@@ -2338,9 +2398,28 @@ const CheckoutManager: React.FC = () => {
                                     <div style={{ flex: 1 }}>
                                       <div style={{ fontWeight: 700 }}>{item.TenPhong ?? item.tenPhong ?? `Phòng ${item.SoPhong ?? item.soPhong}`}</div>
                                       <div style={{ color: '#8c8c8c', fontSize: 13 }}>{item.TenLoaiPhong ?? item.tenLoaiPhong}</div>
+                                      {/* Hiển thị khuyến mãi nếu có */}
+                                      {hasDiscount && promotionName && (
+                                        <div style={{ color: '#52c41a', fontSize: 12, fontWeight: 500, marginTop: 4 }}>
+                                          ✓ {promotionName} {discountPercent ? `(${discountPercent}%)` : ''}
+                                        </div>
+                                      )}
                                     </div>
-                                    <div style={{ fontWeight: 700, color: '#1890ff' }}>
-                                      {Number(price).toLocaleString()}đ/đêm
+                                    <div style={{ textAlign: 'right' }}>
+                                      {hasDiscount ? (
+                                        <div>
+                                          <div style={{ textDecoration: 'line-through', color: '#999', fontSize: 12 }}>
+                                            {Number(basePrice).toLocaleString()}đ
+                                          </div>
+                                          <div style={{ fontWeight: 700, color: '#f5222d', fontSize: 14 }}>
+                                            {Number(discountedPrice).toLocaleString()}đ/đêm
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div style={{ fontWeight: 700, color: '#1890ff' }}>
+                                          {Number(basePrice).toLocaleString()}đ/đêm
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </List.Item>

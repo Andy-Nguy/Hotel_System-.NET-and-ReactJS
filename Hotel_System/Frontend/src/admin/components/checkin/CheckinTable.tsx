@@ -3,7 +3,8 @@ import checkinApi from '../../../api/checkinApi';
 import FormService from './FormService';
 import checkoutApi from '../../../api/checkout.Api';
 import * as serviceApi from '../../../api/serviceApi';
-import { Button, Space, Tag, Segmented, Card, Form, message } from "antd";
+import { Button, Space, Tag, Segmented, Card, Form, message, Image } from "antd";
+import { getRooms, Room as ApiRoom } from '../../../api/roomsApi';
 import type { ColumnsType } from "antd/es/table";
 import DataTable from "../DataTable";
 
@@ -87,7 +88,9 @@ const CheckinTable: React.FC<Props> = ({
   const extractRoomInfo = (it: any) => {
     const ten =
       it?.TenPhong ??
+      it?.TenPhongChiTiet ??
       it?.tenPhong ??
+      it?.tenPhongChiTiet ??
       it?.Phong?.TenPhong ??
       it?.Phong?.tenPhong ??
       it?.TenLoaiPhong ??
@@ -102,7 +105,9 @@ const CheckinTable: React.FC<Props> = ({
 
     const so =
       it?.SoPhong ??
+      it?.SoPhongChiTiet ??
       it?.soPhong ??
+      it?.soPhongChiTiet ??
       it?.Phong?.SoPhong ??
       it?.Phong?.soPhong ??
       it?.Phong?.SoPhongNumber ??
@@ -111,13 +116,22 @@ const CheckinTable: React.FC<Props> = ({
 
     const idPhong =
       it?.IDPhong ??
+      it?.IDPhongChiTiet ??
       it?.IdPhong ??
       it?.idPhong ??
       it?.Phong?.Idphong ??
+      it?.Phong?.idphong ??
       it?.Phong?.IDPhong ??
+      it?.Idphong ??
       null;
 
     return { ten, so, idPhong };
+  };
+
+  const idPhongFromItem = (it: any) => {
+    return (
+      it?.IDPhong ?? it?.IdPhong ?? it?.idPhong ?? it?.Phong?.Idphong ?? it?.Phong?.idphong ?? it?.Idphong ?? null
+    );
   };
 
   // Helper: hợp nhất nguồn chi tiết (detailsMap -> row -> summaryMap)
@@ -170,23 +184,11 @@ const CheckinTable: React.FC<Props> = ({
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {details.map((it, idx) => {
                 const { ten, so, idPhong } = extractRoomInfo(it);
-                const primary =
-                  ten ?? (so ? `Phòng ${so}` : idPhong ? String(idPhong) : "-");
-                // Nếu có cả tên và số phòng thì thêm dòng phụ để rõ ràng
-                const secondary = so
-                  ? `Phòng ${so}`
-                  : idPhong && (!ten || String(idPhong) !== String(ten))
-                  ? String(idPhong)
-                  : null;
-
+                // Show only the room name (no room number)
+                const primary = ten ?? (idPhong ? String(idPhong) : "-");
                 return (
                   <div key={idx}>
                     <div style={{ fontWeight: 600 }}>{primary}</div>
-                    {secondary && (
-                      <div style={{ fontSize: 12, color: "#64748b" }}>
-                        {secondary}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -196,15 +198,9 @@ const CheckinTable: React.FC<Props> = ({
 
         // Fallback: single room fields
         const ten = (r as any)?.TenPhong ?? (r as any)?.tenPhong ?? null;
-        const so = (r as any)?.SoPhong ?? (r as any)?.soPhong ?? null;
         return (
           <div>
-            <div style={{ fontWeight: 600 }}>
-              {ten ?? (so ? `Phòng ${so}` : "-")}
-            </div>
-            {so && (
-              <div style={{ fontSize: 12, color: "#64748b" }}>{`Phòng ${so}`}</div>
-            )}
+            <div style={{ fontWeight: 600 }}>{ten ?? "-"}</div>
           </div>
         );
       },
@@ -269,6 +265,26 @@ const CheckinTable: React.FC<Props> = ({
   const [viewerBookingId, setViewerBookingId] = useState<string | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
   const [viewerForm] = Form.useForm();
+  // Cache of rooms from Rooms API to enrich room info
+  const [roomsMap, setRoomsMap] = useState<Record<string, ApiRoom>>({});
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const rooms = await getRooms();
+        if (!mounted) return;
+        const map: Record<string, ApiRoom> = {};
+        (rooms || []).forEach((r) => {
+          if (r.idphong) map[String(r.idphong)] = r;
+        });
+        setRoomsMap(map);
+      } catch (e) {
+        console.warn('[CheckinTable] failed to load rooms', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const openServiceViewer = async (row: BookingRow) => {
     try {
@@ -366,78 +382,108 @@ const CheckinTable: React.FC<Props> = ({
   if (viewMode === "using") {
     return (
       <div>
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <Segmented
             value={viewMode}
             onChange={(v) => onViewChange?.(v as "using" | "checkin")}
             options={[{ label: "Đang sử dụng", value: "using" }]}
           />
+          <div style={{ color: '#475569', fontSize: 14 }}>
+            <strong>{(data || []).length}</strong> kết quả
+          </div>
         </div>
 
-        {(data || []).map((row) => {
-          const roomLines = getRoomLines(row);
-          const totalRooms = Array.isArray(roomLines) && roomLines.length > 0 ? roomLines.length : 1;
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {(data || []).map((row) => {
+            const roomLines = getRoomLines(row);
+            const totalRooms = Array.isArray(roomLines) && roomLines.length > 0 ? roomLines.length : 1;
 
-          return (
-            <div key={row.IddatPhong} style={{ border: "1px solid #e6e6e6", padding: 16, marginBottom: 18, borderRadius: 8, background: "#ffffff" }}>
-              {/* Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>{(row as any).TenKhachHang ?? "Khách"}</div>
-                  <div style={{ color: "#64748b", fontSize: 14 }}>
-                    Check-in: {row.NgayNhanPhong ?? "-"} &nbsp;•&nbsp; Trả: {row.NgayTraPhong ?? "-"}
+            return (
+              <div key={row.IddatPhong} style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16, background: '#fff', borderRadius: 10, boxShadow: '0 6px 18px rgba(15,23,42,0.04)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{(row as any).TenKhachHang ?? 'Khách'}</div>
+                      {/* Payment status tag */}
+                      <div>
+                        <Tag color={(row.TrangThaiThanhToan ?? 0) === 2 ? 'green' : 'orange'} style={{ fontSize: 12, padding: '2px 8px' }}>
+                          {(row.TrangThaiThanhToan ?? 0) === 2 ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                        </Tag>
+                        {/* Booking status small tag */}
+                        <Tag color={(row.TrangThai ?? 0) === 3 ? 'blue' : (row.TrangThai ?? 0) === 4 ? 'default' : (row.TrangThai ?? 0) === 5 ? 'volcano' : 'default'} style={{ fontSize: 12, padding: '2px 8px', marginLeft: 6 }}>
+                          {(row.TrangThai ?? 0) === 3 ? 'Đang sử dụng' : (row.TrangThai ?? 0) === 4 ? 'Hoàn tất' : (row.TrangThai ?? 0) === 5 ? 'Quá hạn' : 'Khác'}
+                        </Tag>
+                      </div>
+                    </div>
+                    <div style={{ color: '#6b7280', fontSize: 13 }}>{`Check-in: ${row.NgayNhanPhong ?? '-'} • Trả: ${row.NgayTraPhong ?? '-'}`}</div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 15, fontWeight: 700 }}>{totalRooms} phòng</div>
+                      <div style={{ fontSize: 13, color: '#6b7280' }}>Tổng: <span style={{ fontWeight: 800, color: '#0f172a' }}>{fmt(row.TongTien)}</span></div>
+                    </div>
+                    <Space>
+                      <Button type="primary" size="middle" onClick={() => onPay?.(row)}>Thanh toán</Button>
+                    </Space>
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <div style={{ textAlign: "right", marginRight: 8 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>{totalRooms} phòng</div>
-                    <div style={{ fontSize: 14, color: "#64748b", fontWeight: 600 }}>Tổng: {fmt(row.TongTien)}</div>
-                  </div>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  {((roomLines && roomLines.length > 0) ? roomLines : [null]).map((it: any, idx: number) => {
+                    const { ten, so } = extractRoomInfo(it || {});
+                    // Show only the room name on cards (do not display room number)
+                    const primary = ten ?? `#${idx + 1}`;
+                    const price = it?.DonGia ?? it?.Gia ?? it?.GiaPhong ?? it?.Price ?? null;
 
-                  <Space>
-                    <Button type="primary" size="large" onClick={() => onPay?.(row)}>Thanh toán</Button>
-                    <Button size="large" onClick={() => onAddService?.(row)}>Thêm phòng</Button>
-                  </Space>
+                    return (
+                      <Card key={idx} hoverable style={{ flex: '1 1 320px', minWidth: 280, maxWidth: 520, padding: 16, borderRadius: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                          <div>
+                                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                        {/** Thumbnail */}
+                                        {(function() {
+                                          const id = idPhongFromItem(it);
+                                          const roomInfo = id ? roomsMap[String(id)] : null;
+                                          const src = roomInfo?.urlAnhPhong ?? null;
+                                          if (src) return (<Image src={src} width={96} height={64} style={{ objectFit: 'cover', borderRadius: 6 }} preview={false} />);
+                                          return null;
+                                        })()}
+                                        <div>
+                                          <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{primary}</div>
+                                          
+                                          {(function(){
+                                            const id = idPhongFromItem(it);
+                                            const roomInfo = id ? roomsMap[String(id)] : null;
+                                            if (!roomInfo) return null;
+                                            return (
+                                              <div style={{ marginTop: 8, fontSize: 12, color: '#374151' }}>
+                                                
+                                                {roomInfo.moTa && <div style={{ marginTop: 6, color: '#6b7280' }}>{String(roomInfo.moTa).slice(0,120)}{String(roomInfo.moTa).length>120? '...':''}</div>}
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      </div>
+                                    </div>
+                          </div>
+                        </div>
+
+                        <div style={{ height: 1, background: '#eef2f6', margin: '12px 0' }} />
+
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <Button type="primary" onClick={() => onAddService?.(row)} style={{ minWidth: 140 }}>Thêm dịch vụ</Button>
+                          <Button onClick={() => openServiceViewer(row)} style={{ minWidth: 140 }}>Xem dịch vụ</Button>
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Cards per room */}
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                {((roomLines && roomLines.length > 0) ? roomLines : [null]).map((it: any, idx: number) => {
-                  const { ten, so } = extractRoomInfo(it || {});
-                  const primary = ten ?? (so ? `Phòng ${so}` : `#${idx + 1}`);
-
-                  // price extraction heuristic
-                  const price = it?.DonGia ?? it?.Gia ?? it?.GiaPhong ?? it?.Price ?? null;
-
-                  return (
-                    <Card key={idx} hoverable style={{ width: 340, padding: 16, borderRadius: 8, boxShadow: "0 6px 18px rgba(15,23,42,0.06)" }}>
-                      <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 4 }}>{primary}</div>
-                      <div style={{ fontSize: 13, color: "#64748b", marginBottom: 10 }}>Check-in: {row.NgayNhanPhong ?? "-"}</div>
-
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
-                        <div style={{ fontSize: 14 }}>
-                          <div style={{ marginBottom: 6 }}>Giá: {price ? `${Number(price).toLocaleString()} đ/đêm` : "-"}</div>
-                          <div>Trạng thái: <Tag color="green" style={{ fontSize: 12, padding: '2px 8px' }}>Đang ở</Tag></div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 13, color: "#64748b" }}>Số khách</div>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>{it?.SoKhach ?? (it?.SoNguoi ?? "-")}</div>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "flex", gap: 12 }}>
-                        <Button type="primary" onClick={() => onAddService?.(row)} style={{ minWidth: 140 }}>Thêm dịch vụ</Button>
-                        <Button onClick={() => openServiceViewer(row)} style={{ minWidth: 140 }}>Xem chi tiết dịch vụ</Button>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
         {/* Service viewer modal (read-only) */}
         <FormService
           visible={viewerVisible}

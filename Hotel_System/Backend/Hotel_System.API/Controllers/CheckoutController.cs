@@ -51,6 +51,15 @@ namespace Hotel_System.API.Controllers
         // Số điểm khách muốn dùng để giảm giá (tính theo điểm, không phải tiền)
         public int? PointsToUse { get; set; }
     }
+
+    public class ForceCancelRequest
+    {
+        public string BookingId { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty; // no_checkout, no_response, force_process, other
+        public string DepositHandling { get; set; } = "refund"; // refund, partial, keep
+        public decimal? DepositPartialAmount { get; set; }
+        public string? Notes { get; set; }
+    }
     // DTO for previewing checkout totals when using points
     public class CheckoutPreviewRequest
     {
@@ -2268,6 +2277,35 @@ namespace Hotel_System.API.Controllers
 
             decimal roomRate = room?.GiaCoBanMotDem ?? 0;
 
+            // ===== APPLY PROMOTION TO GET DISCOUNTED PRICE =====
+            decimal appliedRoomRate = roomRate;
+            try
+            {
+                var today = DateOnly.FromDateTime(DateTime.Now);
+                var promotion = await _context.KhuyenMais
+                    .Include(km => km.KhuyenMaiPhongs)
+                    .Where(km => km.TrangThai == "active" &&
+                                 km.NgayBatDau <= today &&
+                                 km.NgayKetThuc >= today)
+                    .FirstOrDefaultAsync(km => km.KhuyenMaiPhongs.Any(kmp => kmp.Idphong == roomId));
+
+                if (promotion != null)
+                {
+                    if (promotion.LoaiGiamGia == "percent" && promotion.GiaTriGiam.HasValue)
+                    {
+                        appliedRoomRate = Math.Round(roomRate * (1 - promotion.GiaTriGiam.Value / 100m));
+                    }
+                    else if (promotion.LoaiGiamGia == "amount" && promotion.GiaTriGiam.HasValue)
+                    {
+                        appliedRoomRate = Math.Max(0, roomRate - promotion.GiaTriGiam.Value);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[CheckExtendAvailability] Failed to get promotion for room {RoomId}", roomId);
+            }
+
             response.SameDayOptions = new List<DTOs.ExtendOption>
             {
                 new DTOs.ExtendOption
@@ -2275,29 +2313,29 @@ namespace Hotel_System.API.Controllers
                     Hour = 15,
                     Description = "Đến 15:00",
                     Percentage = 30,
-                    Fee = Math.Round(roomRate * 0.30m),
-                    FeeWithVat = Math.Round(roomRate * 0.30m * 1.10m)
+                    Fee = Math.Round(appliedRoomRate * 0.30m),
+                    FeeWithVat = Math.Round(appliedRoomRate * 0.30m * 1.10m)
                 },
                 new DTOs.ExtendOption
                 {
                     Hour = 18,
                     Description = "Đến 18:00",
                     Percentage = 50,
-                    Fee = Math.Round(roomRate * 0.50m),
-                    FeeWithVat = Math.Round(roomRate * 0.50m * 1.10m)
+                    Fee = Math.Round(appliedRoomRate * 0.50m),
+                    FeeWithVat = Math.Round(appliedRoomRate * 0.50m * 1.10m)
                 },
                 new DTOs.ExtendOption
                 {
                     Hour = 24,
                     Description = "Đến 23:59 (cả ngày)",
                     Percentage = 100,
-                    Fee = roomRate,
-                    FeeWithVat = Math.Round(roomRate * 1.10m)
+                    Fee = appliedRoomRate,
+                    FeeWithVat = Math.Round(appliedRoomRate * 1.10m)
                 }
             };
 
-            response.ExtraNightRate = roomRate;
-            response.ExtraNightRateWithVat = Math.Round(roomRate * 1.10m);
+            response.ExtraNightRate = appliedRoomRate;
+            response.ExtraNightRateWithVat = Math.Round(appliedRoomRate * 1.10m);
 
             // Kiểm tra xem đã có gia hạn trong ngày (SameDay) chưa
             // Dựa vào GhiChu của HoaDon chứa "Gia hạn đến" (pattern từ SameDay extend)
@@ -2309,41 +2347,80 @@ namespace Hotel_System.API.Controllers
                 .Any(h => !string.IsNullOrEmpty(h.GhiChu) && h.GhiChu.Contains("Gia hạn đến")) ?? false;
 
             response.HasSameDayExtended = hasSameDayExtended;
-
             // Trạng thái 3 (đang sử dụng) LUÔN có thể gia hạn
             response.CanExtend = true;
 
-            // Lấy danh sách phòng trống từ service chung `check-available-rooms`
-            // Use DateTime directly for check-in/check-out times (midnight boundaries)
-            DateTime checkInDt = DateTime.Today.AddDays(1); // 00:00 of tomorrow
-            DateTime checkOutDt = DateTime.Today.AddDays(2); // 00:00 of the day after tomorrow
-            var rooms = await _roomService.CheckAvailableRoomsAsync(checkInDt, checkOutDt, booking.SoNguoi ?? 1);
+            // ===== LẤY DANH SÁCH PHÒNG TRỐNG CHỈ TỪ BẢNG DatPhong =====
+            // Phòng trống = KHÔNG có booking với status 1, 2, 3, 5 (hoạt động/chưa thanh toán/đang sử dụng/quá hạn)
+            // Phòng có booking với status 0 (hủy) hoặc 4 (hoàn tất) = được coi là trống
+            var checkinDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1)); // Tomorrow
+            var checkoutDate = DateOnly.FromDateTime(DateTime.Today.AddDays(2)); // Day after tomorrow
 
-            // CHỈ LẤY PHÒNG TRỐNG (không đang sử dụng) và loại bỏ phòng hiện tại
-            var emptyRooms = await _context.Phongs
-                .Where(p => p.TrangThai == "Trống" && p.Idphong != roomId)
-                .Select(p => p.Idphong)
+            // Lấy danh sách tất cả phòng từ bảng Phongs
+            var allRooms = await _context.Phongs
+                .Include(p => p.IdloaiPhongNavigation)
                 .ToListAsync();
 
-            // Lọc: chỉ giữ phòng có trong danh sách service VÀ thực sự đang trống
-            var availableRooms = rooms
-                .Where(r => emptyRooms.Contains(r.RoomId))
-                .Select(r => new DTOs.AvailableRoomForExtend
+            // Lấy danh sách phòng đang có booking HOẠT ĐỘNG (status 1, 2, 3, 5) trong khoảng thời gian check
+            var bookedRoomIds = await _context.DatPhongs
+                .Where(b => (b.TrangThai == 1 || b.TrangThai == 2 || b.TrangThai == 3 || b.TrangThai == 5))
+                .Where(b => !(b.NgayTraPhong <= checkinDate || b.NgayNhanPhong >= checkoutDate))
+                .Select(b => b.Idphong)
+                .Distinct()
+                .ToListAsync();
+
+            // Phòng trống = phòng KHÔNG nằm trong danh sách phòng có booking hoạt động, và không phải phòng hiện tại
+            var availableRooms = allRooms
+                .Where(r => !bookedRoomIds.Contains(r.Idphong) && r.Idphong != roomId)
+                .Select(async r =>
                 {
-                    Idphong = r.RoomId,
-                    TenPhong = r.RoomName,
-                    SoPhong = r.RoomNumber,
-                    TenLoaiPhong = r.RoomTypeName,
-                    GiaMotDem = r.BasePricePerNight,
-                    UrlAnhPhong = r.RoomImageUrl,
-                    SoNguoiToiDa = r.MaxOccupancy,
-                    TrangThai = "Trống", // Đảm bảo trả về trạng thái để frontend biết
-                    // Promotion fields (RoomService already computed these when calling CheckAvailableRoomsAsync)
-                    PromotionName = r.PromotionName,
-                    DiscountPercent = r.DiscountPercent,
-                    DiscountedPrice = r.DiscountedPrice,
-                    Description = r.Description
-                }).ToList();
+                    // Lấy thông tin khuyến mãi cho phòng này
+                    var today = DateOnly.FromDateTime(DateTime.Now);
+                    var promotion = await _context.KhuyenMais
+                        .Include(km => km.KhuyenMaiPhongs)
+                        .Where(km => km.TrangThai == "active" &&
+                                     km.NgayBatDau <= today &&
+                                     km.NgayKetThuc >= today)
+                        .FirstOrDefaultAsync(km => km.KhuyenMaiPhongs.Any(kmp => kmp.Idphong == r.Idphong));
+
+                    decimal basePrice = r.GiaCoBanMotDem ?? 0;
+                    decimal discountedPrice = basePrice;
+                    decimal? discountPercent = null;
+
+                    if (promotion != null && promotion.GiaTriGiam.HasValue)
+                    {
+                        if (promotion.LoaiGiamGia == "percent")
+                        {
+                            discountPercent = promotion.GiaTriGiam.Value;
+                            discountedPrice = Math.Round(basePrice * (1 - promotion.GiaTriGiam.Value / 100m));
+                        }
+                        else if (promotion.LoaiGiamGia == "amount")
+                        {
+                            discountedPrice = Math.Max(0, basePrice - promotion.GiaTriGiam.Value);
+                            discountPercent = Math.Round((basePrice - discountedPrice) / basePrice * 100m);
+                        }
+                    }
+
+                    return new DTOs.AvailableRoomForExtend
+                    {
+                        Idphong = r.Idphong,
+                        TenPhong = r.TenPhong,
+                        SoPhong = r.SoPhong,
+                        TenLoaiPhong = r.IdloaiPhongNavigation?.TenLoaiPhong,
+                        GiaMotDem = basePrice,
+                        UrlAnhPhong = r.UrlAnhPhong,
+                        SoNguoiToiDa = r.SoNguoiToiDa,
+                        // Do not infer room availability from Phong.TrangThai here.
+                        // Availability is determined solely from DatPhong bookings (server-side),
+                        // so we omit returning a hard-coded "Trống" label.
+                        PromotionName = promotion?.TenKhuyenMai,
+                        DiscountPercent = discountPercent,
+                        DiscountedPrice = discountedPrice,
+                        Description = r.MoTa
+                    };
+                })
+                .Select(t => t.Result)
+                .ToList();
 
             response.AvailableRooms = availableRooms;
 
@@ -2422,38 +2499,74 @@ namespace Hotel_System.API.Controllers
                 decimal roomRate = room?.GiaCoBanMotDem ?? 0;
                 var oldCheckout = booking.NgayTraPhong;
 
-                // Tính phí gia hạn
+                // ===== CHECK PROMOTIONS FIRST (để tính giá sau khuyến mãi trước) =====
+                decimal appliedRoomRate = roomRate;
+                var promotion = await _context.KhuyenMais
+                    .Include(km => km.KhuyenMaiPhongs)
+                    .Where(km => km.TrangThai == "active" &&
+                                 km.NgayBatDau <= DateOnly.FromDateTime(DateTime.Now) &&
+                                 km.NgayKetThuc >= DateOnly.FromDateTime(DateTime.Now))
+                    .FirstOrDefaultAsync(km => km.KhuyenMaiPhongs.Any(kmp => kmp.Idphong == booking.Idphong));
+
+                string? promotionName = null;
+                if (promotion != null)
+                {
+                    promotionName = promotion.TenKhuyenMai;
+                    if (promotion.LoaiGiamGia == "percent" && promotion.GiaTriGiam.HasValue)
+                    {
+                        // Tính giá SAU khuyến mãi
+                        appliedRoomRate = Math.Round(roomRate * (1 - promotion.GiaTriGiam.Value / 100m));
+                    }
+                    else if (promotion.LoaiGiamGia == "amount" && promotion.GiaTriGiam.HasValue)
+                    {
+                        // Tính giá SAU khuyến mãi (trừ số tiền cố định)
+                        appliedRoomRate = Math.Max(0, roomRate - promotion.GiaTriGiam.Value);
+                    }
+                }
+
+                // Tính phí gia hạn (dựa trên giá AFTER discount)
                 DateOnly newCheckoutDate;
                 decimal extendFee = 0;
                 string extendDescription = "";
+                decimal discountAmount = 0m;
 
                 if (request.ExtendType == DTOs.ExtendType.SameDay)
                 {
                     newCheckoutDate = booking.NgayTraPhong;
 
                     int hour = request.NewCheckoutHour ?? 15;
+                    decimal percentage = 0m;
                     switch (hour)
                     {
                         case 15:
-                            extendFee = Math.Round(roomRate * 0.30m);
+                            percentage = 0.30m;
+                            extendFee = Math.Round(appliedRoomRate * 0.30m);
                             extendDescription = "Gia hạn đến 15:00 (30%)";
                             break;
                         case 18:
-                            extendFee = Math.Round(roomRate * 0.50m);
+                            percentage = 0.50m;
+                            extendFee = Math.Round(appliedRoomRate * 0.50m);
                             extendDescription = "Gia hạn đến 18:00 (50%)";
                             break;
                         default:
-                            extendFee = roomRate;
+                            percentage = 1m;
+                            extendFee = appliedRoomRate;
                             extendDescription = "Gia hạn đến 23:59 (100%)";
                             break;
                     }
+                    // Tính discount amount: (giá gốc × %) - (giá sau khuyến mãi × %)
+                    decimal baseExtendFee = Math.Round(roomRate * percentage);
+                    discountAmount = baseExtendFee - extendFee;
                 }
                 else
                 {
                     int nights = Math.Max(1, request.ExtraNights);
                     newCheckoutDate = booking.NgayTraPhong.AddDays(nights);
-                    extendFee = roomRate * nights;
+                    extendFee = appliedRoomRate * nights;
                     extendDescription = $"Gia hạn thêm {nights} đêm";
+                    // Tính discount amount: (giá gốc × nights) - (giá sau khuyến mãi × nights)
+                    decimal baseExtendFee = roomRate * nights;
+                    discountAmount = baseExtendFee - extendFee;
                 }
 
                 decimal vatAmount = Math.Round(extendFee * 0.10m);
@@ -2466,19 +2579,6 @@ namespace Hotel_System.API.Controllers
                 // Ensure the physical room remains in 'Đang sử dụng' when we extend
                 // without changing room. This prevents the room record from being
                 // accidentally marked as 'Trống' by other flows.
-                try
-                {
-                    if (room != null)
-                    {
-                        room.TrangThai = "Đang sử dụng";
-                        _context.Phongs.Update(room);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to enforce room status 'Đang sử dụng' for room {RoomId} when extending booking {BookingId}", room?.Idphong, booking.IddatPhong);
-                }
-
                 // Nếu là gia hạn thêm đêm, cập nhật số đêm của booking và chi tiết đặt phòng tương ứng
                 if (request.ExtendType == DTOs.ExtendType.ExtraNight)
                 {
@@ -2678,6 +2778,11 @@ namespace Hotel_System.API.Controllers
                     Message = $"Gia hạn thành công. {paymentStatus}",
                     IddatPhong = booking.IddatPhong,
                     ExtendFee = extendFee,
+                    ExtendFeeBeforeDiscount = extendFee + discountAmount,
+                    DiscountAmount = discountAmount,
+                    PromotionName = promotionName,
+                    PromotionType = promotion?.LoaiGiamGia,
+                    PromotionValue = promotion?.GiaTriGiam,
                     VatAmount = vatAmount,
                     TotalExtendFee = totalExtendFee,
                     OldCheckout = oldCheckout,
@@ -2733,21 +2838,19 @@ namespace Hotel_System.API.Controllers
             if (newRoom == null)
                 return BadRequest(new { message = "Phòng mới không tồn tại." });
 
-            // KIỂM TRA: Phòng mới phải TRỐNG mới được đổi
-            if (newRoom.TrangThai != "Trống")
-            {
-                return BadRequest(new { message = $"Phòng {newRoom.TenPhong} đang được sử dụng. Vui lòng chọn phòng trống khác." });
-            }
+           
 
             var oldRoom = await _context.Phongs.FindAsync(oldBooking.Idphong);
             var oldCheckout = oldBooking.NgayTraPhong;
             decimal newRoomRate = newRoom.GiaCoBanMotDem ?? 0;
+            
             // Check active promotions for the new room and compute applied rate
             decimal appliedRoomRate = newRoomRate;
+            KhuyenMaiPhong? promoKmp = null;
             try
             {
                 var today = DateOnly.FromDateTime(DateTime.Now);
-                var promoKmp = await _context.KhuyenMaiPhongs
+                promoKmp = await _context.KhuyenMaiPhongs
                     .Include(kmp => kmp.IdkhuyenMaiNavigation)
                     .Where(kmp => kmp.Idphong == newRoom.Idphong && kmp.IsActive &&
                                   kmp.IdkhuyenMaiNavigation.TrangThai == "active" &&
@@ -2809,6 +2912,30 @@ namespace Hotel_System.API.Controllers
                 newCheckoutDate = DateOnly.FromDateTime(DateTime.Today.AddDays(nights));
                 extendFee = appliedRoomRate * nights;
                 extendDescription = $"Gia hạn thêm {nights} đêm - {newRoom.TenPhong}";
+            }
+
+            // Tính discount amount: (giá gốc × %) - extendFee (đã tính từ giá after discount)
+            decimal discountAmountExtendFee = 0m;
+            string? promotionNameExtendFee = null;
+            KhuyenMai? promoForExtendFee = null;
+            if (promoKmp != null)
+            {
+                promoForExtendFee = promoKmp.IdkhuyenMaiNavigation;
+                promotionNameExtendFee = promoForExtendFee.TenKhuyenMai;
+                
+                if (request.ExtendType == DTOs.ExtendType.SameDay)
+                {
+                    int hour = request.NewCheckoutHour ?? 15;
+                    decimal percentage = hour == 15 ? 0.30m : (hour == 18 ? 0.50m : 1m);
+                    decimal baseFeeBeforeDiscount = Math.Round(newRoomRate * percentage);
+                    discountAmountExtendFee = Math.Round(baseFeeBeforeDiscount - extendFee);
+                }
+                else
+                {
+                    int nights = Math.Max(1, request.ExtraNights);
+                    decimal baseFeeBeforeDiscount = newRoomRate * nights;
+                    discountAmountExtendFee = Math.Round(baseFeeBeforeDiscount - extendFee);
+                }
             }
 
             decimal vatAmount = Math.Round(extendFee * 0.10m);
@@ -2949,6 +3076,11 @@ namespace Hotel_System.API.Controllers
                 Message = "Đổi phòng và gia hạn thành công",
                 IddatPhong = newBookingId,
                 ExtendFee = extendFee,
+                ExtendFeeBeforeDiscount = extendFee + discountAmountExtendFee,
+                DiscountAmount = discountAmountExtendFee,
+                PromotionName = promotionNameExtendFee,
+                PromotionType = promoForExtendFee?.LoaiGiamGia,
+                PromotionValue = promoForExtendFee?.GiaTriGiam,
                 VatAmount = vatAmount,
                 TotalExtendFee = totalExtendFee,
                 OldCheckout = oldCheckout,
@@ -2969,6 +3101,116 @@ namespace Hotel_System.API.Controllers
             return Ok(response);
         }
 
+        // ===================== CONFIRM PAID (QR / MANUAL PAYMENT) =========================
+        [HttpPost("confirm-paid/{idDatPhong}")]
+        public async Task<IActionResult> ConfirmPaid(string idDatPhong, [FromBody] ConfirmPaidRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(idDatPhong))
+                    return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });
+
+                // Find the booking
+                var booking = await _context.DatPhongs
+                    .Include(dp => dp.HoaDons)
+                    .FirstOrDefaultAsync(dp => dp.IddatPhong == idDatPhong);
+
+                if (booking == null)
+                    return NotFound(new { message = "Không tìm thấy đặt phòng." });
+
+                // Find the invoice if HoaDonId provided, otherwise use the latest one
+                HoaDon hoaDon = null;
+                if (!string.IsNullOrWhiteSpace(request.HoaDonId))
+                {
+                    hoaDon = await _context.HoaDons
+                        .FirstOrDefaultAsync(h => h.IdhoaDon == request.HoaDonId && h.IddatPhong == idDatPhong);
+                }
+                else
+                {
+                    // Get the latest invoice for this booking
+                    hoaDon = booking.HoaDons?
+                        .OrderByDescending(h => h.NgayLap)
+                        .FirstOrDefault();
+                }
+
+                if (hoaDon == null)
+                    return NotFound(new { message = "Không tìm thấy hóa đơn." });
+
+                // Update payment amount if provided
+                if (request.Amount.HasValue && request.Amount.Value > 0)
+                {
+                    hoaDon.TienThanhToan = (hoaDon.TienThanhToan ?? 0m) + Math.Round(request.Amount.Value, 0, MidpointRounding.AwayFromZero);
+                }
+
+                // If it's an online payment (IsOnline = true) with an Amount, mark invoice as paid
+                if (request.IsOnline == true && request.Amount.HasValue && request.Amount.Value > 0)
+                {
+                    hoaDon.TrangThaiThanhToan = 2; // 2 = Đã thanh toán / Paid
+                }
+
+                // Append note if provided
+                if (!string.IsNullOrWhiteSpace(request.Note))
+                {
+                    hoaDon.GhiChu = (hoaDon.GhiChu ?? string.Empty) + 
+                        (string.IsNullOrEmpty(hoaDon.GhiChu) ? "" : "; ") + 
+                        $"[Xác nhận thanh toán] {request.Note}";
+                }
+
+                // Save changes
+                _context.HoaDons.Update(hoaDon);
+                await _context.SaveChangesAsync();
+
+                // Recompute invoice and booking totals/status so booking.TrangThaiThanhToan
+                // is synced when invoice is marked paid (especially for online payments).
+                try
+                {
+                    await RecomputeInvoiceAndBookingTotal(hoaDon);
+
+                    // Also ensure booking-level status reflects paid if any invoice is fully paid
+                    var refreshedBooking = await _context.DatPhongs
+                        .Include(dp => dp.HoaDons)
+                        .FirstOrDefaultAsync(dp => dp.IddatPhong == idDatPhong);
+                    if (refreshedBooking != null)
+                    {
+                        bool anyPaid = refreshedBooking.HoaDons?.Any(h => h.TrangThaiThanhToan == 2) ?? false;
+                        if (anyPaid)
+                        {
+                            refreshedBooking.TrangThaiThanhToan = 2;
+                            _context.DatPhongs.Update(refreshedBooking);
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+                }
+                catch (Exception exRecompute)
+                {
+                    _logger.LogWarning(exRecompute, "[ConfirmPaid] RecomputeInvoiceAndBookingTotal failed for {BookingId}: {Message}", idDatPhong, exRecompute.Message);
+                }
+
+                _logger.LogInformation(
+                    "[ConfirmPaid] Confirmed payment for booking {BookingId}, Invoice {InvoiceId}, Amount: {Amount}, IsOnline: {IsOnline}, TrangThaiThanhToan: {Status}",
+                    idDatPhong, hoaDon.IdhoaDon, request.Amount ?? 0, request.IsOnline ?? false, hoaDon.TrangThaiThanhToan);
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "Xác nhận thanh toán thành công",
+                    HoaDonId = hoaDon.IdhoaDon,
+                    TienThanhToan = hoaDon.TienThanhToan,
+                    TongTien = hoaDon.TongTien,
+                    TrangThaiThanhToan = hoaDon.TrangThaiThanhToan
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ConfirmPaid] Error for booking {BookingId}: {Message}", idDatPhong, ex.Message);
+                return StatusCode(500, new
+                {
+                    message = "Lỗi khi xác nhận thanh toán",
+                    error = ex.Message
+                });
+            }
+        }
+
         private async Task<List<DTOs.AvailableRoomForExtend>> FindAvailableRoomsForExtend(DateTime checkin, DateTime checkout, int guests, string? excludeRoomId)
         {
             var checkinDate = DateOnly.FromDateTime(checkin);
@@ -2987,7 +3229,6 @@ namespace Hotel_System.API.Controllers
                 .Include(p => p.IdloaiPhongNavigation)
                 .Where(p => !bookedRoomIds.Contains(p.Idphong))
                 .Where(p => p.Idphong != excludeRoomId)
-                .Where(p => p.TrangThai == "Trống") // CHỈ phòng trống
                 .Where(p => (p.SoNguoiToiDa ?? 2) >= guests)
                 .Select(p => new
                 {
@@ -3027,7 +3268,6 @@ namespace Hotel_System.API.Controllers
                     UrlAnhPhong = r.RawImageUrl,
                     SoNguoiToiDa = r.MaxOccupancy,
                     Description = r.Description,
-                    TrangThai = "Trống"
                 };
 
                 if (promotionsDict != null && promotionsDict.TryGetValue(r.RoomId, out var kmp))
@@ -3084,6 +3324,124 @@ namespace Hotel_System.API.Controllers
                 return null;
 
             return ghiChu.Substring(startIndex, endIndex - startIndex).Trim();
+        }
+
+        // ===================== FORCE CANCEL (HỦY LƯU TRÚ DO QUÁ HẠN) =========================
+        [HttpPost("force-cancel")]
+        public async Task<IActionResult> ForceCancel([FromBody] ForceCancelRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.BookingId))
+                return BadRequest(new { message = "BookingId là bắt buộc" });
+
+            try
+            {
+                var booking = await _context.DatPhongs
+                    .Include(b => b.IdkhachHangNavigation)
+                    .Include(b => b.HoaDons)
+                    .Include(b => b.IdphongNavigation)
+                    .FirstOrDefaultAsync(b => b.IddatPhong == request.BookingId);
+
+                if (booking == null)
+                    return NotFound(new { message = "Không tìm thấy đặt phòng" });
+
+                // Update booking status to 0 (cancelled)
+                booking.TrangThai = 0;
+
+                // Update room status back to available
+                if (booking.IdphongNavigation != null)
+                {
+                    booking.IdphongNavigation.TrangThai = "Trống";
+                }
+                else if (!string.IsNullOrEmpty(booking.Idphong))
+                {
+                    var room = await _context.Phongs.FirstOrDefaultAsync(p => p.Idphong == booking.Idphong);
+                    if (room != null)
+                        room.TrangThai = "Trống";
+                }
+
+                // Add note to latest invoice if exists
+                var latestInvoice = booking.HoaDons?.OrderByDescending(h => h.NgayLap).FirstOrDefault();
+                if (latestInvoice != null)
+                {
+                    var cancelNote = $"[FORCE_CANCEL] Lý do: {request.Reason} | Ngày hủy: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+                    if (!string.IsNullOrEmpty(request.Notes))
+                        cancelNote += $" | Ghi chú: {request.Notes}";
+
+                    if (string.IsNullOrEmpty(latestInvoice.GhiChu))
+                        latestInvoice.GhiChu = cancelNote;
+                    else
+                        latestInvoice.GhiChu += "\n" + cancelNote;
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Send email notification to customer
+                var email = booking.IdkhachHangNavigation?.Email;
+                var hoTen = booking.IdkhachHangNavigation?.HoTen;
+
+                if (!string.IsNullOrEmpty(email))
+                {
+                    try
+                    {
+                        await SendForceCancelEmail(email, hoTen, request);
+                    }
+                    catch (Exception exEmail)
+                    {
+                        _logger.LogWarning(exEmail, "[ForceCancel] Failed to send email for booking {BookingId}", request.BookingId);
+                    }
+                }
+
+                _logger.LogInformation("[ForceCancel] Booking {BookingId} đã bị hủy lưu trú. Lý do: {Reason}. Xử lý tiền cọc: {DepositHandling}",
+                    request.BookingId, request.Reason, request.DepositHandling);
+
+                return Ok(new { message = "Hủy lưu trú thành công. Email thông báo đã gửi cho khách." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ForceCancel] Error for booking {BookingId}: {Message}", request.BookingId, ex.Message);
+                return StatusCode(500, new { message = "Lỗi khi hủy lưu trú: " + ex.Message });
+            }
+        }
+
+        // Helper to send force cancel email
+        private async Task SendForceCancelEmail(string email, string? hoTen, ForceCancelRequest request)
+        {
+            try
+            {
+                var subject = "Robins Villa – Hủy lưu trú do quá hạn trả phòng";
+
+                var reasonText = request.Reason switch
+                {
+                    "no_checkout" => "Khách không trả phòng đúng giờ",
+                    "no_response" => "Không phản hồi sau khi liên hệ",
+                    "force_process" => "Xử lý cưỡng chế theo quy trình",
+                    _ => "Lý do khác"
+                };
+
+                var body = $@"
+Kính gửi anh/chị {hoTen ?? "khách hàng"},
+
+Đến 12:00 ngày {DateTime.Now:dd/MM/yyyy}, khách sạn đã nhiều lần liên hệ nhưng không nhận được phản hồi từ anh/chị để thực hiện thủ tục trả phòng.
+
+Theo quy định vận hành, chúng tôi đã ghi nhận lý do: <b>{reasonText}</b>
+
+Chúng tôi đã tiến hành hủy lưu trú cho đặt phòng của anh/chị.
+
+Các chi phí phát sinh (nếu có) sẽ được khấu trừ vào tiền cọc hoặc cập nhật vào công nợ của anh/chị theo chính sách của khách sạn.
+
+Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ hotline 1900-xxxx.
+
+Trân trọng,
+Robins Villa
+";
+
+                await SafeSendEmailAsync(email, hoTen, subject, body);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[SendForceCancelEmail] Failed to send email to {Email}", email);
+                throw;
+            }
         }
     }
 }

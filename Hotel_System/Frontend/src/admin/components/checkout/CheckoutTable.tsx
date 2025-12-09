@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Space, Tag, Segmented } from "antd";
+import { Button, Space, Tag, Segmented, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import DataTable from "../DataTable";
 
@@ -20,6 +20,7 @@ interface Props {
   onPay: (row: BookingRow) => void;
   onComplete: (row: BookingRow) => void;
   onPayOverdue?: (row: BookingRow) => void;
+  onCancelOverdue?: (row: BookingRow) => void;
   // When in checkout view, parent can request the payment form to open (same as 'using' view)
   onOpenPaymentForm?: (row: BookingRow) => void;
   onAddService?: (row: BookingRow) => void;
@@ -36,6 +37,7 @@ const CheckoutTable: React.FC<Props> = ({
   onPay,
   onComplete,
   onPayOverdue,
+  onCancelOverdue,
   onOpenPaymentForm,
   onAddService,
   onViewInvoice,
@@ -215,9 +217,33 @@ const CheckoutTable: React.FC<Props> = ({
         const isPaid = (r.TrangThaiThanhToan ?? 0) === 2;
         const isCompleted = (r.TrangThai ?? 0) === 4;
         const isOverdueStatus = (r.TrangThai ?? 0) === 5;
+        const lateFeeHasBeenPaid = overduePaidMap[r.IddatPhong] ?? false;
 
-        // ✅ Nếu trạng thái quá hạn (5) → chỉ hiển thị nút "Thanh toán phí trả phòng muộn"
+        // ✅ Nếu trạng thái quá hạn (5)
         if (isOverdueStatus) {
+          // If late fee has been paid → show checkout button
+          if (lateFeeHasBeenPaid) {
+            return (
+              <Space>
+                <Button
+                  type="primary"
+                  style={{ background: '#22c55e', borderColor: '#22c55e' }}
+                  disabled={!!disabledMap[r.IddatPhong]}
+                  onClick={() => {
+                    setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
+                    setTimeout(
+                      () => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })),
+                      5000
+                    );
+                    (onViewInvoice ? onViewInvoice(r) : onComplete(r));
+                  }}
+                >
+                  Xác nhận trả phòng
+                </Button>
+              </Space>
+            );
+          }
+          // If late fee NOT paid yet → show late fee payment button
           return (
             <Space>
               <Button
@@ -247,6 +273,30 @@ const CheckoutTable: React.FC<Props> = ({
                 }}
               >
                 Thanh toán phí trả phòng muộn
+              </Button>
+
+              {/* Cancel button next to pay button */}
+                  <Button
+                type="default"
+                danger
+                disabled={!!disabledMap[r.IddatPhong]}
+                onClick={async () => {
+                  // Prefer parent handler if provided
+                  try {
+                    setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
+                    if (typeof onCancelOverdue === 'function') {
+                      await onCancelOverdue(r);
+                    } else {
+                      message.info(`Hủy thao tác thanh toán cho ${r.IddatPhong}`);
+                    }
+                  } catch (e) {
+                    // ignore
+                  } finally {
+                    setTimeout(() => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })), 1000);
+                  }
+                }}
+              >
+                Hủy
               </Button>
             </Space>
           );

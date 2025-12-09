@@ -13,7 +13,7 @@ interface Props {
   roomLines?: string[];
   servicesTotal?: number;
   onCancel: () => void;
-  onSubmit: () => void; 
+  onSubmit: () => void;
   // Indicates the booking/invoice has a confirmed extension (gia hạn)
   isExtended?: boolean;
 }
@@ -26,8 +26,7 @@ const PaymentModal: React.FC<Props> = ({
   selectedServices,
   form,
   onCancel,
-  onSubmit
-  ,
+  onSubmit,
   isExtended = false
 }) => {
   // Tổng tiền phòng: đọc từ summary
@@ -493,10 +492,6 @@ const PaymentModal: React.FC<Props> = ({
   } else {
     if ((!ef || ef <= 0) && extendPercent != null) {
       // Derive a per-night room rate.
-      // Strategy:
-      // 1) Prefer an item with both `giaPhong` (or `gia`) and `soDem` > 0.
-      // 2) Otherwise prefer the item with the maximum `giaPhong`/`gia`.
-      // 3) Fallback to `roomTotal / totalNights` if total nights available, else `roomTotal`.
       let perNight = 0;
       try {
         const items = Array.isArray(summary?.items) ? summary.items : [];
@@ -598,44 +593,27 @@ const PaymentModal: React.FC<Props> = ({
     }
   };
 
-  const invoiceStatus =
-    Array.isArray(summary?.invoices) && summary.invoices.length > 0
-      ? summary.invoices[0].trangThaiThanhToan ??
-        summary.invoices[0].TrangThaiThanhToan ??
-        summary.invoices[0].trangThaiThanhToan
-      : undefined;
-
-  const statusCandidates = [
-    invoiceStatus,
-    paymentRow?.TrangThaiThanhToan,
-    paymentRow?.trangThaiThanhToan
-  ];
-  const isPaid = statusCandidates.some(
-    (v) => String(v ?? '').trim() === '2'
-  );
+  // Label nút xác nhận: nếu cần thu > 0 thì “Thanh toán & mở hóa đơn”, ngược lại “Mở hóa đơn”
+  const confirmLabel = needToPay > 0 ? 'Thanh toán & mở hóa đơn' : 'Mở hóa đơn';
 
   return (
     <Modal
       title={`Thanh toán – ${paymentRow?.IddatPhong}`}
       open={visible}
       onCancel={onCancel}
-      onOk={handleOk}
-      okText="Xác nhận"
-      cancelText="Hủy"
-      confirmLoading={submitting}
       width={900}
-      footer={
-          isOverdueBooking
-          ? [
-              <Button key="close" onClick={onCancel}>Đóng</Button>,
-              <Button key="confirm" type="primary" onClick={handleOk} loading={submitting}>
-                Thanh toán
-              </Button>
-            ]
-          : isPaid
-          ? [<Button key="close" onClick={onCancel}>Đóng</Button>]
-          : undefined
-      }
+      footer={[
+        <Button key="close" onClick={onCancel}>Đóng</Button>,
+        <Button
+          key="confirm"
+          type="primary"
+          onClick={handleOk}
+          loading={submitting}
+          disabled={summaryLoading}
+        >
+          {confirmLabel}
+        </Button>
+      ]}
     >
       <Spin spinning={summaryLoading}>
         <Form form={form} layout="vertical">
@@ -661,23 +639,21 @@ const PaymentModal: React.FC<Props> = ({
                 <strong>{paymentRow?.NgayTraPhong?.slice(0, 10)}</strong>
               </div>
             </div>
-              {/* Badge: indicate booking has been extended (based on notes or percent),
-                  even if backend returned no separate extendFee value. */}
-              {(!isOverdueBooking && (hasExtendNote || extendPercent != null || extendDurationLabel)) && (
-                <div style={{ marginTop: 8 }}>
-                  <Tag color="gold" style={{ fontWeight: 700 }}>ĐÃ GIA HẠN</Tag>
-                </div>
-              )}
-              {(extendDurationLabel || extendPercent !== null) && (hasExtendNote || extendPercent != null || extendDurationLabel) && (
-                <div style={{ marginTop: 8, color: '#92400e' }}>
-                  {extendDurationLabel && (
-                    <div style={{ fontSize: 12 }}>Thời gian gia hạn: {extendDurationLabel}</div>
-                  )}
-                  {extendPercent !== null && extendPercent !== undefined && (
-                    <div style={{ fontSize: 12 }}>Tỷ lệ gia hạn: {Number(extendPercent).toString()}%</div>
-                  )}
-                </div>
-              )}
+            {(!isOverdueBooking && (hasExtendNote || extendPercent != null || extendDurationLabel)) && (
+              <div style={{ marginTop: 8 }}>
+                <Tag color="gold" style={{ fontWeight: 700 }}>ĐÃ GIA HẠN</Tag>
+              </div>
+            )}
+            {(extendDurationLabel || extendPercent !== null) && (hasExtendNote || extendPercent != null || extendDurationLabel) && (
+              <div style={{ marginTop: 8, color: '#92400e' }}>
+                {extendDurationLabel && (
+                  <div style={{ fontSize: 12 }}>Thời gian gia hạn: {extendDurationLabel}</div>
+                )}
+                {extendPercent !== null && extendPercent !== undefined && (
+                  <div style={{ fontSize: 12 }}>Tỷ lệ gia hạn: {Number(extendPercent).toString()}%</div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Phòng */}
@@ -808,8 +784,6 @@ const PaymentModal: React.FC<Props> = ({
                 <strong style={{ color: '#d4380d' }}>+ {Number(lateFee).toLocaleString()} đ</strong>
               </div>
             )}
-            {/* We no longer show a separate extend fee row. If booking is extended,
-                indicate it in the room label instead (roomTotal remains authoritative). */}
             <Divider />
             <div
               style={{

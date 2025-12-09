@@ -100,7 +100,7 @@ export const checkoutApi = {
   },
 
   // 7. Thực hiện gia hạn
-    extendStay: async (payload: {
+  extendStay: async (payload: {
     IddatPhong: string;
     ExtendType: 1 | 2; 
     NewCheckoutHour?: number; 

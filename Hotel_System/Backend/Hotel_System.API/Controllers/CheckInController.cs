@@ -341,33 +341,24 @@ namespace Hotel_System.API.Controllers
                     return BadRequest(new { message = "Phòng được chọn không còn trống cho khoảng thời gian này." });
                 }
 
-                // Additional safety checks: ensure the room entity is actually marked as empty
-                // in the `Phongs` table (TrangThai == "Trống") and that there are no
-                // overlapping bookings for this room with active statuses.
-                // Business rule: DatPhong.TrangThai == 0 or 4 are considered empty/cancelled,
-                // so only treat bookings with other statuses as blockers.
+                // Check only DatPhong bookings: room is available if no overlapping bookings with active statuses (1, 2, 3, 5)
+                // Business rule: DatPhong.TrangThai == 0 (canceled) or 4 (completed) mean the room is available
                 try
                 {
-                    // Normalize textual room status (trim to protect against stored whitespace)
-                    if (!string.IsNullOrWhiteSpace(newRoom.TrangThai) && !string.Equals(newRoom.TrangThai.Trim(), "Trống", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return BadRequest(new { message = $"Phòng {newRoom.TenPhong ?? req.NewRoomId} không đang ở trạng thái 'Trống'. Vui lòng chọn phòng khác." });
-                    }
-
                     var hasBlockingBooking = await _context.DatPhongs.AnyAsync(dp => dp.Idphong == req.NewRoomId
                                                                                      && dp.NgayNhanPhong < checkOutDateOnly
                                                                                      && dp.NgayTraPhong > checkInDateOnly
                                                                                      && !(new int[] { 0, 4 }).Contains(dp.TrangThai));
                     if (hasBlockingBooking)
                     {
-                        return BadRequest(new { message = "Phòng được chọn có đặt phòng chồng lấn (không phải trạng thái 0 hoặc 4). Vui lòng chọn phòng khác." });
+                        return BadRequest(new { message = "Phòng được chọn có đặt phòng chồng lấn. Vui lòng chọn phòng khác." });
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Lỗi khi kiểm tra trạng thái phòng mới {NewRoom} cho đặt phòng {BookingId}", req.NewRoomId, id);
+                    _logger.LogWarning(ex, "Lỗi khi kiểm tra đặt phòng cho phòng mới {NewRoom} cho đặt phòng {BookingId}", req.NewRoomId, id);
                     // Proceeding cautiously: if the check fails unexpectedly, block the reassignment to avoid data corruption
-                    return BadRequest(new { message = "Không thể xác thực trạng thái phòng mới. Vui lòng thử lại." });
+                    return BadRequest(new { message = "Không thể xác thực tính khả dụng của phòng. Vui lòng thử lại." });
                 }
 
                 // Compute price difference based on applied nightly price (consider active promotions)

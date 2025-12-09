@@ -5,7 +5,7 @@ import checkinApi, { UsingBooking } from "../../../api/checkinApi";
 import invoiceApi from '../../../api/invoiceApi';
 import * as roomsApi from '../../../api/roomsApi';
 import checkoutApi from '../../../api/checkout.Api';
-import InvoiceCheckin from './InvoiceCheckin';
+import UnifiedInvoiceModal from '../checkout/UnifiedInvoiceModal';
 
 const CheckinSectionNewFixed: React.FC = () => {
   const [bookings, setBookings] = useState<UsingBooking[]>([]);
@@ -1122,11 +1122,13 @@ const CheckinSectionNewFixed: React.FC = () => {
         />
       </Modal>
 
-      {/* Overdue invoice modal using existing invoice component */}
-      <InvoiceCheckin
+      {/* Overdue invoice modal using UnifiedInvoiceModal */}
+      <UnifiedInvoiceModal
         visible={overdueInvoiceVisible}
         invoiceData={overdueInvoiceData}
         paymentRow={null}
+        isOverdue={true}
+        isExtended={false}
         onClose={() => { setOverdueInvoiceVisible(false); setOverdueInvoiceData(null); }}
         onComplete={async (id) => { await loadToday(); setOverdueInvoiceVisible(false); }}
       />

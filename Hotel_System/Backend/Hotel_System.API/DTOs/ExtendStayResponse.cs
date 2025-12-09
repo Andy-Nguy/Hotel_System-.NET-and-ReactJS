@@ -82,6 +82,31 @@ namespace Hotel_System.API.DTOs
         /// Mã hóa đơn cũ đã thanh toán (nếu đổi phòng)
         /// </summary>
         public string? OldInvoiceId { get; set; }
+
+        /// <summary>
+        /// Tên mã khuyến mãi áp dụng (nếu có)
+        /// </summary>
+        public string? PromotionName { get; set; }
+
+        /// <summary>
+        /// Loại giảm giá: "percent" hoặc "amount"
+        /// </summary>
+        public string? PromotionType { get; set; }
+
+        /// <summary>
+        /// Giá trị giảm (% hoặc số tiền)
+        /// </summary>
+        public decimal? PromotionValue { get; set; }
+
+        /// <summary>
+        /// Số tiền được giảm từ phí gia hạn
+        /// </summary>
+        public decimal DiscountAmount { get; set; }
+
+        /// <summary>
+        /// Phí gia hạn trước khuyến mãi
+        /// </summary>
+        public decimal ExtendFeeBeforeDiscount { get; set; }
     }
 
     /// <summary>
