@@ -179,8 +179,12 @@ const BookingsScreen: React.FC = () => {
   const { token, loading: authLoading } = useAuth();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const [activeReviewBookingId, setActiveReviewBookingId] = useState<string | null>(null);
-  const [activeReviewBookingCode, setActiveReviewBookingCode] = useState<string | null>(null);
+  const [activeReviewBookingId, setActiveReviewBookingId] = useState<
+    string | null
+  >(null);
+  const [activeReviewBookingCode, setActiveReviewBookingCode] = useState<
+    string | null
+  >(null);
   const refreshTimers = useRef<Array<any>>([]);
   const [completingId, setCompletingId] = useState<string | null>(null);
 
@@ -226,27 +230,36 @@ const BookingsScreen: React.FC = () => {
           )
         : [];
       setBookings(sortedData);
-      console.debug('Loaded bookings', { count: sortedData.length, sample: sortedData[0] });
+      console.debug("Loaded bookings", {
+        count: sortedData.length,
+        sample: sortedData[0],
+      });
     } catch (e: any) {
-      // If server returns 401, navigate to login so user can reauthenticate
-      const errMsg = e?.message || "Failed to load bookings";
-      if (
-        errMsg.includes("401") ||
-        errMsg.toLowerCase().includes("unauthorized")
-      ) {
-        Alert.alert(
-          "Không có quyền",
-          "Bạn cần đăng nhập để xem lịch sử đặt phòng.",
-          [
-            {
-              text: "Đăng nhập",
-              onPress: () => navigation.navigate("Login" as never),
-            },
-            { text: "Hủy", style: "cancel" },
-          ]
-        );
+      // Map backend/internal errors to friendly user-facing messages.
+      const rawMsg = (e?.message || "").toString();
+      const lower = rawMsg.toLowerCase();
+
+      // Detect authorization/token related issues
+      const isAuthError =
+        lower.includes("401") ||
+        lower.includes("unauthorized") ||
+        lower.includes("token") ||
+        lower.includes("phiên") ||
+        lower.includes("không hợp lệ") ||
+        lower.includes("invalid");
+
+      if (isAuthError) {
+        // Friendly non-blocking message for users
+        const friendly =
+          "Bạn chưa đăng nhập. Vui lòng đăng nhập để xem lịch sử đặt phòng.";
+        // Do not show a popup; show inline error instead and log for debugging
+        console.info("Auth error detected while loading bookings:", rawMsg);
+        setError(friendly);
+      } else {
+        // Generic friendly message for non-auth errors
+        console.error("Bookings load error:", rawMsg, e);
+        setError("Không thể tải lịch sử. Vui lòng thử lại sau.");
       }
-      setError(e?.message || "Failed to load bookings");
     } finally {
       setLoading(false);
     }
@@ -270,7 +283,8 @@ const BookingsScreen: React.FC = () => {
     bookings.forEach((item) => {
       const checkout = item?.ngayTraPhong ? new Date(item.ngayTraPhong) : null;
       const rawStatus = getProp(item, "trangThai", "TrangThai");
-      const statusCode = rawStatus !== undefined ? Number(rawStatus) : undefined;
+      const statusCode =
+        rawStatus !== undefined ? Number(rawStatus) : undefined;
 
       if (!checkout) return;
 
@@ -327,7 +341,6 @@ const BookingsScreen: React.FC = () => {
         "chiTietDatPhongs",
         "ChiTiet"
       ) || [];
-    
 
     return (
       <View style={styles.detailsContainer}>
@@ -451,27 +464,28 @@ const BookingsScreen: React.FC = () => {
   const renderBooking = ({ item, index }: { item: any; index: number }) => {
     // Preserve numeric IDs (0) by checking null/undefined explicitly
     // Lấy ID đặt phòng từ JSON: IddatPhong (hoặc iddatPhong nếu camelCase)
-const rawBookingId = getProp(
-  item,
-  "IddatPhong",   // property C# => JSON mặc định
-  "iddatPhong",   // nếu bạn bật camelCase
-  "IDDatPhong"    // phòng khi bạn map đúng tên cột SQL
-);
-const bookingId =
-  rawBookingId !== undefined && rawBookingId !== null
-    ? String(rawBookingId)
-    : ""; // nếu không có thì để rỗng, KHÔNG dùng index để tránh "0"
+    const rawBookingId = getProp(
+      item,
+      "IddatPhong", // property C# => JSON mặc định
+      "iddatPhong", // nếu bạn bật camelCase
+      "IDDatPhong" // phòng khi bạn map đúng tên cột SQL
+    );
+    const bookingId =
+      rawBookingId !== undefined && rawBookingId !== null
+        ? String(rawBookingId)
+        : ""; // nếu không có thì để rỗng, KHÔNG dùng index để tránh "0"
 
-// Mã đặt phòng hiển thị: hiện tại bảng chỉ có IDDatPhong, nên dùng luôn bookingId
-const rawBookingCode = getProp(
-  item,
-  "IddatPhong",
-  "iddatPhong",
-  "IDDatPhong"
-);
-const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
-    ? String(rawBookingCode)
-    : bookingId;
+    // Mã đặt phòng hiển thị: hiện tại bảng chỉ có IDDatPhong, nên dùng luôn bookingId
+    const rawBookingCode = getProp(
+      item,
+      "IddatPhong",
+      "iddatPhong",
+      "IDDatPhong"
+    );
+    const bookingCode =
+      rawBookingCode !== undefined && rawBookingCode !== null
+        ? String(rawBookingCode)
+        : bookingId;
     const rawStatus = getProp(item, "trangThai", "TrangThai");
     const rawPayment = getProp(
       item,
@@ -485,7 +499,8 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
     const checkoutRaw = getProp(item, "ngayTraPhong", "NgayTraPhong");
     const checkoutDate = checkoutRaw ? new Date(checkoutRaw) : null;
     const now = new Date();
-    const canOpenReview = statusCode === 4 || (!!checkoutDate && now >= checkoutDate);
+    const canOpenReview =
+      statusCode === 4 || (!!checkoutDate && now >= checkoutDate);
 
     const bookingStatusStyle = getStatusBadgeStyle("booking", statusCode);
     const paymentStatusStyle = getStatusBadgeStyle("payment", paymentCode);
@@ -607,9 +622,19 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
         )}
 
         {/* Footer with expand icon and optional review button */}
-        <View style={[styles.cardFooter, { justifyContent: 'space-between', paddingHorizontal: SIZES.padding }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.footerText}>{isExpanded ? "Thu gọn" : "Xem chi tiết"}</Text>
+        <View
+          style={[
+            styles.cardFooter,
+            {
+              justifyContent: "space-between",
+              paddingHorizontal: SIZES.padding,
+            },
+          ]}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text style={styles.footerText}>
+              {isExpanded ? "Thu gọn" : "Xem chi tiết"}
+            </Text>
             <Ionicons
               name={isExpanded ? "chevron-up-outline" : "chevron-down-outline"}
               size={20}
@@ -621,7 +646,11 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
             <TouchableOpacity
               onPress={async () => {
                 // Debug: log which ids/codes we will use when opening review
-                console.debug('Opening review (button press)', { bookingId, bookingCode, item });
+                console.debug("Opening review (button press)", {
+                  bookingId,
+                  bookingCode,
+                  item,
+                });
 
                 // Use bookingId (DB id) for API calls; bookingCode is for display
                 const bId = String(bookingId);
@@ -634,7 +663,10 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
                     setCompletingId(null);
 
                     if (!r.ok) {
-                      Alert.alert('Không thể hoàn tất', r?.message || 'Vui lòng thử lại sau.');
+                      Alert.alert(
+                        "Không thể hoàn tất",
+                        r?.message || "Vui lòng thử lại sau."
+                      );
                       return;
                     }
 
@@ -642,7 +674,10 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
                     loadBookings();
                   } catch (e: any) {
                     setCompletingId(null);
-                    Alert.alert('Không thể hoàn tất', e?.message || 'Vui lòng thử lại sau.');
+                    Alert.alert(
+                      "Không thể hoàn tất",
+                      e?.message || "Vui lòng thử lại sau."
+                    );
                     return;
                   }
                 }
@@ -657,7 +692,10 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
 
                   if (res && res.ok && res.data) {
                     if (res.data.hasReview) {
-                      Alert.alert('Đã đánh giá', 'Bạn đã gửi đánh giá cho đặt phòng này rồi.');
+                      Alert.alert(
+                        "Đã đánh giá",
+                        "Bạn đã gửi đánh giá cho đặt phòng này rồi."
+                      );
                     } else {
                       openInlineReview(bId, bookingCode);
                     }
@@ -667,7 +705,7 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
                     openInlineReview(bId, bookingCode);
                   }
                 } catch (e: any) {
-                  console.debug('Review button error', e);
+                  console.debug("Review button error", e);
                   setActiveReviewBookingId(bId);
                   setActiveReviewBookingCode(bookingCode);
                 }
@@ -684,7 +722,9 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
               {completingId === String(bookingId) ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Đánh giá</Text>
+                <Text style={{ color: "#fff", fontWeight: "700" }}>
+                  Đánh giá
+                </Text>
               )}
             </TouchableOpacity>
           )}
@@ -736,11 +776,10 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
       <FlatList
         data={bookings}
         renderItem={renderBooking}
-       keyExtractor={(item, index) => {
-      const id = getProp(item, "IddatPhong", "iddatPhong", "IDDatPhong");
-      return id != null ? String(id) : `booking-${index}`;
-}
-        }
+        keyExtractor={(item, index) => {
+          const id = getProp(item, "IddatPhong", "iddatPhong", "IDDatPhong");
+          return id != null ? String(id) : `booking-${index}`;
+        }}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -771,49 +810,63 @@ const bookingCode = rawBookingCode !== undefined && rawBookingCode !== null
           setActiveReviewBookingCode(null);
         }}
       >
-        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+        <View style={{ flex: 1, backgroundColor: "#fff" }}>
           {activeReviewBookingId ? (
             <ReviewScreen
-              route={{ params: { bookingId: activeReviewBookingId, bookingCode: activeReviewBookingCode } }}
-              navigation={{
-                goBack: () => {
-                  setActiveReviewBookingId(null);
-                  setActiveReviewBookingCode(null);
+              route={{
+                params: {
+                  bookingId: activeReviewBookingId,
+                  bookingCode: activeReviewBookingCode,
                 },
-                popToTop: () => {
-                  setActiveReviewBookingId(null);
-                  setActiveReviewBookingCode(null);
-                },
-                navigate: (name: string, params?: any) => {
-                  // Close the inline modal first
-                  setActiveReviewBookingId(null);
-                  setActiveReviewBookingCode(null);
+              }}
+              navigation={
+                {
+                  goBack: () => {
+                    setActiveReviewBookingId(null);
+                    setActiveReviewBookingCode(null);
+                  },
+                  popToTop: () => {
+                    setActiveReviewBookingId(null);
+                    setActiveReviewBookingCode(null);
+                  },
+                  navigate: (name: string, params?: any) => {
+                    // Close the inline modal first
+                    setActiveReviewBookingId(null);
+                    setActiveReviewBookingCode(null);
 
-                  try {
-                    // Prefer using the current screen's navigation to switch tabs
-                    if (navigation && typeof navigation.getParent === 'function') {
-                      const parent = navigation.getParent();
-                      if (parent && typeof parent.navigate === 'function') {
-                        // If caller asked to navigate to MainApp/HomeTab, translate accordingly
-                        if (name === 'MainApp' || name === 'HomeTab' || name === 'Home') {
-                          parent.navigate('HomeTab', { screen: 'Home' });
+                    try {
+                      // Prefer using the current screen's navigation to switch tabs
+                      if (
+                        navigation &&
+                        typeof navigation.getParent === "function"
+                      ) {
+                        const parent = navigation.getParent();
+                        if (parent && typeof parent.navigate === "function") {
+                          // If caller asked to navigate to MainApp/HomeTab, translate accordingly
+                          if (
+                            name === "MainApp" ||
+                            name === "HomeTab" ||
+                            name === "Home"
+                          ) {
+                            parent.navigate("HomeTab", { screen: "Home" });
+                            return;
+                          }
+                          parent.navigate(name as any, params);
                           return;
                         }
-                        parent.navigate(name as any, params);
-                        return;
                       }
-                    }
 
-                    // Fallback: try global rootNavigation if present
-                    const rootNav = (global as any).rootNavigation;
-                    if (rootNav && typeof rootNav.navigate === 'function') {
-                      rootNav.navigate(name as any, params);
+                      // Fallback: try global rootNavigation if present
+                      const rootNav = (global as any).rootNavigation;
+                      if (rootNav && typeof rootNav.navigate === "function") {
+                        rootNav.navigate(name as any, params);
+                      }
+                    } catch (e) {
+                      // swallow; modal already closed
                     }
-                  } catch (e) {
-                    // swallow; modal already closed
-                  }
-                },
-              } as any}
+                  },
+                } as any
+              }
             />
           ) : null}
         </View>

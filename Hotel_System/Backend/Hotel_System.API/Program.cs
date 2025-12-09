@@ -117,7 +117,7 @@ builder.Services.AddCors(options =>
                 "http://localhost:5173",     // Vite dev server
                 "http://localhost:3000",    // React dev server
                 "http://10.0.2.2:8080",    // Android emulator accessing host
-                "http://192.168.1.25:8080", // Physical device on same network
+                "http://172.20.10.2:8080", // Physical device on same network
                 "http://localhost:19006",  // Expo dev server
                 "http://localhost:19000"   // Expo dev tools
             };

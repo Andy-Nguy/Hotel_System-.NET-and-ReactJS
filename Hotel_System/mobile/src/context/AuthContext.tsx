@@ -39,7 +39,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const checkAuth = async () => {
     try {
-      const storedToken = await AsyncStorage.getItem("hs_token");
+      let storedToken = await AsyncStorage.getItem("hs_token");
+      // If an old/demo mock token is present, clear it so app behaves unauthenticated
+      if (storedToken && storedToken.includes("mock_signature")) {
+        console.info(
+          "Removing demo/mock token from storage (mock_signature detected)"
+        );
+        await AsyncStorage.removeItem("hs_token");
+        storedToken = null;
+      }
+
       if (storedToken) {
         setToken(storedToken);
         setIsLoggedIn(true);
@@ -68,8 +77,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           }
         }
       } else {
-        // Auto-login with demo user for development
-        await loginWithDemoUser();
+        // No token found: remain logged out so app can work in unauthenticated mode.
+        // Do not auto-login with a demo/mock token because that can cause
+        // protected API calls to fail when the mock token is rejected by backend.
+        setToken(null);
+        setIsLoggedIn(false);
       }
     } catch (error) {
       console.error("Error checking auth:", error);
