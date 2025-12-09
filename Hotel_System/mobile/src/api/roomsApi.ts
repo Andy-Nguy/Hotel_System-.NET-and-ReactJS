@@ -99,8 +99,11 @@ function normalizeImageUrl(
   url: string | null | undefined,
   baseUrl: string = API_CONFIG.CURRENT
 ): string | undefined {
-  if (!url) return undefined;
-  const trimmed = url.trim();
+  if (url === null || url === undefined) return undefined;
+  // Coerce to string to avoid errors when API returns non-string (object/number)
+  const s = String(url);
+  const trimmed = s.trim();
+  if (!trimmed) return undefined;
   console.log("normalizeImageUrl input:", { url, baseUrl, trimmed });
   // If already absolute
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
