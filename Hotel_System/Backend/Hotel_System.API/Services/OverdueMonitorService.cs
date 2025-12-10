@@ -10,26 +10,14 @@ using System.Threading.Tasks;
 
 namespace Hotel_System.API.Services
 {
-    /// <summary>
-    /// Background service that marks bookings as overdue (TrangThai = 5)
-    /// when the expected checkout datetime (NgayTraPhong + 12:00) has passed
-    /// and the guest still hasn't checked out (TrangThai == 3).
-    ///
-    /// Business rule:
-    /// - Phòng đang sử dụng: TrangThai == 3
-    /// - Ngày trả phòng dự kiến: NgayTraPhong <= hôm nay
-    /// - Thời điểm hiện tại: Now > NgayTraPhong + 12:00
-    /// => Đánh dấu Quá hạn + Cộng phí trả phòng muộn vào TongTien (KHÔNG lưu CTHDDV, phí phạt không VAT).
-    ///
-    /// Service chạy định kỳ (mặc định mỗi 5 phút).
     /// </summary>
     public class OverdueMonitorService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<OverdueMonitorService> _logger;
 
-        // Run every 5 minutes
-        private readonly TimeSpan _interval = TimeSpan.FromMinutes(5);
+        // Run every 10 seconds (short interval for prompt overdue detection)
+        private readonly TimeSpan _interval = TimeSpan.FromSeconds(10);
 
         public OverdueMonitorService(
             IServiceScopeFactory scopeFactory,
@@ -39,9 +27,68 @@ namespace Hotel_System.API.Services
             _logger = logger;
         }
 
+        private async Task NormalizeExistingOverdues(HotelSystemContext db, CancellationToken stoppingToken)
+        {
+            try
+            {
+                var overdueBookings = await db.DatPhongs
+                    .Include(d => d.HoaDons)
+                    .Where(d => d.TrangThai == 5)
+                    .ToListAsync(stoppingToken);
+
+                if (!overdueBookings.Any()) return;
+
+                _logger.LogInformation("OverdueMonitorService: normalizing {count} existing overdue booking(s)", overdueBookings.Count);
+
+                foreach (var dp in overdueBookings)
+                {
+                    try
+                    {
+                        if (dp.HoaDons != null)
+                        {
+                            // For overdue bookings, force all invoices and booking-level status to 1 (Chưa thanh toán)
+                            foreach (var h in dp.HoaDons)
+                            {
+                                try
+                                {
+                                    h.TrangThaiThanhToan = 1;
+                                }
+                                catch { }
+                            }
+
+                            dp.TrangThaiThanhToan = 1;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "OverdueMonitorService: failed to normalize booking {id}", dp.IddatPhong);
+                    }
+                }
+
+                await db.SaveChangesAsync(stoppingToken);
+                _logger.LogInformation("OverdueMonitorService: normalization complete");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "OverdueMonitorService: normalization error");
+            }
+        }
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("OverdueMonitorService started");
+            // On startup, ensure any existing bookings already marked as overdue
+            // have their invoice and booking payment statuses normalized.
+            try
+            {
+                using var startScope = _scopeFactory.CreateScope();
+                var startDb = startScope.ServiceProvider.GetRequiredService<HotelSystemContext>();
+                await NormalizeExistingOverdues(startDb, stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "OverdueMonitorService: failed to normalize existing overdues on startup");
+            }
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -79,11 +126,12 @@ namespace Hotel_System.API.Services
                         {
                             try
                             {
-                                // Chuẩn checkout = NgayTraPhong + 12:00
+                                // Checkout chuẩn = NgayTraPhong + giờ hiệu lực (12:00 hoặc "Gia hạn đến HH:mm")
                                 DateTime standardCheckout;
                                 try
                                 {
-                                    standardCheckout = dp.NgayTraPhong.ToDateTime(new TimeOnly(12, 0));
+                                    var effTime = GetEffectiveCheckoutTime(dp);
+                                    standardCheckout = dp.NgayTraPhong.ToDateTime(effTime);
                                 }
                                 catch
                                 {
@@ -91,7 +139,7 @@ namespace Hotel_System.API.Services
                                     standardCheckout = dp.NgayTraPhong.ToDateTime(TimeOnly.MinValue);
                                 }
 
-                                // Nếu đã quá 12:00 ngày trả phòng mà vẫn Đang sử dụng → Quá hạn
+                                // Nếu đã quá giờ checkout hiệu lực mà vẫn Đang sử dụng → Quá hạn
                                 if (now > standardCheckout && dp.TrangThai == 3)
                                 {
                                     dp.TrangThai = 5; // Quá hạn
@@ -141,6 +189,49 @@ namespace Hotel_System.API.Services
             }
 
             _logger.LogInformation("OverdueMonitorService stopping");
+        }
+
+        /// <summary>
+        /// Lấy giờ checkout hiệu lực cho booking:
+        /// - Nếu hóa đơn mới nhất có "Gia hạn đến HH:mm" thì dùng HH:mm
+        /// - Ngược lại dùng 12:00
+        /// </summary>
+        private TimeOnly GetEffectiveCheckoutTime(DatPhong booking)
+        {
+            var defaultTime = new TimeOnly(12, 0);
+
+            try
+            {
+                if (booking.HoaDons == null || !booking.HoaDons.Any())
+                    return defaultTime;
+
+                var latest = booking.HoaDons
+                    .OrderByDescending(h => h.NgayLap)
+                    .FirstOrDefault();
+
+                if (latest == null || string.IsNullOrWhiteSpace(latest.GhiChu))
+                    return defaultTime;
+
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    latest.GhiChu,
+                    @"Gia hạn đến\s+(\d{1,2}):(\d{2})",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                if (!match.Success)
+                    return defaultTime;
+
+                if (int.TryParse(match.Groups[1].Value, out var hour) &&
+                    int.TryParse(match.Groups[2].Value, out var minute))
+                {
+                    return new TimeOnly(hour, minute);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return defaultTime;
         }
 
         /// <summary>
@@ -217,9 +308,25 @@ namespace Hotel_System.API.Services
                 latestInvoice.TongTien = grandTotal;
                 dp.TongTien = grandTotal;
 
-                // Đặt trạng thái thanh toán = 1 (Chưa thanh toán) vì có thêm phí
-                latestInvoice.TrangThaiThanhToan = 1;
-                dp.TrangThaiThanhToan = 1;
+                // For overdue booking, force all invoices and booking-level payment status to 1 (Chưa thanh toán)
+                if (dp.HoaDons != null)
+                {
+                    foreach (var h in dp.HoaDons)
+                    {
+                        try
+                        {
+                            h.TrangThaiThanhToan = 1;
+                        }
+                        catch { /* ignore per-invoice errors */ }
+                    }
+
+                    dp.TrangThaiThanhToan = 1;
+                }
+                else
+                {
+                    latestInvoice.TrangThaiThanhToan = 1;
+                    dp.TrangThaiThanhToan = 1;
+                }
 
                 // Thêm ghi chú
                 latestInvoice.GhiChu = (latestInvoice.GhiChu ?? string.Empty)

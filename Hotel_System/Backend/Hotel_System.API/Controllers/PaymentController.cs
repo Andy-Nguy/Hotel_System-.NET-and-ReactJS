@@ -890,5 +890,108 @@ public async Task<IActionResult> GetInvoicePdf(string id)
         }
     }
 }
+
+        // POST: api/Payment/refund
+        // Records a confirmed refund and appends a booking history entry (LichSuDatPhong)
+        [HttpPost("refund")]
+        public async Task<IActionResult> Refund([FromBody] RefundRequest req)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new { message = "Yêu cầu hoàn tiền không hợp lệ", errors = ModelState });
+            }
+
+            try
+            {
+                var hoaDon = await _context.HoaDons
+                    .Include(h => h.IddatPhongNavigation)
+                    .FirstOrDefaultAsync(h => h.IdhoaDon == req.IdHoaDon);
+
+                if (hoaDon == null)
+                    return NotFound(new { message = "Không tìm thấy hóa đơn" });
+
+                // Create booking history entry recording the refund confirmation
+                var ghiChu = $"Hoàn tiền {req.RefundAmount:N0} đ | Phương thức: {req.RefundMethod ?? "N/A"} | Lý do: {req.Reason} | Hóa đơn: {hoaDon.IdhoaDon}";
+
+                var ls = new Models.LichSuDatPhong
+                {
+                    IddatPhong = hoaDon.IddatPhong ?? string.Empty,
+                    NgayCapNhat = DateTime.UtcNow,
+                    GhiChu = ghiChu
+                };
+
+                _context.LichSuDatPhongs.Add(ls);
+
+                // Append refund note to the invoice for traceability
+                hoaDon.GhiChu = string.IsNullOrWhiteSpace(hoaDon.GhiChu) ? ghiChu : hoaDon.GhiChu + " | " + ghiChu;
+
+                // IMPORTANT: deduct the refunded amount from the invoice's recorded paid amount
+                try
+                {
+                    decimal currentPaid = hoaDon.TienThanhToan ?? 0m;
+                    // Treat the refund amount from the client as VAT-inclusive (already includes VAT).
+                    // Do NOT auto-convert it to VAT-inclusive to avoid double-applying VAT.
+                    decimal refund = Math.Round(req.RefundAmount, 0);
+                    var newPaid = currentPaid - refund;
+                    if (newPaid < 0m) newPaid = 0m;
+
+                    // Ensure stored paid amount is VAT-inclusive and does not exceed invoice total
+                    if (hoaDon.TongTien > 0m && newPaid > hoaDon.TongTien)
+                    {
+                        _logger.LogWarning("Refund resulted in newPaid ({NewPaid}) > TongTien ({TongTien}) for invoice {Invoice}. Capping to TongTien.", newPaid, hoaDon.TongTien, hoaDon.IdhoaDon);
+                        newPaid = hoaDon.TongTien;
+                    }
+
+                    hoaDon.TienThanhToan = newPaid;
+
+                    // Recalculate invoice payment status using VAT-inclusive TongTien
+                    if (hoaDon.TongTien > 0m)
+                    {
+                        var remaining = hoaDon.TongTien - (hoaDon.TienThanhToan ?? 0m);
+                        if (remaining <= 0m)
+                        {
+                            hoaDon.TrangThaiThanhToan = 2; // paid
+                        }
+                        else
+                        {
+                            hoaDon.TrangThaiThanhToan = 1; // pending
+                        }
+                    }
+
+                    // Recalculate booking-level payment status (sum over invoices)
+                    try
+                    {
+                        var booking = await _context.DatPhongs
+                            .Include(d => d.HoaDons)
+                            .FirstOrDefaultAsync(d => d.IddatPhong == hoaDon.IddatPhong);
+
+                        if (booking != null)
+                        {
+                            decimal totalInvoices = booking.HoaDons?.Sum(h => h.TongTien) ?? 0m;
+                            decimal totalPaid = booking.HoaDons?.Sum(h => h.TienThanhToan ?? 0m) ?? 0m;
+                            var remainingAll = Math.Max(0m, totalInvoices - totalPaid);
+                            booking.TrangThaiThanhToan = remainingAll > 0m ? 1 : 2;
+                        }
+                    }
+                    catch (Exception ex2)
+                    {
+                        _logger.LogWarning(ex2, "Failed to recalc booking payment status after refund for invoice {InvoiceId}", hoaDon.IdhoaDon);
+                    }
+                }
+                catch (Exception exCalc)
+                {
+                    _logger.LogWarning(exCalc, "Failed to apply refund arithmetic for invoice {InvoiceId}", hoaDon.IdhoaDon);
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Hoàn tiền đã được ghi nhận và cập nhật vào hóa đơn", idLichSu = ls.IdlichSu });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi xử lý hoàn tiền cho hóa đơn {InvoiceId}", req.IdHoaDon);
+                return StatusCode(500, new { message = "Lỗi khi xử lý hoàn tiền", error = ex.Message });
+            }
+        }
     }
 }
