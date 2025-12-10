@@ -1209,7 +1209,7 @@ const handleForceCancelSubmit = async (data: {
 }) => {
   try {
     // Call backend API to force cancel booking with all the data
-    const resp = await fetch(`/api/Checkout/force-cancel`, {
+    const resp = await fetch(`/api/Checkout/huy-qua-han`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1263,7 +1263,7 @@ const handleForceCancelSubmit = async (data: {
     try {
       setExtendBookingId(row.IddatPhong);
       setExtendVisible(true);
-      setLoadingRooms(true);
+      // NOT setting loadingRooms to true here - form will show immediately
       
       // Reset state
       setExtendType(1);
@@ -1273,14 +1273,28 @@ const handleForceCancelSubmit = async (data: {
       setExtendNote('');
       setSelectedRoomId(null);
       setExtendAvailability(null);
+      setAvailableRooms([]);
       
-      // Lấy thông tin chi tiết booking
+      // Lấy thông tin chi tiết booking - do this first without blocking
       let detail: any = null;
       try { detail = await fetchJson(`/api/DatPhong/${row.IddatPhong}`); } catch { detail = null; }
       setExtendBookingDetail(detail || row);
       
+      // Gọi API kiểm tra khả năng gia hạn - separate async call
+      loadExtendAvailability(row.IddatPhong, detail);
+      
+    } catch (e: any) {
+      message.error(e?.message || 'Không thể tải thông tin gia hạn');
+    }
+  };
+
+  // Separate function to load availability and rooms independently without blocking the form
+  const loadExtendAvailability = async (bookingId: string, detail?: any) => {
+    try {
+      setLoadingRooms(true);
+      
       // Gọi API kiểm tra khả năng gia hạn
-      const rawAvailability = await checkoutApi.checkExtendAvailability(row.IddatPhong);
+      const rawAvailability = await checkoutApi.checkExtendAvailability(bookingId);
       
       // Normalize response (API trả về camelCase, frontend dùng PascalCase)
       const nextBookingRaw = rawAvailability?.nextBooking ?? rawAvailability?.NextBooking ?? null;
@@ -1338,9 +1352,32 @@ const handleForceCancelSubmit = async (data: {
       }
       
       // Hiển thị phòng trống từ API checkExtendAvailability
-      // Backend đã kiểm tra DatPhong bookings, chỉ trả về phòng không có booking hoạt động
+      // Backend đã kiểm tra DatPhong bookings, nhưng để an toàn, frontend sẽ loại bỏ
+      // các phòng đang ở trạng thái 'đang sử dụng' trong khung thời gian gia hạn theo giờ.
+      const mapRoomIsOccupied = (r: any) => {
+        const st = r?.TrangThai ?? r?.trangThai ?? r?.status ?? '';
+        if (st === null || st === undefined) return false;
+        // numeric status 3 means 'using' in this codebase
+        const num = Number(st);
+        if (!isNaN(num) && num === 3) return true;
+        const s = String(st).toLowerCase();
+        const occupiedKeywords = ['using', 'in use', 'occupied', 'dang su dung', 'đang sử dụng', 'in-use', 'inuse'];
+        return occupiedKeywords.some(k => s.includes(k));
+      };
+
+      const filterOutOccupied = (rooms: any[]) => {
+        if (!rooms || !Array.isArray(rooms)) return [];
+        // If user is selecting same-day (hour) extend, hide rooms that are currently in use
+        if (extendType === 1) {
+          return rooms.filter(r => !mapRoomIsOccupied(r));
+        }
+        // For night-extend, keep API results
+        return rooms;
+      };
+
       if (availability?.AvailableRooms?.length > 0) {
-        setAvailableRooms(availability.AvailableRooms);
+        const filtered = filterOutOccupied(availability.AvailableRooms);
+        setAvailableRooms(filtered);
       } else {
         // Fallback: tìm phòng trống nếu API không trả về
         const guests = detail?.SoNguoi ?? detail?.soNguoi ?? 1;
@@ -1349,11 +1386,129 @@ const handleForceCancelSubmit = async (data: {
         setAvailableRooms(available || []);
       }
     } catch (e: any) {
-      message.error(e?.message || 'Không thể tải thông tin gia hạn');
+      console.error('Error loading extend availability:', e);
+      // Don't show error for this background load - rooms will be empty
     } finally {
       setLoadingRooms(false);
     }
   };
+
+  // Dynamically fetch available rooms when user changes extraNights
+  // This ensures the room list updates based on the new date range
+  useEffect(() => {
+    if (!extendVisible || !extendBookingId || extendType !== 2) {
+      return; // Only refetch when extend modal is open and user is in "add nights" mode
+    }
+
+    // Debounce the refetch to avoid too many API calls
+    const timer = setTimeout(async () => {
+      try {
+        setLoadingRooms(true);
+        const rawAvailability = await checkoutApi.checkExtendAvailability(extendBookingId, extraNights);
+        
+        // Normalize response
+        const nextBookingRaw = rawAvailability?.nextBooking ?? rawAvailability?.NextBooking ?? null;
+        const availability = {
+          CanExtend: rawAvailability?.canExtend ?? rawAvailability?.CanExtend ?? false,
+          CanExtendSameRoom: rawAvailability?.canExtendSameRoom ?? rawAvailability?.CanExtendSameRoom ?? false,
+          HasNextBooking: rawAvailability?.hasNextBooking ?? rawAvailability?.HasNextBooking ?? false,
+          Message: rawAvailability?.message ?? rawAvailability?.Message ?? '',
+          NextBooking: nextBookingRaw ? {
+            IddatPhong: nextBookingRaw?.iddatPhong ?? nextBookingRaw?.IddatPhong ?? '',
+            CustomerName: nextBookingRaw?.customerName ?? nextBookingRaw?.CustomerName ?? 'Khách',
+            CheckinDate: nextBookingRaw?.checkinDate ?? nextBookingRaw?.CheckinDate ?? null,
+          } : null,
+          AvailableRooms: (rawAvailability?.availableRooms ?? rawAvailability?.AvailableRooms ?? []).map((room: any) => ({
+            Idphong: room?.idphong ?? room?.Idphong ?? room?.roomId ?? '',
+            TenPhong: room?.tenPhong ?? room?.TenPhong ?? room?.roomName ?? '',
+            SoPhong: room?.soPhong ?? room?.SoPhong ?? room?.roomNumber ?? '',
+            TenLoaiPhong: room?.tenLoaiPhong ?? room?.TenLoaiPhong ?? room?.roomTypeName ?? '',
+            GiaMotDem: room?.giaMotDem ?? room?.GiaMotDem ?? room?.basePricePerNight ?? 0,
+            UrlAnhPhong: (() => {
+              const raw = room?.urlAnhPhong ?? room?.UrlAnhPhong ?? room?.roomImageUrl ?? room?.roomImageUrl ?? '';
+              if (!raw) return '';
+              if (raw.startsWith('http') || raw.startsWith('/')) return raw;
+              if (raw.includes('/img/')) return raw;
+              return `/img/room/${raw}`;
+            })(),
+            SoNguoiToiDa: room?.soNguoiToiDa ?? room?.SoNguoiToiDa ?? room?.maxOccupancy ?? 2,
+            TrangThai: room?.TrangThai ?? room?.trangThai ?? room?.status ?? '',
+            PromotionName: room?.promotionName ?? room?.PromotionName ?? null,
+            DiscountPercent: room?.discountPercent ?? room?.DiscountPercent ?? null,
+            DiscountedPrice: room?.discountedPrice ?? room?.DiscountedPrice ?? null,
+            Description: room?.description ?? room?.Description ?? room?.moTa ?? room?.MoTa ?? null,
+          })),
+          SameDayOptions: (rawAvailability?.sameDayOptions ?? rawAvailability?.SameDayOptions ?? []).map((opt: any) => ({
+            Hour: opt?.hour ?? opt?.Hour,
+            Description: opt?.description ?? opt?.Description,
+            Percentage: opt?.percentage ?? opt?.Percentage,
+            Fee: opt?.fee ?? opt?.Fee,
+            FeeWithVat: opt?.feeWithVat ?? opt?.FeeWithVat,
+          })),
+          ExtraNightRate: rawAvailability?.extraNightRate ?? rawAvailability?.ExtraNightRate ?? 0,
+          ExtraNightRateWithVat: rawAvailability?.extraNightRateWithVat ?? rawAvailability?.ExtraNightRateWithVat ?? 0,
+          HasSameDayExtended: rawAvailability?.hasSameDayExtended ?? rawAvailability?.HasSameDayExtended ?? false,
+        };
+        
+        setExtendAvailability(availability);
+        
+        // Update available rooms with the new list
+        if (availability?.AvailableRooms?.length > 0) {
+          setAvailableRooms(availability.AvailableRooms);
+        } else {
+          // No rooms available for this date range
+          setAvailableRooms([]);
+        }
+        
+        console.log(`[Dynamic Extend] Updated available rooms for ${extraNights} nights:`, availability.AvailableRooms);
+      } catch (e: any) {
+        console.error('[Dynamic Extend] Failed to refetch available rooms:', e);
+        // Don't show error message during dynamic refetch to avoid spam
+      } finally {
+        setLoadingRooms(false);
+      }
+    }, 500); // 500ms debounce
+    
+    return () => clearTimeout(timer);
+  }, [extraNights, extendVisible, extendBookingId, extendType]);
+
+  // Re-filter available rooms when same-day (hour) extend settings change
+  useEffect(() => {
+    if (!extendVisible) return;
+    if (extendType !== 1) return; // only apply for same-day extend
+
+    const occupiedKeywords = ['using', 'in use', 'occupied', 'dang su dung', 'đang sử dụng', 'in-use', 'inuse'];
+
+    const filtered = (availableRooms || []).filter((r: any) => {
+      const st = r?.TrangThai ?? r?.trangThai ?? r?.status ?? '';
+      if (st === null || st === undefined) return true;
+      const num = Number(st);
+      if (!isNaN(num) && num === 3) return false; // numeric 3 = 'using'
+      const s = String(st).toLowerCase();
+      if (occupiedKeywords.some(k => s.includes(k))) return false;
+      return true;
+    });
+
+    try {
+      const a = JSON.stringify(filtered || []);
+      const b = JSON.stringify(availableRooms || []);
+      if (a !== b) setAvailableRooms(filtered);
+    } catch {
+      setAvailableRooms(filtered);
+    }
+  }, [extendVisible, extendType, selectedExtendHour, availableRooms]);
+
+  // If operator selects SameDay and booking status is in [1,2,3,5],
+  // clear any previously-selected room to prevent accidental room-change.
+  useEffect(() => {
+    try {
+      if (extendType === 1 && [1,2,3,5].includes(Number(extendBookingDetail?.TrangThai ?? 0))) {
+        if (selectedRoomId) setSelectedRoomId(null);
+      }
+    } catch {
+      // ignore
+    }
+  }, [extendType, extendBookingDetail]);
 
   // Tính phí gia hạn hiển thị
   const calculateExtendFee = () => {
@@ -1429,12 +1584,19 @@ const handleForceCancelSubmit = async (data: {
   const doExtendSameRoom = async () => {
     setExtendSubmitting(true);
     try {
+      // Get the current room rate (after promotion/discount if applicable)
+      const currentRoomRate = extendAvailability?.ExtraNightRate || 0;
+      const currentRoomRateWithVat = extendAvailability?.ExtraNightRateWithVat || 0;
+      
       const payload: any = {
         IddatPhong: extendBookingId,
         ExtendType: extendType,
         PaymentMethod: extendPaymentMethod,
         Note: extendNote || undefined,
         IsRoomChange: false, // Không đổi phòng
+        // Include current room rate for backend to calculate fees correctly
+        CurrentRoomRate: currentRoomRate,
+        CurrentRoomRateWithVat: currentRoomRateWithVat,
       };
       
       if (extendType === 1) {
@@ -1638,8 +1800,13 @@ const handleForceCancelSubmit = async (data: {
         NewRoomInfo: {
           Idphong: newRoom.Idphong ?? newRoom.idphong ?? newRoom.roomId,
           TenPhong: newRoom.TenPhong ?? newRoom.tenPhong ?? newRoom.roomName,
-          GiaMotDem: newRoom.GiaMotDem ?? newRoom.giaMotDem ?? newRoom.basePricePerNight,
+          // Dùng giá SAU KHUYẾN MÃI (DiscountedPrice), không dùng giá gốc (GiaMotDem)
+          GiaMotDem: newRoom.DiscountedPrice ?? newRoom.discountedPrice ?? newRoom.GiaMotDem ?? newRoom.giaMotDem ?? newRoom.basePricePerNight,
           TenLoaiPhong: newRoom.TenLoaiPhong ?? newRoom.tenLoaiPhong ?? newRoom.roomTypeName,
+          // Include base price and promotion info for backend to calculate fees correctly
+          BasePricePerNight: newRoom.GiaMotDem ?? newRoom.giaMotDem ?? newRoom.basePricePerNight,
+          PromotionName: newRoom.PromotionName ?? newRoom.promotionName,
+          DiscountPercent: newRoom.DiscountPercent ?? newRoom.discountPercent,
         }
       };
       
@@ -1656,6 +1823,37 @@ const handleForceCancelSubmit = async (data: {
         const fee = result.TotalExtendFee ?? result.totalExtendFee ?? 0;
         const newBookingId = result.NewBookingId ?? result.newBookingId;
         const newInvoiceId = result.NewInvoiceId ?? result.newInvoiceId;
+        
+        // Ensure extend fee data is calculated correctly with promotion applied
+        // If backend didn't include discount details, calculate them from base price
+        if (!result.ExtendFeeBeforeDiscount && newRoom) {
+          const basePrice = newRoom.GiaMotDem ?? newRoom.giaMotDem ?? newRoom.basePricePerNight ?? 0;
+          const discountedPrice = newRoom.DiscountedPrice ?? newRoom.discountedPrice ?? basePrice;
+          
+          let baseFeeForType = 0;
+          if (extendType === 1) {
+            // Same day extend - percentage based
+            const selectedOption = extendAvailability?.SameDayOptions?.find((o: any) => o.Hour === selectedExtendHour);
+            if (selectedOption) {
+              baseFeeForType = Math.round((basePrice * selectedOption.Percentage) / 100);
+            }
+          } else {
+            // Extra nights
+            baseFeeForType = basePrice * extraNights;
+          }
+          
+          // Calculate discount
+          const discountAmount = Math.max(0, baseFeeForType - (discountedPrice * (extendType === 2 ? extraNights : 1)));
+          const feeAfterDiscount = Math.max(0, baseFeeForType - discountAmount);
+          const vatAmount = Math.round(feeAfterDiscount * 0.10);
+          const totalFee = feeAfterDiscount + vatAmount;
+          
+          result.ExtendFeeBeforeDiscount = baseFeeForType;
+          result.ExtendFee = feeAfterDiscount;
+          result.DiscountAmount = discountAmount;
+          result.VatAmount = vatAmount;
+          result.TotalExtendFee = totalFee;
+        }
         
         notification.success({
           message: 'Đổi phòng & Gia hạn thành công',
@@ -1691,12 +1889,17 @@ const handleForceCancelSubmit = async (data: {
           try { setPaymentRow({ IddatPhong: extendBookingId } as any); } catch {}
           setQrModalVisible(true);
         } else {
-          // Cash or pay-later: DO NOT show the ExtendInvoiceModal immediately.
-          // Instead store the result and show it after the operator completes the old booking.
+          // Cash or pay-later: Show the ExtendInvoiceModal immediately with the extend result
           try {
             if (extendBookingId) {
+              // Store the result for reference
               setPendingExtendResults(prev => ({ ...(prev || {}), [String(extendBookingId)]: result }));
-              message.info('Gia hạn đã tạo. Vui lòng hoàn tất trả phòng cũ để hiện hóa đơn gia hạn.');
+              // Show the extend invoice modal immediately
+              try { setPaymentRow({ IddatPhong: extendBookingId } as any); } catch {}
+              setExtendInvoiceData(result);
+              setIsExtendedInvoice(true);
+              setIsOverdueInvoice(false);
+              setUnifiedModalVisible(true);
             } else {
               // Fallback: if we don't have old booking id, show immediately
               try { setExtendVisible(false); resetExtendState(); } catch {}
@@ -2112,6 +2315,30 @@ const handleForceCancelSubmit = async (data: {
                       setIsExtendedInvoice(true);
                       setIsOverdueInvoice(false);
                       setExtendFlowPending(false);
+
+                      // IMPORTANT: For extend with room-change via QR, we need to confirm payment
+                      // for the NEW invoice (not the old one). Call confirmPaid for the new booking
+                      // so TrangThaiThanhToan gets updated to 2 (Đã thanh toán).
+                      try {
+                        const newBookingId = extendInvoiceData?.NewBookingId ?? extendInvoiceData?.newBookingId ?? extendInvoiceData?.IddatPhong;
+                        const newInvoiceId = extendInvoiceData?.NewInvoiceId ?? extendInvoiceData?.newInvoiceId ?? extendInvoiceData?.HoaDonId;
+                        const totalExtendFee = Number(extendInvoiceData?.TotalExtendFee ?? extendInvoiceData?.totalExtendFee ?? 0);
+                        
+                        if (newBookingId && totalExtendFee > 0) {
+                          console.log('[extendFlowPending] Confirming payment for NEW extend booking:', { newBookingId, newInvoiceId, totalExtendFee });
+                          const confirmPayload: any = {
+                            IsOnline: true,
+                            Amount: Math.round(totalExtendFee)
+                          };
+                          if (newInvoiceId) confirmPayload.HoaDonId = newInvoiceId;
+                          
+                          await checkoutApi.confirmPaid(newBookingId, confirmPayload);
+                          console.log('[extendFlowPending] Confirmed payment for NEW extend booking successfully');
+                        }
+                      } catch (err: any) {
+                        console.warn('[extendFlowPending] Failed to confirm payment for new extend booking:', err?.message || err);
+                        // Don't throw - allow UI to proceed even if confirmPaid fails
+                      }
                     } else {
                       setIsExtendedInvoice(Boolean(paymentRow && (extendedBookingIds.includes(String(paymentRow?.IddatPhong)) || detectExtendInSummary(invoiceData))));
                       setIsOverdueInvoice(isOverdueBooking);
@@ -2163,8 +2390,48 @@ const handleForceCancelSubmit = async (data: {
               onComplete={async (id) => {
                 try {
                   if (typeof id !== 'undefined' && id !== null) {
-                    // For extend mode, no need to call confirmPaid/completeCheckout
-                    if (!extendInvoiceData) {
+                    // For extend mode with room change
+                    if (extendInvoiceData) {
+                      // extendInvoiceData contains the NEW booking/invoice after room change
+                      // id is the OLD booking id that we just completed
+                      // We need to:
+                      // 1. Complete the OLD booking
+                      // 2. Show the NEW extended invoice (from extendInvoiceData)
+                      
+                      try {
+                        // Complete the old booking
+                        await checkoutApi.completeCheckout(id);
+                        msg.success('Hoàn tất trả phòng cũ - đang hiển thị hóa đơn gia hạn mới...');
+                      } catch (e) {
+                        console.warn('[onComplete] completeCheckout for old booking failed', e);
+                      }
+
+                      // Now show the NEW extend invoice (from extendInvoiceData)
+                      try {
+                        setUnifiedModalVisible(false);
+                        setInvoiceData(null);
+                        setIsExtendedInvoice(false);
+                        setIsOverdueInvoice(false);
+                        // Reset but keep extendInvoiceData
+                        setSelectedServices([]);
+                        setServicesTotal(0);
+                        setPaymentRow(null);
+                        
+                        // Small delay to let modal close
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                        
+                        // Now show the new extended invoice modal
+                        const newBookingId = extendInvoiceData?.NewBookingId ?? extendInvoiceData?.newBookingId ?? extendInvoiceData?.IddatPhong ?? id;
+                        setPaymentRow({ IddatPhong: newBookingId } as any);
+                        setInvoiceData(extendInvoiceData);
+                        setIsExtendedInvoice(true);
+                        setIsOverdueInvoice(false);
+                        setUnifiedModalVisible(true);
+                      } catch (err) {
+                        console.warn('Failed to show new extend invoice', err);
+                      }
+                    } else {
+                      // Regular checkout (not extend)
                       try {
                         const hoaDonId =
                           invoiceData?.IDHoaDon ??
@@ -2197,11 +2464,11 @@ const handleForceCancelSubmit = async (data: {
                       }
 
                       msg.success('Hoàn tất trả phòng');
+                      setUnifiedModalVisible(false);
+                      setIsExtendedInvoice(false);
+                      setIsOverdueInvoice(false);
                     }
 
-                    setUnifiedModalVisible(false);
-                    setIsExtendedInvoice(false);
-                    setIsOverdueInvoice(false);
                     await load();
                   } else {
                     throw new Error('Không có id để hoàn tất trả phòng');
@@ -2231,247 +2498,245 @@ const handleForceCancelSubmit = async (data: {
                 </Button>
               ]}
             >
-              {loadingRooms ? (
-                <div style={{ textAlign: 'center', padding: 40 }}>Đang tải thông tin...</div>
-              ) : (
+              {/* Thông tin booking - always show first */}
+              {extendBookingDetail && (
+                <div style={{ marginBottom: 16, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
+                  <div><strong>Mã đặt phòng:</strong> {extendBookingDetail?.IddatPhong ?? extendBookingDetail?.iddatPhong}</div>
+                  <div><strong>Phòng hiện tại:</strong> {extendBookingDetail?.TenPhong ?? extendBookingDetail?.tenPhong ?? extendBookingDetail?.Idphong ?? extendBookingDetail?.idphong}</div>
+                  <div><strong>Checkout hiện tại:</strong> {(extendBookingDetail?.NgayTraPhong ?? extendBookingDetail?.ngayTraPhong) 
+                    ? `12:00 ${new Date(extendBookingDetail.NgayTraPhong ?? extendBookingDetail.ngayTraPhong).toLocaleDateString('vi-VN')}` 
+                    : '—'}</div>
+                </div>
+              )}
+
+              {/* Thông báo nếu có booking mới */}
+              {extendAvailability?.HasNextBooking && (
+                <div style={{ marginBottom: 16, padding: 12, background: '#fff7e6', border: '1px solid #ffc069', borderRadius: 8 }}>
+                  <div style={{ fontWeight: 600, color: '#d46b08' }}>⚠️ Phòng có khách mới check-in</div>
+                  <div style={{ fontSize: 13, color: '#8c4a00' }}>
+                    Khách: {extendAvailability.NextBooking?.CustomerName} - Check-in: {new Date(extendAvailability.NextBooking?.CheckinDate).toLocaleDateString('vi-VN')}
+                  </div>
+                  <div style={{ fontSize: 13, marginTop: 4 }}>{extendAvailability.Message}</div>
+                </div>
+              )}
+
+              {/* Không thể gia hạn */}
+              {extendAvailability && !extendAvailability?.CanExtend && (
+                <div style={{ marginBottom: 16, padding: 12, background: '#fff2f0', border: '1px solid #ffccc7', borderRadius: 8 }}>
+                  <div style={{ fontWeight: 600, color: '#cf1322' }}>❌ Không thể gia hạn</div>
+                  <div style={{ fontSize: 13 }}>{extendAvailability?.Message}</div>
+                </div>
+              )}
+
+              {/* Loại gia hạn - render even while loading rooms */}
+              {extendAvailability?.CanExtend && (
                 <>
-                  {/* Thông tin booking */}
-                  {extendBookingDetail && (
-                    <div style={{ marginBottom: 16, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
-                      <div><strong>Mã đặt phòng:</strong> {extendBookingDetail?.IddatPhong ?? extendBookingDetail?.iddatPhong}</div>
-                      <div><strong>Phòng hiện tại:</strong> {extendBookingDetail?.TenPhong ?? extendBookingDetail?.tenPhong ?? extendBookingDetail?.Idphong ?? extendBookingDetail?.idphong}</div>
-                      <div><strong>Checkout hiện tại:</strong> {(extendBookingDetail?.NgayTraPhong ?? extendBookingDetail?.ngayTraPhong) 
-                        ? `12:00 ${new Date(extendBookingDetail.NgayTraPhong ?? extendBookingDetail.ngayTraPhong).toLocaleDateString('vi-VN')}` 
-                        : '—'}</div>
-                    </div>
-                  )}
-
-                  {/* Thông báo nếu có booking mới */}
-                  {extendAvailability?.HasNextBooking && (
-                    <div style={{ marginBottom: 16, padding: 12, background: '#fff7e6', border: '1px solid #ffc069', borderRadius: 8 }}>
-                      <div style={{ fontWeight: 600, color: '#d46b08' }}>⚠️ Phòng có khách mới check-in</div>
-                      <div style={{ fontSize: 13, color: '#8c4a00' }}>
-                        Khách: {extendAvailability.NextBooking?.CustomerName} - Check-in: {new Date(extendAvailability.NextBooking?.CheckinDate).toLocaleDateString('vi-VN')}
+                  {/* Thông báo đã gia hạn trong ngày */}
+                  {extendAvailability?.HasSameDayExtended && (
+                    <div style={{ marginBottom: 16, padding: 12, background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8 }}>
+                      <div style={{ fontWeight: 600, color: '#d48806' }}>⚠️ Đã gia hạn trong ngày</div>
+                      <div style={{ fontSize: 13, marginTop: 4 }}>
+                        Booking này đã được gia hạn trong ngày 1 lần. Bạn chỉ có thể chọn <strong>"Thêm đêm"</strong> để tiếp tục gia hạn.
                       </div>
-                      <div style={{ fontSize: 13, marginTop: 4 }}>{extendAvailability.Message}</div>
                     </div>
                   )}
+                  
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 8 }}>Loại gia hạn:</div>
+                    <Space>
+                      <Button 
+                        type={extendType === 1 ? 'primary' : 'default'}
+                        onClick={() => !extendAvailability?.HasSameDayExtended && setExtendType(1)}
+                        disabled={extendAvailability?.HasSameDayExtended}
+                        title={extendAvailability?.HasSameDayExtended ? 'Đã gia hạn trong ngày, không thể gia hạn thêm' : ''}
+                      >
+                        Trong ngày (Late checkout) {extendAvailability?.HasSameDayExtended && '✓'}
+                      </Button>
+                      <Button 
+                        type={extendType === 2 ? 'primary' : 'default'}
+                        onClick={() => setExtendType(2)}
+                      >
+                        Thêm đêm
+                      </Button>
+                    </Space>
+                  </div>
 
-                  {/* Không thể gia hạn */}
-                  {!extendAvailability?.CanExtend && (
-                    <div style={{ marginBottom: 16, padding: 12, background: '#fff2f0', border: '1px solid #ffccc7', borderRadius: 8 }}>
-                      <div style={{ fontWeight: 600, color: '#cf1322' }}>❌ Không thể gia hạn</div>
-                      <div style={{ fontSize: 13 }}>{extendAvailability?.Message}</div>
-                    </div>
-                  )}
-
-                  {/* Loại gia hạn */}
-                  {extendAvailability?.CanExtend && (
-                    <>
-                      {/* Thông báo đã gia hạn trong ngày */}
-                      {extendAvailability?.HasSameDayExtended && (
-                        <div style={{ marginBottom: 16, padding: 12, background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8 }}>
-                          <div style={{ fontWeight: 600, color: '#d48806' }}>⚠️ Đã gia hạn trong ngày</div>
-                          <div style={{ fontSize: 13, marginTop: 4 }}>
-                            Booking này đã được gia hạn trong ngày 1 lần. Bạn chỉ có thể chọn <strong>"Thêm đêm"</strong> để tiếp tục gia hạn.
+                  {/* Options cho gia hạn trong ngày */}
+                  {extendType === 1 && extendAvailability?.SameDayOptions && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 8 }}>Chọn giờ checkout mới:</div>
+                      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                        {extendAvailability.SameDayOptions.map((opt: any) => (
+                          <div 
+                            key={opt.Hour}
+                            onClick={() => setSelectedExtendHour(opt.Hour)}
+                            style={{ 
+                              padding: '12px 20px', 
+                              border: selectedExtendHour === opt.Hour ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                              borderRadius: 8,
+                              cursor: 'pointer',
+                              background: selectedExtendHour === opt.Hour ? '#e6f7ff' : '#fff',
+                              textAlign: 'center',
+                              minWidth: 140
+                            }}
+                          >
+                            <div style={{ fontWeight: 700 }}>{opt.Description}</div>
+                            <div style={{ color: '#8c8c8c', fontSize: 12 }}>({opt.Percentage}% giá phòng)</div>
+                            <div style={{ fontWeight: 700, color: '#1890ff', marginTop: 4 }}>
+                              {Number(opt.FeeWithVat).toLocaleString()}đ
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8 }}>Loại gia hạn:</div>
-                        <Space>
-                          <Button 
-                            type={extendType === 1 ? 'primary' : 'default'}
-                            onClick={() => !extendAvailability?.HasSameDayExtended && setExtendType(1)}
-                            disabled={extendAvailability?.HasSameDayExtended}
-                            title={extendAvailability?.HasSameDayExtended ? 'Đã gia hạn trong ngày, không thể gia hạn thêm' : ''}
-                          >
-                            Trong ngày (Late checkout) {extendAvailability?.HasSameDayExtended && '✓'}
-                          </Button>
-                          <Button 
-                            type={extendType === 2 ? 'primary' : 'default'}
-                            onClick={() => setExtendType(2)}
-                          >
-                            Thêm đêm
-                          </Button>
-                        </Space>
+                        ))}
                       </div>
+                    </div>
+                  )}
 
-                      {/* Options cho gia hạn trong ngày */}
-                      {extendType === 1 && extendAvailability?.SameDayOptions && (
-                        <div style={{ marginBottom: 16 }}>
-                          <div style={{ fontWeight: 600, marginBottom: 8 }}>Chọn giờ checkout mới:</div>
-                          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                            {extendAvailability.SameDayOptions.map((opt: any) => (
-                              <div 
-                                key={opt.Hour}
-                                onClick={() => setSelectedExtendHour(opt.Hour)}
-                                style={{ 
-                                  padding: '12px 20px', 
-                                  border: selectedExtendHour === opt.Hour ? '2px solid #1890ff' : '1px solid #d9d9d9',
-                                  borderRadius: 8,
-                                  cursor: 'pointer',
-                                  background: selectedExtendHour === opt.Hour ? '#e6f7ff' : '#fff',
-                                  textAlign: 'center',
-                                  minWidth: 140
-                                }}
-                              >
-                                <div style={{ fontWeight: 700 }}>{opt.Description}</div>
-                                <div style={{ color: '#8c8c8c', fontSize: 12 }}>({opt.Percentage}% giá phòng)</div>
-                                <div style={{ fontWeight: 700, color: '#1890ff', marginTop: 4 }}>
-                                  {Number(opt.FeeWithVat).toLocaleString()}đ
+                  {/* Options cho thêm đêm */}
+                  {extendType === 2 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 8 }}>Số đêm thêm:</div>
+                      <Space>
+                        <Button onClick={() => setExtraNights(Math.max(1, extraNights - 1))}>-</Button>
+                        <span style={{ minWidth: 40, textAlign: 'center', display: 'inline-block', fontWeight: 700, fontSize: 18 }}>{extraNights}</span>
+                        <Button onClick={() => setExtraNights(extraNights + 1)}>+</Button>
+                        <span style={{ marginLeft: 16, color: '#8c8c8c' }}>
+                          × {Number(extendAvailability.ExtraNightRateWithVat).toLocaleString()}đ/đêm
+                        </span>
+                      </Space>
+                      <div style={{ marginTop: 8, fontWeight: 700, color: '#1890ff' }}>
+                        Tổng: {Number(extendAvailability.ExtraNightRateWithVat * extraNights).toLocaleString()}đ
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chọn phòng mới nếu cần - with loading skeleton */}
+                  {/* Hide room-change selection when operator chose SameDay and booking status is one of [1,2,3,5] */}
+                  {!extendAvailability?.CanExtendSameRoom && !(extendType === 1 && [1,2,3,5].includes(Number(extendBookingDetail?.TrangThai ?? 0))) && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                        Chọn phòng mới:
+                        {loadingRooms && <span style={{ marginLeft: 8, color: '#8c8c8c', fontSize: 12 }}>Đang tải danh sách phòng...</span>}
+                      </div>
+                      <List
+                        dataSource={availableRooms}
+                        locale={{ emptyText: loadingRooms ? 'Đang tải danh sách phòng...' : 'Không có phòng trống' }}
+                        renderItem={(item: any) => {
+                          const id = item.Idphong ?? item.idphong ?? item.RoomId;
+                          const isSelected = selectedRoomId === id;
+                          const basePrice = item.GiaMotDem ?? item.giaCoBanMotDem ?? 0;
+                          const discountedPrice = item.DiscountedPrice ?? basePrice;
+                          const promotionName = item.PromotionName;
+                          const discountPercent = item.DiscountPercent;
+                          const hasDiscount = discountedPrice < basePrice;
+
+                          return (
+                            <List.Item 
+                              style={{ 
+                                background: isSelected ? '#e6f7ff' : undefined, 
+                                cursor: 'pointer', 
+                                padding: 12, 
+                                border: isSelected ? '2px solid #1890ff' : '1px solid #f0f0f0', 
+                                borderRadius: 8, 
+                                marginBottom: 8 
+                              }} 
+                              onClick={() => setSelectedRoomId(id)}
+                            >
+                              <div style={{ display: 'flex', gap: 12, width: '100%', alignItems: 'center' }}>
+                                <div style={{ flex: '0 0 100px', height: 70, borderRadius: 8, overflow: 'hidden', background: '#f8fafc' }}>
+                                  <Image 
+                                    src={item.UrlAnhPhong ?? item.urlAnhPhong ?? '/img/placeholder.png'} 
+                                    width={100} 
+                                    height={70} 
+                                    preview={false} 
+                                    style={{ objectFit: 'cover' }}
+                                  />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: 700 }}>{item.TenPhong ?? item.tenPhong ?? `Phòng ${item.SoPhong ?? item.soPhong}`}</div>
+                                  <div style={{ color: '#8c8c8c', fontSize: 13 }}>{item.TenLoaiPhong ?? item.tenLoaiPhong}</div>
+                                  {/* Hiển thị khuyến mãi nếu có */}
+                                  {hasDiscount && promotionName && (
+                                    <div style={{ color: '#52c41a', fontSize: 12, fontWeight: 500, marginTop: 4 }}>
+                                      ✓ {promotionName} {discountPercent ? `(${discountPercent}%)` : ''}
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  {hasDiscount ? (
+                                    <div>
+                                      <div style={{ textDecoration: 'line-through', color: '#999', fontSize: 12 }}>
+                                        {Number(basePrice).toLocaleString()}đ
+                                      </div>
+                                      <div style={{ fontWeight: 700, color: '#f5222d', fontSize: 14 }}>
+                                        {Number(discountedPrice).toLocaleString()}đ/đêm
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{ fontWeight: 700, color: '#1890ff' }}>
+                                      {Number(basePrice).toLocaleString()}đ/đêm
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Options cho thêm đêm */}
-                      {extendType === 2 && (
-                        <div style={{ marginBottom: 16 }}>
-                          <div style={{ fontWeight: 600, marginBottom: 8 }}>Số đêm thêm:</div>
-                          <Space>
-                            <Button onClick={() => setExtraNights(Math.max(1, extraNights - 1))}>-</Button>
-                            <span style={{ minWidth: 40, textAlign: 'center', display: 'inline-block', fontWeight: 700, fontSize: 18 }}>{extraNights}</span>
-                            <Button onClick={() => setExtraNights(extraNights + 1)}>+</Button>
-                            <span style={{ marginLeft: 16, color: '#8c8c8c' }}>
-                              × {Number(extendAvailability.ExtraNightRateWithVat).toLocaleString()}đ/đêm
-                            </span>
-                          </Space>
-                          <div style={{ marginTop: 8, fontWeight: 700, color: '#1890ff' }}>
-                            Tổng: {Number(extendAvailability.ExtraNightRateWithVat * extraNights).toLocaleString()}đ
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Chọn phòng mới nếu cần */}
-                      {!extendAvailability?.CanExtendSameRoom && availableRooms.length > 0 && (
-                        <div style={{ marginBottom: 16 }}>
-                          <div style={{ fontWeight: 600, marginBottom: 8 }}>Chọn phòng mới:</div>
-                          <List
-                            dataSource={availableRooms}
-                            locale={{ emptyText: 'Không có phòng trống' }}
-                            renderItem={(item: any) => {
-                              const id = item.Idphong ?? item.idphong ?? item.RoomId;
-                              const isSelected = selectedRoomId === id;
-                              const basePrice = item.GiaMotDem ?? item.giaCoBanMotDem ?? 0;
-                              const discountedPrice = item.DiscountedPrice ?? basePrice;
-                              const promotionName = item.PromotionName;
-                              const discountPercent = item.DiscountPercent;
-                              const hasDiscount = discountedPrice < basePrice;
-
-                              return (
-                                <List.Item 
-                                  style={{ 
-                                    background: isSelected ? '#e6f7ff' : undefined, 
-                                    cursor: 'pointer', 
-                                    padding: 12, 
-                                    border: isSelected ? '2px solid #1890ff' : '1px solid #f0f0f0', 
-                                    borderRadius: 8, 
-                                    marginBottom: 8 
-                                  }} 
-                                  onClick={() => setSelectedRoomId(id)}
-                                >
-                                  <div style={{ display: 'flex', gap: 12, width: '100%', alignItems: 'center' }}>
-                                    <div style={{ flex: '0 0 100px', height: 70, borderRadius: 8, overflow: 'hidden', background: '#f8fafc' }}>
-                                      <Image 
-                                        src={item.UrlAnhPhong ?? item.urlAnhPhong ?? '/img/placeholder.png'} 
-                                        width={100} 
-                                        height={70} 
-                                        preview={false} 
-                                        style={{ objectFit: 'cover' }}
-                                      />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                      <div style={{ fontWeight: 700 }}>{item.TenPhong ?? item.tenPhong ?? `Phòng ${item.SoPhong ?? item.soPhong}`}</div>
-                                      <div style={{ color: '#8c8c8c', fontSize: 13 }}>{item.TenLoaiPhong ?? item.tenLoaiPhong}</div>
-                                      {/* Hiển thị khuyến mãi nếu có */}
-                                      {hasDiscount && promotionName && (
-                                        <div style={{ color: '#52c41a', fontSize: 12, fontWeight: 500, marginTop: 4 }}>
-                                          ✓ {promotionName} {discountPercent ? `(${discountPercent}%)` : ''}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                      {hasDiscount ? (
-                                        <div>
-                                          <div style={{ textDecoration: 'line-through', color: '#999', fontSize: 12 }}>
-                                            {Number(basePrice).toLocaleString()}đ
-                                          </div>
-                                          <div style={{ fontWeight: 700, color: '#f5222d', fontSize: 14 }}>
-                                            {Number(discountedPrice).toLocaleString()}đ/đêm
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div style={{ fontWeight: 700, color: '#1890ff' }}>
-                                          {Number(basePrice).toLocaleString()}đ/đêm
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </List.Item>
-                              );
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      {/* Phương thức thanh toán */}
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8 }}>Phương thức thanh toán:</div>
-                        <Space wrap>
-                          <Button 
-                            type={extendPaymentMethod === 1 ? 'primary' : 'default'}
-                            onClick={() => setExtendPaymentMethod(1)}
-                          >
-                            💵 Tiền mặt (thanh toán ngay)
-                          </Button>
-                          <Button 
-                            type={extendPaymentMethod === 2 ? 'primary' : 'default'}
-                            onClick={() => setExtendPaymentMethod(2)}
-                          >
-                            📱 QR / Online
-                          </Button>
-                          <Button 
-                            type={extendPaymentMethod === 3 ? 'primary' : 'default'}
-                            onClick={() => setExtendPaymentMethod(3)}
-                            style={{ borderColor: extendPaymentMethod === 3 ? '#faad14' : undefined, color: extendPaymentMethod === 3 ? '#fff' : '#d48806', background: extendPaymentMethod === 3 ? '#faad14' : undefined }}
-                          >
-                            ⏳ Thanh toán sau (khi checkout)
-                          </Button>
-                        </Space>
-                      </div>
-
-                      {/* Ghi chú */}
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8 }}>Ghi chú:</div>
-                        <Input.TextArea 
-                          value={extendNote}
-                          onChange={(e) => setExtendNote(e.target.value)}
-                          placeholder="Ghi chú (tùy chọn)"
-                          rows={2}
-                        />
-                      </div>
-
-                      {/* Tóm tắt phí */}
-                      <div style={{ padding: 16, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 8 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span>Phí gia hạn:</span>
-                          <span>{Number(calculateExtendFee().fee).toLocaleString()}đ</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span>VAT (10%):</span>
-                          <span>{Number(calculateExtendFee().feeWithVat - calculateExtendFee().fee).toLocaleString()}đ</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, paddingTop: 8, borderTop: '1px solid #b7eb8f' }}>
-                          <span>Tổng cộng:</span>
-                          <span style={{ color: '#52c41a' }}>{Number(calculateExtendFee().feeWithVat).toLocaleString()}đ</span>
-                        </div>
-                      </div>
-                    </>
+                            </List.Item>
+                          );
+                        }}
+                      />
+                    </div>
                   )}
+
+                  {/* Phương thức thanh toán */}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 8 }}>Phương thức thanh toán:</div>
+                    <Space wrap>
+                      <Button 
+                        type={extendPaymentMethod === 1 ? 'primary' : 'default'}
+                        onClick={() => setExtendPaymentMethod(1)}
+                      >
+                        💵 Tiền mặt (thanh toán ngay)
+                      </Button>
+                      <Button 
+                        type={extendPaymentMethod === 2 ? 'primary' : 'default'}
+                        onClick={() => setExtendPaymentMethod(2)}
+                      >
+                        📱 QR / Online
+                      </Button>
+                      <Button 
+                        type={extendPaymentMethod === 3 ? 'primary' : 'default'}
+                        onClick={() => setExtendPaymentMethod(3)}
+                        style={{ borderColor: extendPaymentMethod === 3 ? '#faad14' : undefined, color: extendPaymentMethod === 3 ? '#fff' : '#d48806', background: extendPaymentMethod === 3 ? '#faad14' : undefined }}
+                      >
+                        ⏳ Thanh toán sau (khi checkout)
+                      </Button>
+                    </Space>
+                  </div>
+
+                  {/* Ghi chú */}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 8 }}>Ghi chú:</div>
+                    <Input.TextArea 
+                      value={extendNote}
+                      onChange={(e) => setExtendNote(e.target.value)}
+                      placeholder="Ghi chú (tùy chọn)"
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Tóm tắt phí */}
+                  <div style={{ padding: 16, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span>Phí gia hạn:</span>
+                      <span>{Number(calculateExtendFee().fee).toLocaleString()}đ</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span>VAT (10%):</span>
+                      <span>{Number(calculateExtendFee().feeWithVat - calculateExtendFee().fee).toLocaleString()}đ</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, paddingTop: 8, borderTop: '1px solid #b7eb8f' }}>
+                      <span>Tổng cộng:</span>
+                      <span style={{ color: '#52c41a' }}>{Number(calculateExtendFee().feeWithVat).toLocaleString()}đ</span>
+                    </div>
+                  </div>
                 </>
               )}
             </Modal>

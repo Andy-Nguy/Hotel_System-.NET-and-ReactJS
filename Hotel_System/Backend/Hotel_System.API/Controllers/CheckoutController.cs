@@ -688,6 +688,28 @@ namespace Hotel_System.API.Controllers
             });
         }
 
+        /// <summary>
+        /// Unified API to check available rooms for any date range.
+        /// Query params: checkin (ISO date), checkout (ISO date), guests (int), excludeRoomId (string, optional)
+        /// This centralizes room-availability checks so callers can rely on a single endpoint.
+        /// </summary>
+        [HttpGet("rooms/available")]
+        public async Task<IActionResult> CheckAvailableRooms([FromQuery] DateTime checkin, [FromQuery] DateTime checkout, [FromQuery] int guests = 1, [FromQuery] string? excludeRoomId = null)
+        {
+            if (checkin == default || checkout == default || checkout <= checkin)
+                return BadRequest(new { message = "Invalid checkin/checkout dates." });
+
+            // Delegate to RoomService for canonical availability logic
+            var available = await _roomService.CheckAvailableRoomsAsync(checkin, checkout, guests);
+
+            if (!string.IsNullOrWhiteSpace(excludeRoomId))
+            {
+                available = available.Where(r => !(r.RoomId == excludeRoomId || r.RoomId?.Equals(excludeRoomId, StringComparison.OrdinalIgnoreCase) == true)).ToList();
+            }
+
+            return Ok(new { success = true, checkin = checkin.ToString("yyyy-MM-dd"), checkout = checkout.ToString("yyyy-MM-dd"), guests, availableRooms = available });
+        }
+
         // ===================== PREVIEW CHECKOUT (with points) =========================
         [HttpPost("preview/{idDatPhong}")]
         public async Task<IActionResult> PreviewCheckout(string idDatPhong, [FromBody] CheckoutPreviewRequest? req)
@@ -2224,37 +2246,126 @@ namespace Hotel_System.API.Controllers
         }
 
         // ===================== GIA HẠN PHÒNG (EXTEND STAY) =========================
-        [HttpGet("extend/check/{idDatPhong}")]
-        public async Task<IActionResult> CheckExtendAvailability(string idDatPhong)
+        /// <summary>
+        /// Unified API for checking available rooms. Handles 3 scenarios:
+        /// 1. General availability: GET /api/checkout/available-rooms?checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&guests=1
+        /// 2. Extend with extra nights: GET /api/checkout/available-rooms?idDatPhong=XXX&extraNights=2
+        /// 3. Full extend info: GET /api/checkout/available-rooms?idDatPhong=XXX&mode=extend
+        /// </summary>
+        [HttpGet("available-rooms")]
+        public async Task<IActionResult> GetAvailableRooms(
+            [FromQuery] string? idDatPhong = null,
+            [FromQuery] DateTime? checkin = null,
+            [FromQuery] DateTime? checkout = null,
+            [FromQuery] int guests = 1,
+            [FromQuery] string? excludeRoomId = null,
+            [FromQuery] int extraNights = 1,
+            [FromQuery] string? mode = null)
         {
-            if (string.IsNullOrWhiteSpace(idDatPhong))
-                return BadRequest(new { message = "Mã đặt phòng không hợp lệ." });
+            // Scenario 1: General availability check (checkin/checkout + guests)
+            if (checkin.HasValue && checkout.HasValue && string.IsNullOrWhiteSpace(idDatPhong))
+            {
+                if (checkin.Value == default || checkout.Value == default || checkout.Value <= checkin.Value)
+                    return BadRequest(new { message = "Invalid checkin/checkout dates." });
 
-            var booking = await _context.DatPhongs
-                .Include(b => b.ChiTietDatPhongs)
-                    .ThenInclude(ct => ct.Phong)
-                        .ThenInclude(p => p.IdloaiPhongNavigation)
-                .Include(b => b.IdkhachHangNavigation)
-                .FirstOrDefaultAsync(b => b.IddatPhong == idDatPhong);
+                var available = await _roomService.CheckAvailableRoomsAsync(checkin.Value, checkout.Value, guests);
 
-            if (booking == null)
-                return NotFound(new { message = "Không tìm thấy đặt phòng." });
+                if (!string.IsNullOrWhiteSpace(excludeRoomId))
+                {
+                    available = available.Where(r => !(r.RoomId == excludeRoomId || r.RoomId?.Equals(excludeRoomId, StringComparison.OrdinalIgnoreCase) == true)).ToList();
+                }
 
-            if (booking.TrangThai != 3 && booking.TrangThai != 5)
-                return BadRequest(new { message = "Chỉ có thể gia hạn khi phòng đang sử dụng hoặc quá hạn." });
+                return Ok(new { success = true, checkin = checkin.Value.ToString("yyyy-MM-dd"), checkout = checkout.Value.ToString("yyyy-MM-dd"), guests, availableRooms = available });
+            }
 
-            var response = new DTOs.CheckExtendAvailabilityResponse();
+            // Scenario 2 & 3: Extend stay (idDatPhong + optional extraNights/mode)
+            if (!string.IsNullOrWhiteSpace(idDatPhong))
+            {
+                var booking = await _context.DatPhongs
+                    .Include(b => b.ChiTietDatPhongs)
+                        .ThenInclude(ct => ct.Phong)
+                            .ThenInclude(p => p.IdloaiPhongNavigation)
+                    .Include(b => b.IdkhachHangNavigation)
+                    .Include(b => b.HoaDons)
+                    .FirstOrDefaultAsync(b => b.IddatPhong == idDatPhong);
+
+                if (booking == null)
+                    return NotFound(new { message = "Không tìm thấy đặt phòng." });
+
+                if (booking.TrangThai != 3 && booking.TrangThai != 5)
+                    return BadRequest(new { message = "Chỉ có thể gia hạn khi phòng đang sử dụng hoặc quá hạn." });
+
+                // Check if mode=extend: return full extend info + available rooms
+                if (mode == "extend" || mode == "full")
+                {
+                    return await GetExtendWithAvailableRooms(booking, extraNights);
+                }
+
+                // Otherwise: mode=minimal or just return available rooms for given extra nights
+                var roomId = booking.Idphong;
+                var currentCheckout = booking.NgayTraPhong;
+                var extendCheckIn = currentCheckout.ToDateTime(TimeOnly.MinValue);
+                var extendCheckOut = currentCheckout.AddDays(extraNights).ToDateTime(TimeOnly.MinValue);
+
+                var guestCount = booking.SoNguoi ?? 1;
+                var availableRooms = await _roomService.CheckAvailableRoomsAsync(extendCheckIn, extendCheckOut, guestCount);
+
+                // Exclude current room if not room change
+                availableRooms = availableRooms.Where(r => r.RoomId != roomId).ToList();
+
+                _logger.LogInformation("[GetAvailableRooms] Found {Count} rooms for extend {ExtraNights} nights from {CheckIn} to {CheckOut}",
+                    availableRooms.Count, extraNights, extendCheckIn.ToString("dd/MM/yyyy"), extendCheckOut.ToString("dd/MM/yyyy"));
+
+                return Ok(new
+                {
+                    success = true,
+                    idDatPhong = idDatPhong,
+                    extendCheckIn = extendCheckIn.ToString("yyyy-MM-dd"),
+                    extendCheckOut = extendCheckOut.ToString("yyyy-MM-dd"),
+                    extraNights = extraNights,
+                    currentRoomId = roomId,
+                    availableRooms = availableRooms.Select(r => new
+                    {
+                        idphong = r.RoomId,
+                        tenPhong = r.RoomName,
+                        soPhong = r.RoomNumber,
+                        tenLoaiPhong = r.RoomTypeName,
+                        giaMotDem = r.BasePricePerNight,
+                        urlAnhPhong = r.RoomImageUrl,
+                        soNguoiToiDa = r.MaxOccupancy,
+                        promotionName = r.PromotionName,
+                        discountPercent = r.DiscountPercent,
+                        discountedPrice = r.DiscountedPrice
+                    })
+                });
+            }
+
+            return BadRequest(new { message = "Invalid request. Provide either (checkin+checkout) or idDatPhong." });
+        }
+
+        /// <summary>
+        /// Helper: Get full extend info (same-day options, next booking, etc.) + available rooms for room change
+        /// </summary>
+        private async Task<IActionResult> GetExtendWithAvailableRooms(DatPhong booking, int extraNights = 1)
+        {
             var roomId = booking.Idphong;
+            var idDatPhong = booking.IddatPhong;
+            var response = new DTOs.CheckExtendAvailabilityResponse();
 
-            var tomorrowDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1));
+            // Determine the extend window based on the current booking checkout and requested extra nights
+            var extendCheckIn = booking.NgayTraPhong;
+            var extendCheckOut = booking.NgayTraPhong.AddDays(Math.Max(1, extraNights));
+
+            // Find the next booking that overlaps with the extend window
             var nextBooking = await _context.DatPhongs
                 .Include(b => b.IdkhachHangNavigation)
                 .Where(b => b.Idphong == roomId
                     && b.IddatPhong != idDatPhong
                     && b.TrangThai != 0
                     && b.TrangThai != 4
-                    && b.NgayNhanPhong <= tomorrowDate
-                    && b.NgayTraPhong >= tomorrowDate)
+                    // Overlap: booking.NgayNhanPhong < extendCheckOut && booking.NgayTraPhong > extendCheckIn
+                    && b.NgayNhanPhong < extendCheckOut
+                    && b.NgayTraPhong > extendCheckIn)
                 .OrderBy(b => b.NgayNhanPhong)
                 .FirstOrDefaultAsync();
 
@@ -2352,9 +2463,9 @@ namespace Hotel_System.API.Controllers
 
             // ===== LẤY DANH SÁCH PHÒNG TRỐNG CHỈ TỪ BẢNG DatPhong =====
             // Phòng trống = KHÔNG có booking với status 1, 2, 3, 5 (hoạt động/chưa thanh toán/đang sử dụng/quá hạn)
-            // Phòng có booking với status 0 (hủy) hoặc 4 (hoàn tất) = được coi là trống
-            var checkinDate = DateOnly.FromDateTime(DateTime.Today); // Hôm nay
-            var checkoutDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1)); // Ngày mai
+            // Use the extend window (from current checkout to checkout + extraNights)
+            var checkinDate = extendCheckIn;
+            var checkoutDate = extendCheckOut;
 
             // Lấy danh sách tất cả phòng từ bảng Phongs
             var allRooms = await _context.Phongs
@@ -2429,7 +2540,7 @@ namespace Hotel_System.API.Controllers
             {
                 // Có booking tiếp theo trên phòng này, cần chuyển phòng nếu gia hạn qua đêm
                 response.Message = availableRooms.Count > 0
-                    ? $"Phòng hiện tại có khách mới check-in ngày {nextBooking?.NgayNhanPhong:dd/MM/yyyy}. Có thể gia hạn trong ngày hoặc chuyển sang phòng khác."
+                    ? $"Phòng hiện tại có khách mới check-in ngày {nextBooking?.NgayNhanPhong:dd/MM/yyyy}. Có thể chuyển sang phòng khác để gia hạn."
                     : "Có thể gia hạn trong ngày (late checkout). Nếu gia hạn qua đêm cần liên hệ lễ tân.";
             }
             else
@@ -2523,6 +2634,14 @@ namespace Hotel_System.API.Controllers
                         // Tính giá SAU khuyến mãi (trừ số tiền cố định)
                         appliedRoomRate = Math.Max(0, roomRate - promotion.GiaTriGiam.Value);
                     }
+                }
+
+                // If frontend provided an explicit current room rate (after discount), prefer it.
+                // This ensures frontend-calculated discounted prices are honored for invoice/QR.
+                if (request.CurrentRoomRate.HasValue && request.CurrentRoomRate.Value > 0m)
+                {
+                    _logger.LogInformation("[ExtendSameRoom] Frontend provided CurrentRoomRate={Rate}, overriding server computed appliedRoomRate.", request.CurrentRoomRate.Value);
+                    appliedRoomRate = request.CurrentRoomRate.Value;
                 }
 
                 // Tính phí gia hạn (dựa trên giá AFTER discount)
@@ -2773,6 +2892,13 @@ namespace Hotel_System.API.Controllers
                                      : request.PaymentMethod == 2 ? "Chờ thanh toán QR"
                                      : "Thanh toán sau (khi checkout)";
 
+                // Calculate discount percent for display (if promotion exists)
+                decimal? discountPercent = null;
+                if (promotion != null && promotion.LoaiGiamGia == "percent" && promotion.GiaTriGiam.HasValue)
+                {
+                    discountPercent = promotion.GiaTriGiam.Value;
+                }
+
                 var responseObj = new
                 {
                     Success = true,
@@ -2784,6 +2910,8 @@ namespace Hotel_System.API.Controllers
                     PromotionName = promotionName,
                     PromotionType = promotion?.LoaiGiamGia,
                     PromotionValue = promotion?.GiaTriGiam,
+                    DiscountPercent = discountPercent,
+                    BasePricePerNight = roomRate,  // Giá gốc để frontend tính phí gốc
                     VatAmount = vatAmount,
                     TotalExtendFee = totalExtendFee,
                     OldCheckout = oldCheckout,
@@ -2879,6 +3007,14 @@ namespace Hotel_System.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[ExtendWithRoomChange] Failed to evaluate promotion for room {RoomId}", newRoom.Idphong);
+            }
+
+            // If frontend provided an explicit room price (e.g. discounted price), prefer it.
+            // This ensures the QR/invoice will use the same discounted amount the frontend calculated.
+            if (request.NewRoomInfo != null && request.NewRoomInfo.GiaMotDem > 0m)
+            {
+                _logger.LogInformation("[ExtendWithRoomChange] Overriding appliedRoomRate with NewRoomInfo.GiaMotDem from request: {Price}", request.NewRoomInfo.GiaMotDem);
+                appliedRoomRate = request.NewRoomInfo.GiaMotDem;
             }
 
             // 2. Tính phí gia hạn theo giá phòng MỚI
@@ -3214,87 +3350,33 @@ namespace Hotel_System.API.Controllers
 
         private async Task<List<DTOs.AvailableRoomForExtend>> FindAvailableRoomsForExtend(DateTime checkin, DateTime checkout, int guests, string? excludeRoomId)
         {
-            var checkinDate = DateOnly.FromDateTime(checkin);
-            var checkoutDate = DateOnly.FromDateTime(checkout);
+            // Use RoomService as the single source of truth for availability logic.
+            var available = await _roomService.CheckAvailableRoomsAsync(checkin, checkout, guests);
 
-            // Lấy danh sách phòng đang có booking HOẠT ĐỘNG (status 1,2,3,5) trong khoảng thời gian này
-            // Status 0 (canceled) và 4 (completed) không được coi là booking hoạt động
-            // Overlap condition: booking.NgayNhanPhong < checkoutDate AND booking.NgayTraPhong > checkinDate
-            var bookedRoomIds = await _context.DatPhongs
-                .Where(b => new int[] { 1, 2, 3, 5 }.Contains(b.TrangThai)) // Chỉ booking hoạt động
-                .Where(b => b.NgayNhanPhong < checkoutDate && b.NgayTraPhong > checkinDate) // Overlapping date range
-                .Select(b => b.Idphong)
-                .Distinct()
-                .ToListAsync();
-
-            // Lấy phòng KHÔNG nằm trong danh sách phòng có booking hoạt động, và không phải phòng hiện tại
-            var roomsQuery = await _context.Phongs
-                .Include(p => p.IdloaiPhongNavigation)
-                .Where(p => !bookedRoomIds.Contains(p.Idphong))
-                .Where(p => p.Idphong != excludeRoomId)
-                .Where(p => (p.SoNguoiToiDa ?? 2) >= guests)
-                .Select(p => new
-                {
-                    RoomId = p.Idphong,
-                    RoomName = p.TenPhong ?? "",
-                    RoomNumber = p.SoPhong,
-                    RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong : null,
-                    BasePricePerNight = p.GiaCoBanMotDem ?? 0,
-                    RawImageUrl = p.UrlAnhPhong,
-                    MaxOccupancy = p.SoNguoiToiDa,
-                    Description = p.MoTa
-                })
-                .OrderBy(p => p.RoomNumber)
-                .ToListAsync();
-
-            // Get active promotions for these rooms (if any)
-            var today = DateOnly.FromDateTime(DateTime.Now);
-            var roomIds = roomsQuery.Select(r => r.RoomId).ToList();
-            var promotionsDict = await _context.KhuyenMaiPhongs
-                .Include(kmp => kmp.IdkhuyenMaiNavigation)
-                .Where(kmp => roomIds.Contains(kmp.Idphong) && kmp.IsActive &&
-                              kmp.IdkhuyenMaiNavigation.TrangThai == "active" &&
-                              kmp.IdkhuyenMaiNavigation.NgayBatDau <= today &&
-                              kmp.IdkhuyenMaiNavigation.NgayKetThuc >= today)
-                .GroupBy(kmp => kmp.Idphong)
-                .ToDictionaryAsync(g => g.Key, g => g.OrderByDescending(kmp => kmp.IdkhuyenMaiNavigation.GiaTriGiam).First());
-
-            var availableRooms = roomsQuery.Select(r =>
+            if (!string.IsNullOrWhiteSpace(excludeRoomId))
             {
-                var resp = new DTOs.AvailableRoomForExtend
-                {
-                    Idphong = r.RoomId,
-                    TenPhong = r.RoomName,
-                    SoPhong = r.RoomNumber,
-                    TenLoaiPhong = r.RoomTypeName,
-                    GiaMotDem = r.BasePricePerNight,
-                    UrlAnhPhong = r.RawImageUrl,
-                    SoNguoiToiDa = r.MaxOccupancy,
-                    Description = r.Description,
-                };
+                available = available.Where(r => !(r.RoomId == excludeRoomId || r.RoomId?.Equals(excludeRoomId, StringComparison.OrdinalIgnoreCase) == true)).ToList();
+            }
 
-                if (promotionsDict != null && promotionsDict.TryGetValue(r.RoomId, out var kmp))
-                {
-                    var promo = kmp.IdkhuyenMaiNavigation;
-                    resp.PromotionName = promo.TenKhuyenMai;
-                    resp.DiscountPercent = promo.GiaTriGiam;
-                    if (promo.LoaiGiamGia == "percent" && promo.GiaTriGiam.HasValue)
-                    {
-                        resp.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
-                    }
-                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
-                    {
-                        resp.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
-                    }
-                }
-
-                return resp;
+            // Map to controller DTO type expected by callers
+            var mapped = available.Select(r => new DTOs.AvailableRoomForExtend
+            {
+                Idphong = r.RoomId,
+                TenPhong = r.RoomName,
+                SoPhong = r.RoomNumber,
+                TenLoaiPhong = r.RoomTypeName,
+                GiaMotDem = r.BasePricePerNight,
+                UrlAnhPhong = r.RoomImageUrl ?? r.RoomImageUrl,
+                SoNguoiToiDa = r.MaxOccupancy,
+                PromotionName = r.PromotionName,
+                DiscountPercent = r.DiscountPercent,
+                DiscountedPrice = r.DiscountedPrice,
+                Description = r.Description
             }).ToList();
 
-            _logger.LogInformation("[FindAvailableRoomsForExtend] Tìm thấy {Count} phòng trống từ {Checkin} đến {Checkout}",
-                availableRooms.Count, checkinDate, checkoutDate);
+            _logger.LogInformation("[FindAvailableRoomsForExtend] Tìm thấy {Count} phòng trống từ {Checkin} đến {Checkout}", mapped.Count, DateOnly.FromDateTime(checkin), DateOnly.FromDateTime(checkout));
 
-            return availableRooms;
+            return mapped;
         }
 
         private string GenerateQrUrl(decimal amount, string invoiceId, string description)
@@ -3304,6 +3386,9 @@ namespace Hotel_System.API.Controllers
             var accountName = "ROBINS VILLA";
             var amountStr = ((long)amount).ToString();
             var message = $"{description.Replace(" ", "")}_{invoiceId}";
+            
+            _logger.LogInformation("[GenerateQrUrl] Generated QR with amount: {Amount} VND (decimal={DecimalAmount}, invoiceId={InvoiceId}, description={Description})", 
+                amountStr, amount, invoiceId, description);
 
             return $"https://img.vietqr.io/image/{bankCode}-{accountNo}-compact2.png?amount={amountStr}&addInfo={Uri.EscapeDataString(message)}&accountName={Uri.EscapeDataString(accountName)}";
         }
@@ -3330,7 +3415,7 @@ namespace Hotel_System.API.Controllers
         }
 
         // ===================== FORCE CANCEL (HỦY LƯU TRÚ DO QUÁ HẠN) =========================
-        [HttpPost("force-cancel")]
+        [HttpPost("huy-qua-han")]
         public async Task<IActionResult> ForceCancel([FromBody] ForceCancelRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.BookingId))

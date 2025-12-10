@@ -419,15 +419,29 @@ const UnifiedInvoiceModal: React.FC<Props> = ({
     const roomDisplayName = newRoomName ?? tenPhongGoc ?? 
                            (extractedSoPhong ? `Phòng ${extractedSoPhong}` : '-');
 
-    const extendFeeAmount = extendData?.ExtendFee ?? extendData?.extendFee ?? 0;
-    const extendFeeBeforeDiscount = extendData?.ExtendFeeBeforeDiscount ?? extendData?.extendFeeBeforeDiscount ?? extendFeeAmount;
-    const discountAmount = extendData?.DiscountAmount ?? extendData?.discountAmount ?? 0;
+    const extendFeeAmount = (extendData?.ExtendFee ?? extendData?.extendFee) ?? 0;
+    let extendFeeBeforeDiscount = (extendData?.ExtendFeeBeforeDiscount ?? extendData?.extendFeeBeforeDiscount) ?? extendFeeAmount;
+    
+    // If backend provided BasePricePerNight and ExtendDescription, recalculate ExtendFeeBeforeDiscount
+    // to ensure it reflects the same-day percentage (30%, 50%, 100%)
+    const basePricePerNight = extendData?.BasePricePerNight ?? extendData?.basePricePerNight;
+    const extendDesc = (extendData?.ExtendDescription ?? extendData?.extendDescription) || '';
+    if (basePricePerNight && extendDesc) {
+      let percentage = 1; // Default to 100%
+      if (extendDesc.includes('30%')) percentage = 0.30;
+      else if (extendDesc.includes('50%')) percentage = 0.50;
+      else if (extendDesc.includes('100%')) percentage = 1.00;
+      
+      extendFeeBeforeDiscount = Math.round(basePricePerNight * percentage);
+    }
+    
+    const discountAmount = (extendData?.DiscountAmount ?? extendData?.discountAmount) ?? 0;
     const promotionName = extendData?.PromotionName ?? extendData?.promotionName;
     const promotionType = extendData?.PromotionType ?? extendData?.promotionType;
     const promotionValue = extendData?.PromotionValue ?? extendData?.promotionValue;
-    const vatAmount = extendData?.VatAmount ?? extendData?.vatAmount ?? 0;
-    const totalExtendFee = extendData?.TotalExtendFee ?? extendData?.totalExtendFee ?? 0;
-    const tongTienHoaDonMoi = extendData?.TongTienHoaDonMoi ?? extendData?.tongTienHoaDonMoi ?? 0;
+    const vatAmount = (extendData?.VatAmount ?? extendData?.vatAmount) ?? 0;
+    const totalExtendFee = (extendData?.TotalExtendFee ?? extendData?.totalExtendFee) ?? 0;
+    const tongTienHoaDonMoi = (extendData?.TongTienHoaDonMoi ?? extendData?.tongTienHoaDonMoi) ?? 0;
     const extendDescription = extendData?.ExtendDescription ?? extendData?.extendDescription;
 
     return (

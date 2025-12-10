@@ -94,8 +94,18 @@ export const checkoutApi = {
   // ================== GIA HẠN PHÒNG (EXTEND STAY) ==================
 
   // 6. Kiểm tra khả năng gia hạn
-  checkExtendAvailability: async (idDatPhong: string) => {
-    const res = await axiosClient.get(`/Checkout/extend/check/${idDatPhong}`);
+  checkExtendAvailability: async (idDatPhong: string, extraNights?: number) => {
+    // New unified endpoint: /Checkout/available-rooms?idDatPhong=...&mode=extend
+    // When extraNights is provided, append it to get rooms for that specific night count
+    let url = `/Checkout/available-rooms?idDatPhong=${encodeURIComponent(
+      idDatPhong
+    )}&mode=extend`;
+    
+    if (extraNights && extraNights > 0) {
+      url += `&extraNights=${extraNights}`;
+    }
+    
+    const res = await axiosClient.get(url);
     return res.data;
   },
 

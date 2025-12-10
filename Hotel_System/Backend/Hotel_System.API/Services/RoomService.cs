@@ -86,9 +86,10 @@ namespace Hotel_System.API.Services
 
             // Get booked room IDs using a single optimized query
             // Also fetch the matching DatPhong rows so we can log and inspect them when debugging
+            // Status: 1=chưa thanh toán, 2=đã thanh toán, 3=đang sử dụng, 5=quá hạn (đều là booking hoạt động)
             var overlappingDatPhongs = await _context.DatPhongs
                 .Where(dp => dp.Idphong != null &&
-                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                     dp.NgayNhanPhong < checkOutDate &&
                     dp.NgayTraPhong > checkInDate)
                 .ToListAsync();
@@ -105,14 +106,14 @@ namespace Hotel_System.API.Services
             var bookedRoomIds = await (
                 from dp in _context.DatPhongs
                 where dp.Idphong != null &&
-                      ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                      ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select dp.Idphong
             ).Union(
                 from ct in _context.ChiTietDatPhongs
                 join dp in _context.DatPhongs on ct.IDDatPhong equals dp.IddatPhong
-                where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select ct.IDPhong
@@ -217,7 +218,7 @@ namespace Hotel_System.API.Services
             // Get booked room IDs using same optimized query as other method
             var overlappingDatPhongs2 = await _context.DatPhongs
                 .Where(dp => dp.Idphong != null &&
-                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                     dp.NgayNhanPhong < checkOutDate &&
                     dp.NgayTraPhong > checkInDate)
                 .ToListAsync();
@@ -233,15 +234,15 @@ namespace Hotel_System.API.Services
 
             var bookedRoomIds = await (
                 from dp in _context.DatPhongs
-                where dp.Idphong != null &&
-                      ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
-                      dp.NgayNhanPhong < checkOutDate &&
-                      dp.NgayTraPhong > checkInDate
+                    where dp.Idphong != null &&
+                        ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
+                        dp.NgayNhanPhong < checkOutDate &&
+                        dp.NgayTraPhong > checkInDate
                 select dp.Idphong
             ).Union(
                 from ct in _context.ChiTietDatPhongs
                 join dp in _context.DatPhongs on ct.IDDatPhong equals dp.IddatPhong
-                where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                    where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select ct.IDPhong
