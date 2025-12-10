@@ -6,10 +6,20 @@ const API_BASE = `${API_CONFIG.CURRENT}/api`;
 import RoomTypeSection from "../components/RoomTypeSection";
 import RoomSection from "../components/RoomSection";
 
-const resolveImage = (u?: string | null) => {
+const resolveImage = (u?: string | string[] | null) => {
+  // Accept either a single string or an array of image strings (new format).
   if (!u) return "/img/room/room-b1.jpg";
-  if (u.startsWith("/")) return u;
-  return `/img/room/${u}`;
+  let candidate = "";
+  if (Array.isArray(u)) {
+    candidate = u[0] ?? ""; // primary image is at index 0
+  } else {
+    candidate = u;
+  }
+  const s = String(candidate || "").trim();
+  if (!s) return "/img/room/room-b1.jpg";
+  if (s.startsWith("http") || s.startsWith("//")) return s;
+  if (s.startsWith("/")) return s;
+  return `/img/room/${s}`;
 };
 
 const Badge: React.FC<{ status?: string | null }> = ({ status }) => {

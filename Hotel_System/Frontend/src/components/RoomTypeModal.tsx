@@ -2,6 +2,130 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Room } from '../api/roomsApi';
 import { getAmenitiesForRoom } from '../api/amenticsApi';
 
+// Helper: resolve room image path (handles filenames, arrays, JSON lists, relative paths, full URLs)
+function resolveRoomImageUrl(u: any, fallback = '/img/room/default.webp') {
+  if (u == null) return fallback;
+
+  // If it's an array, take the first non-empty element
+  if (Array.isArray(u)) {
+    const first = u.find((x) => !!x);
+    return resolveRoomImageUrl(first, fallback);
+  }
+
+  // If it's an object with 'u' or similar, try to extract
+  if (typeof u === 'object') {
+    const candidate = (u && (u.u || u.url || u.src)) || null;
+    return resolveRoomImageUrl(candidate, fallback);
+  }
+
+  // String handling
+  let s = String(u).trim();
+  if (!s) return fallback;
+
+  // If looks like JSON array (e.g. '["a.jpg","b.jpg"]'), parse and take first
+  if (s.startsWith('[')) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr) && arr.length > 0) return resolveRoomImageUrl(arr[0], fallback);
+    } catch (e) {
+      // fallthrough to other parsing
+    }
+  }
+
+  // If contains commas/semicolons treat as list and pick first
+  if (s.includes(',') || s.includes(';') || s.includes('|')) {
+    const first = s.split(/[,|;]+/)[0].trim();
+    return resolveRoomImageUrl(first, fallback);
+  }
+
+  // If already an absolute URL or protocol-relative, return as-is
+  if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return s;
+
+  // If it's already a path under /img or starts with slash, return as-is
+  if (s.startsWith('/img') || s.startsWith('/')) return s;
+
+  // Otherwise assume it's a filename and prefix with /img/room/
+  return `/img/room/${s}`;
+}
+
+// ImageGallery: inline main image with vertical thumbnails and centered counter (no fullscreen preview)
+const ImageGallery: React.FC<{
+  srcHint?: any;
+  alt?: string;
+  height?: number | string;
+}> = ({ srcHint, alt, height = '100%' }) => {
+  const defaultJpg = '/img/room/room-1.jpg';
+  const makeCandidates = (u?: any) => {
+    const out: string[] = [];
+    if (u == null) return out;
+    if (Array.isArray(u)) {
+      for (const it of u) out.push(...makeCandidates(it));
+      return out;
+    }
+    const s = String(u || '').trim();
+    if (!s) return out;
+    if (s.startsWith('[')) {
+      try {
+        const arr = JSON.parse(s);
+        if (Array.isArray(arr)) return makeCandidates(arr);
+      } catch (e) {}
+    }
+    const parts = s.split(/[,|;]+/).map((x) => x.trim()).filter(Boolean);
+    for (const p of parts) {
+      if (p.startsWith('http') || p.startsWith('//') || p.startsWith('/img') || p.startsWith('/')) out.push(p);
+      else out.push(`/img/room/${p}`);
+    }
+    return out;
+  };
+
+  const sources = (() => {
+    const s = makeCandidates(srcHint);
+    return s.length ? Array.from(new Set(s)) : [defaultJpg];
+  })();
+
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  // Auto-advance every 3s unless paused
+  useEffect(() => {
+    if (sources.length <= 1) return;
+    if (paused) return;
+    const id = setInterval(() => {
+      setIndex((i) => (i + 1) % sources.length);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [sources.length, paused]);
+
+  return (
+    <div
+      style={{ position: 'relative', width: '100%', height: typeof height === 'number' ? `${height}px` : height, overflow: 'hidden', borderRadius: 8, background: '#000' }}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      {/* Main image */}
+      <img src={sources[index]} alt={alt} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+
+      {/* Vertical thumbnails - top right */}
+      {sources.length > 1 && (
+        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 10 }}>
+          {sources.map((s, idx) => (
+            <div key={idx} onClick={(e) => { e.stopPropagation(); setIndex(idx); }} style={{ width: 84, height: 64, borderRadius: 8, overflow: 'hidden', border: idx === index ? '4px solid #f59e0b' : '2px solid rgba(255,255,255,0.12)', boxShadow: idx === index ? '0 6px 18px rgba(245,158,11,0.25)' : '0 2px 8px rgba(0,0,0,0.2)', cursor: 'pointer', background: '#fff' }}>
+              <img src={s} alt={`thumb-${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Centered counter badge bottom */}
+      {sources.length > 1 && (
+        <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '10px 16px', borderRadius: 20, fontSize: 14, fontWeight: 600, zIndex: 10 }}>
+          {index + 1} / {sources.length}
+        </div>
+      )}
+    </div>
+  );
+};
+
 type RoomType = {
   idLoaiPhong: string;
   tenLoaiPhong?: string | null;
@@ -264,7 +388,7 @@ const RoomTypeModal: React.FC<Props> = ({
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 420px', gap: 24 }}>
             {/* Left: Image */}
             <div style={{ width: '100%', minHeight: 320, overflow: 'hidden', borderRadius: 8 }}>
-              <img src={roomType.urlAnhLoaiPhong ?? '/img/room/room-b1.jpg'} alt={roomType.tenLoaiPhong ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              <img src={resolveRoomImageUrl(roomType.urlAnhLoaiPhong, '/img/room/room-b1.jpg')} alt={roomType.tenLoaiPhong ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
             </div>
 
             {/* Right: Controls */}
@@ -353,7 +477,7 @@ const RoomTypeModal: React.FC<Props> = ({
                 <div style={{ display: 'flex', alignItems: 'center', padding: '16px', gap: 16, background: '#fafafa' }}>
                   {/* Thumbnail */}
                   <div style={{ width: 180, height: 120, flex: '0 0 180px', overflow: 'hidden', borderRadius: 8, background: '#fff', border: '1px solid #f0f0f0' }}>
-                    <img src={room.urlAnhPhong ?? '/img/room/default.webp'} alt={room.tenPhong ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    <img src={resolveRoomImageUrl(room.urlAnhPhong)} alt={room.tenPhong ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   </div>
 
                   {/* Basic info */}
@@ -411,7 +535,7 @@ const RoomTypeModal: React.FC<Props> = ({
                   <div style={{ padding: 16, borderTop: '1px solid #e0e0e0', background: '#fff' }}>
                     {/* Image full-width on its own row */}
                     <div style={{ width: '100%', height: 360, overflow: 'hidden', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa' }}>
-                      <img src={room.urlAnhPhong ?? '/img/room/default.webp'} alt={room.tenPhong ?? ''} style={{ width: '100%', height: 360, objectFit: 'contain', display: 'block', borderRadius: 8, background: '#f7f7f7' }} />
+                      <ImageGallery srcHint={room.urlAnhPhong} alt={room.tenPhong ?? ''} height={360} />
                     </div>
 
                     {/* Info below image */}

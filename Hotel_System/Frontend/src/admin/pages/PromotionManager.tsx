@@ -10,7 +10,6 @@ import PromotionForm from "../components/PromotionForm";
 const PromotionManager: React.FC = () => {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(
     null
   );
@@ -84,19 +83,45 @@ const PromotionManager: React.FC = () => {
     };
   }, []);
 
-  const handleUpdateExpired = async () => {
-    try {
-      setLoading(true);
-      const result = await updateExpiredStatus();
-      alert(`Cập nhật ${result.count} khuyến mãi thành trạng thái hết hạn`);
-      setRefreshTrigger((prev) => prev + 1);
-    } catch (error) {
-      console.error("[PROMOTION_MANAGER] Error updating expired:", error);
-      alert("Lỗi khi cập nhật trạng thái hết hạn");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Auto-update expired promotions once per day on mount
+  useEffect(() => {
+    const autoUpdateExpired = async () => {
+      console.log("[PROMOTION_MANAGER] ⏰ Checking for auto-update expired promotions");
+      const today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD in local time
+      const lastUpdate = localStorage.getItem('lastPromotionUpdateDate');
+      console.log("[PROMOTION_MANAGER] 📅 Today:", today, "Last update:", lastUpdate);
+      
+      // Always try to update - don't skip based on localStorage
+      // We'll check if update actually happened and save date only if successful
+      console.log("[PROMOTION_MANAGER] 🚀 Calling updateExpiredStatus");
+      try {
+        const result = await updateExpiredStatus();
+        console.log("[PROMOTION_MANAGER] ✅ Update result:", result);
+        
+        if (result && result.count >= 0) {
+          localStorage.setItem('lastPromotionUpdateDate', today);
+          console.log("[PROMOTION_MANAGER] 💾 Saved today date to localStorage:", today);
+        }
+        
+        // Small delay to ensure backend has persisted changes
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log("[PROMOTION_MANAGER] ⏳ Delay complete, refreshing promotions");
+        setRefreshTrigger((prev) => prev + 1);
+        console.log("[PROMOTION_MANAGER] ✨ Auto-updated expired promotions for", today);
+      } catch (error) {
+        console.error("[PROMOTION_MANAGER] ❌ Error auto-updating expired:", error);
+        // Don't save lastUpdate if there was an error - will retry next time
+        console.log("[PROMOTION_MANAGER] 🔄 Will retry update next time");
+      }
+    };
+    
+    // Add small delay to ensure component is fully mounted
+    const timer = setTimeout(() => {
+      autoUpdateExpired();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleCreateNew = () => {
     setSelectedPromotion(null);
@@ -137,25 +162,23 @@ const PromotionManager: React.FC = () => {
       >
         Danh sách khuyến mãi
       </button>
-      {showForm && (
-        <button
-          onClick={() => setActiveTab("form")}
-          style={{
-            padding: "8px 14px",
-            borderRadius: 10,
-            border: activeTab === "form" ? "none" : "1px solid #e5e7eb",
-            background:
-              activeTab === "form"
-                ? "linear-gradient(135deg,#1e40af,#3b82f6)"
-                : "#fff",
-            color: activeTab === "form" ? "#fff" : "#374151",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          {selectedPromotion ? "Chỉnh sửa" : "Tạo mới"}
-        </button>
-      )}
+      <button
+        onClick={() => setActiveTab("form")}
+        style={{
+          padding: "8px 14px",
+          borderRadius: 10,
+          border: activeTab === "form" ? "none" : "1px solid #e5e7eb",
+          background:
+            activeTab === "form"
+              ? "linear-gradient(135deg,#1e40af,#3b82f6)"
+              : "#fff",
+          color: activeTab === "form" ? "#fff" : "#374151",
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        {selectedPromotion ? "Chỉnh sửa" : "Tạo mới"}
+      </button>
     </div>
   );
 
@@ -196,7 +219,7 @@ const PromotionManager: React.FC = () => {
         >
           {activeTab === "list" && (
             <>
-              <button
+              {/* <button
                 onClick={handleCreateNew}
                 style={{
                   padding: "8px 14px",
@@ -209,21 +232,7 @@ const PromotionManager: React.FC = () => {
                 }}
               >
                 + Thêm Khuyến Mãi
-              </button>
-              <button
-                onClick={handleUpdateExpired}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
-                  background: "#fff",
-                  color: "#374151",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Cập Nhật Hết Hạn
-              </button>
+              </button> */}
             </>
           )}
         </div>

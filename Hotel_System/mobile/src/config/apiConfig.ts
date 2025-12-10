@@ -1,19 +1,40 @@
 // Centralized API configuration for the mobile app
-// Edit the base URL(s) here when your backend host/port changes.
+// To switch between local development and production:
+// 1. For local development: set IS_PRODUCTION = false
+// 2. For production: set IS_PRODUCTION = true
+//
+// This will automatically select the correct API URL
 
-export const BASE_URLS: string[] = [
-  // Primary local IP + port used in development
-  "http://192.168.2.62:8080",
-  // Production URL
-  "https://hotelsystem-net-and-reactjs-production.up.railway.app",
-];
+export const API_CONFIG = {
+  // Local development API (when running .NET API locally)
+  // Check launchSettings.json for the correct port
+  // Usually: https://localhost:5001 (HTTPS) or http://localhost:5171 (HTTP)
+  LOCAL: "http://172.20.10.2:8080",
 
-export const DEFAULT_BASE_URL = BASE_URLS[1];
+  // Railway production API
+  RAILWAY: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
+
+  // Environment flag - CHANGE THIS TO SWITCH ENVIRONMENTS
+  // Set to `false` for local development (use `LOCAL`).
+  // NOTE: switching this to false will make `API_CONFIG.CURRENT` point to your
+  // local .NET backend (e.g. `http://192.168.1.2:8080`).
+  IS_PRODUCTION: true,
+
+  // Current active API - automatically selected based on IS_PRODUCTION
+  get CURRENT() {
+    return this.IS_PRODUCTION ? this.RAILWAY : this.LOCAL;
+  },
+};
+
+// Legacy support - keeping for backward compatibility
+export const BASE_URLS: string[] = [API_CONFIG.LOCAL, API_CONFIG.RAILWAY];
+
+export const DEFAULT_BASE_URL = API_CONFIG.CURRENT;
 
 // Helper to build a full URL from a path
 import { Platform } from "react-native";
 
-export function buildApiUrl(path: string, base = DEFAULT_BASE_URL) {
+export function buildApiUrl(path: string, base = API_CONFIG.CURRENT) {
   if (!path) return base;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   if (!path.startsWith("/")) path = "/" + path;
@@ -32,6 +53,7 @@ export function buildApiUrl(path: string, base = DEFAULT_BASE_URL) {
 }
 
 export default {
+  API_CONFIG,
   BASE_URLS,
   DEFAULT_BASE_URL,
   buildApiUrl,

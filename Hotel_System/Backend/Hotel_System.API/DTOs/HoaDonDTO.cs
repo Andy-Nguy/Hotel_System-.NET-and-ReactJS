@@ -103,6 +103,12 @@ public class HoaDonPaymentRequest
     public decimal? PreviousPayment { get; set; }
 
     /// <summary>
+    /// Số điểm khách muốn dùng để giảm giá (1 điểm = 100 VND giảm).
+    /// Server sẽ validate và áp dụng giới hạn 50% hóa đơn.
+    /// </summary>
+    public int? RedeemPoints { get; set; }
+
+    /// <summary>
     /// Tùy chọn: cho phép client gửi rõ trạng thái thanh toán mong muốn.
     /// - 0 = Đã cọc
     /// - 1 = Chưa thanh toán

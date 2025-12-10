@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Hotel_System.API.Models;
@@ -9,6 +12,78 @@ public partial class HotelSystemContext : DbContext
 {
     public HotelSystemContext()
     {
+    }
+
+    private static string? SerializeImageList(List<string>? list)
+    {
+        if (list == null) return null;
+        // Serialize into array of objects [{ "u": "filename" }, ...]
+        return JsonSerializer.Serialize(list.Select(s => new { u = s }));
+    }
+
+    private static List<string> DeserializeImageList(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return new List<string>();
+        // Use JsonDocument to support multiple shapes:
+        // - [{ "u": "file.jpg" }, ...]
+        // - [{ "u": ["file.jpg"] }, ...]
+        // - ["file.jpg", ...] (legacy)
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var result = new List<string>();
+
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in root.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("u", out var prop))
+                    {
+                        if (prop.ValueKind == JsonValueKind.String)
+                        {
+                            var s = prop.GetString();
+                            if (!string.IsNullOrEmpty(s)) result.Add(s);
+                        }
+                        else if (prop.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var el in prop.EnumerateArray())
+                            {
+                                if (el.ValueKind == JsonValueKind.String)
+                                {
+                                    var s = el.GetString();
+                                    if (!string.IsNullOrEmpty(s)) result.Add(s);
+                                }
+                            }
+                        }
+                    }
+                    else if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var s = item.GetString();
+                        if (!string.IsNullOrEmpty(s)) result.Add(s);
+                    }
+                }
+
+                return result;
+            }
+        }
+        catch
+        {
+            // ignore and fallback
+        }
+
+        // Final fallback: try deserialize as array of strings
+        try
+        {
+            var strs = JsonSerializer.Deserialize<List<string>>(json);
+            if (strs != null) return strs.Where(s => !string.IsNullOrEmpty(s)).ToList();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        return new List<string>();
     }
 
     public HotelSystemContext(DbContextOptions<HotelSystemContext> options)
@@ -533,7 +608,24 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.SoPhong).HasMaxLength(20);
             entity.Property(e => e.TenPhong).HasMaxLength(20);
             entity.Property(e => e.TrangThai).HasMaxLength(50);
-            entity.Property(e => e.UrlAnhPhong).HasMaxLength(255);
+            // UrlAnhPhong is stored as a JSON array (jsonb) of objects { "u": "filename" }
+            // Keep the CLR property as List<string> for compatibility, but persist as [{u:...}, ...]
+            var urlAnhProp = entity.Property(e => e.UrlAnhPhong);
+            urlAnhProp.HasColumnType("jsonb");
+
+            // Use helper static methods and expression lambdas that call them so EF can translate the expression tree.
+            var urlConverter = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<List<string>, string>(
+                v => SerializeImageList(v),
+                v => DeserializeImageList(v)
+            );
+
+            urlAnhProp.HasConversion(urlConverter);
+            // Ensure EF Core can compare List<string> values for change tracking
+            urlAnhProp.Metadata.SetValueComparer(new ValueComparer<List<string>>(
+                (l1, l2) => (l1 == null && l2 == null) || (l1 != null && l2 != null && l1.SequenceEqual(l2)),
+                l => l == null ? 0 : l.Aggregate(0, (a, v) => HashCode.Combine(a, v != null ? v.GetHashCode() : 0)),
+                l => l == null ? null : l.ToList()
+            ));
 
             entity.HasOne(d => d.IdloaiPhongNavigation).WithMany(p => p.Phongs)
                 .HasForeignKey(d => d.IdloaiPhong)

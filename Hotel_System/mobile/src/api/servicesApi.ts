@@ -1,5 +1,5 @@
 // servicesApi.ts - fetch services from backend with simple caching and URL normalization
-import { BASE_URLS, DEFAULT_BASE_URL } from "../config/apiConfig";
+import { API_CONFIG } from "../config/apiConfig";
 const TIMEOUT_MS = 2000;
 
 type RawService = any;
@@ -32,7 +32,7 @@ function setCached(key: string, data: any) {
 
 function normalizeImageUrl(
   url: string | undefined | null,
-  base = DEFAULT_BASE_URL
+  base = API_CONFIG.CURRENT
 ) {
   if (!url) return undefined;
   const t = String(url).trim();
@@ -72,41 +72,42 @@ async function handleRes(res: Response) {
 }
 
 async function tryFetchServices(): Promise<Service[] | null> {
-  for (const baseUrl of BASE_URLS) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      const res = await fetch(`${baseUrl}/api/dich-vu/lay-danh-sach`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      if (res.ok) {
-        const data = await handleRes(res);
-        if (!data || data.length === 0) continue;
-        const processed = (data || []).map((d: RawService) => ({
-          iddichVu: d.iddichVu ?? d.id ?? d.Id ?? String(d.iddichVu || ""),
-          tenDichVu: d.tenDichVu ?? d.TenDichVu ?? d.name,
-          tienDichVu: d.tienDichVu ?? d.price,
-          hinhDichVu: normalizeImageUrl(
-            d.hinhDichVu ?? d.url ?? d.image,
-            baseUrl
-          ),
-          thongTinDv: (d.thongTinDv ?? d.moTa) || d.description,
-          thoiLuongUocTinh: d.thoiLuongUocTinh ?? d.duration,
-          thoiGianBatDau: d.thoiGianBatDau,
-          thoiGianKetThuc: d.thoiGianKetThuc,
-          ghiChu: d.ghiChu,
-          trangThai: d.trangThai,
-        })) as Service[];
-        return processed;
-      }
-    } catch (err) {
-      continue;
+  // Use only the current configured API
+  const baseUrl = API_CONFIG.CURRENT;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const res = await fetch(`${baseUrl}/api/dich-vu/lay-danh-sach`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await handleRes(res);
+      if (!data || data.length === 0) throw new Error("No services data");
+      const processed = (data || []).map((d: RawService) => ({
+        iddichVu: d.iddichVu ?? d.id ?? d.Id ?? String(d.iddichVu || ""),
+        tenDichVu: d.tenDichVu ?? d.TenDichVu ?? d.name,
+        tienDichVu: d.tienDichVu ?? d.price,
+        hinhDichVu: normalizeImageUrl(
+          d.hinhDichVu ?? d.url ?? d.image,
+          baseUrl
+        ),
+        thongTinDv: (d.thongTinDv ?? d.moTa) || d.description,
+        thoiLuongUocTinh: d.thoiLuongUocTinh ?? d.duration,
+        thoiGianBatDau: d.thoiGianBatDau,
+        thoiGianKetThuc: d.thoiGianKetThuc,
+        ghiChu: d.ghiChu,
+        trangThai: d.trangThai,
+      })) as Service[];
+      return processed;
+    } else {
+      throw new Error(`Failed to fetch services: ${res.status}`);
     }
+  } catch (error: any) {
+    throw error;
   }
-  return null;
 }
 
 export default {
@@ -123,29 +124,28 @@ export default {
   },
 
   async getServiceById(id: string): Promise<Service> {
-    for (const baseUrl of BASE_URLS) {
-      try {
-        const res = await fetch(`${baseUrl}/api/dich-vu/lay-chi-tiet/${id}`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        });
-        const json = await handleRes(res);
-        return {
-          iddichVu: json.iddichVu ?? json.id ?? id,
-          tenDichVu: json.tenDichVu ?? json.TenDichVu,
-          tienDichVu: json.tienDichVu ?? json.price,
-          hinhDichVu: normalizeImageUrl(json.hinhDichVu ?? json.url, baseUrl),
-          thongTinDv: json.thongTinDv ?? json.description,
-          thoiLuongUocTinh: json.thoiLuongUocTinh ?? json.duration,
-          thoiGianBatDau: json.thoiGianBatDau,
-          thoiGianKetThuc: json.thoiGianKetThuc,
-          ghiChu: json.ghiChu,
-          trangThai: json.trangThai,
-        } as Service;
-      } catch (err) {
-        continue;
-      }
+    // Use only the current configured API
+    const baseUrl = API_CONFIG.CURRENT;
+    try {
+      const res = await fetch(`${baseUrl}/api/dich-vu/lay-chi-tiet/${id}`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = await handleRes(res);
+      return {
+        iddichVu: json.iddichVu ?? json.id ?? id,
+        tenDichVu: json.tenDichVu ?? json.TenDichVu,
+        tienDichVu: json.tienDichVu ?? json.price,
+        hinhDichVu: normalizeImageUrl(json.hinhDichVu ?? json.url, baseUrl),
+        thongTinDv: json.thongTinDv ?? json.description,
+        thoiLuongUocTinh: json.thoiLuongUocTinh ?? json.duration,
+        thoiGianBatDau: json.thoiGianBatDau,
+        thoiGianKetThuc: json.thoiGianKetThuc,
+        ghiChu: json.ghiChu,
+        trangThai: json.trangThai,
+      } as Service;
+    } catch (error) {
+      throw error;
     }
-    throw new Error("Failed to fetch service by id");
   },
 };

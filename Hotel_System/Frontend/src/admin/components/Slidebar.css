@@ -1,8 +1,8 @@
 /* Custom styles for admin sidebar scroll and UI improvements */
 
 .slidebar-aside {
-  width: 280px;
-  padding: 20px;
+  width: 320px;
+  padding: 12px;
   background: #fff;
   border-right: 1px solid rgba(0, 0, 0, 0.04);
   height: 100vh;
@@ -10,6 +10,22 @@
   position: fixed;
   left: 0;
   top: 0;
+  .slidebar-header {
+    /* make header span full width including the container padding so there
+       is no translucent gap at the left/right when scrolled */
+    position: relative;
+    z-index: 50;
+    background: #fff;
+    box-sizing: border-box;
+    width: calc(100% + 24px); /* extend to cover parent's 12px padding each side */
+    margin-left: -12px; /* align with left edge of the aside */
+    padding: 8px 12px;
+    padding-bottom: 8px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
   .slidebar-scroll {
     display: flex;
     flex-direction: column;
@@ -74,10 +90,21 @@
   opacity: 0;
 }
 .slidebar-shadow-top {
-  top: 68px; /* header height + spacing */
+.slidebar-shadow-top {
+  top: 88px; /* header height + spacing (adjusted for reduced header) */
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0));
   z-index: 10;
 }
+/* Logo container adjustments */
+.slidebar-header .logo-container {
+  margin: 0 auto;
+  border: none;
+  background: transparent; /* keep logo container flat */
+  box-shadow: none;
+}
+
+/* Glossy white separator under logo to prevent scroll content from overlaying */
+/* glossy separator removed */
 .slidebar-shadow-bottom {
   bottom: 0;
   background: linear-gradient(0deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0));
@@ -88,13 +115,14 @@
 }
 
 .nav-item {
-  padding: 10px;
+  padding: 12px 10px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   gap: 12px;
   cursor: pointer;
   outline: none;
+  font-size: 15px;
 }
 .nav-item:hover {
   background: rgba(59, 130, 246, 0.04);
@@ -106,4 +134,11 @@
   background: #eef7ff;
   color: #0f172a;
   font-weight: 700;
+}
+
+/* Make the label text slightly larger and clearer */
+.nav-item > div:nth-child(2) {
+  font-size: 16px;
+  font-weight: 600;
+}
 }

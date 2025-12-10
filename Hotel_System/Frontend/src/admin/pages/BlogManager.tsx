@@ -21,6 +21,7 @@ import {
   UndoOutlined,
 } from "@ant-design/icons";
 import { blogPosts, BlogPost } from "../../data/blogPosts"; // Sử dụng data mẫu đã có
+import blogApi from "../../api/blogApi";
 
 // Định nghĩa trạng thái mở rộng cho Admin
 type AdminPostStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
@@ -90,14 +91,12 @@ const BlogManager: React.FC = () => {
     let mounted = true;
     const fetchPosts = async () => {
       try {
-        const res = await fetch("/api/blog?admin=true");
-        if (res.ok) {
-          const data = await res.json();
-          if (!mounted) return;
-          const mapped = (data as any[]).map(
-            (d, idx) =>
-              ({
-                id: d.id,
+        const data = await blogApi.getAllBlogs({ admin: true });
+        if (!mounted) return;
+        const mapped = (data as any[]).map(
+          (d, idx) =>
+            ({
+              id: d.id,
                 title: d.title,
                 category: d.category,
                 type: d.type || "internal",
@@ -157,12 +156,10 @@ const BlogManager: React.FC = () => {
           } else {
             setPosts(mapped);
           }
-          return;
-        }
       } catch (e) {
         console.warn("Blog API not reachable, using local posts");
+        setPosts(readAdminPosts());
       }
-      setPosts(readAdminPosts());
     };
     fetchPosts();
     return () => {
@@ -184,25 +181,19 @@ const BlogManager: React.FC = () => {
 
   const handleApprove = async (id: number) => {
     try {
-      const res = await fetch(`/api/blog/${id}/duyet`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === id
-              ? {
-                  ...p,
-                  status: updated.status as AdminPostStatus,
-                  approvedAt: updated.approvedAt,
-                }
-              : p
-          )
-        );
-        return;
-      }
+      const updated = await blogApi.approveBlog(id);
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: updated.status as AdminPostStatus,
+                approvedAt: updated.approvedAt,
+              }
+            : p
+        )
+      );
+      return;
     } catch (e) {
       console.warn("Approve failed, fallback to local");
     }
@@ -215,26 +206,19 @@ const BlogManager: React.FC = () => {
 
   const handleReject = async (id: number, reason: string) => {
     try {
-      const res = await fetch(`/api/blog/${id}/tu-choi`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
-      });
-      if (res.ok) {
-        await res.json();
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === id
-              ? {
-                  ...p,
-                  status: "DRAFT" as AdminPostStatus,
-                  rejectionReason: reason,
-                }
-              : p
-          )
-        );
-        return;
-      }
+      await blogApi.rejectBlog(id, reason);
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: "DRAFT" as AdminPostStatus,
+                rejectionReason: reason,
+              }
+            : p
+        )
+      );
+      return;
     } catch (e) {
       console.warn("Reject failed, fallback to local");
     }
@@ -253,24 +237,15 @@ const BlogManager: React.FC = () => {
 
   const handlePublish = async (id: number) => {
     try {
-      const res = await fetch(`/api/blog/${id}/xuat-ban`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === id
-              ? { ...p, status: updated.status as AdminPostStatus }
-              : p
-          )
-        );
-        message.success("Xuất bản thành công!");
-        return;
-      }
-      const errData = await res.json();
-      throw new Error(errData.error || "Lỗi xuất bản");
+      const updated = await blogApi.publishBlog(id);
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, status: updated.status as AdminPostStatus }
+            : p
+        )
+      );
+      message.success("Xuất bản thành công!");
     } catch (e: any) {
       message.error(`Xuất bản thất bại: ${e.message}`);
       throw e;
@@ -279,28 +254,21 @@ const BlogManager: React.FC = () => {
 
   const handleHide = async (id: number) => {
     try {
-      const res = await fetch(`/api/blog/${id}/an`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (res.ok) {
-        await res.json();
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === id ? { ...p, status: "ARCHIVED" as AdminPostStatus } : p
-          )
-        );
-        message.success("Đã ẩn bài viết!");
-        return;
-      }
+      await blogApi.hideBlog(id);
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, status: "ARCHIVED" as AdminPostStatus } : p
+        )
+      );
+      message.success("Đã ẩn bài viết!");
     } catch (e) {
       console.warn("Hide failed, fallback to local");
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, status: "ARCHIVED" as AdminPostStatus } : p
+        )
+      );
     }
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, status: "ARCHIVED" as AdminPostStatus } : p
-      )
-    );
   };
 
   const handleEdit = (id: number) => {
@@ -318,18 +286,13 @@ const BlogManager: React.FC = () => {
   const handleDeleteBlog = async (id: number) => {
     if (!window.confirm("Xác nhận Xóa vĩnh viễn bài viết này?")) return;
     try {
-      const res = await fetch(`/api/blog/${id}?hard=true`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        setPosts((prev) => prev.filter((p) => p.id !== id));
-        message.success("Xóa vĩnh viễn thành công!");
-        return;
-      }
+      await blogApi.deleteBlog(id);
+      setPosts((prev) => prev.filter((p) => p.id !== id));
+      message.success("Xóa vĩnh viễn thành công!");
     } catch (e) {
       console.warn("Delete failed, fallback to local");
+      setPosts((prev) => prev.filter((p) => p.id !== id));
     }
-    setPosts((prev) => prev.filter((p) => p.id !== id));
   };
 
   // Danh sách các danh mục duy nhất
@@ -388,54 +351,38 @@ const BlogManager: React.FC = () => {
       };
 
       try {
-        const res = await fetch(`/api/blog/${post.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          setPosts((prev) =>
-            prev.map((p) => {
-              if (p.id === id)
-                return {
-                  ...(p as any),
-                  status: updated.status || newStatus,
-                  updated_at: updated.updatedAt || now,
-                  displayOrder:
-                    updated.displayOrder ??
-                    (newStatus !== "PUBLISHED" ? null : p.displayOrder),
-                } as AdminBlogPost;
-              // if we just moved this post away from PUBLISHED, clear its displayOrder locally
-              if (newStatus !== "PUBLISHED" && p.displayOrder)
-                return { ...p, displayOrder: null } as AdminBlogPost;
-              return p;
-            })
-          );
-          try {
-            window.dispatchEvent(new CustomEvent("blogs-updated"));
-          } catch {}
-          message.success(
-            newStatus === "PUBLISHED"
-              ? "Đã kích hoạt/Xuất bản"
-              : newStatus === "ARCHIVED"
-              ? "Đã ngưng hoạt động/Lưu trữ"
-              : `Cập nhật trạng thái thành ${newStatus}`
-          );
-          return;
-        }
-        // parse and show server error message to help debugging
+        const updated = await blogApi.updateBlog(post.id, payload);
+        setPosts((prev) =>
+          prev.map((p) => {
+            if (p.id === id)
+              return {
+                ...(p as any),
+                status: updated.status || newStatus,
+                updated_at: updated.updatedAt || now,
+                displayOrder:
+                  updated.displayOrder ??
+                  (newStatus !== "PUBLISHED" ? null : p.displayOrder),
+              } as AdminBlogPost;
+            // if we just moved this post away from PUBLISHED, clear its displayOrder locally
+            if (newStatus !== "PUBLISHED" && p.displayOrder)
+              return { ...p, displayOrder: null } as AdminBlogPost;
+            return p;
+          })
+        );
         try {
-          const err = await res.json();
-          const msg = err.error || err.message || "Cập nhật API thất bại";
-          message.error(`❌ ${msg}`);
-          throw new Error(msg);
-        } catch (inner) {
-          message.error("❌ Cập nhật API thất bại");
-          throw new Error("Cập nhật API thất bại");
-        }
-      } catch (e) {
+          window.dispatchEvent(new CustomEvent("blogs-updated"));
+        } catch {}
+        message.success(
+          newStatus === "PUBLISHED"
+            ? "Đã kích hoạt/Xuất bản"
+            : newStatus === "ARCHIVED"
+            ? "Đã ngưng hoạt động/Lưu trữ"
+            : `Cập nhật trạng thái thành ${newStatus}`
+        );
+      } catch (e: any) {
         console.warn("API update failed, falling back to local");
+        const msg = e.response?.data?.error || e.message || "Cập nhật API thất bại";
+        message.error(`❌ ${msg}`);
         setPosts((prevPosts) =>
           prevPosts.map((post) =>
             post.id !== id
@@ -446,9 +393,6 @@ const BlogManager: React.FC = () => {
                   updated_at: now,
                 } as AdminBlogPost)
           )
-        );
-        message.warning(
-          `Lỗi API, cập nhật cục bộ thành công trạng thái: ${newStatus}`
         );
       } finally {
         setLoading(false);
@@ -469,52 +413,36 @@ const BlogManager: React.FC = () => {
     (async () => {
       setLoading(true);
       try {
-        const bodyPayload = order === null ? null : order;
-        const res = await fetch(`/api/blog/${id}/thu-tu-hien-thi`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(bodyPayload),
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          // Apply updated displayOrder and clear any conflicting local entries
-          setPosts((prev) =>
-            prev.map((p) => {
-              if (p.id === id)
-                return {
-                  ...(p as any),
-                  displayOrder: updated.displayOrder,
-                } as AdminBlogPost;
-              if (
-                updated.displayOrder != null &&
-                p.id !== id &&
-                p.displayOrder === updated.displayOrder
-              )
-                return { ...p, displayOrder: null } as AdminBlogPost;
-              return p;
-            })
-          );
-          try {
-            window.dispatchEvent(new CustomEvent("blogs-updated"));
-          } catch {}
-          message.success(
-            order
-              ? `Đã đặt thứ tự hiển thị: ${order}`
-              : "Đã xóa thứ tự hiển thị"
-          );
-          return;
-        }
+        const updated = await blogApi.setDisplayOrder(id, order);
+        // Apply updated displayOrder and clear any conflicting local entries
+        setPosts((prev) =>
+          prev.map((p) => {
+            if (p.id === id)
+              return {
+                ...(p as any),
+                displayOrder: updated.displayOrder,
+              } as AdminBlogPost;
+            if (
+              updated.displayOrder != null &&
+              p.id !== id &&
+              p.displayOrder === updated.displayOrder
+            )
+              return { ...p, displayOrder: null } as AdminBlogPost;
+            return p;
+          })
+        );
         try {
-          const err = await res.json();
-          const msg = err.error || err.message || "Cập nhật thứ tự thất bại";
-          message.error(`❌ ${msg}`);
-          throw new Error(msg);
-        } catch (inner) {
-          message.error("❌ Cập nhật thứ tự thất bại");
-          throw new Error("Cập nhật thứ tự thất bại");
-        }
-      } catch (e) {
+          window.dispatchEvent(new CustomEvent("blogs-updated"));
+        } catch {}
+        message.success(
+          order
+            ? `Đã đặt thứ tự hiển thị: ${order}`
+            : "Đã xóa thứ tự hiển thị"
+        );
+      } catch (e: any) {
         console.warn("API update failed, falling back to local");
+        const msg = e.response?.data?.error || e.message || "Cập nhật thứ tự thất bại";
+        message.error(`❌ ${msg}`);
         setPosts((prevPosts) =>
           prevPosts.map((p) => {
             if (p.id === id)
@@ -524,7 +452,6 @@ const BlogManager: React.FC = () => {
             return p;
           })
         );
-        message.warning(`Lỗi API, cập nhật cục bộ thứ tự: ${order || "xóa"}`);
       } finally {
         setLoading(false);
       }
@@ -537,14 +464,10 @@ const BlogManager: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/blog/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        // Chỉ xóa blog được chọn khỏi danh sách
-        setPosts((prev) => prev.filter((p) => p.id !== id));
-        message.success("Xóa bài viết thành công!");
-        return;
-      }
-      message.error("Xóa bài viết thất bại!");
+      await blogApi.deleteBlog(id);
+      // Chỉ xóa blog được chọn khỏi danh sách
+      setPosts((prev) => prev.filter((p) => p.id !== id));
+      message.success("Xóa bài viết thành công!");
     } catch (e) {
       console.warn("Delete failed:", e);
       message.error("Xóa bài viết thất bại!");

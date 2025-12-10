@@ -14,8 +14,9 @@ import {
   SafeAreaView,
   Platform,
 } from "react-native";
+import { Image } from "expo-image";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import { getPromotions } from "../api/promotionApi";
+import { getPromotions, calculateDiscountedPrice, getServiceDetails } from "../api/promotionApi";
 import { checkAvailableRooms } from "../api/roomsApi";
 import { getAmenitiesForRoom } from "../api/amenitiesApi";
 
@@ -365,108 +366,162 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
           </View>
         </View>
 
-        {/* Availability Check */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🔍 Kiểm Tra Phòng Trống</Text>
+        {/* Promotion Type Specific Content */}
+        {(() => {
+          const combos = (promotion as any)?.khuyenMaiCombos || (promotion as any)?.khuyenMaiCombo || (promotion as any)?.combos || [];
+          const promoServices = (promotion as any)?.khuyenMaiDichVus || (promotion as any)?.khuyenMaiDichVu || (promotion as any)?.dichVus || null;
 
-          {/* Date Inputs */}
-          <View style={styles.datePickerContainer}>
-            <TouchableOpacity
-              style={styles.datePickerButton}
-              onPress={() => setShowCheckInPicker(true)}
-            >
-              <Text style={styles.datePickerLabel}>Nhận phòng</Text>
-              <Text style={styles.datePickerValue}>
-                {formatDate(checkIn) || "Chọn ngày"}
-              </Text>
-            </TouchableOpacity>
+          if (Array.isArray(combos) && combos.length > 0) {
+            // Render combo list
+            return (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>🎁 Combo Dịch Vụ</Text>
+                <View style={{ marginBottom: 12 }}>
+                  {combos.map((combo: any, idx: number) => {
+                    const services = combo.khuyenMaiComboDichVus || combo.KhuyenMaiComboDichVus || combo.services || [];
+                    const originalPrice = (services || []).reduce((sum: number, s: any) => sum + Number(s.tienDichVu ?? s.TienDichVu ?? s.price ?? 0), 0);
+                    const promoType = (promotion as any)?.loaiGiamGia;
+                    const promoVal = Number((promotion as any)?.giaTriGiam ?? 0);
+                    const discounted = promoType === "percent" ? Math.round(originalPrice * (1 - promoVal / 100)) : Math.max(0, Math.round(originalPrice - promoVal));
 
-            <TouchableOpacity
-              style={styles.datePickerButton}
-              onPress={() => setShowCheckOutPicker(true)}
-              disabled={!checkIn}
-            >
-              <Text style={styles.datePickerLabel}>Trả phòng</Text>
-              <Text style={styles.datePickerValue}>
-                {formatDate(checkOut) || "Chọn ngày"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+                    return (
+                      <View key={combo.idkhuyenMaiCombo ?? combo.IdkhuyenMaiCombo ?? idx} style={{ padding: 12, backgroundColor: "#fff", borderRadius: 8, borderWidth: 1, borderColor: "#eee", marginBottom: 12 }}>
+                        <Text style={{ fontWeight: "700", fontSize: 16, marginBottom: 6 }}>{combo.tenCombo || combo.TenCombo || combo.name || `Combo ${idx + 1}`}</Text>
+                        <Text style={{ color: "#666", marginBottom: 8 }}>{combo.moTa || combo.MoTa || ""}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#ff4d4f" }}>Giá sau khuyến mãi: {discounted?.toLocaleString()} ₫</Text>
+                        <Text style={{ fontSize: 12, color: "#999", marginTop: 6 }}>Gồm {services.length} dịch vụ</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          }
 
-          <DateTimePickerModal
-            isVisible={showCheckInPicker}
-            mode="date"
-            date={checkIn || today}
-            onConfirm={(date) => handleConfirmCheckIn(date)}
-            onCancel={() => setShowCheckInPicker(false)}
-            minimumDate={today}
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            locale="vi-VN"
-          />
+          if (Array.isArray(promoServices) && promoServices.length > 0) {
+            // Render services list
+            return (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>🎯 Dịch Vụ Áp Dụng</Text>
+                <View style={{ marginBottom: 8 }}>
+                  {promoServices.map((m: any, idx: number) => (
+                    <ServiceCardWithImage
+                      key={m.iddichVu ?? m.IddichVu ?? idx}
+                      serviceId={m.iddichVu || m.IddichVu}
+                      serviceData={m}
+                      promotion={promotion}
+                    />
+                  ))}
+                </View>
+              </View>
+            );
+          }
 
-          <DateTimePickerModal
-            isVisible={showCheckOutPicker}
-            mode="date"
-            date={checkOut || minCheckOut || today}
-            onConfirm={(date) => handleConfirmCheckOut(date)}
-            onCancel={() => setShowCheckOutPicker(false)}
-            minimumDate={minCheckOut || today}
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            locale="vi-VN"
-          />
+          // Default: render availability check (rooms)
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>🔍 Kiểm Tra Phòng Trống</Text>
 
-          {/* Guest Count */}
-          <View style={styles.guestCountContainer}>
-            <Text style={styles.datePickerLabel}>Số khách</Text>
-            <View style={styles.guestCountInput}>
-              <TouchableOpacity
-                onPress={() => {
-                  const count = Math.max(1, parseInt(guests, 10) - 1);
-                  setGuests(count.toString());
-                }}
-                style={styles.guestCountButton}
-              >
-                <Text style={styles.guestCountButtonText}>−</Text>
-              </TouchableOpacity>
-              <TextInput
-                style={styles.guestCountText}
-                value={guests}
-                onChangeText={(text) => {
-                  const num = parseInt(text, 10);
-                  if (!isNaN(num) && num > 0) {
-                    setGuests(num.toString());
-                  }
-                }}
-                keyboardType="number-pad"
+              {/* Date Inputs */}
+              <View style={styles.datePickerContainer}>
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowCheckInPicker(true)}
+                >
+                  <Text style={styles.datePickerLabel}>Nhận phòng</Text>
+                  <Text style={styles.datePickerValue}>
+                    {formatDate(checkIn) || "Chọn ngày"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowCheckOutPicker(true)}
+                  disabled={!checkIn}
+                >
+                  <Text style={styles.datePickerLabel}>Trả phòng</Text>
+                  <Text style={styles.datePickerValue}>
+                    {formatDate(checkOut) || "Chọn ngày"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <DateTimePickerModal
+                isVisible={showCheckInPicker}
+                mode="date"
+                date={checkIn || today}
+                onConfirm={(date) => handleConfirmCheckIn(date)}
+                onCancel={() => setShowCheckInPicker(false)}
+                minimumDate={today}
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                locale="vi-VN"
               />
+
+              <DateTimePickerModal
+                isVisible={showCheckOutPicker}
+                mode="date"
+                date={checkOut || minCheckOut || today}
+                onConfirm={(date) => handleConfirmCheckOut(date)}
+                onCancel={() => setShowCheckOutPicker(false)}
+                minimumDate={minCheckOut || today}
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                locale="vi-VN"
+              />
+
+              {/* Guest Count */}
+              <View style={styles.guestCountContainer}>
+                <Text style={styles.datePickerLabel}>Số khách</Text>
+                <View style={styles.guestCountInput}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const count = Math.max(1, parseInt(guests, 10) - 1);
+                      setGuests(count.toString());
+                    }}
+                    style={styles.guestCountButton}
+                  >
+                    <Text style={styles.guestCountButtonText}>−</Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.guestCountText}
+                    value={guests}
+                    onChangeText={(text) => {
+                      const num = parseInt(text, 10);
+                      if (!isNaN(num) && num > 0) {
+                        setGuests(num.toString());
+                      }
+                    }}
+                    keyboardType="number-pad"
+                  />
+                  <TouchableOpacity
+                    onPress={() => {
+                      const count = parseInt(guests, 10) + 1;
+                      setGuests(count.toString());
+                    }}
+                    style={styles.guestCountButton}
+                  >
+                    <Text style={styles.guestCountButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Check Button */}
               <TouchableOpacity
-                onPress={() => {
-                  const count = parseInt(guests, 10) + 1;
-                  setGuests(count.toString());
-                }}
-                style={styles.guestCountButton}
+                style={[
+                  styles.checkButton,
+                  isCheckAvailableDisabled && styles.checkButtonDisabled,
+                ]}
+                onPress={handleCheckAvailability}
+                disabled={isCheckAvailableDisabled}
               >
-                <Text style={styles.guestCountButtonText}>+</Text>
+                {checking ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.checkButtonText}>Kiểm Tra Phòng Trống</Text>
+                )}
               </TouchableOpacity>
             </View>
-          </View>
-
-          {/* Check Button */}
-          <TouchableOpacity
-            style={[
-              styles.checkButton,
-              isCheckAvailableDisabled && styles.checkButtonDisabled,
-            ]}
-            onPress={handleCheckAvailability}
-            disabled={isCheckAvailableDisabled}
-          >
-            {checking ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.checkButtonText}>Kiểm Tra Phòng Trống</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          );
+        })()}
 
         {/* Room List */}
         {hasCheckedAvailability && (
@@ -1112,6 +1167,98 @@ const AmenitiesDisplay: React.FC<AmenitiesDisplayProps> = ({
           </Text>
         </View>
       ))}
+    </View>
+  );
+};
+
+// Service Card Component with Image loaded from backend
+interface ServiceCardProps {
+  serviceId: string;
+  serviceData: any;
+  promotion: Promotion | null;
+}
+
+const ServiceCardWithImage: React.FC<ServiceCardProps> = ({
+  serviceId,
+  serviceData,
+  promotion,
+}) => {
+  const [serviceInfo, setServiceInfo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadServiceInfo();
+  }, [serviceId]);
+
+  const loadServiceInfo = async () => {
+    try {
+      setLoading(true);
+      if (serviceId) {
+        const details = await getServiceDetails(serviceId);
+        setServiceInfo(details);
+      }
+    } catch (err) {
+      console.error("Error loading service info:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const svc = serviceInfo || serviceData.service || serviceData.dichVu || serviceData.serviceDetail || serviceData;
+  const name = svc?.tenDichVu || svc?.TenDichVu || svc?.name || serviceData.tenDichVu || serviceData.TenDichVu || `Dịch vụ`;
+  const image = svc?.hinhDichVu || svc?.HinhDichVu || svc?.image || null;
+  const original = Number(svc?.tienDichVu ?? svc?.TienDichVu ?? svc?.price ?? 0);
+  const promoType = promotion?.loaiGiamGia;
+  const promoVal = Number(promotion?.giaTriGiam ?? 0);
+  const discounted = calculateDiscountedPrice(original, promoType || "percent", promoVal);
+  const discountPercent = promoType === "percent" ? promoVal : ((original - discounted) / original * 100).toFixed(0);
+
+  return (
+    <View style={{ padding: 12, backgroundColor: "#fff", borderRadius: 8, borderWidth: 1, borderColor: "#eee", marginBottom: 12, flexDirection: "row", gap: 12 }}>
+      {/* Service Image */}
+      <View style={{ width: 100, height: 100, borderRadius: 8, overflow: "hidden", backgroundColor: "#f0f0f0", flexShrink: 0 }}>
+        {loading ? (
+          <View style={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center" }}>
+            <ActivityIndicator size="small" color="#999" />
+          </View>
+        ) : image ? (
+          <Image
+            source={{ uri: image }}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="cover"
+            onError={(e) => console.log("Service image load error:", image, e)}
+          />
+        ) : (
+          <View style={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center", backgroundColor: "#e0e0e0" }}>
+            <Text style={{ fontSize: 24 }}>🎁</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Service Info */}
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+          <Text style={{ fontWeight: "600", fontSize: 15, flex: 1, paddingRight: 8 }}>{name}</Text>
+          {promoVal > 0 && (
+            <View style={{ backgroundColor: "#ff4d4f", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>-{discountPercent}%</Text>
+            </View>
+          )}
+        </View>
+        
+        {original > 0 && (
+          <View style={{ marginTop: 6 }}>
+            <Text style={{ color: "#999", marginBottom: 4, textDecorationLine: original !== discounted ? "line-through" : "none", fontSize: 13 }}>
+              {original.toLocaleString()} ₫
+            </Text>
+            {original !== discounted && (
+              <Text style={{ color: "#ff4d4f", fontWeight: "700", fontSize: 15 }}>
+                {discounted?.toLocaleString()} ₫
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
     </View>
   );
 };

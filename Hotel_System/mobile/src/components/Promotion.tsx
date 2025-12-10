@@ -10,14 +10,14 @@ import {
   ViewStyle,
   TextStyle,
   ImageBackgroundProps,
+  FlatList,
+  Dimensions,
 } from "react-native";
 
 type Props = {
   imageUri?: string;
   title?: string;
-  description?: string;
   onDetailsPress?: (e: GestureResponderEvent) => void;
-  onRegisterPress?: (e: GestureResponderEvent) => void;
   containerStyle?: ViewStyle;
   promotionId?: string;
   navigation?: any;
@@ -28,14 +28,13 @@ import { getPromotions } from "../api/promotionApi";
 const Promotion: React.FC<Props> = ({
   imageUri,
   title,
-  description,
   onDetailsPress,
-  onRegisterPress,
+  // onRegisterPress,
   containerStyle,
   promotionId,
   navigation,
 }) => {
-  const [remotePromo, setRemotePromo] = useState<any | null>(null);
+  const [remotePromos, setRemotePromos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,11 +49,10 @@ const Promotion: React.FC<Props> = ({
         console.log("[Promotion] Fetched data:", data);
         if (!mounted) return;
         if (Array.isArray(data) && data.length > 0) {
-          // prefer the first active promotion when possible
-          const active =
-            data.find((p: any) => p.trangThai === "active") || data[0];
-          console.log("[Promotion] Selected promo:", active);
-          setRemotePromo(active);
+          // only keep promotions that are currently active
+          const activePromos = data.filter((p: any) => String(p.trangThai || p.status || "").toLowerCase() === "active");
+          console.log("[Promotion] Active promos count:", activePromos.length);
+          setRemotePromos(activePromos);
         } else {
           console.log("[Promotion] No promotions found or data is not array");
         }
@@ -72,169 +70,144 @@ const Promotion: React.FC<Props> = ({
     };
   }, [imageUri, title]);
 
-  // Use only real data from props or DB; do not fall back to mock values.
-  const promo = remotePromo;
-  // Ensure image src is a string when used as ImageBackground source
-  const imageSrcRaw = imageUri && imageUri.length > 0 ? imageUri : promo?.hinhAnhBanner;
-  const imageSrc = imageSrcRaw ? String(imageSrcRaw) : null;
+  // Use list of promos from backend, fallback to props if provided
+  const promos = remotePromos && remotePromos.length > 0 ? remotePromos : [];
 
-  // Force title and description to strings when rendering to avoid passing
-  // objects or arrays directly as children to <Text>
-  const titleText = title && title.length > 0 ? String(title) : promo?.tenKhuyenMai ? String(promo.tenKhuyenMai) : "";
-  const descriptionText = description ? String(description) : promo?.moTa ? String(promo.moTa) : "";
+        console.log("[Promotion] render - promos count:", promos.length, "loading:", loading, "error:", error);
 
-  // Use JSON stringification for objects in debug logs to avoid interfering with React rendering
-  console.log("[Promotion] render - imageSrc:", imageSrc);
-  console.log("[Promotion] render - titleText:", titleText);
-  console.log("[Promotion] render - descriptionText:", descriptionText);
-  console.log("[Promotion] render - promo:", promo ? JSON.stringify(promo) : null);
-  console.log("[Promotion] render - loading:", loading);
-  console.log("[Promotion] render - error:", error ? String(error) : null);
-
-  // If no real data is available, render nothing (no mock data)
-  if (!imageSrc && !titleText && !descriptionText) {
-    console.log("[Promotion] Returning null - no data");
-
-    // Show placeholder while loading or error state for debugging
-    if (loading) {
-      return (
-        <View
-          style={[
-            styles.wrap,
-            containerStyle,
-            {
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: "#f0f0f0",
-            },
-          ]}
-        >
-          <Text style={styles.debugText}>⏳ Loading promotions...</Text>
-        </View>
-      );
-    }
-
-    if (error) {
-      return (
-        <View
-          style={[
-            styles.wrap,
-            containerStyle,
-            {
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: "#fdd",
-            },
-          ]}
-        >
-          <Text style={[styles.debugText, { color: "#d00" }]}>
-            ❌ Error loading promotions:
-          </Text>
-          <Text style={[styles.debugText, { color: "#d00", fontSize: 12 }]}>
-            {error}
-          </Text>
-        </View>
-      );
-    }
-
-    // No data and not loading/error - means API returned empty array
-    return (
-      <View
-        style={[
-          styles.wrap,
-          containerStyle,
-          {
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "#f9f9f9",
-          },
-        ]}
-      >
-        <Text style={styles.debugText}>ℹ️ No promotions available</Text>
-        <Text style={[styles.debugText, { fontSize: 12, color: "#666" }]}>
-          Check backend database
-        </Text>
-      </View>
-    );
-  }
-  return (
-    <View style={styles.sectionTitle}>
-      <Text style={styles.span}>Khuyến mãi</Text>
-      <Text style={styles.h2}>Ưu đãi đặc biệt</Text>
-
-      <View style={[styles.wrap, containerStyle]}>
-        <ImageBackground
-          source={imageSrc ? { uri: imageSrc } : undefined}
-          style={styles.bg}
-          imageStyle={styles.imageStyle}
-          resizeMode="cover"
-        >
-          {/* dark overlay for contrast */}
-          <View style={styles.overlay} />
-
-          <View style={styles.content} pointerEvents="box-none">
-            <Text numberOfLines={3} style={styles.title}>
-              {String(titleText)}
-            </Text>
-
-            {descriptionText ? (
-                <Text numberOfLines={2} style={styles.description}>
-                {String(descriptionText)}
-              </Text>
-            ) : null}
-
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (onDetailsPress) {
-                    onDetailsPress({} as GestureResponderEvent);
-                  } else if (navigation && remotePromo?.idkhuyenMai) {
-                    navigation.navigate("PromotionDetail", {
-                      promotionId: remotePromo.idkhuyenMai,
-                    });
-                  }
-                }}
-                style={[styles.button, styles.outlineButton]}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.buttonText, styles.outlineButtonText]}>
-                  Details
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={onRegisterPress}
-                style={[styles.button, styles.filledButton]}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.buttonText, styles.filledButtonText]}>
-                  Register
-                </Text>
-              </TouchableOpacity>
+        // Loading placeholder
+        if (loading) {
+          return (
+            <View
+              style={[
+                styles.wrap,
+                containerStyle,
+                {
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "#f0f0f0",
+                },
+              ]}
+            >
+              <Text style={styles.debugText}>⏳ Loading promotions...</Text>
             </View>
-          </View>
-        </ImageBackground>
-      </View>
-    </View>
-  );
-};
+          );
+        }
 
-const styles = StyleSheet.create({
-  wrap: {
-    width: "100%",
-    aspectRatio: 16 / 9,
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: "#000",
-    marginVertical: 12,
-    // shadow (iOS)
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    // elevation (Android)
-    elevation: 6,
-  },
+        // Error placeholder
+        if (error) {
+          return (
+            <View
+              style={[
+                styles.wrap,
+                containerStyle,
+                {
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "#fdd",
+                },
+              ]}
+            >
+              <Text style={[styles.debugText, { color: "#d00" }]}>❌ Error loading promotions:</Text>
+              <Text style={[styles.debugText, { color: "#d00", fontSize: 12 }]}>{error}</Text>
+            </View>
+          );
+        }
+
+        // No promos from backend: if props provided, show a single promo card, else show empty state
+        const hasPropsData = (imageUri && imageUri.length > 0) || (title && title.length > 0);
+        if (promos.length === 0 && !hasPropsData) {
+          return (
+            <View
+              style={[
+                styles.wrap,
+                containerStyle,
+                {
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "#f9f9f9",
+                },
+              ]}
+            >
+              <Text style={styles.debugText}>ℹ️ No promotions available</Text>
+              <Text style={[styles.debugText, { fontSize: 12, color: "#666" }]}>Check backend database</Text>
+            </View>
+          );
+        }
+
+        const windowWidth = Dimensions.get("window").width;
+
+        const renderCard = (item: any, index?: number) => {
+          const imageSrcRaw = item?.hinhAnhBanner || imageUri;
+          const imageSrc = imageSrcRaw ? String(imageSrcRaw) : null;
+          const titleText = item?.tenKhuyenMai ? String(item.tenKhuyenMai) : (title ? String(title) : "");
+
+          return (
+            <TouchableOpacity
+              key={item?.idkhuyenMai ?? index}
+              activeOpacity={0.9}
+              onPress={() => {
+                if (onDetailsPress) {
+                  onDetailsPress({} as GestureResponderEvent);
+                } else if (navigation && item?.idkhuyenMai) {
+                  navigation.navigate("PromotionDetail", { promotionId: item.idkhuyenMai });
+                }
+              }}
+            >
+              <View style={[styles.wrap, { width: windowWidth - 32 }, containerStyle]}>
+                <ImageBackground source={imageSrc ? { uri: imageSrc } : undefined} style={styles.bg} imageStyle={styles.imageStyle} resizeMode="cover">
+                  <View style={styles.overlay} />
+                  <View style={styles.content} pointerEvents="box-none">
+                    <Text numberOfLines={3} style={styles.title}>{String(titleText)}</Text>
+                    {/* description intentionally removed */}
+                  </View>
+                </ImageBackground>
+              </View>
+            </TouchableOpacity>
+          );
+        };
+
+        return (
+          <View style={styles.sectionTitle}>
+            <Text style={styles.span}>Khuyến mãi</Text>
+            <Text style={styles.h2}>Ưu đãi đặc biệt</Text>
+
+            {promos.length > 0 ? (
+              <FlatList
+                data={promos}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item, idx) => (item?.idkhuyenMai ? String(item.idkhuyenMai) : String(idx))}
+                renderItem={({ item, index }) => renderCard(item, index)}
+                contentContainerStyle={{ paddingHorizontal: 16 }}
+                // add spacing between items
+                ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+              />
+              ) : (
+              // fallback to single card from props
+              renderCard({ hinhAnhBanner: imageUri, tenKhuyenMai: title })
+            )}
+          </View>
+        );
+      };
+
+      const styles = StyleSheet.create({
+        wrap: {
+          width: "100%",
+          aspectRatio: 16 / 9,
+          borderRadius: 14,
+          overflow: "hidden",
+          backgroundColor: "#000",
+          marginVertical: 12,
+          // shadow (iOS)
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.3,
+          shadowRadius: 10,
+          // elevation (Android)
+          elevation: 6,
+        },
   sectionTitle: {
     paddingTop: SIZES.padding * 3,
     marginBottom: SIZES.margin * 2,

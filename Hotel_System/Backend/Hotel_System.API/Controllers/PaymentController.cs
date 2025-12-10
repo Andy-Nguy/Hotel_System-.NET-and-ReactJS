@@ -168,7 +168,35 @@ namespace Hotel_System.API.Controllers
                 decimal tongTien = Math.Round(totalBeforeVat * 1.1m, 0, MidpointRounding.AwayFromZero);
                 _logger.LogInformation("PaymentController: computed tongTien server-side room={Room} services={Services} tongTien={TongTien}", roomTotal, servicesTotal, tongTien);
 
-                // Persist VAT-inclusive total to booking so DatPhong.TongTien always includes VAT
+                // ============ LOYALTY POINTS: Validate and apply discount ============
+                const int POINT_VALUE_VND = 100; // 1 point = 100 VND
+                const decimal MAX_REDEEM_PERCENT = 0.5m; // Max 50% invoice discount
+                int pointsToUse = request.RedeemPoints ?? 0;
+                int customerCurrentPoints = datPhong.IdkhachHangNavigation?.TichDiem ?? 0;
+                decimal pointsDiscount = 0m;
+
+                if (pointsToUse > 0)
+                {
+                    if (pointsToUse > customerCurrentPoints)
+                    {
+                        await tx.RollbackAsync();
+                        return BadRequest(new { message = "Không đủ điểm tích lũy." });
+                    }
+
+                    int maxPointsByAmount = (int)Math.Floor((double)(tongTien * MAX_REDEEM_PERCENT / POINT_VALUE_VND));
+                    if (pointsToUse > maxPointsByAmount)
+                    {
+                        await tx.RollbackAsync();
+                        return BadRequest(new { message = $"Chỉ được dùng tối đa {maxPointsByAmount} điểm (50% hóa đơn)." });
+                    }
+
+                    pointsDiscount = pointsToUse * POINT_VALUE_VND;
+                    tongTien = Math.Max(0m, tongTien - pointsDiscount);
+                    _logger.LogInformation("PaymentController: applied {Points} points = {Discount}đ discount, new tongTien={TongTien}", pointsToUse, pointsDiscount, tongTien);
+                }
+                // ======================================================================
+
+                // Persist VAT-inclusive total (after point discount) to booking
                 datPhong.TongTien = tongTien;
 
                 // Lấy tiền cọc hiện có trên DatPhong làm nguồn dữ liệu mặc định
@@ -200,13 +228,14 @@ namespace Hotel_System.API.Controllers
                 }
 
                 // Tính số tiền đã thanh toán trên hóa đơn hiện tại:
-                // - Nếu đã thanh toán (2): số tiền thanh toán là phần còn lại = TongTien - TienCoc
+                // - Nếu đã thanh toán (2): số tiền thanh toán = TongTien (toàn bộ)
                 // - Nếu chỉ đặt cọc (0): số tiền thanh toán chính là số tiền cọc (đã chuyển)
                 // - Nếu chưa thanh toán (1): 0
                 decimal tienThanhToan;
                 if (trangThaiThanhToan == 2)
                 {
-                    tienThanhToan = Math.Max(0m, tongTien - tienCoc);
+                    // Đã thanh toán đầy đủ online
+                    tienThanhToan = tongTien;
                 }
                 else if (trangThaiThanhToan == 0)
                 {
@@ -217,19 +246,52 @@ namespace Hotel_System.API.Controllers
                     tienThanhToan = 0m;
                 }
 
+                // Override trạng thái thanh toán dựa trên số tiền thực tế đã thanh toán
+                if (tienThanhToan >= tongTien)
+                {
+                    trangThaiThanhToan = 2; // Đã thanh toán đầy đủ
+                }
+                else if (tienThanhToan >= tienCoc && tienThanhToan > 0)
+                {
+                    trangThaiThanhToan = 0; // Đã đặt cọc
+                }
+                else
+                {
+                    trangThaiThanhToan = 1; // Chưa thanh toán
+                }
+
+                // ========== LƯU GIÁ ĐÃ CHỐT VÀO GHICHU ==========
+                // Format: [PRICE_LOCKED]{"goc":X,"giamKM":Y,"giamDiem":Z,"cuoi":W,"diemDaDung":N}[/PRICE_LOCKED]
+                var priceLocked = new
+                {
+                    goc = (int)totalBeforeVat,           // Tổng gốc trước VAT (phòng + dịch vụ)
+                    giamKM = 0,                          // Giảm từ khuyến mãi (đã tính vào roomTotal)
+                    giamDiem = (int)pointsDiscount,      // Giảm từ điểm
+                    cuoi = (int)tongTien,                // Tổng cuối cùng sau VAT và giảm điểm
+                    diemDaDung = pointsToUse             // Số điểm đã dùng
+                };
+                var priceLockedJson = System.Text.Json.JsonSerializer.Serialize(priceLocked);
+                var ghiChuBase = BuildInvoiceNote(request);
+                var ghiChuFull = $"{ghiChuBase} [PRICE_LOCKED]{priceLockedJson}[/PRICE_LOCKED]";
+                if (pointsToUse > 0)
+                {
+                    ghiChuFull += $" [USE_POINT] Dùng {pointsToUse} điểm giảm {pointsDiscount:N0}đ";
+                }
+
                 var idHoaDon = $"HD{DateTime.UtcNow:yyyyMMddHHmmssfff}";
                 var hoaDon = new HoaDon
                 {
                     IdhoaDon = idHoaDon,
                     IddatPhong = datPhong.IddatPhong,
                     NgayLap = DateTime.UtcNow,
-                    TienPhong = tienPhong,
+                    TienPhong = (int)Math.Round(tongTien), // Final room price after all discounts
                     Slngay = soNgay,
-TongTien = tongTien,
+                    TongTien = tongTien,
                     TienCoc = tienCoc,
                     TrangThaiThanhToan = trangThaiThanhToan,
                     TienThanhToan = tienThanhToan,
-                    GhiChu = BuildInvoiceNote(request)
+                    DiemSuDung = pointsToUse > 0 ? pointsToUse : null,
+                    GhiChu = ghiChuFull
                 };
 
                 _context.HoaDons.Add(hoaDon);
@@ -356,6 +418,34 @@ TongTien = tongTien,
                         }
                     }
                 }
+
+                // ============ LOYALTY POINTS: Deduct used points and add earned points on successful payment ============
+                if (trangThaiThanhToan == 2 && datPhong.IdkhachHangNavigation != null)
+                {
+                    // Deduct used points
+                    if (pointsToUse > 0)
+                    {
+                        datPhong.IdkhachHangNavigation.TichDiem = Math.Max(0, (datPhong.IdkhachHangNavigation.TichDiem ?? 0) - pointsToUse);
+                        _logger.LogInformation("PaymentController: deducted {Points} points from customer {Id}, new balance={Balance}", 
+                            pointsToUse, datPhong.IdkhachHangNavigation.IdkhachHang, datPhong.IdkhachHangNavigation.TichDiem);
+                    }
+
+                    // Add earned points based on final amount paid (tongTien after discount)
+                    int pointsToAdd = (int)Math.Floor((double)(tongTien / POINT_VALUE_VND));
+                    if (pointsToAdd > 0)
+                    {
+                        datPhong.IdkhachHangNavigation.TichDiem = (datPhong.IdkhachHangNavigation.TichDiem ?? 0) + pointsToAdd;
+                        _logger.LogInformation("PaymentController: awarded {Points} points to customer {Id}, new balance={Balance}", 
+                            pointsToAdd, datPhong.IdkhachHangNavigation.IdkhachHang, datPhong.IdkhachHangNavigation.TichDiem);
+                    }
+
+                    // Mark points as used in invoice notes
+                    if (pointsToUse > 0 && !string.IsNullOrWhiteSpace(hoaDon.GhiChu) && hoaDon.GhiChu.Contains("[POINT_PENDING]"))
+                    {
+                        hoaDon.GhiChu = hoaDon.GhiChu.Replace("[POINT_PENDING]", "[POINT_USED]");
+                    }
+                }
+                // ==========================================================================================================
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -800,5 +890,108 @@ public async Task<IActionResult> GetInvoicePdf(string id)
         }
     }
 }
+
+        // POST: api/Payment/refund
+        // Records a confirmed refund and appends a booking history entry (LichSuDatPhong)
+        [HttpPost("refund")]
+        public async Task<IActionResult> Refund([FromBody] RefundRequest req)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new { message = "Yêu cầu hoàn tiền không hợp lệ", errors = ModelState });
+            }
+
+            try
+            {
+                var hoaDon = await _context.HoaDons
+                    .Include(h => h.IddatPhongNavigation)
+                    .FirstOrDefaultAsync(h => h.IdhoaDon == req.IdHoaDon);
+
+                if (hoaDon == null)
+                    return NotFound(new { message = "Không tìm thấy hóa đơn" });
+
+                // Create booking history entry recording the refund confirmation
+                var ghiChu = $"Hoàn tiền {req.RefundAmount:N0} đ | Phương thức: {req.RefundMethod ?? "N/A"} | Lý do: {req.Reason} | Hóa đơn: {hoaDon.IdhoaDon}";
+
+                var ls = new Models.LichSuDatPhong
+                {
+                    IddatPhong = hoaDon.IddatPhong ?? string.Empty,
+                    NgayCapNhat = DateTime.UtcNow,
+                    GhiChu = ghiChu
+                };
+
+                _context.LichSuDatPhongs.Add(ls);
+
+                // Append refund note to the invoice for traceability
+                hoaDon.GhiChu = string.IsNullOrWhiteSpace(hoaDon.GhiChu) ? ghiChu : hoaDon.GhiChu + " | " + ghiChu;
+
+                // IMPORTANT: deduct the refunded amount from the invoice's recorded paid amount
+                try
+                {
+                    decimal currentPaid = hoaDon.TienThanhToan ?? 0m;
+                    // Treat the refund amount from the client as VAT-inclusive (already includes VAT).
+                    // Do NOT auto-convert it to VAT-inclusive to avoid double-applying VAT.
+                    decimal refund = Math.Round(req.RefundAmount, 0);
+                    var newPaid = currentPaid - refund;
+                    if (newPaid < 0m) newPaid = 0m;
+
+                    // Ensure stored paid amount is VAT-inclusive and does not exceed invoice total
+                    if (hoaDon.TongTien > 0m && newPaid > hoaDon.TongTien)
+                    {
+                        _logger.LogWarning("Refund resulted in newPaid ({NewPaid}) > TongTien ({TongTien}) for invoice {Invoice}. Capping to TongTien.", newPaid, hoaDon.TongTien, hoaDon.IdhoaDon);
+                        newPaid = hoaDon.TongTien;
+                    }
+
+                    hoaDon.TienThanhToan = newPaid;
+
+                    // Recalculate invoice payment status using VAT-inclusive TongTien
+                    if (hoaDon.TongTien > 0m)
+                    {
+                        var remaining = hoaDon.TongTien - (hoaDon.TienThanhToan ?? 0m);
+                        if (remaining <= 0m)
+                        {
+                            hoaDon.TrangThaiThanhToan = 2; // paid
+                        }
+                        else
+                        {
+                            hoaDon.TrangThaiThanhToan = 1; // pending
+                        }
+                    }
+
+                    // Recalculate booking-level payment status (sum over invoices)
+                    try
+                    {
+                        var booking = await _context.DatPhongs
+                            .Include(d => d.HoaDons)
+                            .FirstOrDefaultAsync(d => d.IddatPhong == hoaDon.IddatPhong);
+
+                        if (booking != null)
+                        {
+                            decimal totalInvoices = booking.HoaDons?.Sum(h => h.TongTien) ?? 0m;
+                            decimal totalPaid = booking.HoaDons?.Sum(h => h.TienThanhToan ?? 0m) ?? 0m;
+                            var remainingAll = Math.Max(0m, totalInvoices - totalPaid);
+                            booking.TrangThaiThanhToan = remainingAll > 0m ? 1 : 2;
+                        }
+                    }
+                    catch (Exception ex2)
+                    {
+                        _logger.LogWarning(ex2, "Failed to recalc booking payment status after refund for invoice {InvoiceId}", hoaDon.IdhoaDon);
+                    }
+                }
+                catch (Exception exCalc)
+                {
+                    _logger.LogWarning(exCalc, "Failed to apply refund arithmetic for invoice {InvoiceId}", hoaDon.IdhoaDon);
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Hoàn tiền đã được ghi nhận và cập nhật vào hóa đơn", idLichSu = ls.IdlichSu });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi xử lý hoàn tiền cho hóa đơn {InvoiceId}", req.IdHoaDon);
+                return StatusCode(500, new { message = "Lỗi khi xử lý hoàn tiền", error = ex.Message });
+            }
+        }
     }
 }

@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DEFAULT_BASE_URL } from "../config/apiConfig";
-const BASE_URL = DEFAULT_BASE_URL;
+import { API_CONFIG } from "../config/apiConfig";
+const BASE_URL = API_CONFIG.CURRENT;
 
 // Type definitions
 export type RegisterRequest = {
@@ -129,6 +129,41 @@ export async function getProfile() {
   }
 }
 
+export interface LoyaltyInfo {
+  tichDiem: number;
+  tier: string;
+  vndPerPoint: number;
+  totalSpent: number;
+  totalNights: number;
+  rewards?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    costPoints: number;
+    canRedeem: boolean;
+  }>;
+}
+
+export async function getLoyalty(): Promise<LoyaltyInfo | null> {
+  const token = await AsyncStorage.getItem("hs_token");
+  const url = `${BASE_URL}/api/Auth/loyalty`;
+  console.log("authApi.getLoyalty ->", url, "token?", !!token);
+  try {
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+      10000
+    );
+    return handleRes(res);
+  } catch (err: any) {
+    console.error("authApi.getLoyalty error:", err?.message || err);
+    return null;
+  }
+}
+
 export async function getBookings() {
   const token = await AsyncStorage.getItem("hs_token");
   const res = await fetch(`${BASE_URL}/api/datphong`, {
@@ -152,6 +187,7 @@ export default {
   verifyOtp,
   login,
   getProfile,
+  getLoyalty,
   getBookings,
   getMyBookingHistory,
 };

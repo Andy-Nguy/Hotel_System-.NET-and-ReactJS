@@ -11,7 +11,9 @@ namespace Hotel_System.API.DTOs
         public string? PromotionName { get; set; }
         public decimal? DiscountPercent { get; set; }
         public string RoomImageUrl { get; set; } = string.Empty;
+        public List<string>? RoomImageUrls { get; set; } // Multiple images for carousel
         public string RoomTypeName { get; set; } = string.Empty;
         public int MaxOccupancy { get; set; }
     }
 }
+

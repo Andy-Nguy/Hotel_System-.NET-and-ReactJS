@@ -38,17 +38,42 @@ const ComboCard: React.FC<Props> = ({ combo, onView }) => {
   let savingPercent = 0;
   
   if (combo.comboPrice !== undefined) {
-    // If comboPrice is provided, use it
-    saving = combo.comboPrice;
-    finalPrice = originalPrice - saving;
-    savingPercent = originalPrice > 0 ? Math.round((saving / originalPrice) * 100) : 0;
+    // If comboPrice is provided, interpret it according to loaiGiamGia when available.
+    // - If loaiGiamGia === 'percent' treat combo.comboPrice as percent (e.g., 15 means 15%).
+    // - If loaiGiamGia === 'amount' treat combo.comboPrice as amount in VND to subtract.
+    // - Otherwise try to guess: value <= 100 -> percent, else -> amount (saving).
+    const val = Number(combo.comboPrice);
+    const kind = (combo.loaiGiamGia || '').toString().toLowerCase();
+    if (kind === 'percent') {
+      const pct = val;
+      finalPrice = Math.round(originalPrice * (1 - pct / 100));
+      saving = originalPrice - finalPrice;
+      savingPercent = pct;
+    } else if (kind === 'amount') {
+      const amt = val;
+      finalPrice = Math.max(0, Math.round(originalPrice - amt));
+      saving = Math.min(amt, originalPrice);
+      savingPercent = originalPrice > 0 ? Math.round((saving / originalPrice) * 100) : 0;
+    } else {
+      // unknown kind: guess based on numeric range
+      if (val > 0 && val <= 100) {
+        const pct = val;
+        finalPrice = Math.round(originalPrice * (1 - pct / 100));
+        saving = originalPrice - finalPrice;
+        savingPercent = pct;
+      } else {
+        // treat as saving amount by default
+        saving = val;
+        finalPrice = Math.max(0, Math.round(originalPrice - saving));
+        savingPercent = originalPrice > 0 ? Math.round((saving / originalPrice) * 100) : 0;
+      }
+    }
   } else if (combo.loaiGiamGia && combo.giaTriGiam !== undefined && combo.giaTriGiam !== null) {
     // Calculate from discount type and value
     const discountValue = Number(combo.giaTriGiam);
     const discountPercent = combo.loaiGiamGia.toLowerCase() === 'percent' ? discountValue : 0;
     const discountAmount = combo.loaiGiamGia.toLowerCase() === 'amount' ? discountValue : 0;
     
-    // Match PromotionSection.tsx logic
     if (discountPercent > 0) {
       finalPrice = Math.round(originalPrice * (1 - discountPercent / 100));
       saving = originalPrice - finalPrice;
