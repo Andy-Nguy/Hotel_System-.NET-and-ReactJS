@@ -127,8 +127,8 @@ const PromotionLoyaltyPanel: React.FC<Props> = ({
       }
 
       const totalAfter = Math.max(0, baseAmount - discount);
-      // estimate points (rule: Diem += TongTien / 100000)
-      const points = Math.floor(totalAfter / 100000);
+      // estimate points (rule: Diem += TongTien / 100)
+      const points = Math.floor(totalAfter / 100);
 
       if (!best || discount > best.discountAmount) {
         best = {

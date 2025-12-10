@@ -30,15 +30,18 @@ const RoomCard: React.FC<Props> = ({
 }) => {
   const defaultWebp = "/img/room/room-6.jpg";
 
-  const rawImageField =
-    (room as any).roomImageUrl ??
-    (room as any).RoomImageUrl ??
-    (room as any).urlAnhPhong ??
-    (room as any).UrlAnhPhong;
+  // Handle image array or single image string
+  const imageArray = Array.isArray(room.urlAnhPhong)
+    ? room.urlAnhPhong
+    : room.urlAnhPhong
+    ? [room.urlAnhPhong]
+    : [];
+  
+  const primaryImage = imageArray[0] || null;
 
   let imageBase = "";
-  if (rawImageField) {
-    const u = String(rawImageField).trim();
+  if (primaryImage) {
+    const u = String(primaryImage).trim();
     if (u.startsWith("http") || u.startsWith("//")) {
       imageBase = u;
     } else if (u.startsWith("/")) {

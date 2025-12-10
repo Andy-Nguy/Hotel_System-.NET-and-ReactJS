@@ -76,7 +76,7 @@ export const checkoutApi = {
   addServiceToInvoice: async (payload: {
     IDDatPhong: string | number;
     DichVu: Array<{
-      IddichVu: string | number;
+      IddichVu?: string | number | null;
       TienDichVu?: number;
       DonGia?: number;
       TenDichVu?: string;
@@ -94,19 +94,29 @@ export const checkoutApi = {
   // ================== GIA HẠN PHÒNG (EXTEND STAY) ==================
 
   // 6. Kiểm tra khả năng gia hạn
-  checkExtendAvailability: async (idDatPhong: string) => {
-    const res = await axiosClient.get(`/Checkout/extend/check/${idDatPhong}`);
+  checkExtendAvailability: async (idDatPhong: string, extraNights?: number) => {
+    // New unified endpoint: /Checkout/available-rooms?idDatPhong=...&mode=extend
+    // When extraNights is provided, append it to get rooms for that specific night count
+    let url = `/Checkout/available-rooms?idDatPhong=${encodeURIComponent(
+      idDatPhong
+    )}&mode=extend`;
+    
+    if (extraNights && extraNights > 0) {
+      url += `&extraNights=${extraNights}`;
+    }
+    
+    const res = await axiosClient.get(url);
     return res.data;
   },
 
   // 7. Thực hiện gia hạn
   extendStay: async (payload: {
     IddatPhong: string;
-    ExtendType: 1 | 2; // 1 = SameDay, 2 = ExtraNight
-    NewCheckoutHour?: number; // 15, 18, 24
+    ExtendType: 1 | 2; 
+    NewCheckoutHour?: number; 
     ExtraNights?: number;
     NewRoomId?: string;
-    PaymentMethod: 1 | 2; // 1 = Tiền mặt, 2 = QR
+    PaymentMethod: 1 | 2 | 3;
     Note?: string;
   }) => {
     const res = await axiosClient.post(`/Checkout/extend`, payload);

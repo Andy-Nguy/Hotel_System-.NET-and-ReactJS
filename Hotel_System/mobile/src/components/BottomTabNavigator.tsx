@@ -19,12 +19,14 @@ import BookingsScreen from "../screens/BookingsScreen";
 import OffersScreen from "../screens/OffersScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import BlogDetailScreen from "../screens/BlogDetailScreen";
+import ImageViewerScreen from "../screens/ImageViewerScreen";
+import HotelIntroductionScreen from "../screens/HotelIntroductionScreen";
 
 export type TabParamList = {
   HomeTab: undefined;
   Book: undefined;
   Trips: undefined;
-  Wishlists: undefined;
+  About: undefined;
   Account: undefined;
 };
 
@@ -51,6 +53,7 @@ export type HomeStackParamList = {
   Payment: undefined;
   BookingSuccess: undefined;
   BlogDetail: { blogId: number };
+  ImageViewer: { images: string[]; initialIndex?: number };
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -79,6 +82,7 @@ const HomeStackNavigator: React.FC = () => {
         component={BookingSuccessScreen}
       />
       <HomeStack.Screen name="BlogDetail" component={BlogDetailScreen} />
+      <HomeStack.Screen name="ImageViewer" component={ImageViewerScreen} />
     </HomeStack.Navigator>
   );
 };
@@ -174,15 +178,15 @@ const BottomTabNavigator: React.FC = () => {
       />
 
       <Tab.Screen
-        name="Wishlists"
-        component={OffersScreen}
+        name="About"
+        component={HotelIntroductionScreen}
         options={{
           tabBarIcon: ({ focused, color }) => (
             <TabIcon
               focused={focused}
               color={color}
-              iconName={focused ? "heart" : "heart-outline"}
-              label="Favorite"
+              iconName={focused ? "information-circle" : "information-circle-outline"}
+              label="About"
             />
           ),
         }}

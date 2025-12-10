@@ -139,6 +139,58 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
   const [comboServices, setComboServices] = useState<
     { id: string; name: string; price: number }[]
   >([]);
+  
+  // Helper to render a room card in the assign modal
+  const renderRoomCard = (r: any) => {
+    const imageUrl = (() => {
+      const v = r?.urlAnhPhong ?? r?.UrlAnhPhong ?? r?.roomImageUrl ?? r?.roomImage ?? null;
+      if (!v) return "/img/placeholder.png";
+      if (Array.isArray(v)) {
+        const first = v[0];
+        if (!first) return "/img/placeholder.png";
+        if (typeof first === "string") return first.startsWith("http") ? first : `/img/room/${first}`;
+        if (typeof first === "object") return first.url || first.path || "/img/placeholder.png";
+      }
+      if (typeof v === "object") return v.url || v.path || "/img/placeholder.png";
+      if (typeof v === "string") return v.startsWith("http") ? v : `/img/room/${v}`;
+      return "/img/placeholder.png";
+    })();
+
+    return (
+      <div
+        key={r.idphong}
+        style={{ border: "1px solid #eee", borderRadius: 8, overflow: "hidden" }}
+      >
+        <div
+          style={{
+            height: 120,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundImage: `url(${imageUrl})`,
+            backgroundRepeat: "no-repeat",
+          }}
+        />
+        <div style={{ padding: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>{r.tenPhong}</div>
+          <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>{r.idphong}</div>
+          <div>
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="checkbox"
+                checked={selectedRooms.includes(r.idphong)}
+                onChange={(e) => {
+                  if (e.target.checked)
+                    setSelectedRooms((s) => (s.includes(r.idphong) ? s : [...s, r.idphong]));
+                  else setSelectedRooms((s) => s.filter((x) => x !== r.idphong));
+                }}
+              />
+              <span style={{ fontSize: 13 }}>Gán phòng</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Load rooms from API - only once
   useEffect(() => {
@@ -487,7 +539,6 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                     { label: "Phòng", value: "room" },
                     { label: "Dịch Vụ", value: "service" },
                     { label: "Combo Dịch Vụ", value: "combo" },
-                    { label: "Khách Hàng", value: "customer" },
                   ]}
                   onChange={() => {
                     // Only reset when creating new promotion, not when editing
@@ -1110,6 +1161,8 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                   </div>
                 ) : (
                   // Gán Phòng cho selectedRooms
+
+                  
                   <div
                     style={{
                       display: "grid",
@@ -1117,72 +1170,10 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                       gap: 12,
                     }}
                   >
-                    {roomObjects.map((r) => (
-                      <div
-                        key={r.idphong}
-                        style={{
-                          border: "1px solid #eee",
-                          borderRadius: 8,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: 120,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                            backgroundImage: `url(${
-                              (r?.urlAnhPhong &&
-                                (r.urlAnhPhong.startsWith("http")
-                                  ? r.urlAnhPhong
-                                  : `/img/room/${r.urlAnhPhong}`)) ||
-                              "/img/placeholder.png"
-                            })`,
-                          }}
-                        />
-                        <div style={{ padding: 8 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700 }}>
-                            {r.tenPhong}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "#666",
-                              marginBottom: 8,
-                            }}
-                          >
-                            {r.idphong}
-                          </div>
-                          <div>
-                            <label
-                              style={{
-                                display: "flex",
-                                gap: 8,
-                                alignItems: "center",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedRooms.includes(r.idphong)}
-                                onChange={(e) => {
-                                  if (e.target.checked)
-                                    setSelectedRooms((s) =>
-                                      s.includes(r.idphong)
-                                        ? s
-                                        : [...s, r.idphong]
-                                    );
-                                  else
-                                    setSelectedRooms((s) =>
-                                      s.filter((x) => x !== r.idphong)
-                                    );
-                                }}
-                              />
-                              <span style={{ fontSize: 13 }}>Gán phòng</span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                    {
+                      // renderRoomCard moved out-of-line to avoid complex inline blocks
+                    }
+                    {roomObjects.map(renderRoomCard)}
                   </div>
                 )}
                 <div style={{ marginTop: 12, textAlign: "right" }}>

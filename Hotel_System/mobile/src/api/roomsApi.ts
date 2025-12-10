@@ -2,7 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_CONFIG } from "../config/apiConfig";
 
 // All requests will use the host(s) defined in `src/config/apiConfig.ts`
-const TIMEOUT_MS = 2000; // Reduced from 5000ms to 2000ms
+// Increase timeout to be more tolerant on real devices / mobile networks
+const TIMEOUT_MS = 8000; // 8s timeout to avoid spurious failures on slower networks
 
 // Simple cache for API responses
 const apiCache = new Map<string, { data: any; timestamp: number }>();
@@ -98,8 +99,11 @@ function normalizeImageUrl(
   url: string | null | undefined,
   baseUrl: string = API_CONFIG.CURRENT
 ): string | undefined {
-  if (!url) return undefined;
-  const trimmed = url.trim();
+  if (url === null || url === undefined) return undefined;
+  // Coerce to string to avoid errors when API returns non-string (object/number)
+  const s = String(url);
+  const trimmed = s.trim();
+  if (!trimmed) return undefined;
   console.log("normalizeImageUrl input:", { url, baseUrl, trimmed });
   // If already absolute
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
@@ -219,7 +223,7 @@ export async function getRooms(): Promise<Room[]> {
 
   // No fallback - force real connection
   throw new Error(
-    "❌ Cannot connect to backend database. Please ensure backend is running and accessible."
+    `❌ Cannot connect to backend at ${API_CONFIG.CURRENT}. Please ensure backend is running and accessible.`
   );
 }
 

@@ -62,7 +62,8 @@ namespace Hotel_System.API.Controllers
                     tongTien = h.TongTien,
                     tienCoc = h.TienCoc,
                     tienThanhToan = h.TienThanhToan,
-                    trangThaiThanhToan = h.TrangThaiThanhToan,
+                    // Compute payment status from amounts to avoid stale/inconsistent DB values
+                    trangThaiThanhToan = ((h.TongTien - (h.TienThanhToan ?? 0m)) > 1000m) ? 1 : 2,
                     ghiChu = h.GhiChu,
                     customer = new
                     {
@@ -139,6 +140,9 @@ namespace Hotel_System.API.Controllers
 
             var services = await _db.Cthddvs.Where(c => c.IdhoaDon == id).ToListAsync();
 
+            // Compute a derived payment status to ensure consistency with amounts
+            int computedStatus = ((hd.TongTien - (hd.TienThanhToan ?? 0m)) > 1000m) ? 1 : 2;
+
             var result = new
             {
                 idHoaDon = hd.IdhoaDon,
@@ -147,7 +151,7 @@ namespace Hotel_System.API.Controllers
                 tongTien = hd.TongTien,
                 tienCoc = hd.TienCoc,
                 tienThanhToan = hd.TienThanhToan,
-                trangThaiThanhToan = hd.TrangThaiThanhToan,
+                trangThaiThanhToan = computedStatus,
                 ghiChu = hd.GhiChu,
                 tienPhong = hd.TienPhong,
                 slNgay = hd.Slngay,

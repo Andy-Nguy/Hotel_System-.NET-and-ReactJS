@@ -86,9 +86,10 @@ namespace Hotel_System.API.Services
 
             // Get booked room IDs using a single optimized query
             // Also fetch the matching DatPhong rows so we can log and inspect them when debugging
+            // Status: 1=chưa thanh toán, 2=đã thanh toán, 3=đang sử dụng, 5=quá hạn (đều là booking hoạt động)
             var overlappingDatPhongs = await _context.DatPhongs
                 .Where(dp => dp.Idphong != null &&
-                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                     dp.NgayNhanPhong < checkOutDate &&
                     dp.NgayTraPhong > checkInDate)
                 .ToListAsync();
@@ -105,14 +106,14 @@ namespace Hotel_System.API.Services
             var bookedRoomIds = await (
                 from dp in _context.DatPhongs
                 where dp.Idphong != null &&
-                      ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                      ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select dp.Idphong
             ).Union(
                 from ct in _context.ChiTietDatPhongs
                 join dp in _context.DatPhongs on ct.IDDatPhong equals dp.IddatPhong
-                where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select ct.IDPhong
@@ -138,7 +139,7 @@ namespace Hotel_System.API.Services
                     RoomNumber = p.SoPhong,
                     Description = p.MoTa ?? "",
                     BasePricePerNight = p.GiaCoBanMotDem ?? 0,
-                    RawImageUrl = p.UrlAnhPhong,
+                    RawImageUrls = p.UrlAnhPhong,
                     RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong ?? "" : "",
                     MaxOccupancy = p.SoNguoiToiDa ?? 0
                 })
@@ -171,7 +172,11 @@ namespace Hotel_System.API.Services
                     RoomNumber = r.RoomNumber,
                     Description = r.Description,
                     BasePricePerNight = r.BasePricePerNight,
-                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomImageUrl = ResolveImageUrl((r.RawImageUrls != null && r.RawImageUrls.Count > 0) ? r.RawImageUrls[0] : null) ?? "",
+                    // Add multiple images for carousel/thumbnails in frontend
+                    RoomImageUrls = (r.RawImageUrls != null && r.RawImageUrls.Count > 0) 
+                        ? r.RawImageUrls.Select(img => ResolveImageUrl(img) ?? "").Where(u => !string.IsNullOrEmpty(u)).ToList()
+                        : new List<string>(),
                     RoomTypeName = r.RoomTypeName,
                     MaxOccupancy = r.MaxOccupancy
                 };
@@ -187,9 +192,9 @@ namespace Hotel_System.API.Services
                     {
                         response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
                     }
-                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    else if ((promo.LoaiGiamGia == "amount" || promo.LoaiGiamGia == "fixed") && promo.GiaTriGiam.HasValue)
                     {
-                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                        response.DiscountedPrice = Math.Max(0, r.BasePricePerNight - promo.GiaTriGiam.Value);
                     }
                 }
 
@@ -213,7 +218,7 @@ namespace Hotel_System.API.Services
             // Get booked room IDs using same optimized query as other method
             var overlappingDatPhongs2 = await _context.DatPhongs
                 .Where(dp => dp.Idphong != null &&
-                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                    ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                     dp.NgayNhanPhong < checkOutDate &&
                     dp.NgayTraPhong > checkInDate)
                 .ToListAsync();
@@ -229,15 +234,15 @@ namespace Hotel_System.API.Services
 
             var bookedRoomIds = await (
                 from dp in _context.DatPhongs
-                where dp.Idphong != null &&
-                      ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
-                      dp.NgayNhanPhong < checkOutDate &&
-                      dp.NgayTraPhong > checkInDate
+                    where dp.Idphong != null &&
+                        ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
+                        dp.NgayNhanPhong < checkOutDate &&
+                        dp.NgayTraPhong > checkInDate
                 select dp.Idphong
             ).Union(
                 from ct in _context.ChiTietDatPhongs
                 join dp in _context.DatPhongs on ct.IDDatPhong equals dp.IddatPhong
-                where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3 }.Contains(dp.TrangThai)) &&
+                    where ((dp.ThoiHan != null && dp.ThoiHan > now) || new[] { 1, 2, 3, 5 }.Contains(dp.TrangThai)) &&
                       dp.NgayNhanPhong < checkOutDate &&
                       dp.NgayTraPhong > checkInDate
                 select ct.IDPhong
@@ -262,7 +267,7 @@ namespace Hotel_System.API.Services
                     RoomNumber = p.SoPhong,
                     Description = p.MoTa ?? "",
                     BasePricePerNight = p.GiaCoBanMotDem ?? 0,
-                    RawImageUrl = p.UrlAnhPhong,
+                    RawImageUrls = p.UrlAnhPhong,
                     RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong ?? "" : "",
                     MaxOccupancy = p.SoNguoiToiDa ?? 0
                 })
@@ -295,7 +300,11 @@ namespace Hotel_System.API.Services
                     RoomNumber = r.RoomNumber,
                     Description = r.Description,
                     BasePricePerNight = r.BasePricePerNight,
-                    RoomImageUrl = ResolveImageUrl(r.RawImageUrl) ?? "",
+                    RoomImageUrl = ResolveImageUrl((r.RawImageUrls != null && r.RawImageUrls.Count > 0) ? r.RawImageUrls[0] : null) ?? "",
+                    // Add multiple images for carousel/thumbnails in frontend
+                    RoomImageUrls = (r.RawImageUrls != null && r.RawImageUrls.Count > 0) 
+                        ? r.RawImageUrls.Select(img => ResolveImageUrl(img) ?? "").Where(u => !string.IsNullOrEmpty(u)).ToList()
+                        : new List<string>(),
                     RoomTypeName = r.RoomTypeName,
                     MaxOccupancy = r.MaxOccupancy
                 };
@@ -311,9 +320,9 @@ namespace Hotel_System.API.Services
                     {
                         response.DiscountedPrice = r.BasePricePerNight * (1 - promo.GiaTriGiam.Value / 100);
                     }
-                    else if (promo.LoaiGiamGia == "fixed" && promo.GiaTriGiam.HasValue)
+                    else if ((promo.LoaiGiamGia == "amount" || promo.LoaiGiamGia == "fixed") && promo.GiaTriGiam.HasValue)
                     {
-                        response.DiscountedPrice = r.BasePricePerNight - promo.GiaTriGiam.Value;
+                        response.DiscountedPrice = Math.Max(0, r.BasePricePerNight - promo.GiaTriGiam.Value);
                     }
                 }
 

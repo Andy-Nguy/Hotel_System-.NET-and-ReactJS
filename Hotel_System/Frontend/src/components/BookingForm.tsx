@@ -141,7 +141,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
             discountPercent: r.discountPercent ?? r.DiscountPercent,
             xepHangSao: r.xepHangSao ?? null, // Not in sample
             trangThai: r.trangThai ?? "Trống", // Assume available
-            urlAnhPhong: r.roomImageUrl ?? r.RoomImageUrl,
+            // Prioritize multiple images (RoomImageUrls) over single image
+            urlAnhPhong: r.roomImageUrls ?? r.RoomImageUrls ?? r.roomImageUrl ?? r.RoomImageUrl,
             // keep original raw object for debugging if needed
             __raw: r,
           };

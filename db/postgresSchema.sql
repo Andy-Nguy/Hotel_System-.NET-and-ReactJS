@@ -494,4 +494,160 @@ ALTER TABLE "danhgia"
 ADD COLUMN "isresponded" BOOLEAN NOT NULL DEFAULT FALSE;
 
 
+ALTER TABLE HoaDon
+ADD COLUMN DiemSuDung INT DEFAULT 0;
+
+CREATE FUNCTION sp_checkout_use_points(
+    p_idhoadon      VARCHAR(50),
+    p_idkhachhang   INT,
+    p_diemyeucau    INT
+)
+RETURNS TABLE (
+    diemdasudung INT,
+    sotiengiam NUMERIC(18,2)
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    trangthaitt         INT;
+    tongtien            NUMERIC(18,2);
+    tiencoc             NUMERIC(18,2);
+    tienthanhtoanht     NUMERIC(18,2);
+    iddatphong          VARCHAR(50);
+    idkhachhang_hd      INT;
+    ghichucu            TEXT;
+    diemhienco          INT;
+    giatri1diem         NUMERIC(18,2) := 500;
+    sotienconphaitra    NUMERIC(18,2);
+    maxdiemtheosotien   INT;
+BEGIN
+    -- 1. Lấy hóa đơn
+    SELECT 
+        TrangThaiThanhToan,
+        TongTien,
+        COALESCE(TienCoc, 0),
+        COALESCE(TienThanhToan, TongTien - COALESCE(TienCoc, 0)),
+        IDDatPhong,
+        GhiChu
+    INTO 
+        trangthaitt, tongtien, tiencoc, tienthanhtoanht, iddatphong, ghichucu
+    FROM HoaDon
+    WHERE IDHoaDon = p_idhoadon;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Hóa đơn không tồn tại.';
+    END IF;
+
+    -- 2. Check hóa đơn đúng khách
+    SELECT IDKhachHang INTO idkhachhang_hd
+    FROM DatPhong
+    WHERE IDDatPhong = iddatphong;
+
+    IF idkhachhang_hd <> p_idkhachhang THEN
+        RAISE EXCEPTION 'Hóa đơn không thuộc khách hàng này.';
+    END IF;
+
+    -- 3. Nếu đã thanh toán thì không cho dùng
+    IF trangthaitt = 2 THEN
+        RAISE EXCEPTION 'Hóa đơn đã thanh toán.';
+    END IF;
+
+    -- 4. Không cho dùng 2 lần
+    IF ghichucu LIKE '%[POINT_PENDING]%' THEN
+        RAISE EXCEPTION 'Hóa đơn này đã áp dụng điểm trước đó.';
+    END IF;
+
+    -- 5. Điểm hiện có
+    SELECT TichDiem INTO diemhienco
+    FROM KhachHang
+    WHERE IDKhachHang = p_idkhachhang;
+
+    IF p_diemyeucau <= 0 OR p_diemyeucau % 100 <> 0 THEN
+        RAISE EXCEPTION 'Số điểm phải là bội số của 100.';
+    END IF;
+
+    IF p_diemyeucau > diemhienco THEN
+        RAISE EXCEPTION 'Không đủ điểm.';
+    END IF;
+
+    -- 6. Tính toán
+    sotienconphaitra := tienthanhtoanht;
+
+    maxdiemtheosotien := FLOOR(sotienconphaitra / giatri1diem);
+    maxdiemtheosotien := (maxdiemtheosotien / 100) * 100;
+
+    IF p_diemyeucau > maxdiemtheosotien THEN
+        RAISE EXCEPTION 'Chỉ được dùng tối đa % điểm.', maxdiemtheosotien;
+    END IF;
+
+    diemdasudung := p_diemyeucau;
+    sotiengiam   := diemdasudung * giatri1diem;
+
+    -- 7. Cập nhật vào hóa đơn — pending
+    UPDATE HoaDon
+    SET 
+        DiemSuDung = diemdasudung,
+        TienThanhToan = GREATEST(sotienconphaitra - sotiengiam, 0),
+        GhiChu = COALESCE(ghichucu, '') ||
+                 ' [POINT_PENDING] ' ||
+                 'Dùng ' || diemdasudung || ' điểm, giảm ' || sotiengiam || ' VND'
+    WHERE IDHoaDon = p_idhoadon;
+
+    RETURN NEXT;
+END;
+$$;
+
+CREATE FUNCTION sp_confirm_payment(
+    p_idhoadon VARCHAR(50)
+)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    idkhachhang INT;
+    diem INT;
+BEGIN
+    -- lấy điểm đã dùng
+    SELECT d.IDKhachHang, h.DiemSuDung
+    INTO idkhachhang, diem
+    FROM HoaDon h
+    JOIN DatPhong d ON d.IDDatPhong = h.IDDatPhong
+    WHERE h.IDHoaDon = p_idhoadon;
+
+    IF diem > 0 THEN
+        UPDATE KhachHang
+        SET TichDiem = TichDiem - diem
+        WHERE IDKhachHang = idkhachhang;
+    END IF;
+
+    UPDATE HoaDon
+    SET 
+        TrangThaiThanhToan = 2,
+        GhiChu = REPLACE(GhiChu, '[POINT_PENDING]', '[POINT_USED]')
+    WHERE IDHoaDon = p_idhoadon;
+END;
+$$;
+
+CREATE FUNCTION sp_cancel_payment(
+    p_idhoadon VARCHAR(50)
+)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE 
+    tongtien NUMERIC;
+    tiencoc  NUMERIC;
+BEGIN
+    SELECT TongTien, COALESCE(TienCoc, 0)
+    INTO tongtien, tiencoc
+    FROM HoaDon WHERE IDHoaDon = p_idhoadon;
+
+    UPDATE HoaDon
+    SET 
+        DiemSuDung = 0,
+        TienThanhToan = tongtien - tiencoc,
+        GhiChu = regexp_replace(GhiChu, '\[POINT_PENDING\].*$', '')
+    WHERE IDHoaDon = p_idhoadon;
+END;
+$$;
 

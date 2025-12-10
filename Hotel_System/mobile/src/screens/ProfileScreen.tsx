@@ -6,206 +6,236 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  ImageBackground,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useIsFocused } from "@react-navigation/native";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import authApi from "../api/authApi";
 import { useAuth } from "../context/AuthContext";
-import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
+
+// === LUXURY COLORS ===
+const COLORS = {
+  primary: "#0F172A",
+  accentGold: "#D4AF37",
+  accentGoldLight: "#F5E6B3",
+  background: "#F8FAFC",
+  cardBg: "rgba(255, 255, 255, 0.95)",
+  text: "#1E293B",
+  textLight: "#64748B",
+  border: "rgba(226, 232, 240, 0.6)",
+  error: "#DC2626",
+};
+
+const SIZES = { padding: 24, margin: 16, radius: 20, radiusLarge: 28 };
+
+// === FONTS ĐÃ FIX TYPESCRIPT ===
+const FONTS = {
+  h1: { fontSize: 48, fontWeight: "800" as const },
+  h2: { fontSize: 28, fontWeight: "700" as const },
+  h3: { fontSize: 22, fontWeight: "600" as const },
+  body1: { fontSize: 17, fontWeight: "500" as const },
+  body2: { fontSize: 16, fontWeight: "500" as const },
+  body3: { fontSize: 15, fontWeight: "400" as const },
+} as const;
 
 const ProfileScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { logout, userInfo, isLoggedIn } = useAuth();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
+  const tabBarHeight = useBottomTabBarHeight();
 
   useEffect(() => {
-    if (isFocused && isLoggedIn) {
-      loadProfile();
-    }
+    if (isFocused && isLoggedIn) loadProfile();
   }, [isFocused, isLoggedIn]);
 
   const loadProfile = async () => {
+    setLoading(true);
     try {
-      console.log("ProfileScreen: loading profile...");
-      setLoading(true);
       const data = await authApi.getProfile();
-      console.log("ProfileScreen: got profile:", data);
       setProfile(data);
     } catch (e) {
-      console.error("ProfileScreen: error fetching profile", e);
-      // fallback: try decode token
-      const token = await AsyncStorage.getItem("hs_token");
-      if (token) {
-        try {
-          const base64Payload = token.split(".")[1];
-          const decoded = decodeURIComponent(
-            atob(base64Payload)
-              .split("")
-              .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-              .join("")
-          );
-          setProfile(JSON.parse(decoded));
-        } catch (e) {
-          console.error("Error decoding token:", e);
-          // show user-friendly message
-          // eslint-disable-next-line no-alert
-          alert("Không thể tải thông tin tài khoản. Vui lòng thử lại.");
-        }
-      }
+      console.log("Load profile error");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigation.navigate("Home" as never);
-  };
+  const getDisplayName = () =>
+    profile?.name || profile?.hoTen || userInfo?.name || "Khách hàng";
+  const getDisplayEmail = () => profile?.email || userInfo?.email || "-";
+  const getPhone = () => profile?.soDienThoai || profile?.phone || "-";
+  const getPoints = () => profile?.tichDiem || 0;
 
-  const getDisplayName = () => {
-    return (
-      profile?.name ||
-      profile?.hoTen ||
-      profile?.HoTen ||
-      profile?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] ||
-      userInfo?.name ||
-      "User"
-    );
+  const getTier = () => {
+    if (getPoints() >= 5000) return { name: "Platinum", color: "#E5E4E2" };
+    if (getPoints() >= 2000) return { name: "Gold", color: "#D4AF37" };
+    return { name: "Silver", color: "#94A3B8" };
   };
-
-  const getDisplayEmail = () => {
-    return (
-      profile?.email ||
-      profile?.Email ||
-      profile?.eMail ||
-      profile?.["emailAddress"] ||
-      profile?.[
-        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
-      ] ||
-      userInfo?.email ||
-      "-"
-    );
-  };
+  const tier = getTier();
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading profile...</Text>
+        <ActivityIndicator size="large" color={COLORS.accentGold} />
+        <Text style={styles.loadingText}>Đang tải hồ sơ...</Text>
       </View>
     );
   }
 
-  // If user is not logged in, show prompt to login/register
   if (!isLoggedIn) {
     return (
       <View style={styles.notLoggedContainer}>
-        <Text style={styles.notLoggedTitle}>Bạn chưa đăng nhập</Text>
-        <Text style={styles.notLoggedSubtitle}>
-          Vui lòng đăng nhập để xem thông tin tài khoản
+        <Text style={styles.welcomeTitle}>Trải nghiệm dịch vụ đẳng cấp</Text>
+        <Text style={styles.welcomeSubtitle}>
+          Đăng nhập để nhận ưu đãi riêng
         </Text>
-
-        <View style={styles.notLoggedActions}>
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => navigation.navigate("Login" as never)}
-          >
-            <Text style={styles.primaryBtnText}>Đăng nhập</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.linkBtn}
-            onPress={() => navigation.navigate("Register" as never)}
-          >
-            <Text style={styles.linkBtnText}>Đăng ký</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.luxuryBtn}
+          onPress={() => navigation.navigate("Login")}
+        >
+          <Text style={styles.luxuryBtnText}>Đăng nhập ngay</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {getDisplayName()[0]?.toUpperCase()}
-            </Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: tabBarHeight + 40 }}
+    >
+      {/* Header sang trọng */}
+      <LinearGradient
+        colors={["#0F172A", "#1E293B", "#334155"]}
+        style={styles.header}
+      >
+        <ImageBackground
+          source={{
+            uri: "https://images.unsplash.com/photo-1520250497591-1930b33a6002?w=800",
+          }}
+          style={{ flex: 1 }}
+          imageStyle={{ opacity: 0.3 }}
+        >
+          <View style={styles.headerContent}>
+            <View style={styles.avatarWrapper}>
+              <View style={styles.goldRing}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarLetter}>
+                    {getDisplayName()[0]?.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.name}>{getDisplayName()}</Text>
+            <Text style={styles.email}>{getDisplayEmail()}</Text>
+
+            <View style={styles.tierBadge}>
+              <Text style={styles.tierText}>✦ {tier.name} Member</Text>
+              <Text style={styles.pointsText}>
+                {getPoints().toLocaleString()} điểm tích lũy
+              </Text>
+            </View>
           </View>
+        </ImageBackground>
+      </LinearGradient>
+
+      {/* Thông tin cá nhân */}
+      <View style={styles.section}>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("EditProfile")}
+            >
+              <Text style={styles.editText}>Chỉnh sửa</Text>
+            </TouchableOpacity>
+          </View>
+
+          {[
+            { label: "Họ và tên", value: getDisplayName() },
+            { label: "Email", value: getDisplayEmail() },
+            { label: "Số điện thoại", value: getPhone() },
+            {
+              label: "Điểm tích lũy",
+              value: `${getPoints().toLocaleString()} điểm`,
+            },
+          ].map((item, i) => (
+            <View key={i}>
+              {i > 0 && <View style={styles.divider} />}
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>{item.label}</Text>
+                <Text style={styles.infoValue}>{item.value}</Text>
+              </View>
+            </View>
+          ))}
         </View>
-        <Text style={styles.name}>{getDisplayName()}</Text>
-        <Text style={styles.email}>{getDisplayEmail()}</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
+      {/* Menu Section */}
+      <View style={styles.menuSection}>
+        <Text style={styles.menuTitle}>Tài khoản & Dịch vụ</Text>
 
-        <View style={styles.infoCard}>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Họ tên</Text>
-            <Text style={styles.infoValue}>{getDisplayName()}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{getDisplayEmail()}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Số điện thoại</Text>
-            <Text style={styles.infoValue}>
-              {profile?.soDienThoai ||
-                profile?.Sodienthoai ||
-                profile?.phone ||
-                "-"}
-            </Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Ngày sinh</Text>
-            <Text style={styles.infoValue}>
-              {profile?.ngaySinh ||
-                profile?.Ngaysinh ||
-                profile?.birthday ||
-                "-"}
-            </Text>
-          </View>
+        <View style={styles.menuGrid}>
+          {[
+            {
+              icon: "📋",
+              title: "Lịch sử đặt phòng",
+              screen: "Trips",
+              gradient: [COLORS.accentGold, COLORS.accentGoldLight] as const,
+            },
+            {
+              icon: "🔒",
+              title: "Đổi mật khẩu",
+              screen: "ChangePassword",
+              gradient: [COLORS.primary, "#1E293B"] as const,
+            },
+          ].map((item, i) => (
+            <TouchableOpacity
+              key={i}
+              style={styles.menuCard}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate(item.screen)}
+            >
+              <LinearGradient
+                colors={item.gradient}
+                style={styles.menuCardGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.menuIconContainer}>
+                  <Text style={styles.menuIcon}>{item.icon}</Text>
+                </View>
+                <Text
+                  style={styles.menuCardTitle}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                >
+                  {item.title}
+                </Text>
+                <View style={styles.menuArrow}>
+                  <Text style={styles.menuArrowText}>›</Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          ))}
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Hành động</Text>
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => navigation.navigate("Bookings" as never)}
-        >
-          <Text style={styles.actionIcon}>📋</Text>
-          <Text style={styles.actionText}>Lịch sử đặt phòng</Text>
-          <Text style={styles.actionArrow}>›</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton} onPress={loadProfile}>
-          <Text style={styles.actionIcon}>🔄</Text>
-          <Text style={styles.actionText}>Làm mới thông tin</Text>
-          <Text style={styles.actionArrow}>›</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.logoutButton]}
-          onPress={handleLogout}
-        >
-          <Text style={styles.actionIcon}>🚪</Text>
-          <Text style={styles.logoutText}>Đăng xuất</Text>
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+          <LinearGradient
+            colors={["#DC2626", "#B91C1C"]}
+            style={styles.logoutGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Text style={styles.logoutIcon}>🚪</Text>
+            <Text style={styles.logoutButtonText}>Đăng xuất</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -213,159 +243,234 @@ const ProfileScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  loadingContainer: {
+  container: { flex: 1, backgroundColor: COLORS.background },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingText: { ...FONTS.body3, color: COLORS.textLight, marginTop: 16 },
+
+  header: { height: 360 },
+  headerContent: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: COLORS.background,
+    paddingTop: 50,
   },
-  loadingText: {
-    ...FONTS.body3,
-    color: COLORS.gray,
-    marginTop: SIZES.margin,
-  },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SIZES.padding * 3,
-    paddingHorizontal: SIZES.padding,
+  avatarWrapper: { marginBottom: 20 },
+  goldRing: {
+    width: 124,
+    height: 124,
+    borderRadius: 62,
+    backgroundColor: COLORS.accentGold,
+    padding: 6,
+    justifyContent: "center",
     alignItems: "center",
-  },
-  avatarContainer: {
-    marginBottom: SIZES.margin * 1.5,
+    shadowColor: COLORS.accentGold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 15,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.white,
+    width: "100%",
+    height: "100%",
+    borderRadius: 56,
+    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
-    ...SHADOWS.medium,
   },
-  avatarText: {
-    ...FONTS.h1,
+  avatarLetter: {
+    fontSize: 48,
+    fontWeight: "800" as const,
     color: COLORS.primary,
-    fontWeight: "700",
   },
-  name: {
-    ...FONTS.h3,
-    color: COLORS.white,
-    marginBottom: 8,
+  name: { ...FONTS.h2, color: "#fff", marginTop: 12 },
+  email: { ...FONTS.body2, color: "#E2E8F0", marginTop: 4 },
+  tierBadge: { alignItems: "center", marginTop: 20 },
+  tierText: {
+    color: COLORS.accentGoldLight,
+    fontSize: 18,
+    fontWeight: "700" as const,
   },
-  email: {
-    ...FONTS.body3,
-    color: COLORS.white,
-    opacity: 0.9,
-  },
-  section: {
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding * 1.5,
-  },
-  sectionTitle: {
-    ...FONTS.h4,
-    color: COLORS.secondary,
-    marginBottom: SIZES.margin * 1.5,
-  },
-  infoCard: {
-    backgroundColor: COLORS.white,
+  pointsText: { color: "#E2E8F0", fontSize: 15, marginTop: 6 },
+
+  section: { paddingHorizontal: SIZES.padding, marginTop: 24 },
+  card: {
+    backgroundColor: COLORS.cardBg,
     borderRadius: SIZES.radiusLarge,
-    padding: SIZES.padding,
-    ...SHADOWS.light,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 12,
   },
-  infoItem: {
-    paddingVertical: SIZES.padding,
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
   },
-  infoLabel: {
-    ...FONTS.body4,
-    color: COLORS.gray,
-    marginBottom: 6,
+  sectionTitle: { ...FONTS.h3, color: COLORS.text },
+  editText: { color: COLORS.accentGold, fontWeight: "600" as const },
+
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 12,
   },
+  infoLabel: { ...FONTS.body3, color: COLORS.textLight },
   infoValue: {
     ...FONTS.body2,
-    color: COLORS.secondary,
-    fontWeight: "600",
+    color: COLORS.text,
+    fontWeight: "600" as const,
+    textAlign: "right",
   },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  actionButton: {
+  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 4 },
+
+  actionRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.white,
-    padding: SIZES.padding,
-    borderRadius: SIZES.radiusLarge,
-    marginBottom: SIZES.margin,
-    ...SHADOWS.light,
+    backgroundColor: "#fff",
+    padding: 18,
+    borderRadius: SIZES.radius,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  actionIcon: {
-    fontSize: 24,
-    marginRight: SIZES.margin,
-  },
-  actionText: {
-    ...FONTS.body2,
-    color: COLORS.secondary,
-    flex: 1,
-    fontWeight: "500",
-  },
-  actionArrow: {
+  actionIcon: { fontSize: 26, marginRight: 16 },
+  actionText: { ...FONTS.body1, color: COLORS.text, flex: 1 },
+  arrow: { fontSize: 28, color: COLORS.textLight },
+
+  // New Menu Styles
+  menuSection: { paddingHorizontal: SIZES.padding, marginTop: 32 },
+  menuTitle: {
     ...FONTS.h3,
-    color: COLORS.gray,
+    color: COLORS.text,
+    marginBottom: 20,
+    textAlign: "center",
   },
+  menuGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 32,
+  },
+  menuCard: {
+    width: "48%",
+    height: 160,
+    borderRadius: SIZES.radiusLarge,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  menuCardGradient: {
+    flex: 1,
+    borderRadius: SIZES.radiusLarge,
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  menuIcon: { fontSize: 24 },
+  menuCardTitle: {
+    ...FONTS.body2,
+    color: "#fff",
+    fontWeight: "600" as const,
+    flex: 1,
+  },
+  menuArrow: {
+    alignSelf: "flex-end",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuArrowText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+
   logoutButton: {
-    backgroundColor: COLORS.error,
+    height: 60,
+    borderRadius: SIZES.radiusLarge,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  logoutGradient: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: SIZES.radiusLarge,
+    paddingHorizontal: 24,
+  },
+  logoutIcon: { fontSize: 24, marginRight: 12 },
+  logoutButtonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700" as const,
+  },
+
+  logoutRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    padding: 18,
+    borderRadius: SIZES.radius,
+    marginTop: 24,
   },
   logoutText: {
-    ...FONTS.body2,
-    color: COLORS.white,
+    ...FONTS.body1,
+    color: COLORS.error,
+    fontWeight: "600" as const,
     flex: 1,
-    fontWeight: "600",
   },
+
   notLoggedContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: SIZES.padding * 2,
-    backgroundColor: COLORS.background,
+    padding: 32,
   },
-  notLoggedTitle: {
+  welcomeTitle: {
     ...FONTS.h2,
-    color: COLORS.secondary,
-    marginBottom: SIZES.margin,
-  },
-  notLoggedSubtitle: {
-    ...FONTS.body3,
-    color: COLORS.gray,
+    color: COLORS.text,
     textAlign: "center",
-    marginBottom: SIZES.margin * 2,
+    marginBottom: 12,
   },
-  notLoggedActions: {
-    width: "100%",
-    alignItems: "center",
+  welcomeSubtitle: {
+    ...FONTS.body2,
+    color: COLORS.textLight,
+    textAlign: "center",
+    marginBottom: 40,
   },
-  primaryBtn: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: SIZES.radius,
-    marginBottom: SIZES.margin,
+  luxuryBtn: {
+    backgroundColor: COLORS.accentGold,
+    paddingHorizontal: 50,
+    paddingVertical: 16,
+    borderRadius: 30,
   },
-  primaryBtnText: {
-    color: COLORS.white,
-    ...FONTS.body3,
-    fontWeight: "700",
-  },
-  linkBtn: {
-    paddingVertical: 10,
-  },
-  linkBtnText: {
+  luxuryBtnText: {
     color: COLORS.primary,
-    ...FONTS.body3,
-    fontWeight: "600",
+    fontSize: 18,
+    fontWeight: "700" as const,
   },
 });
 

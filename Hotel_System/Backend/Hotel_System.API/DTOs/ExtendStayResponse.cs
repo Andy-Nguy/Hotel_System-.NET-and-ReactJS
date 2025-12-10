@@ -9,7 +9,7 @@ namespace Hotel_System.API.DTOs
         public string Message { get; set; } = string.Empty;
         
         /// <summary>
-        /// Mã đặt phòng
+        /// Mã đặt phòng (cũ hoặc mới nếu đổi phòng)
         /// </summary>
         public string IddatPhong { get; set; } = string.Empty;
 
@@ -39,7 +39,7 @@ namespace Hotel_System.API.DTOs
         public DateOnly NewCheckout { get; set; }
 
         /// <summary>
-        /// Mã hóa đơn đã cập nhật/tạo mới
+        /// Mã hóa đơn (cũ nếu không đổi phòng, mới nếu đổi phòng)
         /// </summary>
         public string? HoaDonId { get; set; }
 
@@ -62,6 +62,51 @@ namespace Hotel_System.API.DTOs
         /// Mô tả loại gia hạn
         /// </summary>
         public string ExtendDescription { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Có đổi phòng hay không
+        /// </summary>
+        public bool IsRoomChange { get; set; }
+        
+        /// <summary>
+        /// Mã booking mới (nếu đổi phòng)
+        /// </summary>
+        public string? NewBookingId { get; set; }
+        
+        /// <summary>
+        /// Mã hóa đơn mới (nếu đổi phòng)
+        /// </summary>
+        public string? NewInvoiceId { get; set; }
+        
+        /// <summary>
+        /// Mã hóa đơn cũ đã thanh toán (nếu đổi phòng)
+        /// </summary>
+        public string? OldInvoiceId { get; set; }
+
+        /// <summary>
+        /// Tên mã khuyến mãi áp dụng (nếu có)
+        /// </summary>
+        public string? PromotionName { get; set; }
+
+        /// <summary>
+        /// Loại giảm giá: "percent" hoặc "amount"
+        /// </summary>
+        public string? PromotionType { get; set; }
+
+        /// <summary>
+        /// Giá trị giảm (% hoặc số tiền)
+        /// </summary>
+        public decimal? PromotionValue { get; set; }
+
+        /// <summary>
+        /// Số tiền được giảm từ phí gia hạn
+        /// </summary>
+        public decimal DiscountAmount { get; set; }
+
+        /// <summary>
+        /// Phí gia hạn trước khuyến mãi
+        /// </summary>
+        public decimal ExtendFeeBeforeDiscount { get; set; }
     }
 
     /// <summary>
@@ -72,6 +117,13 @@ namespace Hotel_System.API.DTOs
         public bool CanExtend { get; set; }
         public bool CanExtendSameRoom { get; set; }
         public bool HasNextBooking { get; set; }
+        
+        /// <summary>
+        /// True nếu booking đã được gia hạn trong ngày (SameDay) 1 lần rồi.
+        /// Frontend sẽ ẩn/disable option "Trong ngày" và chỉ cho phép "Thêm đêm".
+        /// </summary>
+        public bool HasSameDayExtended { get; set; }
+        
         public string Message { get; set; } = string.Empty;
 
 
@@ -115,8 +167,33 @@ namespace Hotel_System.API.DTOs
         public string? SoPhong { get; set; }
         public string? TenLoaiPhong { get; set; }
         public decimal GiaMotDem { get; set; }
-        public string? UrlAnhPhong { get; set; }
+        public List<string>? UrlAnhPhong { get; set; }
         public int? SoNguoiToiDa { get; set; }
+        
+        /// <summary>
+        /// Trạng thái phòng (chỉ trả về phòng "Trống")
+        /// </summary>
+        public string? TrangThai { get; set; }
+        
+        /// <summary>
+        /// Tên chương trình khuyến mãi (nếu có)
+        /// </summary>
+        public string? PromotionName { get; set; }
+
+        /// <summary>
+        /// Phần trăm giảm giá (nếu áp dụng theo %)
+        /// </summary>
+        public decimal? DiscountPercent { get; set; }
+
+        /// <summary>
+        /// Giá đã áp dụng khuyến mãi (nếu có)
+        /// </summary>
+        public decimal? DiscountedPrice { get; set; }
+
+        /// <summary>
+        /// Mô tả / thông tin ngắn về phòng
+        /// </summary>
+        public string? Description { get; set; }
     }
 
     public class ExtendOption
