@@ -2657,7 +2657,7 @@ const handleForceCancelSubmit = async (data: {
                                   {/* Hiển thị khuyến mãi nếu có */}
                                   {hasDiscount && promotionName && (
                                     <div style={{ color: '#52c41a', fontSize: 12, fontWeight: 500, marginTop: 4 }}>
-                                      ✓ {promotionName} {discountPercent ? `(${discountPercent}%)` : ''}
+                                      ✓ {promotionName}
                                     </div>
                                   )}
                                 </div>

@@ -527,8 +527,6 @@ const UnifiedInvoiceModal: React.FC<Props> = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: '#52c41a', fontWeight: 600 }}>
                 <span>
                   Khuyến mãi: {promotionName || 'Áp dụng'}
-                  {promotionType === 'percent' && promotionValue && <span> ({promotionValue}%)</span>}
-                  {promotionType === 'amount' && promotionValue && <span> ({formatMoney(promotionValue)})</span>}
                 </span>
                 <span>- {formatMoney(discountAmount)}</span>
               </div>
