@@ -982,18 +982,18 @@ const CheckinSectionNewFixed: React.FC = () => {
                 </td>
                 <td style={{ padding: 12, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                    {/* Show Confirm only for status 2 */}
-                    {b.trangThai === 2 && (
-                      <button onClick={(e) => { e.stopPropagation(); handleConfirm(b.iddatPhong); }} disabled={disabledConfirmIds.has(b.iddatPhong)}>Xác nhận</button>
+                    {/* Show Confirm only for status 2; hide it after operator presses OK */}
+                    {b.trangThai === 2 && !disabledConfirmIds.has(b.iddatPhong) && (
+                      <button onClick={(e) => { e.stopPropagation(); handleConfirm(b.iddatPhong); }}>Xác nhận</button>
                     )}
 
-                    {/* Show Đổi phòng button for status 3 (Đang sử dụng) */}
-                    {b.trangThai === 3 && (
+                    {/* Show Đổi phòng button for status 3 (Đang sử dụng) - hidden after operator confirms checkin */}
+                    {b.trangThai === 3 && !disabledConfirmIds.has(b.iddatPhong) && (
                       <button onClick={(e) => { e.stopPropagation(); openReassignModal(b.iddatPhong); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #3b82f6", background: "#eff6ff", color: "#3b82f6", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Đổi phòng</button>
                     )}
 
-                    {/* Show a single Cancel button for any non-cancelled booking so it stays visible after confirm */}
-                    {b.trangThai !== 0 && (
+                    {/* Show a single Cancel button for any non-cancelled booking; hide after operator confirms checkin */}
+                    {b.trangThai !== 0 && !disabledConfirmIds.has(b.iddatPhong) && (
                       <button onClick={(e) => { e.stopPropagation(); handleCancelBooking(b.iddatPhong); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ef4444", background: "#fff", color: "#ef4444", cursor: "pointer", fontSize: 12 }}>Hủy</button>
                     )}
 

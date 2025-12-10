@@ -1759,9 +1759,7 @@ const handleForceCancelSubmit = async (data: {
               const todayStr = dayjs().format('YYYY-MM-DD');
               const newCheckoutStr = String(newCheckoutRaw).slice(0, 10);
               if (viewMode === 'checkout' && newCheckoutStr !== todayStr) {
-                // For QR payment (PaymentMethod = 2) we should NOT remove the booking until
-                // the operator confirms payment (presses "Đã thanh toán"). Only remove when
-                // payment is not QR or it was already paid immediately.
+              
                 const paidNow = result.IsPaidNow ?? result.isPaidNow ?? false;
                 const pm = result.PaymentMethod ?? result.paymentMethod ?? extendPaymentMethod;
                 if (pm !== 2 || paidNow) {
@@ -2533,7 +2531,7 @@ const handleForceCancelSubmit = async (data: {
                 <div style={{ marginBottom: 16, padding: 12, background: '#fff7e6', border: '1px solid #ffc069', borderRadius: 8 }}>
                   <div style={{ fontWeight: 600, color: '#d46b08' }}>⚠️ Phòng có khách mới check-in</div>
                   <div style={{ fontSize: 13, color: '#8c4a00' }}>
-                    Khách: {extendAvailability.NextBooking?.CustomerName} - Check-in: {new Date(extendAvailability.NextBooking?.CheckinDate).toLocaleDateString('vi-VN')}
+                    Có khách check-in: {new Date(extendAvailability.NextBooking?.CheckinDate).toLocaleDateString('vi-VN')}
                   </div>
                   <div style={{ fontSize: 13, marginTop: 4 }}>{extendAvailability.Message}</div>
                 </div>
@@ -2601,9 +2599,7 @@ const handleForceCancelSubmit = async (data: {
                           >
                             <div style={{ fontWeight: 700 }}>{opt.Description}</div>
                             <div style={{ color: '#8c8c8c', fontSize: 12 }}>({opt.Percentage}% giá phòng)</div>
-                            <div style={{ fontWeight: 700, color: '#1890ff', marginTop: 4 }}>
-                              {Number(opt.FeeWithVat).toLocaleString()}đ
-                            </div>
+                            {/* Price removed as requested */}
                           </div>
                         ))}
                       </div>

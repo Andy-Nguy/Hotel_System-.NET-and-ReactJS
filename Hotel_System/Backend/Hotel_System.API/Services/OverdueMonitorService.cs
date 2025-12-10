@@ -10,19 +10,6 @@ using System.Threading.Tasks;
 
 namespace Hotel_System.API.Services
 {
-    /// <summary>
-    /// Background service that marks bookings as overdue (TrangThai = 5)
-    /// when the expected checkout datetime (NgayTraPhong + 12:00 or extended hour) has passed
-    /// and the guest still hasn't checked out (TrangThai == 3).
-    ///
-    /// Business rule:
-    /// - Phòng đang sử dụng: TrangThai == 3
-    /// - Ngày trả phòng dự kiến: NgayTraPhong <= hôm nay
-    /// - Thời điểm hiện tại: Now > NgayTraPhong + Giờ checkout hiệu lực
-    ///   (12:00 nếu không gia hạn, hoặc "Gia hạn đến HH:mm" nếu có)
-    /// => Đánh dấu Quá hạn + Cộng phí trả phòng muộn vào TongTien (KHÔNG lưu CTHDDV, phí phạt không VAT).
-    ///
-    /// Service chạy định kỳ (mặc định mỗi 5 phút).
     /// </summary>
     public class OverdueMonitorService : BackgroundService
     {
@@ -337,7 +324,6 @@ namespace Hotel_System.API.Services
                 }
                 else
                 {
-                    // Fallback: mark latest and booking as unpaid
                     latestInvoice.TrangThaiThanhToan = 1;
                     dp.TrangThaiThanhToan = 1;
                 }
