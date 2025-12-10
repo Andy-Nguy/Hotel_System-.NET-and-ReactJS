@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Modal, List, Tag, Image, Button, Select, message as antdMessage, Alert, notification } from 'antd';
+import RefundForm from '../payment/RefundForm';
 import checkinApi, { UsingBooking } from "../../../api/checkinApi";
+import invoiceApi from '../../../api/invoiceApi';
 import * as roomsApi from '../../../api/roomsApi';
 import checkoutApi from '../../../api/checkout.Api';
-import InvoiceCheckin from './InvoiceCheckin';
+import UnifiedInvoiceModal from '../checkout/UnifiedInvoiceModal';
 
 const CheckinSectionNewFixed: React.FC = () => {
   const [bookings, setBookings] = useState<UsingBooking[]>([]);
@@ -28,6 +30,10 @@ const CheckinSectionNewFixed: React.FC = () => {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [reassignBookingId, setReassignBookingId] = useState<string | null>(null);
   const [reassignBookingDetail, setReassignBookingDetail] = useState<any | null>(null);
+  const [refundVisible, setRefundVisible] = useState(false);
+  const [refundInvoiceId, setRefundInvoiceId] = useState<string | null>(null);
+  const [refundAmount, setRefundAmount] = useState<number | null>(null);
+  const [refundBookingDetail, setRefundBookingDetail] = useState<any | null>(null);
 
   const [showOverdueModal, setShowOverdueModal] = useState(false);
   const [overdueContext, setOverdueContext] = useState<{ bookingId?: string | null; message?: string | null; roomId?: string | null } | null>(null);
@@ -57,65 +63,65 @@ const CheckinSectionNewFixed: React.FC = () => {
   };
 
   const handleConfirm = async (id: string) => {
-  if (!confirm("Xác nhận nhận khách?")) return;
+    if (!confirm("Xác nhận nhận khách?")) return;
 
-  // khóa nút để tránh bấm nhiều lần
-  setDisabledConfirmIds((s) => new Set(s).add(id));
+    // khóa nút để tránh bấm nhiều lần
+    setDisabledConfirmIds((s) => new Set(s).add(id));
 
-  // lấy thông tin booking và roomId để dùng khi cần mở modal đổi phòng
-  const booking = bookings.find((b) => b.iddatPhong === id);
-  const roomId =
-    booking?.idphong ??
-    (booking as any)?.Idphong ??
-    (booking as any)?.RoomId ??
-    null;
+    // lấy thông tin booking và roomId để dùng khi cần mở modal đổi phòng
+    const booking = bookings.find((b) => b.iddatPhong === id);
+    const roomId =
+      booking?.idphong ??
+      (booking as any)?.Idphong ??
+      (booking as any)?.RoomId ??
+      null;
 
-  try {
-    // GỌI THẲNG API, để backend check trong bảng ĐặtPhòng
-    const result = await checkinApi.confirmCheckIn(id);
+    try {
+      // GỌI THẲNG API, để backend check trong bảng ĐặtPhòng
+      const result = await checkinApi.confirmCheckIn(id);
 
-    // cập nhật trạng thái trên UI thành Đang sử dụng (3)
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.iddatPhong === id ? { ...b, trangThai: 3 } : b
-      )
-    );
-    if (selectedBooking && selectedBooking.iddatPhong === id) {
-      setSelectedBooking({ ...selectedBooking, trangThai: 3 });
-    }
+      // cập nhật trạng thái trên UI thành Đang sử dụng (3)
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.iddatPhong === id ? { ...b, trangThai: 3 } : b
+        )
+      );
+      if (selectedBooking && selectedBooking.iddatPhong === id) {
+        setSelectedBooking({ ...selectedBooking, trangThai: 3 });
+      }
 
-    // thông báo thành công
-    antdMessage.success(result?.message || "Xác nhận thành công.");
-  } catch (err: any) {
-    // cho phép bấm lại nút
-    setDisabledConfirmIds((s) => {
-      const copy = new Set(s);
-      copy.delete(id);
-      return copy;
-    });
-
-    const serverMsg =
-      err?.response?.data?.message || err?.message || "";
-
-    // NẾU PHÒNG ĐANG CÓ KHÁCH SỬ DỤNG / QUÁ HẠN → mở modal Đổi phòng
-    if (
-      typeof serverMsg === "string" &&
-      (serverMsg.toLowerCase().includes("quá hạn") ||
-        serverMsg.toLowerCase().includes("đang có khách sử dụng"))
-    ) {
-      setOverdueContext({
-        bookingId: id,
-        message: serverMsg,
-        roomId: roomId,
+      // thông báo thành công
+      antdMessage.success(result?.message || "Xác nhận thành công.");
+    } catch (err: any) {
+      // cho phép bấm lại nút
+      setDisabledConfirmIds((s) => {
+        const copy = new Set(s);
+        copy.delete(id);
+        return copy;
       });
-      setShowOverdueModal(true);
-      return;
-    }
 
-    // các lỗi khác → chỉ báo lỗi bình thường
-    antdMessage.error(serverMsg || "Xác nhận thất bại");
-  }
-};
+      const serverMsg =
+        err?.response?.data?.message || err?.message || "";
+
+      // NẾU PHÒNG ĐANG CÓ KHÁCH SỬ DỤNG / QUÁ HẠN → mở modal Đổi phòng
+      if (
+        typeof serverMsg === "string" &&
+        (serverMsg.toLowerCase().includes("quá hạn") ||
+          serverMsg.toLowerCase().includes("đang có khách sử dụng"))
+      ) {
+        setOverdueContext({
+          bookingId: id,
+          message: serverMsg,
+          roomId: roomId,
+        });
+        setShowOverdueModal(true);
+        return;
+      }
+
+      // các lỗi khác → chỉ báo lỗi bình thường
+      antdMessage.error(serverMsg || "Xác nhận thất bại");
+    }
+  };
 
   const handleCancel = async (id: string) => {
     if (!confirm("Xác nhận huỷ / no-show?")) return;
@@ -177,7 +183,6 @@ const CheckinSectionNewFixed: React.FC = () => {
         placement: 'topRight'
       });
 
-
       // close reassign UI
       const chosenRoomId = selectedRoomId;
       const chosenRoom = (availableRooms || []).find((r: any) => (r.idphong ?? r.RoomId ?? r.roomId) === chosenRoomId) || null;
@@ -199,8 +204,14 @@ const CheckinSectionNewFixed: React.FC = () => {
             }
             if (res && typeof res.tongTien !== 'undefined') updated.tongTien = res.tongTien;
             // If server indicates a positive price delta, mark as unpaid (1 = Chưa thanh toán)
-            if (res && typeof res.priceDelta !== 'undefined' && Number(res.priceDelta) > 0) {
-              updated.trangThaiThanhToan = 1;
+            if (res && typeof res.priceDelta !== 'undefined') {
+              if (Number(res.priceDelta) > 0) {
+                updated.trangThaiThanhToan = 1;
+              } else if (Number(res.priceDelta) < 0) {
+                // mark pending refund amount on the booking so UI can show quick refund
+                const srvRef = res?.refundAmount ?? res?.refund ?? res?.refund_amount ?? null;
+                updated.pendingRefund = srvRef != null && !isNaN(Number(srvRef)) ? Math.abs(Number(srvRef)) : Math.abs(Number(res.priceDelta));
+              }
             }
             return updated;
           })
@@ -214,10 +225,15 @@ const CheckinSectionNewFixed: React.FC = () => {
             newDetail.idphongNavigation = { ...(newDetail.idphongNavigation || {}), TenPhong: chosenRoom.tenPhong ?? chosenRoom.roomName, SoPhong: chosenRoom.soPhong ?? chosenRoom.roomNumber, UrlAnhPhong: chosenRoom.roomImageUrl ?? chosenRoom.urlAnhPhong };
           }
           if (res && typeof res.tongTien !== 'undefined') newDetail.TongTien = res.tongTien;
-          if (res && typeof res.priceDelta !== 'undefined' && Number(res.priceDelta) > 0) {
-            // update payment status on the open detail modal too
-            newDetail.trangThaiThanhToan = 1;
-            newDetail.TrangThaiThanhToan = 1;
+          if (res && typeof res.priceDelta !== 'undefined') {
+            if (Number(res.priceDelta) > 0) {
+              // update payment status on the open detail modal too
+              newDetail.trangThaiThanhToan = 1;
+              newDetail.TrangThaiThanhToan = 1;
+            } else if (Number(res.priceDelta) < 0) {
+              const srvRef = res?.refundAmount ?? res?.refund ?? res?.refund_amount ?? null;
+              newDetail.pendingRefund = srvRef != null && !isNaN(Number(srvRef)) ? Math.abs(Number(srvRef)) : Math.abs(Number(res.priceDelta));
+            }
           }
           setSelectedBooking(newDetail);
         }
@@ -225,6 +241,120 @@ const CheckinSectionNewFixed: React.FC = () => {
         // non-fatal; we'll still refresh lists below
         console.error('Error updating local booking after reassign', e);
       }
+
+      // ==== REFUND: tiền khách đã trả (sum thanh toán + cọc) - tổng tiền phòng mới (VAT) ====
+      try {
+        // Lấy chi tiết mới nhất để tính paid
+        let bd: any = selectedBooking && selectedBooking.iddatPhong === reassignBookingId
+          ? selectedBooking
+          : await checkinApi.getCheckinById(reassignBookingId).catch(() => null);
+
+        // 1) Tổng tiền KHÁCH ĐÃ TRẢ = sum(TienThanhToan) + TienCoc
+        const sumInvoicePaid = (() => {
+          try {
+            const invs = bd?.hoaDons ?? bd?.HoaDons ?? (bd?.hoaDon ? [bd.hoaDon] : null);
+            if (Array.isArray(invs) && invs.length > 0) {
+              return invs.reduce((s: number, i: any) => s + Number(i?.TienThanhToan ?? i?.tienThanhToan ?? 0), 0);
+            }
+            return 0;
+          } catch { return 0; }
+        })();
+        const deposit = Number(bd?.tienCoc ?? bd?.TienCoc ?? 0);
+        // Nếu hệ thống của bạn đã cộng cọc vào TienThanhToan rồi, thay đổi dòng dưới thành: const totalPaid = sumInvoicePaid;
+        const totalPaid = sumInvoicePaid + deposit;
+
+        // 2) Tổng tiền PHÒNG MỚI (có VAT)
+        let newTotalWithVat: number;
+        if (typeof res?.tongTien !== 'undefined' && res.tongTien != null) {
+          newTotalWithVat = Number(res.tongTien);
+        } else {
+          // Tính từ phòng mới + các line cũ khác (noVAT) rồi *1.1
+          const nights = bd?.SoDem ?? bd?.soDem ?? 1;
+          const oldLines = (bd?.ChiTietDatPhongs ?? bd?.chiTietDatPhongs ?? []) || [];
+          const oldRoomId = bd?.Idphong ?? bd?.idphong ?? null;
+
+          const otherNoVat = Array.isArray(oldLines)
+            ? oldLines.reduce((s: number, ct: any) => {
+                const ctRoomId = ct?.IdPhong ?? ct?.IDPhong ?? ct?.idPhong ?? ct?.Phong?.Idphong ?? null;
+                const gia = Number(ct?.GiaPhong ?? ct?.giaPhong ?? ct?.Gia ?? 0);
+                const soDemLine = Number(ct?.SoDem ?? ct?.soDem ?? ct?.Slngay ?? nights ?? 1);
+                const lineNoVat = gia * soDemLine;
+                if (oldRoomId != null && ctRoomId != null && String(ctRoomId) === String(oldRoomId)) {
+                  return s; // bỏ line phòng cũ
+                }
+                return s + lineNoVat;
+              }, 0)
+            : 0;
+
+          const rawBasePrice =
+            chosenRoom?.GiaMotDem ??
+            chosenRoom?.giaCoBanMotDem ??
+            chosenRoom?.basePricePerNight ??
+            chosenRoom?.BasePricePerNight ??
+            chosenRoom?.pricePerNight ??
+            chosenRoom?.Gia ??
+            0;
+          const discounted =
+            chosenRoom?.DiscountedPrice ??
+            chosenRoom?.discountedPrice ??
+            chosenRoom?.promotionPrice ??
+            chosenRoom?.KhuyenMaiGia ??
+            null;
+          const pricePerNight =
+            discounted != null && !isNaN(Number(discounted)) && Number(discounted) > 0
+              ? Number(discounted)
+              : Number(rawBasePrice);
+          const newRoomNoVat = Number(pricePerNight) * (Number(bd?.SoDem ?? bd?.soDem ?? 1) || 1);
+
+          newTotalWithVat = Math.round((otherNoVat + newRoomNoVat) * 1.1);
+        }
+
+        // Persist new room total as the paid amount on the booking/invoice so
+        // the invoice reflects the new room total rather than the old payment.
+        try {
+          // Update booking record on server with new paid amount and new total
+          await checkinApi.updateBooking(reassignBookingId, {
+            tienThanhToan: Number(newTotalWithVat),
+            TongTien: Number(newTotalWithVat),
+            tongTien: Number(newTotalWithVat)
+          }).catch(() => null);
+        } catch (e) {
+          // non-fatal: server update failed, continue and still show refund modal if needed
+          console.warn('[reassign] failed to persist new paid amount', e);
+        }
+
+        // also update local UI state so invoice/modal shows the new paid amount immediately
+        setBookings((prev) =>
+          (prev || []).map((b) =>
+            b.iddatPhong === reassignBookingId
+              ? { ...b, tienThanhToan: Number(newTotalWithVat), tongTien: Number(newTotalWithVat), TongTien: Number(newTotalWithVat) }
+              : b
+          )
+        );
+        if (selectedBooking && selectedBooking.iddatPhong === reassignBookingId) {
+          setSelectedBooking({ ...selectedBooking, tienThanhToan: Number(newTotalWithVat), tongTien: Number(newTotalWithVat), TongTien: Number(newTotalWithVat) });
+        }
+        // Prefer server-provided refundAmount (VAT-inclusive) when present
+        const serverRefundRaw = res?.refundAmount ?? res?.refund ?? res?.refund_amount ?? null;
+        let proposeRefund = NaN as any as number;
+        if (serverRefundRaw != null && !isNaN(Number(serverRefundRaw))) {
+          proposeRefund = Math.max(0, Math.round(Number(serverRefundRaw)));
+        } else {
+          proposeRefund = Math.max(0, Math.round(totalPaid - newTotalWithVat));
+        }
+
+        if (proposeRefund > 0) {
+          const invIdFromRes = res?.invoiceId ?? res?.idHoaDon ?? res?.hoaDonId ?? null;
+          setRefundInvoiceId(invIdFromRes || null);
+          setRefundAmount(proposeRefund);
+          try {
+            if (!bd) bd = await checkinApi.getCheckinById(reassignBookingId);
+          } catch {}
+          setRefundBookingDetail(bd || null);
+          setRefundVisible(true);
+        }
+      } catch {}
+      // ==== END REFUND ====
 
       // Refresh bookings and rooms, but first ask receptionist if they want to check-in now
       const ask = () => {
@@ -329,12 +459,90 @@ const CheckinSectionNewFixed: React.FC = () => {
     try {
       // fetch full booking details (includes navigation properties like idkhachHangNavigation, idphongNavigation, hoaDons, cthddvs)
       const detail = await checkinApi.getCheckinById(b.iddatPhong);
+      // attempt to fetch authoritative invoice detail from invoices table
+      try {
+        const inv = (detail?.hoaDons && detail.hoaDons[0]) || detail?.hoaDon || (detail?.HoaDons && detail.HoaDons[0]) || null;
+        let invId = inv?.IdHoaDon ?? inv?.idHoaDon ?? inv?.id ?? null;
+
+        // fallback: if no invoice id but booking id present, try list invoices and match by idDatPhong
+        if (!invId && detail?.iddatPhong) {
+          try {
+            const list = await invoiceApi.getInvoices();
+            if (Array.isArray(list) && list.length > 0) {
+              const found = list.find((x: any) => (x.idDatPhong ?? x.idDatPhong) == detail.iddatPhong || (x.idDatPhong ?? x.idDatPhong) == detail.IddatPhong);
+              if (found) invId = found.idHoaDon ?? found.id ?? found.IDHoaDon ?? null;
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        if (invId) {
+          const invRes = await invoiceApi.getInvoiceDetail(invId);
+          if (invRes && invRes.data) {
+            // attach invoiceDetail to detail for rendering authoritative values
+            (detail as any).invoiceDetail = invRes.data;
+          }
+        }
+      } catch (e) {
+        // ignore invoice fetch failures
+      }
       setSelectedBooking(detail);
       setShowModal(true);
     } catch (err: any) {
       alert(err?.message || "Không thể tải chi tiết đặt phòng");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Row refund: đề xuất = tiền khách trả (sum thanh toán + cọc) - tổng hiện tại (VAT)
+  const handleRowRefund = async (_e: any, b: any) => {
+    try {
+      // fetch detail to get invoice id if not present
+      const detail = await checkinApi.getCheckinById(b.iddatPhong);
+      // try to obtain invoice id from different shapes
+      const inv = (detail?.hoaDons && detail.hoaDons[0]) || detail?.hoaDon || (detail?.HoaDons && detail.HoaDons[0]) || null;
+      const invId = inv?.IdHoaDon ?? inv?.idHoaDon ?? inv?.id ?? null;
+
+      // tổng đã trả = sum thanh toán + cọc
+      const sumInvoicePaid = (() => {
+        try {
+          const invs = detail?.hoaDons ?? detail?.HoaDons ?? (detail?.hoaDon ? [detail.hoaDon] : null);
+          if (Array.isArray(invs) && invs.length > 0) {
+            return invs.reduce((s: number, i: any) => s + Number(i?.TienThanhToan ?? i?.tienThanhToan ?? 0), 0);
+          }
+          return 0;
+        } catch { return 0; }
+      })();
+      const deposit = Number(detail?.tienCoc ?? detail?.TienCoc ?? 0);
+      // nếu TienThanhToan đã bao gồm cọc thì đổi thành: const totalPaid = sumInvoicePaid;
+      const totalPaid = sumInvoicePaid + deposit;
+
+      // tổng hiện tại (VAT): ưu tiên TongTien, fallback sum(room)*1.1
+      const lines = (detail?.ChiTietDatPhongs ?? detail?.chiTietDatPhongs ?? []) || [];
+      const noVat = Array.isArray(lines)
+        ? lines.reduce((s: number, ct: any) => {
+            const gia = Number(ct?.GiaPhong ?? ct?.giaPhong ?? ct?.Gia ?? 0);
+            const soDem = Number(ct?.SoDem ?? ct?.soDem ?? ct?.Slngay ?? 1);
+            return s + (gia * soDem);
+          }, 0)
+        : 0;
+      const currentTotalWithVat =
+        (typeof detail?.TongTien !== 'undefined' && detail?.TongTien != null)
+          ? Number(detail.TongTien)
+          : (typeof detail?.tongTien !== 'undefined' && detail?.tongTien != null)
+          ? Number(detail.tongTien)
+          : Math.round(noVat * 1.1);
+
+      const amt = Math.max(0, Math.round(totalPaid - currentTotalWithVat));
+
+      setRefundInvoiceId(invId || null);
+      setRefundAmount(amt > 0 ? amt : null);
+      setRefundBookingDetail(detail || null);
+      setRefundVisible(true);
+    } catch (err) {
+      antdMessage.error('Không thể lấy thông tin hóa đơn để hoàn tiền');
     }
   };
 
@@ -412,15 +620,16 @@ const CheckinSectionNewFixed: React.FC = () => {
   };
 
   const getPaymentStatusColor = (s: any) => {
+    // Muted palette (less flashy)
     switch (s) {
       case 0:
-        return { bg: "#f8fafc", color: "#64748b" };
+        return { bg: "#f1f5f9", color: "#475569" };
       case 1:
-        return { bg: "#fef3c7", color: "#92400e" };
+        return { bg: "#fff7ed", color: "#92400e" };
       case 2:
-        return { bg: "#dcfce7", color: "#166534" };
+        return { bg: "#f8fafc", color: "#0f172a" };
       default:
-        return { bg: "#f8fafc", color: "#64748b" };
+        return { bg: "#f1f5f9", color: "#475569" };
     }
   };
 
@@ -504,108 +713,221 @@ const CheckinSectionNewFixed: React.FC = () => {
       {/* Modal: booking details */}
       {showModal && selectedBooking && (
         <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, backdropFilter: "blur(4px)" }}
           onClick={closeModal}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "96%", maxWidth: 1100, maxHeight: "90vh", overflow: "auto", background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 12px 40px rgba(2,6,23,0.22)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-              <div>
-                <h3 style={{ margin: 0 }}>Chi tiết đặt phòng</h3>
-                <div style={{ color: "#6b7280", fontSize: 13 }}>{selectedBooking.iddatPhong} • {selectedBooking.tenKhachHang || "N/A"}</div>
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <div style={{ padding: "6px 10px", borderRadius: 999, background: `${getStatusColor(selectedBooking.trangThai)}20`, color: getStatusColor(selectedBooking.trangThai), fontWeight: 700, fontSize: 13 }}>
-                  {getStatusLabel(selectedBooking.trangThai)}
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "96%", maxWidth: 900, maxHeight: "90vh", overflow: "auto", background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)", borderRadius: 20, padding: 0, boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
+            {/* Header with gradient */}
+            <div style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", padding: "24px 28px", borderRadius: "20px 20px 0 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h2 style={{ margin: 0, color: "#fff", fontWeight: 700, fontSize: 22 }}>🏨 Chi tiết đặt phòng</h2>
+                  <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, marginTop: 6 }}>
+                    <span style={{ background: "rgba(255,255,255,0.2)", padding: "4px 10px", borderRadius: 6, marginRight: 8 }}>{selectedBooking.iddatPhong}</span>
+                    {selectedBooking.tenKhachHang || "N/A"}
+                  </div>
                 </div>
-                <button onClick={closeModal} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff" }}>Đóng</button>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ padding: "8px 16px", borderRadius: 999, background: "rgba(255,255,255,0.95)", color: getStatusColor(selectedBooking.trangThai), fontWeight: 700, fontSize: 13, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
+                    {getStatusLabel(selectedBooking.trangThai)}
+                  </div>
+                  <button onClick={closeModal} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "rgba(255,255,255,0.9)", color: "#374151", fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>✕ Đóng</button>
+                </div>
               </div>
             </div>
 
-            <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              <div>
-                <div style={{ marginBottom: 8 }}><strong>Khách hàng:</strong> {selectedBooking.idkhachHangNavigation?.hoTen || selectedBooking.tenKhachHang || "N/A"}</div>
-                <div style={{ marginBottom: 8 }}><strong>Email:</strong> {selectedBooking.idkhachHangNavigation?.email || selectedBooking.emailKhachHang || "N/A"}</div>
-                <div style={{ marginBottom: 8 }}><strong>ID khách hàng:</strong> {selectedBooking.idkhachHang ?? (selectedBooking.idkhachHangNavigation?.id ?? "N/A")}</div>
-                <div style={{ marginBottom: 8 }}><strong>Số đêm:</strong> {selectedBooking.soDem ?? "N/A"}</div>
-                <div style={{ marginBottom: 8 }}><strong>Tiền cọc:</strong> {selectedBooking.tienCoc ? Number(selectedBooking.tienCoc).toLocaleString() + " VND" : "N/A"}</div>
+            <div style={{ padding: "24px 28px" }}>
+              {/* Customer & Payment Info Cards */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                {/* Customer Card */}
+                <div style={{ background: "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)", borderRadius: 16, padding: 20, border: "1px solid #7dd3fc" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                    <span style={{ fontSize: 24 }}>👤</span>
+                    <h4 style={{ margin: 0, color: "#0369a1", fontWeight: 700 }}>Thông tin khách hàng</h4>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Họ tên:</span>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{selectedBooking.idkhachHangNavigation?.hoTen || selectedBooking.tenKhachHang || "N/A"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Email:</span>
+                      <span style={{ fontWeight: 500, color: "#0f172a", fontSize: 13 }}>{selectedBooking.idkhachHangNavigation?.email || selectedBooking.emailKhachHang || "N/A"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>ID khách:</span>
+                      <span style={{ fontWeight: 500, color: "#0f172a" }}>{selectedBooking.idkhachHang ?? (selectedBooking.idkhachHangNavigation?.id ?? "N/A")}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Số đêm:</span>
+                      <span style={{ fontWeight: 600, color: "#0369a1" }}>{selectedBooking.soDem ?? "N/A"} đêm</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Card */}
+                <div style={{ background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)", borderRadius: 16, padding: 20, border: "1px solid #fbbf24" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                    <span style={{ fontSize: 24 }}>💳</span>
+                    <h4 style={{ margin: 0, color: "#b45309", fontWeight: 700 }}>Thanh toán</h4>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#78716c" }}>Tiền cọc:</span>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{selectedBooking.tienCoc ? Number(selectedBooking.tienCoc).toLocaleString('vi-VN') + " ₫" : "N/A"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#78716c" }}>Đã thanh toán:</span>
+                      <span style={{ fontWeight: 700, color: "#16a34a", fontSize: 16 }}>{
+                        (() => {
+                          try {
+                            const paidFromInvDetail = (selectedBooking as any)?.invoiceDetail?.tienThanhToan ?? null;
+                            if (paidFromInvDetail != null) return Number(paidFromInvDetail).toLocaleString('vi-VN') + ' ₫';
+                            const inv = (selectedBooking.hoaDons && selectedBooking.hoaDons[0]) || selectedBooking.hoaDon || (selectedBooking.HoaDons && selectedBooking.HoaDons[0]) || null;
+                            const paid = inv?.TienThanhToan ?? inv?.tienThanhToan ?? selectedBooking.tienCoc ?? selectedBooking.TienCoc ?? null;
+                            return paid != null ? Number(paid).toLocaleString('vi-VN') + ' ₫' : 'N/A';
+                          } catch (e) { return 'N/A'; }
+                        })()
+                      }</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ color: "#78716c" }}>Trạng thái:</span>
+                      <span style={{ padding: "4px 12px", borderRadius: 999, background: getPaymentStatusColor(selectedBooking.trangThaiThanhToan).bg, color: getPaymentStatusColor(selectedBooking.trangThaiThanhToan).color, fontWeight: 600, fontSize: 12 }}>{getPaymentStatusLabel(selectedBooking.trangThaiThanhToan)}</span>
+                    </div>
+                    <div style={{ borderTop: "1px dashed #d97706", paddingTop: 10, marginTop: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#b45309", fontWeight: 600 }}>Tổng tiền:</span>
+                        <span style={{ fontWeight: 800, color: "#dc2626", fontSize: 18 }}>{selectedBooking.tongTien ? Number(selectedBooking.tongTien).toLocaleString('vi-VN') + " ₫" : "N/A"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <div style={{ marginBottom: 8 }}><strong>Phòng:</strong> {selectedBooking.idphongNavigation?.tenPhong || selectedBooking.tenPhong || selectedBooking.idphong} ({selectedBooking.idphongNavigation?.soPhong || selectedBooking.soPhong || "N/A"})</div>
-                
-                <div style={{ marginBottom: 8 }}><strong>Nhận phòng:</strong> {selectedBooking.ngayNhanPhong ? new Date(selectedBooking.ngayNhanPhong).toLocaleString() : "N/A"}</div>
-                <div style={{ marginBottom: 8 }}><strong>Trả phòng:</strong> {selectedBooking.ngayTraPhong ? new Date(selectedBooking.ngayTraPhong).toLocaleString() : "N/A"}</div>
-                <div style={{ marginBottom: 8 }}><strong>Tổng tiền:</strong> {selectedBooking.tongTien ? Number(selectedBooking.tongTien).toLocaleString() + " VND" : "N/A"}</div>
-                <div style={{ marginTop: 6 }}><strong>Thanh toán:</strong> {getPaymentStatusLabel(selectedBooking.trangThaiThanhToan)}</div>
+
+              {/* Room Info Card */}
+              <div style={{ background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)", borderRadius: 16, padding: 20, marginTop: 20, border: "1px solid #86efac" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <span style={{ fontSize: 24 }}>🛏️</span>
+                  <h4 style={{ margin: 0, color: "#166534", fontWeight: 700 }}>Thông tin phòng</h4>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                  <div style={{ background: "#fff", borderRadius: 12, padding: 14, textAlign: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                    <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>Phòng</div>
+                    <div style={{ fontWeight: 700, color: "#166534", fontSize: 15 }}>{selectedBooking.idphongNavigation?.tenPhong || selectedBooking.tenPhong || selectedBooking.idphong}</div>
+                    <div style={{ color: "#64748b", fontSize: 12 }}>({selectedBooking.idphongNavigation?.soPhong || selectedBooking.soPhong || "N/A"})</div>
+                  </div>
+                  <div style={{ background: "#fff", borderRadius: 12, padding: 14, textAlign: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                    <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>📅 Nhận phòng</div>
+                    <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 14 }}>{selectedBooking.ngayNhanPhong ? new Date(selectedBooking.ngayNhanPhong).toLocaleDateString('vi-VN') : "N/A"}</div>
+                    <div style={{ color: "#64748b", fontSize: 11 }}>{selectedBooking.ngayNhanPhong ? new Date(selectedBooking.ngayNhanPhong).toLocaleTimeString('vi-VN') : ""}</div>
+                  </div>
+                  <div style={{ background: "#fff", borderRadius: 12, padding: 14, textAlign: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                    <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>📅 Trả phòng</div>
+                    <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 14 }}>{selectedBooking.ngayTraPhong ? new Date(selectedBooking.ngayTraPhong).toLocaleDateString('vi-VN') : "N/A"}</div>
+                    <div style={{ color: "#64748b", fontSize: 11 }}>{selectedBooking.ngayTraPhong ? new Date(selectedBooking.ngayTraPhong).toLocaleTimeString('vi-VN') : ""}</div>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div style={{ marginTop: 12 }}>
-              <strong>Ghi chú / Thông tin thêm:</strong>
-              <div style={{ marginTop: 8, color: "#374151" }}>{(selectedBooking as any).ghiChu || (selectedBooking as any).note || "Không có"}</div>
-            </div>
+              {/* Notes */}
+              <div style={{ background: "#f8fafc", borderRadius: 12, padding: 16, marginTop: 16, border: "1px solid #e2e8f0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span>📝</span>
+                  <strong style={{ color: "#475569" }}>Ghi chú / Thông tin thêm:</strong>
+                </div>
+                <div style={{ color: "#64748b", fontStyle: (selectedBooking as any).ghiChu || (selectedBooking as any).note ? "normal" : "italic" }}>{(selectedBooking as any).ghiChu || (selectedBooking as any).note || "Không có ghi chú"}</div>
+              </div>
 
-            <div style={{ marginTop: 14 }}>
-              <strong>Chi tiết các phòng trong đơn:</strong>
-              { (selectedBooking as any).chiTietDatPhongs && (selectedBooking as any).chiTietDatPhongs.length > 0 ? (
-                <ul style={{ marginTop: 8 }}>
-                  {(selectedBooking as any).chiTietDatPhongs.map((ct: any) => (
-                    <li key={ct.idChiTiet} style={{ marginBottom: 6 }}>
-                      <strong>{ct.tenPhongChiTiet || ct.idPhong}</strong> — {ct.soDem} đêm • {ct.giaPhong.toLocaleString()} VND/đêm = {ct.thanhTien.toLocaleString()} VND {ct.ghiChu ? `— ${ct.ghiChu}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div style={{ color: "#6b7280", marginTop: 8 }}>Không có chi tiết nào.</div>
-              ) }
-            </div>
+              {/* Room Details */}
+              <div style={{ marginTop: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 20 }}>🛎️</span>
+                  <strong style={{ color: "#374151", fontSize: 15 }}>Chi tiết các phòng trong đơn:</strong>
+                </div>
+                { (selectedBooking as any).chiTietDatPhongs && (selectedBooking as any).chiTietDatPhongs.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {(selectedBooking as any).chiTietDatPhongs.map((ct: any, idx: number) => (
+                      <div key={ct.idChiTiet || idx} style={{ background: "linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)", borderRadius: 12, padding: 16, border: "1px solid #d8b4fe", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#7c3aed", fontSize: 15 }}>{ct.tenPhongChiTiet || ct.idPhong}</div>
+                          <div style={{ color: "#7c3aed", fontSize: 13, marginTop: 4 }}>{ct.soDem} đêm • {Number(ct.giaPhong || 0).toLocaleString('vi-VN')} ₫/đêm</div>
+                          {ct.ghiChu && <div style={{ color: "#a78bfa", fontSize: 12, marginTop: 4 }}>💬 {ct.ghiChu}</div>}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontWeight: 800, color: "#7c3aed", fontSize: 18 }}>{Number(ct.thanhTien || 0).toLocaleString('vi-VN')} ₫</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ color: "#94a3b8", padding: 16, background: "#f8fafc", borderRadius: 10, textAlign: "center" }}>Không có chi tiết nào.</div>
+                ) }
+              </div>
 
-            <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-              <select
-                value={(selectedBooking as any).trangThai}
-                onChange={async (e) => {
-                  const v = parseInt(e.target.value);
-                  if (!selectedBooking) return;
-                  await handleUpdateStatus(selectedBooking.iddatPhong, v);
-                  await loadBookings();
-                  const updated = bookings.find((x) => x.iddatPhong === selectedBooking.iddatPhong) || null;
-                  setSelectedBooking(updated);
-                }}
-                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e5e7eb" }}
-              >
-                <option value={0}>Đã hủy</option>
-                <option value={1}>Chờ xác nhận</option>
-                <option value={2}>Đã xác nhận</option>
-                <option value={3}>Đang sử dụng</option>
-              </select>
+              {/* Action Buttons */}
+              <div style={{ marginTop: 24, paddingTop: 20, borderTop: "2px solid #e2e8f0", display: "flex", gap: 12, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
+                <select
+                  value={(selectedBooking as any).trangThai}
+                  onChange={async (e) => {
+                    const v = parseInt(e.target.value);
+                    if (!selectedBooking) return;
+                    await handleUpdateStatus(selectedBooking.iddatPhong, v);
+                    await loadBookings();
+                    const updated = bookings.find((x) => x.iddatPhong === selectedBooking.iddatPhong) || null;
+                    setSelectedBooking(updated);
+                  }}
+                  style={{ padding: "10px 16px", borderRadius: 10, border: "2px solid #c7d2fe", background: "#eef2ff", color: "#4338ca", fontWeight: 600, cursor: "pointer" }}
+                >
+                  <option value={0}>🚫 Đã hủy</option>
+                  <option value={1}>⏳ Chờ xác nhận</option>
+                  <option value={2}>✅ Đã xác nhận</option>
+                  <option value={3}>🔑 Đang sử dụng</option>
+                </select>
 
-              <select
-                value={(selectedBooking as any).trangThaiThanhToan}
-                onChange={async (e) => {
-                  const v = parseInt(e.target.value);
-                  if (!selectedBooking) return;
-                  await handleUpdatePaymentStatus(selectedBooking.iddatPhong, v);
-                  await loadBookings();
-                  const updated = bookings.find((x) => x.iddatPhong === selectedBooking.iddatPhong) || null;
-                  setSelectedBooking(updated);
-                }}
-                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e5e7eb" }}
-              >
-                <option value={0}>Chưa thanh toán</option>
-                <option value={1}>Đã đặt cọc</option>
-                <option value={2}>Đã thanh toán</option>
-              </select>
+                <select
+                  value={(selectedBooking as any).trangThaiThanhToan}
+                  onChange={async (e) => {
+                    const v = parseInt(e.target.value);
+                    if (!selectedBooking) return;
+                    await handleUpdatePaymentStatus(selectedBooking.iddatPhong, v);
+                    await loadBookings();
+                    const updated = bookings.find((x) => x.iddatPhong === selectedBooking.iddatPhong) || null;
+                    setSelectedBooking(updated);
+                  }}
+                  style={{ padding: "10px 16px", borderRadius: 10, border: "2px solid #fde68a", background: "#fffbeb", color: "#b45309", fontWeight: 600, cursor: "pointer" }}
+                >
+                  <option value={0}>💰 Chưa thanh toán</option>
+                  <option value={1}>📋 Đã đặt cọc</option>
+                  <option value={2}>✅ Đã thanh toán</option>
+                </select>
 
-              <button
-                onClick={async () => {
-                  if (!selectedBooking) return;
-                  if (!confirm("Xác nhận xóa?")) return;
-                  await handleDelete(selectedBooking.iddatPhong);
-                  closeModal();
-                }}
-                style={{ padding: "8px 12px", background: "#ef4444", color: "#fff", border: "none", borderRadius: 8 }}
-              >
-                Xóa
-              </button>
+                <button
+                  onClick={async () => {
+                    if (!selectedBooking) return;
+                    if (!confirm("Xác nhận xóa?")) return;
+                    await handleDelete(selectedBooking.iddatPhong);
+                    closeModal();
+                  }}
+                  style={{ padding: "10px 20px", background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 12px rgba(239,68,68,0.3)" }}
+                >
+                  🗑️ Xóa
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!selectedBooking) return;
+                    const inv = (selectedBooking.hoaDons && selectedBooking.hoaDons[0]) || selectedBooking.hoaDon || (selectedBooking.HoaDons && selectedBooking.HoaDons[0]) || null;
+                    const invId = inv?.IdHoaDon ?? inv?.idHoaDon ?? inv?.id ?? null;
+                    setRefundInvoiceId(invId || null);
+                    const suggested = inv?.RefundAmount ?? inv?.refundAmount ?? null;
+                    setRefundAmount(suggested ?? null);
+                    setRefundBookingDetail(selectedBooking || null);
+                    setRefundVisible(true);
+                  }}
+                  style={{ padding: "10px 20px", background: "linear-gradient(135deg, #10b981 0%, #059669 100%)", color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 12px rgba(16,185,129,0.3)" }}
+                >
+                  💸 Hoàn tiền
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -627,7 +949,13 @@ const CheckinSectionNewFixed: React.FC = () => {
           </thead>
           <tbody>
             {pagedBookings.map((b) => (
-              <tr key={b.iddatPhong} style={{ borderBottom: "1px solid #f3f4f6", transition: "background 150ms ease", background: Number(b.trangThai ?? 0) === 5 ? '#fff1f0' : undefined }} onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              <tr
+                key={b.iddatPhong}
+                style={{ borderBottom: "1px solid #f3f4f6", transition: "background 150ms ease", background: Number(b.trangThai ?? 0) === 5 ? '#fff1f0' : undefined, cursor: 'pointer' }}
+                onClick={() => openModal(b)}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
                 <td style={{ padding: 12, fontWeight: 700, color: "#0f172a" }}>{b.iddatPhong}</td>
                 <td style={{ padding: 12 }}>
                   <div style={{ fontWeight: 600, color: "#0f172a" }}>{b.tenKhachHang || "N/A"}</div>
@@ -654,22 +982,25 @@ const CheckinSectionNewFixed: React.FC = () => {
                 </td>
                 <td style={{ padding: 12, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                    {/* Show Confirm only for status 2 */}
-                    {b.trangThai === 2 && (
-                      <button disabled={disabledConfirmIds.has(b.iddatPhong)} onClick={() => handleConfirm(b.iddatPhong)}>Xác nhận</button>
+                    {/* Show Confirm only for status 2; hide it after operator presses OK */}
+                    {b.trangThai === 2 && !disabledConfirmIds.has(b.iddatPhong) && (
+                      <button onClick={(e) => { e.stopPropagation(); handleConfirm(b.iddatPhong); }}>Xác nhận</button>
                     )}
 
-                    {/* Show Đổi phòng button for status 3 (Đang sử dụng) */}
-                    {b.trangThai === 3 && (
-                      <button onClick={() => openReassignModal(b.iddatPhong)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #3b82f6", background: "#eff6ff", color: "#3b82f6", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Đổi phòng</button>
+                    {/* Show Đổi phòng button for status 3 (Đang sử dụng) - hidden after operator confirms checkin */}
+                    {b.trangThai === 3 && !disabledConfirmIds.has(b.iddatPhong) && (
+                      <button onClick={(e) => { e.stopPropagation(); openReassignModal(b.iddatPhong); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #3b82f6", background: "#eff6ff", color: "#3b82f6", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Đổi phòng</button>
                     )}
 
-                    {/* Show a single Cancel button for any non-cancelled booking so it stays visible after confirm */}
-                    {b.trangThai !== 0 && (
-                      <button onClick={() => handleCancelBooking(b.iddatPhong)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ef4444", background: "#fff", color: "#ef4444", cursor: "pointer", fontSize: 12 }}>Hủy</button>
+                    {/* Show a single Cancel button for any non-cancelled booking; hide after operator confirms checkin */}
+                    {b.trangThai !== 0 && !disabledConfirmIds.has(b.iddatPhong) && (
+                      <button onClick={(e) => { e.stopPropagation(); handleCancelBooking(b.iddatPhong); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ef4444", background: "#fff", color: "#ef4444", cursor: "pointer", fontSize: 12 }}>Hủy</button>
                     )}
 
-                    <button onClick={() => openModal(b)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontSize: 12 }}>Chi tiết</button>
+                    <button onClick={(e) => { e.stopPropagation(); openModal(b); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontSize: 12 }}>Chi tiết</button>
+                    {(b as any).pendingRefund && Number((b as any).pendingRefund) > 0 ? (
+                      <button onClick={async (e) => { e.stopPropagation(); await handleRowRefund(e, b); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #10b981", background: "#ecfdf5", color: "#065f46", cursor: "pointer", fontSize: 12, fontWeight: 700, marginLeft: 6 }}>Hoàn tiền</button>
+                    ) : null}
                   </div>
                 </td>
               </tr>
@@ -739,7 +1070,9 @@ const CheckinSectionNewFixed: React.FC = () => {
           dataSource={availableRooms}
           renderItem={(item: any) => {
             const id = item.idphong ?? item.RoomId ?? item.roomId;
-            const price = item.giaCoBanMotDem ?? item.basePricePerNight ?? item.BasePricePerNight ?? item.discountedPrice ?? item.DiscountedPrice ?? 0;
+            const rawBasePrice = item.GiaMotDem ?? item.giaCoBanMotDem ?? item.basePricePerNight ?? item.BasePricePerNight ?? 0;
+            const discounted = (item.DiscountedPrice ?? item.discountedPrice ?? item.discountedprice ?? null);
+            const price = (discounted != null && !isNaN(Number(discounted)) && Number(discounted) > 0) ? Number(discounted) : Number(rawBasePrice);
             const isSelected = selectedRoomId === id;
             // compute price delta (approx)
             let oldPricePerNight = 0;
@@ -762,11 +1095,22 @@ const CheckinSectionNewFixed: React.FC = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                       <div>
                         <div style={{ fontWeight: 800, fontSize: 15 }}>{item.tenPhong ?? item.roomName ?? `Phòng ${item.soPhong ?? item.roomNumber ?? id}`}</div>
-                        <div style={{ color: '#6b7280', fontSize: 13, marginTop: 6 }}>{item.tenLoaiPhong ?? item.roomTypeName ?? ''} • Sức chứa: {item.soNguoiToiDa ?? item.maxOccupancy ?? '—'}</div>
-                        {item.promotionName && <div style={{ marginTop: 6, color: '#d97706', fontSize: 13 }}>{item.promotionName}</div>}
+                        <div style={{ color: '#6b7280', fontSize: 13, marginTop: 6 }}>
+                          {item.tenLoaiPhong ?? item.roomTypeName ?? ''}
+                          {" • "}
+                          <span style={{ color: '#6b7280' }}>{(item.Description ?? item.moTa ?? item.description ?? '').toString().slice(0, 80) || 'Thông tin phòng'}</span>
+                        </div>
+                        {item.PromotionName || item.promotionName ? <div style={{ marginTop: 6, color: '#d97706', fontSize: 13 }}>{item.PromotionName ?? item.promotionName}</div> : null}
                       </div>
                       <div style={{ textAlign: 'right', minWidth: 140 }}>
-                        <div style={{ fontWeight: 800, fontSize: 16 }}>{Number(price ?? 0).toLocaleString()} đ</div>
+                        {discounted != null && Number(discounted) > 0 ? (
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: 16 }}>{Number(price).toLocaleString()} đ</div>
+                            <div style={{ fontSize: 13, color: '#8b8b8b', textDecoration: 'line-through' }}>{Number(rawBasePrice).toLocaleString()} đ</div>
+                          </div>
+                        ) : (
+                          <div style={{ fontWeight: 800, fontSize: 16 }}>{Number(price ?? 0).toLocaleString()} đ</div>
+                        )}
                         <div style={{ marginTop: 8, color: delta >= 0 ? '#d4380d' : '#16a34a', fontWeight: 700 }}>{(delta >= 0 ? '+' : '') + delta.toLocaleString()} đ</div>
                       </div>
                     </div>
@@ -778,13 +1122,31 @@ const CheckinSectionNewFixed: React.FC = () => {
         />
       </Modal>
 
-      {/* Overdue invoice modal using existing invoice component */}
-      <InvoiceCheckin
+      {/* Overdue invoice modal using UnifiedInvoiceModal */}
+      <UnifiedInvoiceModal
         visible={overdueInvoiceVisible}
         invoiceData={overdueInvoiceData}
         paymentRow={null}
+        isOverdue={true}
+        isExtended={false}
         onClose={() => { setOverdueInvoiceVisible(false); setOverdueInvoiceData(null); }}
         onComplete={async (id) => { await loadToday(); setOverdueInvoiceVisible(false); }}
+      />
+
+      <RefundForm
+        visible={refundVisible}
+        onClose={() => setRefundVisible(false)}
+        idHoaDon={refundInvoiceId ?? undefined}
+        defaultAmount={refundAmount ?? undefined}
+        onSuccess={async () => {
+          setRefundVisible(false);
+          await loadToday();
+          if (selectedBooking && selectedBooking.iddatPhong) {
+            const d = await checkinApi.getCheckinById(selectedBooking.iddatPhong);
+            setSelectedBooking(d || selectedBooking);
+          }
+        }}
+        bookingDetail={refundBookingDetail ?? undefined}
       />
 
       {/* pagination */}

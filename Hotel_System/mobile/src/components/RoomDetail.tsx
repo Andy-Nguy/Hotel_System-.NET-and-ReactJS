@@ -167,10 +167,10 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
               <View>
                 <Text style={styles.priceLabel}>Giá mỗi đêm</Text>
                 {hasDiscount && (
-                  <Text style={styles.originalPrice}>${Number(selectedRoom.giaCoBanMotDem).toLocaleString()}</Text>
+                  <Text style={styles.originalPrice}>{Number(selectedRoom.giaCoBanMotDem).toLocaleString()} VND</Text>
                 )}
               </View>
-              <Text style={[styles.priceValue, { color: COLORS.primary }]}>${Number(discountPrice).toLocaleString()}</Text>
+              <Text style={[styles.priceValue, { color: COLORS.primary }]}>{Number(discountPrice).toLocaleString()} VND</Text>
             </View>
 
             <TouchableOpacity style={styles.bookButton}>

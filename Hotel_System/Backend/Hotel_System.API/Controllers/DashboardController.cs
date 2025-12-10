@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Data.Common;
 
 namespace Hotel_System.API.Controllers
 {
@@ -20,7 +21,7 @@ namespace Hotel_System.API.Controllers
             _context = context;
         }
 
-        [HttpGet("kpi")]
+        [HttpGet("chi-so-kpi")]
         public async Task<ActionResult<object>> GetKPI()
         {
             try
@@ -83,7 +84,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("revenue-chart")]
+        [HttpGet("bieu-do-doanh-thu")]
         public async Task<ActionResult<object>> GetRevenueChart([FromQuery] int days = 30)
         {
             try
@@ -138,7 +139,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("occupancy-rate")]
+        [HttpGet("ty-le-lap-phong")]
         public async Task<ActionResult<object>> GetOccupancyRate([FromQuery] int days = 30)
         {
             try
@@ -166,7 +167,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("top-rooms")]
+        [HttpGet("phong-top")]
         public async Task<ActionResult<object>> GetTopRooms([FromQuery] int limit = 5, [FromQuery] string? month = null)
         {
             try
@@ -208,7 +209,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("top-services")]
+        [HttpGet("dich-vu-top")]
         public async Task<ActionResult<object>> GetTopServices([FromQuery] int limit = 5, [FromQuery] string? month = null)
         {
             try
@@ -249,7 +250,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("customer-origin")]
+        [HttpGet("nguon-khach-hang")]
         public async Task<ActionResult<object>> GetCustomerOrigin()
         {
             try
@@ -274,7 +275,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("detailed-report")]
+        [HttpGet("bao-cao/chi-tiet")]
         public async Task<ActionResult<object>> GetDetailedReport(
             [FromQuery] string? fromDate = null,
             [FromQuery] string? toDate = null,
@@ -376,5 +377,315 @@ namespace Hotel_System.API.Controllers
                 return BadRequest(new { error = ex.Message });
             }
         }
+        
+            // --- Batch report endpoints using materialized view `mv_thongke` ---
+            [HttpGet("bao-cao/thong-ke/ngay")]
+            public async Task<ActionResult<object>> GetMvDailyReport([FromQuery] int days = 30)
+            {
+                try
+                {
+                    var endDate = DateTime.Now.Date;
+                    var startDate = endDate.AddDays(-days + 1);
+
+                    var conn = _context.Database.GetDbConnection();
+                    await conn.OpenAsync();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT ngay::date AS date, SUM(COALESCE(doanhthuthucnhan,0)) AS revenue
+                                         FROM mv_thongke
+                                         WHERE ngay >= @start AND ngay <= @end
+                                         GROUP BY date
+                                         ORDER BY date";
+                    var p1 = cmd.CreateParameter(); p1.ParameterName = "@start"; p1.Value = startDate; cmd.Parameters.Add(p1);
+                    var p2 = cmd.CreateParameter(); p2.ParameterName = "@end"; p2.Value = endDate; cmd.Parameters.Add(p2);
+
+                    var map = new Dictionary<string, decimal>();
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var d = reader.GetDateTime(0).ToString("yyyy-MM-dd");
+                            var rev = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                            map[d] = rev;
+                        }
+                    }
+
+                    var allDates = Enumerable.Range(0, days).Select(i => startDate.AddDays(i).ToString("yyyy-MM-dd")).ToList();
+                    var completed = allDates.Select(d => new { date = d, revenue = map.ContainsKey(d) ? map[d] : 0m }).ToList();
+
+                    return Ok(new { data = completed });
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+            }
+
+            [HttpGet("bao-cao/thong-ke/thang")]
+            public async Task<ActionResult<object>> GetMvMonthlyReport([FromQuery] int months = 12)
+            {
+                try
+                {
+                    var end = DateTime.Now.Date;
+                    var start = new DateTime(end.Year, end.Month, 1).AddMonths(-months + 1);
+
+                    var conn = _context.Database.GetDbConnection();
+                    await conn.OpenAsync();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT date_trunc('month', ngay)::date AS month, SUM(COALESCE(doanhthuthucnhan,0)) AS revenue
+                                         FROM mv_thongke
+                                         WHERE ngay >= @start AND ngay <= @end
+                                         GROUP BY month
+                                         ORDER BY month";
+                    var p1 = cmd.CreateParameter(); p1.ParameterName = "@start"; p1.Value = start; cmd.Parameters.Add(p1);
+                    var p2 = cmd.CreateParameter(); p2.ParameterName = "@end"; p2.Value = end; cmd.Parameters.Add(p2);
+
+                    var result = new List<object>();
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var month = reader.GetDateTime(0).ToString("yyyy-MM");
+                            var rev = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                            result.Add(new { month, revenue = rev });
+                        }
+                    }
+
+                    return Ok(new { data = result });
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+            }
+
+            [HttpGet("bao-cao/thong-ke/gia-trung-binh")]
+            public async Task<ActionResult<object>> GetMvAdr([FromQuery] int days = 30)
+            {
+                try
+                {
+                    var endDate = DateTime.Now.Date;
+                    var startDate = endDate.AddDays(-days + 1);
+
+                    var conn = _context.Database.GetDbConnection();
+                    await conn.OpenAsync();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT ngay::date AS date,
+                                               SUM(COALESCE(tienphong,0)) AS tienphong_sum,
+                                               SUM(COALESCE(soDemDaDat,0)) AS so_dem_sum
+                                         FROM mv_thongke
+                                         WHERE ngay >= @start AND ngay <= @end
+                                         GROUP BY date
+                                         ORDER BY date";
+                    var p1 = cmd.CreateParameter(); p1.ParameterName = "@start"; p1.Value = startDate; cmd.Parameters.Add(p1);
+                    var p2 = cmd.CreateParameter(); p2.ParameterName = "@end"; p2.Value = endDate; cmd.Parameters.Add(p2);
+
+                    var list = new List<object>();
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var d = reader.GetDateTime(0).ToString("yyyy-MM-dd");
+                            var tienphong = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                            var soDem = reader.IsDBNull(2) ? 0m : reader.GetDecimal(2);
+                            var adr = soDem > 0 ? Math.Round(tienphong / soDem, 0) : 0m;
+                            list.Add(new { date = d, giaTrungBinh = adr });
+                        }
+                    }
+
+                    return Ok(new { data = list });
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+            }
+
+            // --- Snapshot (persistent table) endpoints reading from ThongKeDoanhThuKhachSan ---
+            [HttpGet("bao-cao/ngay")]
+            public async Task<ActionResult<object>> GetSnapshotDailyReport([FromQuery] int days = 30)
+            {
+                try
+                {
+                    var endDate = DateTime.Now.Date;
+                    var startDate = endDate.AddDays(-days + 1);
+
+                    var conn = _context.Database.GetDbConnection();
+                    await conn.OpenAsync();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT ngay::date AS date, SUM(COALESCE(doanhthuthucnhan,0)) AS revenue
+                                         FROM ThongKeDoanhThuKhachSan
+                                         WHERE ngay >= @start AND ngay <= @end
+                                         GROUP BY date
+                                         ORDER BY date";
+                    var p1 = cmd.CreateParameter(); p1.ParameterName = "@start"; p1.Value = startDate; cmd.Parameters.Add(p1);
+                    var p2 = cmd.CreateParameter(); p2.ParameterName = "@end"; p2.Value = endDate; cmd.Parameters.Add(p2);
+
+                    var map = new Dictionary<string, decimal>();
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var d = reader.GetDateTime(0).ToString("yyyy-MM-dd");
+                            var rev = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                            map[d] = rev;
+                        }
+                    }
+
+                    var allDates = Enumerable.Range(0, days).Select(i => startDate.AddDays(i).ToString("yyyy-MM-dd")).ToList();
+                    var completed = allDates.Select(d => new { date = d, revenue = map.ContainsKey(d) ? map[d] : 0m }).ToList();
+
+                    return Ok(new { data = completed });
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+            }
+
+            [HttpGet("bao-cao/thang")]
+            public async Task<ActionResult<object>> GetSnapshotMonthlyReport([FromQuery] int months = 12)
+            {
+                try
+                {
+                    var end = DateTime.Now.Date;
+                    var start = new DateTime(end.Year, end.Month, 1).AddMonths(-months + 1);
+
+                    var conn = _context.Database.GetDbConnection();
+                    await conn.OpenAsync();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT date_trunc('month', ngay)::date AS month, SUM(COALESCE(doanhthuthucnhan,0)) AS revenue
+                                         FROM ThongKeDoanhThuKhachSan
+                                         WHERE ngay >= @start AND ngay <= @end
+                                         GROUP BY month
+                                         ORDER BY month";
+                    var p1 = cmd.CreateParameter(); p1.ParameterName = "@start"; p1.Value = start; cmd.Parameters.Add(p1);
+                    var p2 = cmd.CreateParameter(); p2.ParameterName = "@end"; p2.Value = end; cmd.Parameters.Add(p2);
+
+                    var result = new List<object>();
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var month = reader.GetDateTime(0).ToString("yyyy-MM");
+                            var rev = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                            result.Add(new { month, revenue = rev });
+                        }
+                    }
+
+                    return Ok(new { data = result });
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+            }
+
+            [HttpGet("bao-cao/gia-trung-binh")]
+            public async Task<ActionResult<object>> GetSnapshotAdr([FromQuery] int days = 30)
+            {
+                try
+                {
+                    var endDate = DateTime.Now.Date;
+                    var startDate = endDate.AddDays(-days + 1);
+
+                    var conn = _context.Database.GetDbConnection();
+                    await conn.OpenAsync();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT ngay::date AS date,
+                                               SUM(COALESCE(tienphong,0)) AS tienphong_sum,
+                                               SUM(COALESCE(soDemDaDat,0)) AS so_dem_sum
+                                         FROM ThongKeDoanhThuKhachSan
+                                         WHERE ngay >= @start AND ngay <= @end
+                                         GROUP BY date
+                                         ORDER BY date";
+                    var p1 = cmd.CreateParameter(); p1.ParameterName = "@start"; p1.Value = startDate; cmd.Parameters.Add(p1);
+                    var p2 = cmd.CreateParameter(); p2.ParameterName = "@end"; p2.Value = endDate; cmd.Parameters.Add(p2);
+
+                    var list = new List<object>();
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var d = reader.GetDateTime(0).ToString("yyyy-MM-dd");
+                            var tienphong = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                            var soDem = reader.IsDBNull(2) ? 0m : reader.GetDecimal(2);
+                            var adr = soDem > 0 ? Math.Round(tienphong / soDem, 0) : 0m;
+                            list.Add(new { date = d, giaTrungBinh = adr });
+                        }
+                    }
+
+                    return Ok(new { data = list });
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+            }
+
+            [HttpPost("bao-cao/dong-bo")]
+            public async Task<ActionResult<object>> SyncThongKeFromMv()
+            {
+                try
+                {
+                    var conn = _context.Database.GetDbConnection();
+                    await conn.OpenAsync();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT sync_thongke_from_mv();";
+                    var res = await cmd.ExecuteScalarAsync();
+                    return Ok(new { ok = true, message = "sync_thongke_from_mv executed" });
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+            }
+
+            [HttpGet("bao-cao/details")]
+            public async Task<ActionResult<object>> GetSnapshotDetails([FromQuery] string? from = null, [FromQuery] string? to = null)
+            {
+                try
+                {
+                    DateTime startDate = DateTime.MinValue;
+                    DateTime endDate = DateTime.MaxValue;
+                    if (!string.IsNullOrEmpty(from)) startDate = DateTime.Parse(from);
+                    if (!string.IsNullOrEmpty(to)) endDate = DateTime.Parse(to);
+
+                    var conn = _context.Database.GetDbConnection();
+                    await conn.OpenAsync();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"SELECT ID, IDHoaDon, IDDatPhong, Ngay, TongPhong, SoDemDaDat, TienPhong, TienDichVu, TienGiamGia, DoanhThuThucNhan
+                                         FROM ThongKeDoanhThuKhachSan
+                                         WHERE Ngay >= @start AND Ngay <= @end
+                                         ORDER BY Ngay DESC";
+                    var p1 = cmd.CreateParameter(); p1.ParameterName = "@start"; p1.Value = startDate; cmd.Parameters.Add(p1);
+                    var p2 = cmd.CreateParameter(); p2.ParameterName = "@end"; p2.Value = endDate; cmd.Parameters.Add(p2);
+
+                    var list = new List<object>();
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            list.Add(new {
+                                id = reader.IsDBNull(0) ? 0 : reader.GetInt32(0),
+                                idHoaDon = reader.IsDBNull(1) ? null : reader.GetString(1),
+                                idDatPhong = reader.IsDBNull(2) ? null : reader.GetString(2),
+                                ngay = reader.IsDBNull(3) ? (DateTime?)null : reader.GetDateTime(3),
+                                tongPhong = reader.IsDBNull(4) ? 0 : reader.GetInt32(4),
+                                soDem = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
+                                tienPhong = reader.IsDBNull(6) ? 0m : reader.GetDecimal(6),
+                                tienDichVu = reader.IsDBNull(7) ? 0m : reader.GetDecimal(7),
+                                tienGiamGia = reader.IsDBNull(8) ? 0m : reader.GetDecimal(8),
+                                doanhThu = reader.IsDBNull(9) ? 0m : reader.GetDecimal(9)
+                            });
+                        }
+                    }
+
+                    return Ok(new { data = list });
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = ex.Message });
+                }
+            }
     }
 }

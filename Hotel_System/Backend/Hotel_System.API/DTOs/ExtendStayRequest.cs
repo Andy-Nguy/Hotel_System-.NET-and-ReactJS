@@ -48,6 +48,18 @@ namespace Hotel_System.API.DTOs
         public string? NewRoomId { get; set; }
 
         /// <summary>
+        /// If provided by frontend, the current room's rate (after promotions) to be used
+        /// for same-room extend calculations. This allows frontend to pass its computed
+        /// discounted price so backend and QR/invoice use the same amount.
+        /// </summary>
+        public decimal? CurrentRoomRate { get; set; }
+
+        /// <summary>
+        /// Optional: current room rate including VAT (frontend may supply this).
+        /// </summary>
+        public decimal? CurrentRoomRateWithVat { get; set; }
+
+        /// <summary>
         /// Phương thức thanh toán: 1 = Tiền mặt, 2 = QR/Online
         /// </summary>
         public int PaymentMethod { get; set; } = 1;
@@ -56,5 +68,26 @@ namespace Hotel_System.API.DTOs
         /// Ghi chú của lễ tân
         /// </summary>
         public string? Note { get; set; }
+        
+        /// <summary>
+        /// Có đổi phòng hay không (frontend gửi lên)
+        /// </summary>
+        public bool IsRoomChange { get; set; } = false;
+        
+        /// <summary>
+        /// Thông tin phòng mới (nếu đổi phòng)
+        /// </summary>
+        public NewRoomInfo? NewRoomInfo { get; set; }
+    }
+    
+    /// <summary>
+    /// Thông tin phòng mới khi đổi phòng
+    /// </summary>
+    public class NewRoomInfo
+    {
+        public string Idphong { get; set; } = string.Empty;
+        public string TenPhong { get; set; } = string.Empty;
+        public decimal GiaMotDem { get; set; }
+        public string? TenLoaiPhong { get; set; }
     }
 }

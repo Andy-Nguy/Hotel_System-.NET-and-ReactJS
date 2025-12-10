@@ -1,5 +1,6 @@
-import React from "react";
-import { Button, Space, Tag, Segmented } from "antd";
+import React, { useEffect, useState } from "react";
+import { Button, Space, Tag, Segmented, message, DatePicker, Input } from "antd";
+import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from "antd/es/table";
 import DataTable from "../DataTable";
 
@@ -20,14 +21,21 @@ interface Props {
   onPay: (row: BookingRow) => void;
   onComplete: (row: BookingRow) => void;
   onPayOverdue?: (row: BookingRow) => void;
+  onCancelOverdue?: (row: BookingRow) => void;
   // When in checkout view, parent can request the payment form to open (same as 'using' view)
   onOpenPaymentForm?: (row: BookingRow) => void;
   onAddService?: (row: BookingRow) => void;
   onViewInvoice?: (row: BookingRow) => void;
-  onExtend?: (row: BookingRow) => void; // Gia hạn phòng quá hạn
+  onExtend?: (row: BookingRow) => void; // Gia hạn phòng
   viewInvoiceIds?: string[];
   viewMode?: "using" | "checkout" | "overdue";
   onViewChange?: (mode: "using" | "checkout" | "overdue") => void;
+  // optional external controls (search / date / reload) — passed from parent when needed
+  keyword?: string;
+  setKeyword?: (s: string) => void;
+  selectedDate?: Dayjs | null;
+  setSelectedDate?: (d: Dayjs | null) => void;
+  onReload?: () => void;
 }
 
 const CheckoutTable: React.FC<Props> = ({
@@ -36,6 +44,7 @@ const CheckoutTable: React.FC<Props> = ({
   onPay,
   onComplete,
   onPayOverdue,
+  onCancelOverdue,
   onOpenPaymentForm,
   onAddService,
   onViewInvoice,
@@ -43,18 +52,198 @@ const CheckoutTable: React.FC<Props> = ({
   viewInvoiceIds,
   viewMode = "using",
   onViewChange,
+  keyword,
+  setKeyword,
+  selectedDate,
+  setSelectedDate,
+  onReload,
 }) => {
   // track disabled state per booking id to prevent repeated clicks
   const [disabledMap, setDisabledMap] = React.useState<Record<string, boolean>>({});
   // track when overdue fee has been paid for a booking (local UX state)
   const [overduePaidMap, setOverduePaidMap] = React.useState<Record<string, boolean>>({});
+  const [detailsMap, setDetailsMap] = useState<Record<string, any[]>>({});
+  const [filterFromDate, setFilterFromDate] = useState<Dayjs | null>(null);
+  const [filterToDate, setFilterToDate] = useState<Dayjs | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const idsToFetch = (data || [])
+        .filter(d => {
+          const hasDetails = Array.isArray((d as any)?.ChiTietDatPhongs) && (d as any).ChiTietDatPhongs.length > 0;
+          return !hasDetails && d?.IddatPhong && !detailsMap[d.IddatPhong];
+        })
+        .map(d => d.IddatPhong);
+
+      for (const id of idsToFetch) {
+        try {
+          const res = await fetch(`/api/DatPhong/${id}`);
+          if (!mounted) return;
+          if (!res.ok) continue;
+          const json = await res.json();
+          const detailLines = json?.ChiTietDatPhongs ?? json?.chiTietDatPhongs ?? null;
+          if (Array.isArray(detailLines) && detailLines.length > 0) {
+            setDetailsMap(prev => ({ ...prev, [id]: detailLines }));
+          }
+        } catch (e) {
+          console.warn('[CheckoutTable] fetch detail failed', id, e);
+        }
+      }
+    })();
+    return () => { mounted = false; };
+  }, [data, detailsMap]);
+
+  // Apply date filters to the data: include bookings that overlap the selected range.
+  const filteredData = (data || []).filter((r) => {
+    try {
+      const start = r.NgayNhanPhong ? dayjs(r.NgayNhanPhong) : null;
+      const end = r.NgayTraPhong ? dayjs(r.NgayTraPhong) : null;
+
+      if (filterFromDate && filterToDate) {
+        // include if booking range overlaps [filterFromDate, filterToDate]
+        if (!start || !end) return false;
+        if (end.isBefore(filterFromDate, 'day')) return false;
+        if (start.isAfter(filterToDate, 'day')) return false;
+        return true;
+      }
+
+      if (filterFromDate) {
+        // include bookings that end on/after the from date
+        if (!end) return false;
+        return !end.isBefore(filterFromDate, 'day');
+      }
+
+      if (filterToDate) {
+        // include bookings that start on/before the to date
+        if (!start) return false;
+        return !start.isAfter(filterToDate, 'day');
+      }
+
+      return true;
+    } catch (e) {
+      return true;
+    }
+  });
+
   const columns: ColumnsType<BookingRow> = [
     { title: 'Mã đặt phòng', dataIndex: 'IddatPhong', key: 'IddatPhong', width: 160 },
-    { title: 'Khách hàng', key: 'customer', render: (_, r) => (<div>{r.TenKhachHang}<div style={{fontSize:12,color:'#64748b'}}>{r.EmailKhachHang}</div></div>) },
+    {
+      title: 'Khách hàng',
+      key: 'customer',
+      render: (_, r) => (
+        <div>
+          {r.TenKhachHang}
+          <div style={{ fontSize: 12, color: '#64748b' }}>{r.EmailKhachHang}</div>
+        </div>
+      )
+    },
+    {
+      title: 'Phòng',
+      key: 'rooms',
+      render: (_: any, r: BookingRow) => {
+        // Ưu tiên lấy từ detailsMap (đã fetch chi tiết), fallback dữ liệu có sẵn trong row
+        const details: any[] =
+          (detailsMap && (detailsMap as any)[r.IddatPhong]) ??
+          (r as any)?.ChiTietDatPhongs ??
+          (r as any)?.chiTietDatPhongs ??
+          [];
+
+        // Hàm trợ giúp: lấy TenPhong/SoPhong/IDPhong từ nhiều shape khác nhau
+        const extractRoomInfo = (it: any) => {
+          // Try several possible fields for a human-friendly room name / room-type name
+          const ten =
+            it?.TenPhong ??
+            it?.tenPhong ??
+            it?.Phong?.TenPhong ??
+            it?.Phong?.tenPhong ??
+            it?.TenLoaiPhong ??
+            it?.tenLoaiPhong ??
+            it?.LoaiPhong?.TenLoaiPhong ??
+            it?.LoaiPhong?.tenLoaiPhong ??
+            it?.LoaiPhong?.TenLoai ??
+            it?.LoaiPhong?.tenLoai ??
+            it?.Phong?.LoaiPhong?.TenLoaiPhong ??
+            it?.Phong?.LoaiPhong?.TenLoai ??
+            null;
+
+          // ID phòng fallback nếu thiếu SoPhong
+          const idPhong =
+            it?.IDPhong ??
+            it?.IdPhong ??
+            it?.idPhong ??
+            it?.Phong?.Idphong ??
+            it?.Phong?.IDPhong ??
+            null;
+
+          const so =
+            it?.SoPhong ??
+            it?.soPhong ??
+            it?.Phong?.SoPhong ??
+            it?.Phong?.soPhong ??
+            it?.Phong?.SoPhongNumber ??
+            it?.Phong?.roomNumber ??
+            null;
+
+          return { ten, so, idPhong };
+        };
+
+        if (Array.isArray(details) && details.length > 0) {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {details.map((it, idx) => {
+                const { ten, so, idPhong } = extractRoomInfo(it);
+                const primary = ten ?? (so ? `Phòng ${so}` : (idPhong ? String(idPhong) : '-'));
+                const secondary = so
+                  ? `Phòng ${so}`
+                  : (idPhong && (!ten || String(idPhong) !== String(ten)) ? String(idPhong) : null);
+
+                return (
+                  <div key={idx}>
+                    <div style={{ fontWeight: 600 }}>{primary}</div>
+                    {secondary && <div style={{ fontSize: 12, color: '#64748b' }}>{secondary}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+
+        // Fallback: hiển thị tên/phòng từ cột tổng hợp nếu chưa có chi tiết
+        const ten = (r as any)?.TenPhong ?? (r as any)?.tenPhong ?? null;
+        const so = (r as any)?.SoPhong ?? (r as any)?.soPhong ?? null;
+        if (ten || so) {
+          return (
+            <div>
+              <div style={{ fontWeight: 600 }}>{ten ?? (so ? `Phòng ${so}` : '-')}</div>
+              {so && <div style={{ fontSize: 12, color: '#64748b' }}>{`Phòng ${so}`}</div>}
+            </div>
+          );
+        }
+
+        // Nếu chưa có dữ liệu chi tiết và cũng không có tổng hợp → chờ fetch
+        return <div style={{ color: '#94a3b8' }}>Đang tải...</div>;
+      }
+    },
     { title: 'Nhận', dataIndex: 'NgayNhanPhong', key: 'NgayNhanPhong', width: 120 },
     { title: 'Trả', dataIndex: 'NgayTraPhong', key: 'NgayTraPhong', width: 120 },
-    { title: 'Tổng tiền', dataIndex: 'TongTien', key: 'TongTien', align: 'right', render: (v) => Number(v).toLocaleString() + ' đ' },
-    { title: 'Trạng thái TT', dataIndex: 'TrangThaiThanhToan', key: 'tt', render: (s) => <Tag color={s===2?'green':'orange'}>{s===2? 'Đã thanh toán' : 'Chưa thanh toán'}</Tag> },
+    {
+      title: 'Tổng tiền',
+      dataIndex: 'TongTien',
+      key: 'TongTien',
+      align: 'right',
+      render: (v) => Number(v).toLocaleString() + ' đ'
+    },
+    {
+      title: 'Trạng thái TT',
+      dataIndex: 'TrangThaiThanhToan',
+      key: 'tt',
+      render: (s) => (
+        <Tag color={s === 2 ? 'green' : 'orange'}>
+          {s === 2 ? 'Đã thanh toán' : 'Chưa thanh toán'}
+        </Tag>
+      )
+    },
     {
       title: 'Tình trạng',
       key: 'status',
@@ -73,10 +262,34 @@ const CheckoutTable: React.FC<Props> = ({
       render: (_, r) => {
         const isPaid = (r.TrangThaiThanhToan ?? 0) === 2;
         const isCompleted = (r.TrangThai ?? 0) === 4;
+        const isOverdueStatus = (r.TrangThai ?? 0) === 5;
+        const lateFeeHasBeenPaid = overduePaidMap[r.IddatPhong] ?? false;
 
-        // For checkout view show normal actions. For overdue view show ONLY the
-        // 'Thanh toán phí quá hạn' button per product owner request.
-        if (viewMode === 'overdue') {
+        // ✅ Nếu trạng thái quá hạn (5)
+        if (isOverdueStatus) {
+          // If late fee has been paid → show checkout button
+          if (lateFeeHasBeenPaid) {
+            return (
+              <Space>
+                <Button
+                  type="primary"
+                  style={{ background: '#22c55e', borderColor: '#22c55e' }}
+                  disabled={!!disabledMap[r.IddatPhong]}
+                  onClick={() => {
+                    setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
+                    setTimeout(
+                      () => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })),
+                      5000
+                    );
+                    (onViewInvoice ? onViewInvoice(r) : onComplete(r));
+                  }}
+                >
+                  Xác nhận trả phòng
+                </Button>
+              </Space>
+            );
+          }
+          // If late fee NOT paid yet → show late fee payment button
           return (
             <Space>
               <Button
@@ -86,8 +299,11 @@ const CheckoutTable: React.FC<Props> = ({
                 onClick={async () => {
                   setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
                   try {
-                    const opener = typeof onOpenPaymentForm === 'function' ? onOpenPaymentForm :
-                                   (typeof onPayOverdue === 'function' ? onPayOverdue : (typeof onPay === 'function' ? onPay : undefined));
+                    const opener = typeof onOpenPaymentForm === 'function'
+                      ? onOpenPaymentForm
+                      : (typeof onPayOverdue === 'function'
+                          ? onPayOverdue
+                          : (typeof onPay === 'function' ? onPay : undefined));
                     if (!opener) return;
                     const res: any = opener(r);
                     if (res && typeof res.then === 'function') {
@@ -95,16 +311,44 @@ const CheckoutTable: React.FC<Props> = ({
                       if (ok) setOverduePaidMap(prev => ({ ...prev, [r.IddatPhong]: true }));
                     }
                   } finally {
-                    setTimeout(() => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })), 5000);
+                    setTimeout(
+                      () => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })),
+                      5000
+                    );
                   }
                 }}
               >
-                Thanh toán phí quá hạn
+                Thanh toán phí trả phòng muộn
+              </Button>
+
+              {/* Cancel button next to pay button */}
+                  <Button
+                type="default"
+                danger
+                disabled={!!disabledMap[r.IddatPhong]}
+                onClick={async () => {
+                  // Prefer parent handler if provided
+                  try {
+                    setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
+                    if (typeof onCancelOverdue === 'function') {
+                      await onCancelOverdue(r);
+                    } else {
+                      message.info(`Hủy thao tác thanh toán cho ${r.IddatPhong}`);
+                    }
+                  } catch (e) {
+                    // ignore
+                  } finally {
+                    setTimeout(() => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })), 1000);
+                  }
+                }}
+              >
+                Hủy
               </Button>
             </Space>
           );
         }
 
+        // Các trạng thái khác xử lý theo viewMode (chủ yếu 'checkout')
         if (viewMode === 'checkout') {
           return (
             <Space>
@@ -120,7 +364,10 @@ const CheckoutTable: React.FC<Props> = ({
                       disabled={!!disabledMap[r.IddatPhong]}
                       onClick={() => {
                         setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
-                        setTimeout(() => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })), 5000);
+                        setTimeout(
+                          () => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })),
+                          5000
+                        );
                         (onViewInvoice ? onViewInvoice(r) : onComplete(r));
                       }}
                     >
@@ -136,8 +383,13 @@ const CheckoutTable: React.FC<Props> = ({
                       disabled={!!disabledMap[r.IddatPhong]}
                       onClick={() => {
                         setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: true }));
-                        setTimeout(() => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })), 5000);
-                        (typeof (onOpenPaymentForm) === 'function' ? onOpenPaymentForm!(r) : onPay?.(r));
+                        setTimeout(
+                          () => setDisabledMap(prev => ({ ...prev, [r.IddatPhong]: false })),
+                          5000
+                        );
+                        (typeof onOpenPaymentForm === 'function'
+                          ? onOpenPaymentForm!(r)
+                          : onPay?.(r));
                       }}
                     >
                       Xác nhận thanh toán
@@ -159,27 +411,77 @@ const CheckoutTable: React.FC<Props> = ({
             </Space>
           );
         }
+
+        // Các viewMode khác (nếu có) có thể chỉ hiển thị đơn giản
+        return null;
       },
     },
   ];
 
   return (
+    
     <div>
       {/* Khung chọn chế độ hiển thị riêng trong bảng */}
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <Segmented
           value={viewMode}
           onChange={(v) => onViewChange?.(v as "using" | "checkout" | "overdue")}
           options={[
             { label: "Trả phòng hôm nay", value: "checkout" },
-            { label: "Quá hạn", value: "overdue" }
+            // Bỏ tab "Quá hạn" theo yêu cầu: không cho chọn trực tiếp nữa
+            // { label: "Quá hạn", value: "overdue" }
           ]}
         />
+
+        {/* Optional search / date / reload controls (placed inline next to Segmented) */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Space wrap>
+            <Input.Search
+              placeholder="Tìm mã đặt / khách / email"
+              value={keyword}
+              onChange={(e) => setKeyword?.(e.target.value)}
+              style={{ minWidth: 260 }}
+            />
+            <DatePicker
+              value={selectedDate}
+              onChange={(d) => setSelectedDate?.(d ?? null)}
+              format="YYYY-MM-DD"
+              allowClear={false}
+            />
+           
+          </Space>
+        </div>
+
+        {/* Date filters to allow checking future bookings */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ fontSize: 12, color: '#475569' }}>Từ ngày</div>
+          <DatePicker
+            value={filterFromDate}
+            onChange={(d) => setFilterFromDate(d)}
+            allowClear
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ fontSize: 12, color: '#475569' }}>Đến ngày</div>
+          <DatePicker
+            value={filterToDate}
+            onChange={(d) => setFilterToDate(d)}
+            allowClear
+          />
+           <Button onClick={() => onReload?.()}>Tải lại</Button>
+        </div>
+
+        <div style={{ marginLeft: 'auto' }}>
+          <Button onClick={() => { setFilterFromDate(null); setFilterToDate(null); message.success('Đã xóa bộ lọc ngày'); }}>
+            Xóa bộ lọc
+          </Button>
+        </div>
       </div>
 
       <DataTable
         rowKey="IddatPhong"
-        dataSource={data}
+        dataSource={filteredData}
         columns={columns}
         loading={loading}
       />
