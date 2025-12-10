@@ -1006,7 +1006,9 @@ namespace Hotel_System.API.Controllers
 
                 decimal tongTienForResponse = hoaDon.TongTien;
                 decimal tienThanhToanForResponse = hoaDon.TienThanhToan ?? 0m;
-                decimal soTienConLai = Math.Max(0m, tongTienForResponse - tienThanhToanForResponse);
+                decimal depositForResponse = booking?.TienCoc ?? 0m;
+                // Remaining due = TongTien - (DaThanhToan + TienCoc)
+                decimal soTienConLai = Math.Max(0m, tongTienForResponse - (tienThanhToanForResponse + depositForResponse));
 
                 await _context.SaveChangesAsync();
 
@@ -2025,18 +2027,20 @@ namespace Hotel_System.API.Controllers
                 decimal finalLockedTotal = lockedPrice.Value + lockedServiceWithVat + (parsedLateFromNote > 0m ? parsedLateFromNote : 0m);
                 hoaDon.TongTien = finalLockedTotal;
 
-                // Cập nhật trạng thái thanh toán dựa trên số tiền đã trả
-                decimal paidSoFar = hoaDon.TienThanhToan ?? 0m;
-                decimal depositAmount = booking.TienCoc ?? 0m;
+                // Cập nhật trạng thái thanh toán dựa trên số tiền đã trả (bao gồm tiền cọc)
+                decimal depositLocked = booking.TienCoc ?? 0m;
+                decimal paidLocked = hoaDon.TienThanhToan ?? 0m;
+                decimal totalPaidLocked = depositLocked + paidLocked;
 
-                if (depositAmount > 0 && paidSoFar < depositAmount)
+                // Nếu tổng tiền đã trả >= tổng tiền hóa đơn thì coi là đã thanh toán
+                if (totalPaidLocked >= finalLockedTotal)
                 {
-                    paidSoFar = depositAmount;
-                    hoaDon.TienThanhToan = paidSoFar;
+                    hoaDon.TrangThaiThanhToan = 2; // DA_THANH_TOAN
                 }
-
-                decimal remaining = finalLockedTotal - paidSoFar;
-                hoaDon.TrangThaiThanhToan = (remaining > 1000m) ? 1 : 2;
+                else
+                {
+                    hoaDon.TrangThaiThanhToan = 1; // CHUA_THANH_TOAN
+                }
 
                 // Cập nhật tổng tiền booking (bao gồm late-fee nếu có)
                 decimal totalBookingAmount = booking.HoaDons?.Sum(h => h.TongTien) ?? finalLockedTotal;
@@ -2114,27 +2118,18 @@ namespace Hotel_System.API.Controllers
 
             hoaDon.TongTien = tongTienChuan;
 
-            decimal daTraHienTai = hoaDon.TienThanhToan ?? 0m;
-            decimal tienCoc = booking.TienCoc ?? 0m;
+            decimal paidCurrent = hoaDon.TienThanhToan ?? 0m;
+            decimal depositCurrent = booking.TienCoc ?? 0m;
+            decimal totalPaidCurrent = depositCurrent + paidCurrent;
 
-            if (tienCoc > 0 && daTraHienTai < tienCoc)
+            // Nếu tổng tiền đã trả >= tổng tiền hóa đơn thì coi là đã thanh toán
+            if (totalPaidCurrent >= tongTienChuan)
             {
-                daTraHienTai = tienCoc;
-                hoaDon.TienThanhToan = daTraHienTai;
-            }
-
-            decimal conThieu = tongTienChuan - daTraHienTai;
-
-            if (conThieu > 1000m)
-            {
-                hoaDon.TrangThaiThanhToan = 1;
+                hoaDon.TrangThaiThanhToan = 2; // DA_THANH_TOAN
             }
             else
             {
-                if (tongTienChuan > 0)
-                {
-                    hoaDon.TrangThaiThanhToan = 2;
-                }
+                hoaDon.TrangThaiThanhToan = 1; // CHUA_THANH_TOAN
             }
 
             decimal bookingTotal = 0;
@@ -3280,9 +3275,10 @@ namespace Hotel_System.API.Controllers
                 }
 
                 // If it's an online payment (IsOnline = true) with an Amount, mark invoice as paid
+                // ALWAYS set TrangThaiThanhToan = 2 when IsOnline = true (QR payment)
                 if (request.IsOnline == true && request.Amount.HasValue && request.Amount.Value > 0)
                 {
-                    hoaDon.TrangThaiThanhToan = 2; // 2 = Đã thanh toán / Paid
+                    hoaDon.TrangThaiThanhToan = 2; // 2 = Đã thanh toán / Paid (QR)
                 }
 
                 // Append note if provided

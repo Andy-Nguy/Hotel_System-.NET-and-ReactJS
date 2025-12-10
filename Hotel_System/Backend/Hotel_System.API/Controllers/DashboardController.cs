@@ -21,7 +21,7 @@ namespace Hotel_System.API.Controllers
             _context = context;
         }
 
-        [HttpGet("kpi")]
+        [HttpGet("chi-so-kpi")]
         public async Task<ActionResult<object>> GetKPI()
         {
             try
@@ -84,7 +84,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("revenue-chart")]
+        [HttpGet("bieu-do-doanh-thu")]
         public async Task<ActionResult<object>> GetRevenueChart([FromQuery] int days = 30)
         {
             try
@@ -139,7 +139,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("occupancy-rate")]
+        [HttpGet("ty-le-lap-phong")]
         public async Task<ActionResult<object>> GetOccupancyRate([FromQuery] int days = 30)
         {
             try
@@ -167,7 +167,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("top-rooms")]
+        [HttpGet("phong-top")]
         public async Task<ActionResult<object>> GetTopRooms([FromQuery] int limit = 5, [FromQuery] string? month = null)
         {
             try
@@ -209,7 +209,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("top-services")]
+        [HttpGet("dich-vu-top")]
         public async Task<ActionResult<object>> GetTopServices([FromQuery] int limit = 5, [FromQuery] string? month = null)
         {
             try
@@ -250,7 +250,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("customer-origin")]
+        [HttpGet("nguon-khach-hang")]
         public async Task<ActionResult<object>> GetCustomerOrigin()
         {
             try
@@ -275,7 +275,7 @@ namespace Hotel_System.API.Controllers
             }
         }
 
-        [HttpGet("detailed-report")]
+        [HttpGet("bao-cao/chi-tiet")]
         public async Task<ActionResult<object>> GetDetailedReport(
             [FromQuery] string? fromDate = null,
             [FromQuery] string? toDate = null,
@@ -379,7 +379,7 @@ namespace Hotel_System.API.Controllers
         }
         
             // --- Batch report endpoints using materialized view `mv_thongke` ---
-            [HttpGet("reports/mv/daily")]
+            [HttpGet("bao-cao/thong-ke/ngay")]
             public async Task<ActionResult<object>> GetMvDailyReport([FromQuery] int days = 30)
             {
                 try
@@ -420,7 +420,7 @@ namespace Hotel_System.API.Controllers
                 }
             }
 
-            [HttpGet("reports/mv/monthly")]
+            [HttpGet("bao-cao/thong-ke/thang")]
             public async Task<ActionResult<object>> GetMvMonthlyReport([FromQuery] int months = 12)
             {
                 try
@@ -458,7 +458,7 @@ namespace Hotel_System.API.Controllers
                 }
             }
 
-            [HttpGet("reports/mv/adr")]
+            [HttpGet("bao-cao/thong-ke/gia-trung-binh")]
             public async Task<ActionResult<object>> GetMvAdr([FromQuery] int days = 30)
             {
                 try
@@ -488,7 +488,7 @@ namespace Hotel_System.API.Controllers
                             var tienphong = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
                             var soDem = reader.IsDBNull(2) ? 0m : reader.GetDecimal(2);
                             var adr = soDem > 0 ? Math.Round(tienphong / soDem, 0) : 0m;
-                            list.Add(new { date = d, adr });
+                            list.Add(new { date = d, giaTrungBinh = adr });
                         }
                     }
 
@@ -501,7 +501,7 @@ namespace Hotel_System.API.Controllers
             }
 
             // --- Snapshot (persistent table) endpoints reading from ThongKeDoanhThuKhachSan ---
-            [HttpGet("reports/snapshot/daily")]
+            [HttpGet("bao-cao/ngay")]
             public async Task<ActionResult<object>> GetSnapshotDailyReport([FromQuery] int days = 30)
             {
                 try
@@ -542,7 +542,7 @@ namespace Hotel_System.API.Controllers
                 }
             }
 
-            [HttpGet("reports/snapshot/monthly")]
+            [HttpGet("bao-cao/thang")]
             public async Task<ActionResult<object>> GetSnapshotMonthlyReport([FromQuery] int months = 12)
             {
                 try
@@ -580,7 +580,7 @@ namespace Hotel_System.API.Controllers
                 }
             }
 
-            [HttpGet("reports/snapshot/adr")]
+            [HttpGet("bao-cao/gia-trung-binh")]
             public async Task<ActionResult<object>> GetSnapshotAdr([FromQuery] int days = 30)
             {
                 try
@@ -610,7 +610,7 @@ namespace Hotel_System.API.Controllers
                             var tienphong = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
                             var soDem = reader.IsDBNull(2) ? 0m : reader.GetDecimal(2);
                             var adr = soDem > 0 ? Math.Round(tienphong / soDem, 0) : 0m;
-                            list.Add(new { date = d, adr });
+                            list.Add(new { date = d, giaTrungBinh = adr });
                         }
                     }
 
@@ -622,7 +622,7 @@ namespace Hotel_System.API.Controllers
                 }
             }
 
-            [HttpPost("reports/sync")]
+            [HttpPost("bao-cao/dong-bo")]
             public async Task<ActionResult<object>> SyncThongKeFromMv()
             {
                 try
@@ -640,7 +640,7 @@ namespace Hotel_System.API.Controllers
                 }
             }
 
-            [HttpGet("reports/snapshot/details")]
+            [HttpGet("bao-cao/details")]
             public async Task<ActionResult<object>> GetSnapshotDetails([FromQuery] string? from = null, [FromQuery] string? to = null)
             {
                 try

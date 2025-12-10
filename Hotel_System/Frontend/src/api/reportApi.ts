@@ -1,8 +1,8 @@
 import axiosClient from './axiosClient';
 
-const BASE_PATH = '/Dashboard/reports/mv';
-const SNAPSHOT_BASE = '/Dashboard/reports/snapshot';
-const SYNC_PATH = '/Dashboard/reports/sync';
+const BASE_PATH = '/Dashboard/bao-cao/thong-ke';
+const SNAPSHOT_BASE = '/Dashboard/bao-cao';
+const SYNC_PATH = '/Dashboard/bao-cao/dong-bo';
 
 export interface DailyRevenueData {
   date: string;
@@ -16,14 +16,14 @@ export interface MonthlyRevenueData {
 
 export interface AdrData {
   date: string;
-  adr: number;
+  giaTrungBinh: number; // was 'adr'
 }
 
 /**
  * Fetch daily revenue from materialized view
  */
 export const getDailyRevenue = async (days: number = 30): Promise<DailyRevenueData[]> => {
-  const res = await axiosClient.get(`${BASE_PATH}/daily?days=${days}`);
+  const res = await axiosClient.get(`${BASE_PATH}/ngay?days=${days}`);
   // backend returns { data: [...] }
   return (res?.data?.data as DailyRevenueData[]) || [];
 };
@@ -32,7 +32,7 @@ export const getDailyRevenue = async (days: number = 30): Promise<DailyRevenueDa
  * Fetch monthly revenue from materialized view
  */
 export const getMonthlyRevenue = async (months: number = 12): Promise<MonthlyRevenueData[]> => {
-  const res = await axiosClient.get(`${BASE_PATH}/monthly?months=${months}`);
+  const res = await axiosClient.get(`${BASE_PATH}/thang?months=${months}`);
   return (res?.data?.data as MonthlyRevenueData[]) || [];
 };
 
@@ -40,23 +40,23 @@ export const getMonthlyRevenue = async (months: number = 12): Promise<MonthlyRev
  * Fetch ADR (Average Daily Rate) from materialized view
  */
 export const getAdr = async (days: number = 30): Promise<AdrData[]> => {
-  const res = await axiosClient.get(`${BASE_PATH}/adr?days=${days}`);
+  const res = await axiosClient.get(`${BASE_PATH}/gia-trung-binh?days=${days}`);
   return (res?.data?.data as AdrData[]) || [];
 };
 
 // Snapshot-based endpoints (persistent table `ThongKeDoanhThuKhachSan`)
 export const getDailyRevenueSnapshot = async (days: number = 30): Promise<DailyRevenueData[]> => {
-  const res = await axiosClient.get(`${SNAPSHOT_BASE}/daily?days=${days}`);
+  const res = await axiosClient.get(`${SNAPSHOT_BASE}/ngay?days=${days}`);
   return (res?.data?.data as DailyRevenueData[]) || [];
 };
 
 export const getMonthlyRevenueSnapshot = async (months: number = 12): Promise<MonthlyRevenueData[]> => {
-  const res = await axiosClient.get(`${SNAPSHOT_BASE}/monthly?months=${months}`);
+  const res = await axiosClient.get(`${SNAPSHOT_BASE}/thang?months=${months}`);
   return (res?.data?.data as MonthlyRevenueData[]) || [];
 };
 
 export const getAdrSnapshot = async (days: number = 30): Promise<AdrData[]> => {
-  const res = await axiosClient.get(`${SNAPSHOT_BASE}/adr?days=${days}`);
+  const res = await axiosClient.get(`${SNAPSHOT_BASE}/gia-trung-binh?days=${days}`);
   return (res?.data?.data as AdrData[]) || [];
 };
 
@@ -82,7 +82,7 @@ export interface SnapshotDetailRow {
 }
 
 export const getSnapshotDetails = async (from?: string, to?: string): Promise<SnapshotDetailRow[]> => {
-  let url = '/Dashboard/reports/snapshot/details';
+  let url = `${SNAPSHOT_BASE}/details`;
   const q: string[] = [];
   if (from) q.push(`from=${encodeURIComponent(from)}`);
   if (to) q.push(`to=${encodeURIComponent(to)}`);
@@ -97,6 +97,6 @@ export interface CustomerOriginData {
 }
 
 export const getCustomerOrigin = async (): Promise<CustomerOriginData[]> => {
-  const res = await axiosClient.get('/Dashboard/customer-origin');
+  const res = await axiosClient.get('/Dashboard/nguon-khach-hang');
   return (res?.data?.data as CustomerOriginData[]) || [];
 };

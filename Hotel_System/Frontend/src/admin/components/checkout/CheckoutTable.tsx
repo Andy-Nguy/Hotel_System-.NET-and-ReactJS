@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Button, Space, Tag, Segmented, message } from "antd";
+import { Button, Space, Tag, Segmented, message, DatePicker, Input } from "antd";
+import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from "antd/es/table";
 import DataTable from "../DataTable";
 
@@ -29,6 +30,12 @@ interface Props {
   viewInvoiceIds?: string[];
   viewMode?: "using" | "checkout" | "overdue";
   onViewChange?: (mode: "using" | "checkout" | "overdue") => void;
+  // optional external controls (search / date / reload) — passed from parent when needed
+  keyword?: string;
+  setKeyword?: (s: string) => void;
+  selectedDate?: Dayjs | null;
+  setSelectedDate?: (d: Dayjs | null) => void;
+  onReload?: () => void;
 }
 
 const CheckoutTable: React.FC<Props> = ({
@@ -45,12 +52,19 @@ const CheckoutTable: React.FC<Props> = ({
   viewInvoiceIds,
   viewMode = "using",
   onViewChange,
+  keyword,
+  setKeyword,
+  selectedDate,
+  setSelectedDate,
+  onReload,
 }) => {
   // track disabled state per booking id to prevent repeated clicks
   const [disabledMap, setDisabledMap] = React.useState<Record<string, boolean>>({});
   // track when overdue fee has been paid for a booking (local UX state)
   const [overduePaidMap, setOverduePaidMap] = React.useState<Record<string, boolean>>({});
   const [detailsMap, setDetailsMap] = useState<Record<string, any[]>>({});
+  const [filterFromDate, setFilterFromDate] = useState<Dayjs | null>(null);
+  const [filterToDate, setFilterToDate] = useState<Dayjs | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -79,6 +93,38 @@ const CheckoutTable: React.FC<Props> = ({
     })();
     return () => { mounted = false; };
   }, [data, detailsMap]);
+
+  // Apply date filters to the data: include bookings that overlap the selected range.
+  const filteredData = (data || []).filter((r) => {
+    try {
+      const start = r.NgayNhanPhong ? dayjs(r.NgayNhanPhong) : null;
+      const end = r.NgayTraPhong ? dayjs(r.NgayTraPhong) : null;
+
+      if (filterFromDate && filterToDate) {
+        // include if booking range overlaps [filterFromDate, filterToDate]
+        if (!start || !end) return false;
+        if (end.isBefore(filterFromDate, 'day')) return false;
+        if (start.isAfter(filterToDate, 'day')) return false;
+        return true;
+      }
+
+      if (filterFromDate) {
+        // include bookings that end on/after the from date
+        if (!end) return false;
+        return !end.isBefore(filterFromDate, 'day');
+      }
+
+      if (filterToDate) {
+        // include bookings that start on/before the to date
+        if (!start) return false;
+        return !start.isAfter(filterToDate, 'day');
+      }
+
+      return true;
+    } catch (e) {
+      return true;
+    }
+  });
 
   const columns: ColumnsType<BookingRow> = [
     { title: 'Mã đặt phòng', dataIndex: 'IddatPhong', key: 'IddatPhong', width: 160 },
@@ -373,9 +419,10 @@ const CheckoutTable: React.FC<Props> = ({
   ];
 
   return (
+    
     <div>
       {/* Khung chọn chế độ hiển thị riêng trong bảng */}
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <Segmented
           value={viewMode}
           onChange={(v) => onViewChange?.(v as "using" | "checkout" | "overdue")}
@@ -385,11 +432,56 @@ const CheckoutTable: React.FC<Props> = ({
             // { label: "Quá hạn", value: "overdue" }
           ]}
         />
+
+        {/* Optional search / date / reload controls (placed inline next to Segmented) */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Space wrap>
+            <Input.Search
+              placeholder="Tìm mã đặt / khách / email"
+              value={keyword}
+              onChange={(e) => setKeyword?.(e.target.value)}
+              style={{ minWidth: 260 }}
+            />
+            <DatePicker
+              value={selectedDate}
+              onChange={(d) => setSelectedDate?.(d ?? null)}
+              format="YYYY-MM-DD"
+              allowClear={false}
+            />
+           
+          </Space>
+        </div>
+
+        {/* Date filters to allow checking future bookings */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ fontSize: 12, color: '#475569' }}>Từ ngày</div>
+          <DatePicker
+            value={filterFromDate}
+            onChange={(d) => setFilterFromDate(d)}
+            allowClear
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ fontSize: 12, color: '#475569' }}>Đến ngày</div>
+          <DatePicker
+            value={filterToDate}
+            onChange={(d) => setFilterToDate(d)}
+            allowClear
+          />
+           <Button onClick={() => onReload?.()}>Tải lại</Button>
+        </div>
+
+        <div style={{ marginLeft: 'auto' }}>
+          <Button onClick={() => { setFilterFromDate(null); setFilterToDate(null); message.success('Đã xóa bộ lọc ngày'); }}>
+            Xóa bộ lọc
+          </Button>
+        </div>
       </div>
 
       <DataTable
         rowKey="IddatPhong"
-        dataSource={data}
+        dataSource={filteredData}
         columns={columns}
         loading={loading}
       />

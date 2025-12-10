@@ -641,27 +641,49 @@ const CheckoutManager: React.FC = () => {
       if (existingInvoiceId) {
         // NẾU ĐÃ CÓ HÓA ĐƠN
         if (method === 2) {
-          // --- QR (use server remaining or compute remaining excluding deposit) ---
-          const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
-          const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
-          const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
-          const deposit = Number(summary?.money?.deposit ?? 0);
-          const paidExcl = Math.max(0, daTra - deposit);
-          const needToPay = serverRemaining > 0 ? serverRemaining : Math.max(0, tongTien - deposit - paidExcl);
-          try {
-            const resp: any = await checkoutApi.payQr({ IDDatPhong: paymentRow.IddatPhong, HoaDonId: existingInvoiceId, Amount: needToPay });
-            const paymentUrl = resp?.paymentUrl ?? null;
-            const hoaDonId = resp?.idHoaDon ?? existingInvoiceId ?? null;
-            setQrUrl(paymentUrl);
-            setPaymentInvoiceId(hoaDonId);
-            setQrExpectedAmount(Number(needToPay ?? 0));
-            // persist for later retrieval
-            setQrMap((prev) => ({ ...(prev || {}), [String(paymentRow.IddatPhong)]: { qrUrl: paymentUrl ?? undefined, hoaDonId: hoaDonId ?? undefined } }));
-            try { setExtendVisible(false); resetExtendState(); } catch {}
-            setQrModalVisible(true);
-          } catch (err: any) {
-            console.error('payQr failed', err);
-            message.error(err?.message || 'Không thể tạo liên kết QR');
+          // --- QR (use server remaining or compute remaining excluding deposit)
+          // If booking is overdue (TrangThai === 5) we should only charge the late fee via QR,
+          // because the late-fee is a one-shot amount the front-desk expects to collect.
+          const isOverdueBooking = Number(paymentRow?.TrangThai ?? 0) === 5;
+          if (isOverdueBooking) {
+            const lateFee = Number(summary?.money?.lateFee ?? summary?.lateFee ?? 0);
+            const needToPay = Math.max(0, lateFee);
+            try {
+              const resp: any = await checkoutApi.payQr({ IDDatPhong: paymentRow.IddatPhong, HoaDonId: existingInvoiceId, Amount: needToPay });
+              const paymentUrl = resp?.paymentUrl ?? null;
+              const hoaDonId = resp?.idHoaDon ?? existingInvoiceId ?? null;
+              setQrUrl(paymentUrl);
+              setPaymentInvoiceId(hoaDonId);
+              setQrExpectedAmount(Number(needToPay ?? 0));
+              setQrMap((prev) => ({ ...(prev || {}), [String(paymentRow.IddatPhong)]: { qrUrl: paymentUrl ?? undefined, hoaDonId: hoaDonId ?? undefined } }));
+              try { setExtendVisible(false); resetExtendState(); } catch {}
+              setQrModalVisible(true);
+            } catch (err: any) {
+              console.error('payQr failed', err);
+              message.error(err?.message || 'Không thể tạo liên kết QR');
+            }
+          } else {
+            const serverRemaining = Number(summary?.soTienConLai ?? summary?.money?.soTienConLai ?? summary?.invoices?.[0]?.soTienConLai ?? 0);
+            const tongTien = Number(summary?.money?.tongTien ?? form.getFieldValue('TongTien') ?? paymentRow?.TongTien ?? 0);
+            const daTra = Number(summary?.invoices?.[0]?.tienThanhToan ?? summary?.money?.paidAmount ?? 0);
+            const deposit = Number(summary?.money?.deposit ?? 0);
+            const paidExcl = Math.max(0, daTra - deposit);
+            const needToPay = serverRemaining > 0 ? serverRemaining : Math.max(0, tongTien - deposit - paidExcl);
+            try {
+              const resp: any = await checkoutApi.payQr({ IDDatPhong: paymentRow.IddatPhong, HoaDonId: existingInvoiceId, Amount: needToPay });
+              const paymentUrl = resp?.paymentUrl ?? null;
+              const hoaDonId = resp?.idHoaDon ?? existingInvoiceId ?? null;
+              setQrUrl(paymentUrl);
+              setPaymentInvoiceId(hoaDonId);
+              setQrExpectedAmount(Number(needToPay ?? 0));
+              // persist for later retrieval
+              setQrMap((prev) => ({ ...(prev || {}), [String(paymentRow.IddatPhong)]: { qrUrl: paymentUrl ?? undefined, hoaDonId: hoaDonId ?? undefined } }));
+              try { setExtendVisible(false); resetExtendState(); } catch {}
+              setQrModalVisible(true);
+            } catch (err: any) {
+              console.error('payQr failed', err);
+              message.error(err?.message || 'Không thể tạo liên kết QR');
+            }
           }
         } else {
           // --- TIỀN MẶT (SỬA) ---
@@ -2124,15 +2146,6 @@ const handleForceCancelSubmit = async (data: {
             <h2 style={{ marginBottom: 16 }}>Quản lý trả phòng</h2>
             {contextHolder}
 
-            <Card style={{ marginBottom: 12 }}>
-              <Space wrap>
-                <Input.Search placeholder="Tìm mã đặt / khách / email" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
-                <DatePicker value={selectedDate} onChange={(d) => setSelectedDate(d)} format="YYYY-MM-DD" allowClear={false} />
-                <Button onClick={() => setSelectedDate(dayjs())}>Hôm nay</Button>
-                <Button onClick={load}>Tải lại</Button>
-              </Space>
-            </Card>
-
             <Card>
               <CheckoutTable
                 data={tableData}
@@ -2148,6 +2161,11 @@ const handleForceCancelSubmit = async (data: {
                 viewInvoiceIds={viewInvoiceIds}
                 viewMode={viewMode}
                 onViewChange={handleViewModeChange}
+                keyword={keyword}
+                setKeyword={setKeyword}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                onReload={load}
               />
             </Card>
 
@@ -2446,7 +2464,8 @@ const handleForceCancelSubmit = async (data: {
                         const paidExclDeposit = Math.max(0, paidAmount - deposit);
                         const remaining = Math.round(Math.max(0, total - paidExclDeposit));
 
-                        const payload: any = hoaDonId ? { HoaDonId: hoaDonId, Amount: remaining } : { Amount: remaining };
+                        const payload: any = { IsOnline: true, Amount: remaining };
+                        if (hoaDonId) payload.HoaDonId = hoaDonId;
                         await checkoutApi.confirmPaid(id, payload);
                       } catch (e) {
                         console.warn('[onComplete] confirmPaid failed', e);

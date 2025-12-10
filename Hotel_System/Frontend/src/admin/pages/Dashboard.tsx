@@ -134,12 +134,12 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     try {
       // Load KPI data
-      const kpiRes = await fetchJson("/api/Dashboard/kpi");
+      const kpiRes = await fetchJson("/api/Dashboard/chi-so-kpi");
       setKpiData(kpiRes?.data || {});
 
       // Load revenue chart data (default: last 30 days)
       const revenueRes = await fetchJson(
-        `/api/Dashboard/revenue-chart?days=30`
+        `/api/Dashboard/bieu-do-doanh-thu?days=30`
       );
       setRevenueChartData(
         Array.isArray(revenueRes?.data) ? revenueRes.data : []
@@ -147,7 +147,7 @@ const Dashboard: React.FC = () => {
 
       // Load occupancy data
       const occupancyRes = await fetchJson(
-        `/api/Dashboard/occupancy-rate?days=30`
+        `/api/Dashboard/ty-le-lap-phong?days=30`
       );
       setOccupancyData(
         Array.isArray(occupancyRes?.data) ? occupancyRes.data : []
@@ -155,13 +155,13 @@ const Dashboard: React.FC = () => {
 
       // Load top rooms
       const topRoomsRes = await fetchJson(
-        `/api/Dashboard/top-rooms?limit=5&month=${dayjs().format("YYYY-MM")}`
+        `/api/Dashboard/phong-top?limit=5&month=${dayjs().format("YYYY-MM")}`
       );
       setTopRooms(Array.isArray(topRoomsRes?.data) ? topRoomsRes.data : []);
 
       // Load top services
       const topServicesRes = await fetchJson(
-        `/api/Dashboard/top-services?limit=5&month=${dayjs().format("YYYY-MM")}`
+        `/api/Dashboard/dich-vu-top?limit=5&month=${dayjs().format("YYYY-MM")}`
       );
       setTopServices(
         Array.isArray(topServicesRes?.data) ? topServicesRes.data : []
@@ -169,7 +169,7 @@ const Dashboard: React.FC = () => {
 
       // Load customer origin distribution
       const customerOriginRes = await fetchJson(
-        `/api/Dashboard/customer-origin`
+        `/api/Dashboard/nguon-khach-hang`
       );
       setCustomerOrigin(
         Array.isArray(customerOriginRes?.data) ? customerOriginRes.data : []
@@ -193,7 +193,7 @@ const Dashboard: React.FC = () => {
       qs.set("reportType", reportType);
 
       const res = await fetchJson(
-        `/api/Dashboard/detailed-report?${qs.toString()}`
+        `/api/Dashboard/bao-cao/chi-tiet?${qs.toString()}`
       );
       setDetailedReports(Array.isArray(res?.data) ? res.data : []);
     } catch (e: any) {
@@ -267,7 +267,7 @@ const Dashboard: React.FC = () => {
           render: (v: number) => `${v.toLocaleString()}đ`,
         },
         {
-          title: "Tỷ lệ lấp",
+          title: "Tỷ lệ lấp phòng",
           dataIndex: "occupancyRate",
           key: "occupancyRate",
           width: 100,
@@ -455,7 +455,7 @@ const Dashboard: React.FC = () => {
               </Card>
             </Col>
             <Col xs={24} lg={12}>
-              <Card title="Occupancy Rate (1 → 15)" style={{ marginBottom: 12 }}>
+              <Card title="Tỷ lệ đặt phòng (1 → 15)" style={{ marginBottom: 12 }}>
                 <AreaChartComponent data={occupancyChartData as any} dataKey="occupied" xKey="day" />
               </Card>
             </Col>
@@ -474,7 +474,7 @@ const Dashboard: React.FC = () => {
           }}
         >
           <h2 style={{ marginBottom: 16 }}>Báo cáo chi tiết</h2>
-          <Space style={{ marginBottom: 16 }}>
+                <Space style={{ marginBottom: 16 }}>
             <DatePicker
               value={filterFromDate}
               onChange={setFilterFromDate}
@@ -501,7 +501,7 @@ const Dashboard: React.FC = () => {
             <Button
               onClick={() => {
                 const csv = [
-                  ["Phòng", "Doanh thu", "Tỷ lệ lấp"].join(","),
+                  ["Phòng", "Doanh thu", "Tỷ lệ lấp phòng"].join(","),
                   ...detailedReports.map((r) =>
                     [
                       `${r.roomName} (#${r.roomNumber})`,

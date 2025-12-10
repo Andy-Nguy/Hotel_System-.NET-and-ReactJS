@@ -594,7 +594,7 @@ const PaymentModal: React.FC<Props> = ({
   };
 
   // Label nút xác nhận: nếu cần thu > 0 thì “Thanh toán & mở hóa đơn”, ngược lại “Mở hóa đơn”
-  const confirmLabel = needToPay > 0 ? 'Thanh toán & mở hóa đơn' : 'Mở hóa đơn';
+  const confirmLabel = needToPay > 0 ? 'Thanh toán & mở hóa đơn' : 'Xác nhận thanh toán';
 
   return (
     <Modal
@@ -804,7 +804,7 @@ const PaymentModal: React.FC<Props> = ({
                 justifyContent: 'space-between'
               }}
             >
-              <span>Tiền cọc (chỉ để hiển thị):</span>
+              <span>Tiền cọc:</span>
               <strong>{deposit.toLocaleString()} đ</strong>
             </div>
             <div
@@ -813,8 +813,8 @@ const PaymentModal: React.FC<Props> = ({
                 justifyContent: 'space-between'
               }}
             >
-              <span>Đã thanh toán (không bao gồm tiền cọc):</span>
-              <strong>- {paid.toLocaleString()} đ</strong>
+              <span>Đã thanh toán:</span>
+              <strong>{paid.toLocaleString()} đ</strong>
             </div>
             <Divider />
             <div

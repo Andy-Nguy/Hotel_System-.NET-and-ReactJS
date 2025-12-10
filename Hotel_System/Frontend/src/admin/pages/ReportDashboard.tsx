@@ -90,7 +90,7 @@ const ReportDashboard: React.FC = () => {
   // Calculate total and average from daily data
   const totalRevenue = dailyData.reduce((sum, item) => sum + (item.revenue || 0), 0);
   const avgDailyRevenue = dailyData.length > 0 ? totalRevenue / dailyData.length : 0;
-  const avgAdr = adrData.length > 0 ? adrData.reduce((sum, item) => sum + (item.adr || 0), 0) / adrData.length : 0;
+  const avgAdr = adrData.length > 0 ? adrData.reduce((sum, item) => sum + (item.giaTrungBinh || 0), 0) / adrData.length : 0;
 
   return (
     <div style={{ padding: '24px', background: '#f5f5f5', minHeight: '100vh' }}>
@@ -122,8 +122,8 @@ const ReportDashboard: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic
-              title="TB giá phòng/đêm (ADR)"
+              <Statistic
+              title="Giá phòng trung bình/đêm"
               value={avgAdr}
               prefix={<DollarOutlined />}
               valueStyle={{ color: '#fa8c16' }}
@@ -282,7 +282,7 @@ const ReportDashboard: React.FC = () => {
                                 isAnimationActive={true}
                               >
                                 {monthlyChartData.map((d) => (
-                                  <Cell key={`cell-${d.month}`} fill={d.month === 3 ? '#3b82f6' : 'url(#monthlyGradient)'} />
+                                  <Cell key={`cell-${d.month}`} fill={'#10b962ff'} />
                                 ))}
                                 <LabelList
                                   dataKey="revenue"
@@ -307,7 +307,7 @@ const ReportDashboard: React.FC = () => {
 
         <Row gutter={16}>
           <Col xs={24} lg={18}>
-            <Card title="Giá phòng trung bình hàng ngày (ADR)" bodyStyle={{ height: 320 }}>
+            <Card title="Giá phòng trung bình hàng ngày" bodyStyle={{ height: 320 }}>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={adrData}>
                   <defs>
@@ -324,11 +324,11 @@ const ReportDashboard: React.FC = () => {
                   <Legend />
                   <Line
                     type="monotone"
-                    dataKey="adr"
+                    dataKey="giaTrungBinh"
                     stroke="url(#adrGradient)"
                     strokeWidth={3}
                     dot={false}
-                    name="ADR"
+                    name="Giá trung bình/đêm"
                     isAnimationActive={true}
                   />
                 </LineChart>
