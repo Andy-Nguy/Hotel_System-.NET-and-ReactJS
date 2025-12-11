@@ -93,15 +93,18 @@ const DetailComboCard: React.FC<Props> = ({ visible, combo, onClose }) => {
   const FONT_WEIGHT_BOLD = 600;
 
   return (
-		<Modal
-			open={visible}
-			onCancel={onClose}
-			footer={null}
-			width={900}
-			centered
-			maskClosable={true}
-			styles={{ body: { padding: 0 } }}
-		>
+    <Modal
+      open={visible}
+      onCancel={onClose}
+      footer={null}
+      width={900}
+      centered
+      zIndex={9999}
+      maskClosable={true}
+      maskStyle={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999 }}
+      style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.35)', borderRadius: 16, overflow: 'hidden' }}
+      bodyStyle={{ padding: 0 }}
+    >
       <div style={{ 
         display: 'flex', 
         maxHeight: '90vh', 

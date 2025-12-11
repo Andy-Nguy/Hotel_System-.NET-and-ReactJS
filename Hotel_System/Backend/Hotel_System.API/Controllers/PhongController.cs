@@ -407,8 +407,25 @@ namespace Hotel_System.API.Controllers
             _context.Phongs.Add(payload);
             await _context.SaveChangesAsync();
 
-            // Return created resource (simple shape)
-            return CreatedAtAction(nameof(GetAll), new { id = payload.Idphong }, payload);
+            // Return created resource with normalized image URLs so clients
+            // immediately receive usable paths (e.g. "/img/room/...") instead
+            // of raw filenames which would cause relative 404 requests.
+            var response = new
+            {
+                payload.Idphong,
+                payload.IdloaiPhong,
+                payload.TenPhong,
+                TenLoaiPhong = (payload.IdloaiPhong != null) ? (await _context.LoaiPhongs.FindAsync(payload.IdloaiPhong))?.TenLoaiPhong : null,
+                payload.SoPhong,
+                payload.MoTa,
+                payload.SoNguoiToiDa,
+                payload.GiaCoBanMotDem,
+                payload.XepHangSao,
+                TrangThai = payload.TrangThai,
+                UrlAnhPhong = ResolveImageUrls(payload.UrlAnhPhong),
+            };
+
+            return CreatedAtAction(nameof(GetAll), new { id = payload.Idphong }, response);
         }
 
         // PUT: api/Phong/{id}
