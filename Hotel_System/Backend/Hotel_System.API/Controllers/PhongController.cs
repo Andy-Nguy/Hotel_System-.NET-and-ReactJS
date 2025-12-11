@@ -86,6 +86,7 @@ namespace Hotel_System.API.Controllers
                 }
                 else
                 {
+                    // Plain filename: keep as-is (allow any image index at any position)
                     outList.Add(v);
                 }
             }
