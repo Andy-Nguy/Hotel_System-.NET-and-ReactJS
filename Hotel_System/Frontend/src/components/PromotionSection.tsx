@@ -394,8 +394,20 @@ const PromotionSection: React.FC = () => {
           </Button>
         }
         onCancel={() => setModalVisible(false)}
-  width={820}
-  styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
+        width={820}
+        centered
+        zIndex={9999}
+        maskStyle={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999 }}
+        style={{ 
+          boxShadow: '0 8px 40px rgba(0,0,0,0.35)', 
+          borderRadius: 16,
+          overflow: 'hidden'
+        }}
+        bodyStyle={{ 
+          maxHeight: '70vh', 
+          overflowY: 'auto',
+          padding: '24px'
+        }}
       >
         {modalLoading || !selectedPromo ? (
           <div style={{ textAlign: "center", padding: 40 }}>

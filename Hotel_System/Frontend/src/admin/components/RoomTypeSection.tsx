@@ -2,40 +2,12 @@ import React, { useEffect, useState } from "react";
 import {
   RoomType,
   getRoomTypes,
-  createRoomType,
   updateRoomType,
   deleteRoomType,
   getRooms,
   Room,
   createRoom,
 } from "../../api/roomsApi";
-
-const Thumbnail: React.FC<{
-  src?: string | null;
-  alt?: string;
-  style?: React.CSSProperties;
-}> = ({ src, alt, style }) => (
-  <div
-    style={{
-      width: 120,
-      height: 80,
-      background: "#f3f4f6",
-      borderRadius: 8,
-      overflow: "hidden",
-      ...style,
-    }}
-  >
-    {src ? (
-      <img
-        src={src}
-        alt={alt}
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-      />
-    ) : (
-      <div style={{ width: "100%", height: "100%" }} />
-    )}
-  </div>
-);
 
 const RoomTypeSection: React.FC = () => {
   const [types, setTypes] = useState<RoomType[]>([]);
@@ -65,6 +37,8 @@ const RoomTypeSection: React.FC = () => {
       setLoading(false);
     }
   };
+  
+  // Creation of room types is disabled server-side; only editing is supported.
 
   useEffect(() => {
     load();
@@ -95,7 +69,12 @@ const RoomTypeSection: React.FC = () => {
   }) => {
     if (!activeType) return;
     try {
-      await createRoom({ ...values, idloaiPhong: activeType.idLoaiPhong });
+      // API expects `urlAnhPhong` as an array (string[] | null). Convert if needed.
+      await createRoom({
+        ...values,
+        idloaiPhong: activeType.idLoaiPhong,
+        urlAnhPhong: values.urlAnhPhong ? [values.urlAnhPhong] : undefined,
+      });
       // refresh
       const all = await getRooms();
       setRoomsForType(
@@ -111,38 +90,26 @@ const RoomTypeSection: React.FC = () => {
     }
   };
 
-  const handleAddClick = () => {
-    setEditing(null);
-    setShowForm(true);
-  };
+  
 
   const handleEditClick = (t: RoomType) => {
     setEditing(t);
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Xác nhận xóa loại phòng?")) return;
-    try {
-      await deleteRoomType(id);
-      await load();
-    } catch (e) {
-      console.error(e);
-      alert("Lỗi khi xóa loại phòng");
-    }
-  };
+  
 
   const handleFormSave = async (values: {
     tenLoaiPhong: string;
     moTa?: string;
     urlAnhLoaiPhong?: string;
   }) => {
+    if (!editing) {
+      alert('Tạo loại phòng mới không được hỗ trợ qua UI này. Vui lòng chỉnh sửa loại phòng hiện có.');
+      return;
+    }
     try {
-      if (editing) {
-        await updateRoomType(editing.idLoaiPhong, values);
-      } else {
-        await createRoomType(values);
-      }
+      await updateRoomType(editing.idLoaiPhong, values);
       setShowForm(false);
       await load();
     } catch (e) {
@@ -163,15 +130,8 @@ const RoomTypeSection: React.FC = () => {
           marginBottom: 12,
         }}
       >
-        <h3 style={{ margin: 0 }}>Loại phòng</h3>
-        <div>
-          <button
-            onClick={handleAddClick}
-            style={{ padding: "8px 12px", borderRadius: 8 }}
-          >
-            Thêm loại phòng
-          </button>
-        </div>
+      
+        
       </div>
 
       <div
@@ -359,12 +319,7 @@ const RoomTypeSection: React.FC = () => {
                 {activeType.tenLoaiPhong} — Danh sách phòng
               </h3>
               <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => setShowAddRoomModal(true)}
-                  style={{ padding: 8, borderRadius: 8 }}
-                >
-                  ➕ Thêm phòng mới
-                </button>
+                
                 <button
                   onClick={() => setShowRoomsModal(false)}
                   style={{ padding: 8, borderRadius: 8 }}
@@ -395,7 +350,7 @@ const RoomTypeSection: React.FC = () => {
                       style={{
                         width: 120,
                         height: 80,
-                        backgroundImage: `url(${r.urlAnhPhong})`,
+                        backgroundImage: `url(${Array.isArray(r.urlAnhPhong) ? (r.urlAnhPhong[0] ?? "/img/room/default.webp") : (r.urlAnhPhong ?? "/img/room/default.webp")})`,
                         backgroundSize: "cover",
                         backgroundPosition: "center",
                         borderRadius: 8,
@@ -497,12 +452,45 @@ const TypeFormModal: React.FC<{
             onChange={(e) => setMoTa(e.target.value)}
             style={{ padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
           />
-          <label>URL ảnh</label>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            style={{ padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
-          />
+          <label>Ảnh loại phòng</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const f = e.target.files && e.target.files[0];
+                if (!f) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const result = reader.result as string;
+                  // store data URL in url state so backend can accept base64 upload
+                  setUrl(result);
+                };
+                reader.readAsDataURL(f);
+              }}
+            />
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Hoặc dán URL (http/ /img/...)"
+              style={{ padding: 8, borderRadius: 8, border: '1px solid #e5e7eb', flex: 1 }}
+            />
+          </div>
+          {url && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ width: 160, height: 96, overflow: 'hidden', borderRadius: 8, background: '#f3f4f6' }}>
+                <img
+                  src={url}
+                  alt="Preview"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  onError={(e) => {
+                    // if data URL or path invalid, hide image
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
         <div
           style={{
