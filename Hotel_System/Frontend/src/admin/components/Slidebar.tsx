@@ -289,45 +289,54 @@ const Slidebar: React.FC = () => {
 
   return (
     <aside className="slidebar-aside">
-      <div className="slidebar-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div
+        className="slidebar-header"
+        style={{ position: "sticky", top: 0, zIndex: 30, background: "#fff", padding: "4px 0", display: "flex", justifyContent: "center" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
           <div
+            className="logo-container"
             style={{
-              width: 64,
-              height: 64,
-              padding: 8,
-              borderRadius: 12,
-              background: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              boxShadow: '0 6px 18px rgba(15,23,42,0.06)',
-              border: '1px solid #a75a00'
+              width: 160,
+              height: 72,
+              padding: 0,
+              borderRadius: 0,
+              background: "transparent",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+              boxShadow: "none",
+              position: "relative"
             }}
           >
             <img
               src="/img/logo.webp"
               alt="Khách sạn"
               style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                display: 'block',
-                background: '#ffffff'
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                transform: "translate(-50%, -50%)",
+                height: 72,
+                width: "auto",
+                objectFit: "contain",
+                display: "block",
+                background: "#ffffff"
               }}
               onError={(e) => {
                 // fallback to letter M if logo not found
                 const el = e.target as HTMLImageElement;
-                el.style.display = 'none';
+                el.style.display = "none";
                 try {
                   const parent = el.parentElement;
-                  if (parent) parent.innerText = 'M';
+                  if (parent) parent.innerText = "M";
                 } catch {}
               }}
             />
           </div>
         </div>
+        {/* glossy separator removed per request */}
       </div>
 
       <div

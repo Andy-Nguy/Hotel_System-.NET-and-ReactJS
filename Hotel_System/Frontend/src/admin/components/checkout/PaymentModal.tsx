@@ -13,7 +13,9 @@ interface Props {
   roomLines?: string[];
   servicesTotal?: number;
   onCancel: () => void;
-  onSubmit: () => void; 
+  onSubmit: () => void;
+  // Indicates the booking/invoice has a confirmed extension (gia hạn)
+  isExtended?: boolean;
 }
 
 const PaymentModal: React.FC<Props> = ({
@@ -24,7 +26,8 @@ const PaymentModal: React.FC<Props> = ({
   selectedServices,
   form,
   onCancel,
-  onSubmit
+  onSubmit,
+  isExtended = false
 }) => {
   // Tổng tiền phòng: đọc từ summary
   const roomTotal = Number(summary?.money?.roomTotal ?? 0);
@@ -317,9 +320,7 @@ const PaymentModal: React.FC<Props> = ({
     : [];
 
   const combinedServices = [...(dbServices || []), ...clientServices];
-  // Tổng dịch vụ (kết hợp server + client-added). We'll normally prefer server-side totals,
-  // but for the overdue surcharge case we must include the local surcharge in totals
-  // and show it explicitly under VAT.
+  // Tổng dịch vụ
   const serviceTotalFromServer = Number(summary?.money?.serviceTotal ?? 0);
   const serviceTotalServerPreferred = serviceTotalFromServer;
 
@@ -343,8 +344,6 @@ const PaymentModal: React.FC<Props> = ({
         normal.push(s);
       }
     });
-    // We intentionally do NOT push the late-fee into the service list here —
-    // late-fee is shown separately below the services table per UX requirement.
     return { normal, aggregatedLate };
   }, [dbServices, clientServices, computedLateFee]);
 
@@ -372,41 +371,80 @@ const PaymentModal: React.FC<Props> = ({
     return () => { mounted = false; };
   }, [visible, isOverdueBooking, paymentRow, displayServices]);
 
-  // Build final display services (deduped, include computed late fee when needed)
-  // Final services displayed in the "Dịch vụ sử dụng" table — explicitly exclude late-fee.
   const finalDisplayServices = React.useMemo(() => {
     return (displayServices as any).normal ?? [];
   }, [displayServices]);
 
   const serviceTotalFromCombined = finalDisplayServices.reduce((acc: number, s: any) => acc + Number(s.amount ?? s.TienDichVu ?? 0), 0);
 
-  // effective late fee value for display — prefer server-provided `money.lateFee` if present
   const lateFeeFromLines = (displayServices as any).aggregatedLate ?? 0;
   const serverLateFee = Number(summary?.money?.lateFee ?? 0);
   let lateFee = serverLateFee > 0 ? serverLateFee : (lateFeeFromLines > 0 ? lateFeeFromLines : computedLateFee);
 
-  // Tạm tính & VAT & Tổng cộng: by default prefer backend values
+  // Tạm tính & VAT & Tổng cộng: prefer backend
   const subTotalFromServer = Number(summary?.money?.subTotal ?? 0);
   const vatFromServer = Number(summary?.money?.vat ?? 0);
   const totalFromServer = Number(summary?.money?.tongTien ?? 0);
 
-  let serviceTotal = serviceTotalServerPreferred;
-  let subTotal = subTotalFromServer > 0 ? subTotalFromServer : roomTotal + serviceTotal;
-  let vat = vatFromServer > 0 ? vatFromServer : Math.round(subTotal * 0.1);
-  let total = totalFromServer > 0 ? totalFromServer : subTotal + vat;
+  // ----- Thử tách ghi chú để phát hiện marker gia hạn -----
+  const extractNotesFromSummary = (s: any) => {
+    const notes: string[] = [];
+    if (!s) return notes;
+    if (s?.GhiChu) notes.push(String(s.GhiChu));
+    if (s?.ghiChu) notes.push(String(s.ghiChu));
+    if (s?.HoaDon && (s.HoaDon.GhiChu || s.HoaDon.ghiChu)) notes.push(String(s.HoaDon.GhiChu ?? s.HoaDon.ghiChu));
+    const inv0 = Array.isArray(s?.invoices) && s.invoices.length > 0 ? s.invoices[0] : null;
+    if (inv0?.GhiChu) notes.push(String(inv0.GhiChu));
+    if (inv0?.ghiChu) notes.push(String(inv0.ghiChu));
+    return notes;
+  };
 
-    if (isOverdueBooking && lateFee > 0) {
-    // recompute using finalDisplayServices (includes deduped + computed late fee)
-    serviceTotal = serviceTotalFromCombined;
-    // Phí trả phòng muộn KHÔNG tính VAT (là phí phạt)
-    // Công thức: TongTien = (room + service) * 1.1 + lateFee
-    subTotal = roomTotal + serviceTotal;
-    vat = Math.round(subTotal * 0.1);
-    total = subTotal + vat + lateFee;
+  const rawNotes = extractNotesFromSummary(summary);
+  const notesNorm = rawNotes.map((nn) =>
+    (nn || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+  );
+
+  // Chỉ coi là đã gia hạn nếu ghi chú có 'Gia hạn đến' hoặc 'Gia hạn thêm'
+  const hasExtendNote = notesNorm.some((n) =>
+    /\bgia\s*han\s*(den|them)\b/.test(n) && !/\bkhong\s*gia\s*han\b/.test(n)
+  );
+
+  let extendDurationLabel: string | null = null;
+  let extendPercent: number | null = null;
+  const moneyAny = summary?.money ?? {};
+  if (moneyAny.extendDuration || moneyAny.extendHours || moneyAny.extendTime) {
+    extendDurationLabel = String(moneyAny.extendDuration ?? moneyAny.extendHours ?? moneyAny.extendTime);
   }
-
-  // Đã thanh toán & Cần thanh toán
-  const deposit = Number(summary?.money?.deposit ?? 0);
+  if (moneyAny.extendPercent || moneyAny.extend_pct || moneyAny.extendRate) {
+    const p = moneyAny.extendPercent ?? moneyAny.extend_pct ?? moneyAny.extendRate;
+    const pnum = Number(p);
+    if (!isNaN(pnum)) extendPercent = pnum;
+  }
+  if (!extendDurationLabel || extendPercent == null) {
+    for (let i = 0; i < notesNorm.length; i++) {
+      const n = notesNorm[i];
+      if (!extendDurationLabel) {
+        const m = n.match(/(\d+)\s*(gio|h|phut|ngay)/i);
+        if (m) {
+          const unit = m[2];
+          const num = m[1];
+          extendDurationLabel = `${num} ${unit.replace('gio', 'giờ').replace('phut', 'phút')}`;
+        }
+      }
+      if (extendPercent == null) {
+        const m2 = n.match(/(\d+(?:\.\d+)?)\s*%/);
+        if (m2) extendPercent = Number(m2[1]);
+        else {
+          const m3 = n.match(/(\d+(?:\.\d+)?)\s*phan\s*tram/);
+          if (m3) extendPercent = Number(m3[1]);
+        }
+      }
+      if (extendDurationLabel && extendPercent != null) break;
+    }
+  }
 
   const paidFromBooking = Number(summary?.money?.paidAmount ?? 0);
 
@@ -420,8 +458,8 @@ const PaymentModal: React.FC<Props> = ({
       : 0;
 
   const paidRaw = paidFromBooking > 0 ? paidFromBooking : invoicePaid;
-  const paidExcludingDepositRaw = Math.max(0, paidRaw - deposit);
-  const paid = Math.min(paidExcludingDepositRaw, total);
+  const paidExcludingDepositRaw = Math.max(0, paidRaw - Number(summary?.money?.deposit ?? 0));
+  const paid = Math.min(paidExcludingDepositRaw, totalFromServer > 0 ? totalFromServer : Math.round((roomTotal + serviceTotalServerPreferred) * 1.1));
 
   const serverRemaining = Number(
     summary?.soTienConLai ??
@@ -430,19 +468,106 @@ const PaymentModal: React.FC<Props> = ({
       0
   );
 
-  // Compute effective total: prefer authoritative server total when available.
-  // Only use locally computed totals (which include computedLateFee) when server totals are not present.
+  let serviceTotal = serviceTotalServerPreferred;
+  let subTotal = subTotalFromServer > 0 ? subTotalFromServer : roomTotal + serviceTotal;
+  let vat = vatFromServer > 0 ? vatFromServer : Math.round(subTotal * 0.1);
+  let total = totalFromServer > 0 ? totalFromServer : subTotal + vat;
+
+  if (isOverdueBooking && lateFee > 0) {
+    // Overdue: TongTien = (room + service) * 1.1 + lateFee (lateFee không VAT)
+    serviceTotal = serviceTotalFromCombined;
+    subTotal = roomTotal + serviceTotal;
+    vat = Math.round(subTotal * 0.1);
+    total = subTotal + vat + lateFee;
+  }
+
+  // Detect extend fee:
+  // 1) Prefer explicit backend value `summary.money.extendFee` when present
+  // 2) If not present and booking is not overdue, but `extendPercent` is available
+  //    compute fee as `perNightRate * (extendPercent/100)` then apply VAT (x1.1)
+  // 3) Otherwise fall back to previous heuristic: diff between server total and computed basic
+  let ef = Number(summary?.money?.extendFee ?? 0);
+  if (isOverdueBooking) {
+    ef = 0;
+  } else {
+    if ((!ef || ef <= 0) && extendPercent != null) {
+      // Derive a per-night room rate.
+      let perNight = 0;
+      try {
+        const items = Array.isArray(summary?.items) ? summary.items : [];
+        // try to find a best candidate
+        let candidate: any = null;
+        for (const it of items) {
+          const gp = Number(it?.giaPhong ?? it?.gia ?? 0) || 0;
+          const nights = Number(it?.soDem ?? it?.soNgay ?? it?.soNgayO ?? 0) || 0;
+          if (gp > 0 && nights > 0) {
+            candidate = it;
+            break;
+          }
+          if (!candidate) candidate = it;
+        }
+        if (candidate) {
+          perNight = Number(candidate?.giaPhong ?? candidate?.gia ?? 0) || 0;
+          const nights = Number(candidate?.soDem ?? candidate?.soNgay ?? candidate?.soNgayO ?? 0) || 0;
+          if ((perNight === 0 || perNight <= 0) && nights > 0) {
+            perNight = Math.round(Number(roomTotal) / nights);
+          }
+        }
+        if (!perNight || perNight <= 0) {
+          // try global total nights
+          const totalNights = items.reduce((acc: number, it: any) => acc + (Number(it?.soDem ?? it?.soNgay ?? 0) || 0), 0);
+          if (totalNights > 0) {
+            perNight = Math.round(Number(roomTotal) / totalNights);
+          }
+        }
+        if (!perNight || perNight <= 0) {
+          perNight = Math.round(Number(roomTotal));
+        }
+      } catch (e) {
+        perNight = Math.round(Number(roomTotal));
+      }
+
+      const feeBeforeVat = Math.round(perNight * (Number(extendPercent) / 100));
+      const feeWithVat = Math.round(feeBeforeVat * 1.1);
+      ef = feeWithVat;
+    } else if ((!ef || ef <= 0) && hasExtendNote) {
+      const computedBasic = Math.round((roomTotal + (serviceTotalServerPreferred > 0 ? serviceTotalServerPreferred : serviceTotalFromCombined)) * 1.1);
+      const possibleTotal = totalFromServer > 0 ? totalFromServer : NaN;
+      if (!isNaN(possibleTotal) && possibleTotal > 0) {
+        const diff = possibleTotal - computedBasic;
+        if (diff > 1000) ef = diff;
+      }
+    }
+  }
+  let extendFee = ef;
+
+  // Do NOT add a separate extendFee to totals here. The room total should reflect
+  // any extension (display-only change below). Avoid double-counting.
+
+  // Đã thanh toán & Cần thanh toán
+  const deposit = Number(summary?.money?.deposit ?? 0);
+
   const effectiveTotal = totalFromServer > 0 ? totalFromServer : total;
 
-  // For overdue bookings the operator expects the amount due to be exactly:
-  // KHÁCH CẦN THANH TOÁN := tổng cộng - đã thanh toán - cọc
-  // where `tổng cộng` is the displayed `total`, `đã thanh toán` is `paid` (excluding deposit),
-  // and `cọc` is `deposit`.
   let needToPay: number;
+  // Prefer any server-provided remaining amount (authoritative). If not available,
+  // prefer invoice-level remaining (`soTienConLai`) when present. Otherwise compute.
+  const invoiceRemaining = Number(
+    (Array.isArray(summary?.invoices) && summary.invoices.length > 0
+      ? summary.invoices[0]?.soTienConLai ?? summary.invoices[0]?.soTienConLai
+      : undefined) ?? 0
+  );
+
   if (isOverdueBooking) {
     needToPay = Math.max(0, Math.round(Number(total ?? 0) - Number(paid ?? 0) - Number(deposit ?? 0)));
   } else {
-    needToPay = serverRemaining > 0 ? serverRemaining : Math.max(0, effectiveTotal - deposit - paidExcludingDepositRaw);
+    if (serverRemaining > 0) {
+      needToPay = serverRemaining;
+    } else if (invoiceRemaining > 0) {
+      needToPay = invoiceRemaining;
+    } else {
+      needToPay = Math.max(0, effectiveTotal - deposit - paidExcludingDepositRaw);
+    }
   }
 
   // Khi mở modal, set default method & ghi chú
@@ -458,7 +583,6 @@ const PaymentModal: React.FC<Props> = ({
 
   const [submitting, setSubmitting] = useState(false);
 
-  // Bấm OK: chỉ ủy quyền cho parent (submitPayment) xử lý thanh toán
   const handleOk = async () => {
     if (typeof onSubmit !== 'function') return;
     try {
@@ -469,46 +593,27 @@ const PaymentModal: React.FC<Props> = ({
     }
   };
 
-  // Kiểm tra đã thanh toán chưa (status = 2)
-  const invoiceStatus =
-    Array.isArray(summary?.invoices) && summary.invoices.length > 0
-      ? summary.invoices[0].trangThaiThanhToan ??
-        summary.invoices[0].TrangThaiThanhToan ??
-        summary.invoices[0].trangThaiThanhToan
-      : undefined;
-
-  const statusCandidates = [
-    invoiceStatus,
-    paymentRow?.TrangThaiThanhToan,
-    paymentRow?.trangThaiThanhToan
-  ];
-  const isPaid = statusCandidates.some(
-    (v) => String(v ?? '').trim() === '2'
-  );
+  // Label nút xác nhận: nếu cần thu > 0 thì “Thanh toán & mở hóa đơn”, ngược lại “Mở hóa đơn”
+  const confirmLabel = needToPay > 0 ? 'Thanh toán & mở hóa đơn' : 'Xác nhận thanh toán';
 
   return (
     <Modal
       title={`Thanh toán – ${paymentRow?.IddatPhong}`}
       open={visible}
       onCancel={onCancel}
-      onOk={handleOk}
-      okText="Xác nhận"
-      cancelText="Hủy"
-      confirmLoading={submitting}
       width={900}
-      footer={
-        // For overdue bookings show both Close and a Confirm button next to it.
-          isOverdueBooking
-          ? [
-              <Button key="close" onClick={onCancel}>Đóng</Button>,
-              <Button key="confirm" type="primary" onClick={handleOk} loading={submitting}>
-                Thanh toán
-              </Button>
-            ]
-          : isPaid
-          ? [<Button key="close" onClick={onCancel}>Đóng</Button>]
-          : undefined
-      }
+      footer={[
+        <Button key="close" onClick={onCancel}>Đóng</Button>,
+        <Button
+          key="confirm"
+          type="primary"
+          onClick={handleOk}
+          loading={submitting}
+          disabled={summaryLoading}
+        >
+          {confirmLabel}
+        </Button>
+      ]}
     >
       <Spin spinning={summaryLoading}>
         <Form form={form} layout="vertical">
@@ -534,6 +639,21 @@ const PaymentModal: React.FC<Props> = ({
                 <strong>{paymentRow?.NgayTraPhong?.slice(0, 10)}</strong>
               </div>
             </div>
+            {(!isOverdueBooking && (hasExtendNote || extendPercent != null || extendDurationLabel)) && (
+              <div style={{ marginTop: 8 }}>
+                <Tag color="gold" style={{ fontWeight: 700 }}>ĐÃ GIA HẠN</Tag>
+              </div>
+            )}
+            {(extendDurationLabel || extendPercent !== null) && (hasExtendNote || extendPercent != null || extendDurationLabel) && (
+              <div style={{ marginTop: 8, color: '#92400e' }}>
+                {extendDurationLabel && (
+                  <div style={{ fontSize: 12 }}>Thời gian gia hạn: {extendDurationLabel}</div>
+                )}
+                {extendPercent !== null && extendPercent !== undefined && (
+                  <div style={{ fontSize: 12 }}>Tỷ lệ gia hạn: {Number(extendPercent).toString()}%</div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Phòng */}
@@ -620,7 +740,11 @@ const PaymentModal: React.FC<Props> = ({
                 marginBottom: 8
               }}
             >
-              <span>Tiền phòng:</span>
+              <span>
+                {(!isOverdueBooking && (hasExtendNote || extendPercent != null || extendDurationLabel))
+                  ? `Tiền phòng (gồm ${extendDurationLabel ? `Gia hạn đến ${extendDurationLabel}` : 'gia hạn'}${extendPercent != null ? ` (${Number(extendPercent)}%)` : ''}):`
+                  : 'Tiền phòng:'}
+              </span>
               <strong>{roomTotal.toLocaleString()} đ</strong>
             </div>
             <div
@@ -680,7 +804,7 @@ const PaymentModal: React.FC<Props> = ({
                 justifyContent: 'space-between'
               }}
             >
-              <span>Tiền cọc (chỉ để hiển thị):</span>
+              <span>Tiền cọc:</span>
               <strong>{deposit.toLocaleString()} đ</strong>
             </div>
             <div
@@ -689,8 +813,8 @@ const PaymentModal: React.FC<Props> = ({
                 justifyContent: 'space-between'
               }}
             >
-              <span>Đã thanh toán (không bao gồm tiền cọc):</span>
-              <strong>- {paid.toLocaleString()} đ</strong>
+              <span>Đã thanh toán:</span>
+              <strong>{paid.toLocaleString()} đ</strong>
             </div>
             <Divider />
             <div
