@@ -3362,7 +3362,7 @@ namespace Hotel_System.API.Controllers
                 SoPhong = r.RoomNumber,
                 TenLoaiPhong = r.RoomTypeName,
                 GiaMotDem = r.BasePricePerNight,
-                UrlAnhPhong = r.RoomImageUrl ?? r.RoomImageUrl,
+                UrlAnhPhong = !string.IsNullOrEmpty(r.RoomImageUrl) ? new List<string> { r.RoomImageUrl } : null,
                 SoNguoiToiDa = r.MaxOccupancy,
                 PromotionName = r.PromotionName,
                 DiscountPercent = r.DiscountPercent,
@@ -3370,7 +3370,7 @@ namespace Hotel_System.API.Controllers
                 Description = r.Description
             }).ToList();
 
-            _logger.LogInformation("[FindAvailableRoomsForExtend] Tìm thấy {Count} phòng trống từ {Checkin} đến {Checkout}", mapped.Count, DateOnly.FromDateTime(checkin), DateOnly.FromDateTime(checkout));
+            _logger.LogInformation("[FindAvailableRoomsForExtend] Tìm thấy {Count} phòng trống từ {Checkin} đến {Checkout}", mapped.Count, DateOnly.FromDateTime(checkin).ToString("yyyy-MM-dd"), DateOnly.FromDateTime(checkout).ToString("yyyy-MM-dd"));
 
             return mapped;
         }

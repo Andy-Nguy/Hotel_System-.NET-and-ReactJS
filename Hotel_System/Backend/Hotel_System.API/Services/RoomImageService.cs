@@ -210,12 +210,12 @@ namespace Hotel_System.API.Services
             if (!AllowedExtensions.Contains(ext))
                 throw new ArgumentException($"File extension '{ext}' is not allowed. Allowed: {string.Join(',', AllowedExtensions)}");
 
-            // Build expected prefix
+            // Validate that filename starts with correct room prefix (allow any image index)
             var safeRoomId = Regex.Replace(roomId, "[^A-Za-z0-9_-]", "");
-            var expectedPrefix = $"room-{safeRoomId}-a{expectedIndex}";
+            var expectedPrefix = $"room-{safeRoomId}-a";
             var nameNoExt = Path.GetFileNameWithoutExtension(filename);
-            if (!nameNoExt.Equals(expectedPrefix, StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException($"Filename '{filename}' does not match expected pattern '{expectedPrefix}{ext}'");
+            if (!nameNoExt.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"Filename '{filename}' does not start with expected prefix '{expectedPrefix}'");
         }
     }
 }
