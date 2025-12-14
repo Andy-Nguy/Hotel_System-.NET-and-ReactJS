@@ -211,10 +211,16 @@ namespace Hotel_System.API.Controllers
                 }
 
                 // Quy tắc xác định trạng thái thanh toán:
-                // - Nếu PhuongThucThanhToan == 2 (online) -> cho phép client override TrangThaiThanhToan (ví dụ: đặt cọc = 0, đã thanh toán = 2)
-                // - Nếu PhuongThucThanhToan != 2 (ví dụ: thanh toán tại khách sạn / quầy) -> luôn ghi nhận là CHƯA THANH TOÁN (1)
+                // - PhuongThucThanhToan == 1 (tiền mặt) -> đã thanh toán ngay (2)
+                // - PhuongThucThanhToan == 2 (online) -> client có thể gửi 0 (cọc), 1 (chưa), hoặc 2 (đã TT)
+                // - PhuongThucThanhToan == 3 (tại quầy) -> chưa thanh toán (1)
                 int trangThaiThanhToan;
-                if (request.PhuongThucThanhToan == 2)
+                if (request.PhuongThucThanhToan == 1)
+                {
+                    // Tiền mặt: đã thanh toán ngay
+                    trangThaiThanhToan = 2;
+                }
+                else if (request.PhuongThucThanhToan == 2)
                 {
                     // Online: dùng giá trị client gửi nếu hợp lệ, ngược lại mặc định = 2 (đã thanh toán online)
                     trangThaiThanhToan = request.TrangThaiThanhToan.HasValue ? request.TrangThaiThanhToan.Value : 2;
@@ -223,7 +229,7 @@ namespace Hotel_System.API.Controllers
                 }
                 else
                 {
-                    // Không phải online (tiền mặt/ tại quầy / tại khách sạn) => lưu là CHƯA THANH TOÁN
+                    // Tại quầy / tại khách sạn => chưa thanh toán
                     trangThaiThanhToan = 1;
                 }
 
