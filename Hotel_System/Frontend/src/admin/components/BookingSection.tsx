@@ -29,8 +29,10 @@ import {
   CreditCardOutlined,
   FileTextOutlined,
   InfoCircleOutlined,
+  PlusOutlined,
 } from "@ant-design/icons";
 import BookingTable from "./BookingTable";
+import DirectBookingModal from "./DirectBookingModal";
 import {
   getStatusColor,
   getStatusLabel,
@@ -43,6 +45,8 @@ const BookingSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [directBookingModalVisible, setDirectBookingModalVisible] =
+    useState(false);
 
   useEffect(() => {
     loadBookings();
@@ -173,6 +177,14 @@ const BookingSection: React.FC = () => {
           </div>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setDirectBookingModalVisible(true)}
+          >
+            Đặt phòng trực tiếp
+          </Button>
+
           <Input
             placeholder="Tìm kiếm tên, phòng, mã..."
             prefix={<SearchOutlined style={{ color: "#9CA3AF" }} />}
@@ -581,6 +593,16 @@ const BookingSection: React.FC = () => {
           </Space>
         )}
       </Modal>
+
+      {/* Direct Booking Modal */}
+      <DirectBookingModal
+        visible={directBookingModalVisible}
+        onClose={() => setDirectBookingModalVisible(false)}
+        onSuccess={() => {
+          loadBookings();
+          setDirectBookingModalVisible(false);
+        }}
+      />
     </div>
   );
 };
