@@ -12,6 +12,17 @@ public class CreateBookingRequest
     public string NgayTraPhong { get; set; } = string.Empty;
     public int SoLuongKhach { get; set; }
     public List<RoomBookingDto> Rooms { get; set; } = new();
+    
+    /// <summary>
+    /// Đặt phòng trực tiếp - mã bắt đầu bằng "TT", mặc định = false (mã "DP")
+    /// </summary>
+    public bool IsDirectBooking { get; set; } = false;
+    
+    /// <summary>
+    /// Trạng thái thanh toán khi tạo booking (0: cọc, 1: chưa TT, 2: đã TT)
+    /// Mặc định = 0 (Đã cọc)
+    /// </summary>
+    public int TrangThaiThanhToan { get; set; } = 0;
 }
 
 public class RoomBookingDto
