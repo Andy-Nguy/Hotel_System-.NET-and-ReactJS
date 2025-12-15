@@ -393,8 +393,14 @@ const PaymentPage: React.FC = () => {
   const subtotal = totalPrice + servicesTotal;
   const tax = subtotal * 0.1;
   const grandTotal = subtotal + tax;
-  // Points conversion (100 VND per point)
-  const POINT_VALUE = 100;
+  
+  // Points system: 500,000 VND = 1 point, 1 point = 10,000 VND discount
+  const POINTS_RATE = 500000; // VND per point earned
+  const POINT_VALUE = 10000; // VND per point redeemed
+  const earnedPoints = Math.floor(grandTotal / POINTS_RATE); // Points earned from this invoice
+  const currentPoints = profile?.TichDiem ?? profile?.tichDiem ?? 0;
+  const totalAvailablePoints = currentPoints + earnedPoints;
+  
   const discountFromPoints = (redeemPoints || 0) * POINT_VALUE;
   const displayedGrandTotal = Math.max(0, grandTotal - discountFromPoints);
 
@@ -638,89 +644,159 @@ const PaymentPage: React.FC = () => {
               {/* Loyalty / points usage (Option B) */}
               {profile ? (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #f0f0f0" }}>
-                  <Title level={5} style={{ margin: "0 0 8px 0", color: "#2c3e50" }}>Sử dụng điểm tích lũy</Title>
+                  <Title level={5} style={{ margin: "0 0 16px 0", color: "#2c3e50" }}>
+                    💎 Sử dụng điểm tích lũy
+                  </Title>
 
-                  <Text style={{ display: "block", marginBottom: 8 }}>
-                    Điểm hiện có: <Text strong style={{ color: "#dfa974" }}>{(profile?.TichDiem ?? profile?.tichDiem ?? 0).toLocaleString()} điểm</Text>
-                  </Text>
+                  <div style={{ background: "#fef8f1", padding: 12, borderRadius: 8, marginBottom: 12 }}>
+                    <Text style={{ display: "block", marginBottom: 6 }}>
+                      <span style={{ color: "#2c3e50" }}>Điểm hiện có: </span>
+                      <Text strong style={{ color: "#dfa974", fontSize: 16 }}>
+                        {currentPoints.toLocaleString()}
+                      </Text>
+                      <span style={{ color: "#7f8c8d" }}> điểm</span>
+                    </Text>
+                    {currentPoints > 0 && (
+                      <Text type="secondary" style={{ display: "block", fontSize: 12 }}>
+                        ➕ Sẽ kiếm được: <Text strong style={{ color: "#27ae60" }}>{earnedPoints} điểm</Text> từ đơn hàng này (cứ 500,000đ = 1 điểm)
+                      </Text>
+                    )}
+                  </div>
 
-                  <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
-                    Bạn muốn sử dụng điểm như thế nào?
-                  </Text>
+                  {currentPoints > 0 ? (
+                    <>
+                      <Text type="secondary" style={{ display: "block", marginBottom: 12, fontSize: 13 }}>
+                        Cách sử dụng: 1 điểm = 10,000đ giảm giá
+                      </Text>
 
-                  <Radio.Group
-                    value={redeemMode}
-                    onChange={(e) => {
-                      const val = e.target.value as 'no' | 'part' | 'all';
-                      if (val === 'no') {
-                        setRedeemMode('no');
-                        setRedeemPoints(0);
-                      } else if (val === 'all') {
-                        setRedeemMode('all');
-                        const pts = profile?.TichDiem ?? profile?.tichDiem ?? 0;
-                        setRedeemPoints(pts);
-                      } else {
-                        // part
-                        setRedeemMode('part');
-                        // keep existing redeemPoints (user will enter if 0)
-                        if (!redeemPoints) setRedeemPoints(0);
-                      }
-                    }}
-                  >
-                    <Space direction="vertical">
-                      <Radio value="no">Không dùng điểm</Radio>
-                      <Radio value="part">Dùng một phần</Radio>
-                      <Radio value="all">Dùng tất cả điểm</Radio>
-                    </Space>
-                  </Radio.Group>
+                      <Radio.Group
+                        value={redeemMode}
+                        onChange={(e) => {
+                          const val = e.target.value as 'no' | 'part' | 'all';
+                          if (val === 'no') {
+                            setRedeemMode('no');
+                            setRedeemPoints(0);
+                          } else if (val === 'all') {
+                            setRedeemMode('all');
+                            const pts = currentPoints;
+                            setRedeemPoints(pts);
+                          } else {
+                            // part
+                            setRedeemMode('part');
+                            if (!redeemPoints) setRedeemPoints(0);
+                          }
+                        }}
+                      >
+                        <Space direction="vertical" style={{ width: "100%" }}>
+                          <Radio value="no">
+                            <span style={{ color: "#2c3e50" }}>Không sử dụng điểm</span>
+                          </Radio>
+                          <Radio value="part">
+                            <span style={{ color: "#2c3e50" }}>Sử dụng một phần điểm</span>
+                          </Radio>
+                          <Radio value="all">
+                            <span style={{ color: "#2c3e50" }}>Sử dụng tất cả {currentPoints.toLocaleString()} điểm</span>
+                          </Radio>
+                        </Space>
+                      </Radio.Group>
+                    </>
+                  ) : (
+                    <Alert
+                      message="Bạn chưa có điểm tích lũy"
+                      description={`Hoàn thành đơn hàng này sẽ nhận được ${earnedPoints} điểm. Sử dụng điểm ở các đơn hàng tiếp theo!`}
+                      type="info"
+                      showIcon
+                      style={{
+                        borderRadius: 8,
+                        border: "1px solid #91d5ff",
+                        background: "#e6f7ff",
+                      }}
+                    />
+                  )}
 
-                  {/** Input only when using a part of points */}
-                  {(redeemMode === 'part' && (profile?.TichDiem ?? profile?.tichDiem ?? 0) > 0) && (
-                    <div style={{ marginTop: 12 }}>
-                      {/** compute caps **/}
-                      {/** 1 point = POINT_VALUE VND, cannot redeem more than 50% of grandTotal **/}
-                      {
-                        (() => {
-                          const POINT_VALUE = 100;
-                          const maxByAmount = Math.floor((grandTotal * 0.5) / POINT_VALUE);
-                          const currentPts = profile?.TichDiem ?? profile?.tichDiem ?? 0;
-                          const maxAllowed = Math.max(0, Math.min(currentPts, maxByAmount));
-                          return (
-                            <>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <Text strong style={{ color: "#2c3e50" }}>Số điểm bạn muốn sử dụng</Text>
-                                <Text type="secondary" style={{ fontSize: 12 }}>(Số nguyên)</Text>
+                  {/* Input only when using a part of points */}
+                  {(redeemMode === 'part' && currentPoints > 0) && (
+                    <div style={{ marginTop: 16, padding: 12, background: "#f0f2f5", borderRadius: 8 }}>
+                      {(() => {
+                        const maxByAmount = Math.floor((grandTotal * 0.5) / POINT_VALUE);
+                        const maxAllowed = Math.max(0, Math.min(currentPoints, maxByAmount));
+                        const currentDiscount = (redeemPoints || 0) * POINT_VALUE;
+                        const percentOfTotal = ((currentDiscount / grandTotal) * 100).toFixed(1);
+
+                        return (
+                          <>
+                            <div style={{ marginBottom: 12 }}>
+                              <Text strong style={{ color: "#2c3e50", fontSize: 13 }}>
+                                Nhập số điểm muốn sử dụng
+                              </Text>
+                              <div style={{ marginTop: 6 }}>
+                                <InputNumber
+                                  min={0}
+                                  max={maxAllowed}
+                                  step={1}
+                                  value={redeemPoints || 0}
+                                  onChange={(v: any) => {
+                                    const n = Number(v) || 0;
+                                    if (n < 0) {
+                                      setRedeemPoints(0);
+                                    } else if (n > maxAllowed) {
+                                      setRedeemPoints(maxAllowed);
+                                    } else {
+                                      setRedeemPoints(Math.floor(n));
+                                    }
+                                  }}
+                                  placeholder="0"
+                                  style={{ width: "100%", fontSize: 14 }}
+                                />
                               </div>
+                            </div>
 
-                              <InputNumber
-                                min={0}
-                                max={maxAllowed}
-                                step={1}
-                                value={redeemPoints}
-                                onChange={(v: any) => {
-                                  const n = Number(v) || 0;
-                                  if (n < 0) setRedeemPoints(0);
-                                  else if (n > maxAllowed) setRedeemPoints(maxAllowed);
-                                  else setRedeemPoints(Math.floor(n));
-                                }}
-                                style={{ width: 200, marginTop: 8 }}
-                              />
-
-                              <div style={{ marginTop: 8 }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  1 điểm = 100đ giảm giá · Không được vượt quá số điểm bạn đang có · Điểm sử dụng sẽ được trừ khi thanh toán thành công
-                                </Text>
+                            <Alert
+                              message={
                                 <div>
-                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                    Giới hạn tối đa theo hóa đơn: {maxByAmount.toLocaleString()} điểm (50% tổng tiền)
-                                  </Text>
+                                  <div style={{ marginBottom: 6 }}>
+                                    <strong>Giảm giá: {currentDiscount.toLocaleString()}đ ({percentOfTotal}% tổng hoá đơn)</strong>
+                                  </div>
+                                  <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+                                    <div>• Tối đa được dùng: <strong>{maxAllowed.toLocaleString()} điểm</strong> ({(maxAllowed * POINT_VALUE).toLocaleString()}đ)</div>
+                                    <div>• Hạn chế: không vượt quá <strong>50%</strong> tổng hoá đơn ({(grandTotal * 0.5).toLocaleString()}đ)</div>
+                                    <div>• Điểm sẽ được trừ sau khi thanh toán thành công</div>
+                                  </div>
                                 </div>
-                              </div>
-                            </>
-                          );
-                        })()
-                      }
+                              }
+                              type="info"
+                              showIcon
+                              style={{
+                                marginTop: 12,
+                                background: "#e6f7ff",
+                                border: "1px solid #91d5ff",
+                              }}
+                            />
+                          </>
+                        );
+                      })()}
                     </div>
+                  )}
+
+                  {/* Summary when using all points */}
+                  {redeemMode === 'all' && currentPoints > 0 && (
+                    <Alert
+                      message={
+                        <div>
+                          <div style={{ marginBottom: 6 }}>
+                            <strong>Giảm giá: {(currentPoints * POINT_VALUE).toLocaleString()}đ ({((currentPoints * POINT_VALUE / grandTotal) * 100).toFixed(1)}% tổng hoá đơn)</strong>
+                          </div>
+                          <div style={{ fontSize: 12 }}>Sẽ sử dụng tất cả {currentPoints.toLocaleString()} điểm tích lũy</div>
+                        </div>
+                      }
+                      type="success"
+                      showIcon
+                      style={{
+                        marginTop: 12,
+                        background: "#f6ffed",
+                        border: "1px solid #b7eb8f",
+                      }}
+                    />
                   )}
                 </div>
               ) : (
