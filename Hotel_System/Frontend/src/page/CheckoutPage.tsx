@@ -39,6 +39,34 @@ import {
 } from "@ant-design/icons";
 import BookingProgress from "../components/BookingProgress";
 
+// Local image resolver (keeps behavior consistent with other components)
+function resolveImageUrl(u: any, fallback = '/img/room/default.webp') {
+  if (u == null) return fallback;
+  if (Array.isArray(u)) {
+    const first = u.find((x: any) => !!x);
+    return resolveImageUrl(first, fallback);
+  }
+  if (typeof u === 'object') {
+    const candidate = (u && (u.u || u.url || u.src || u.urlAnhPhong)) || null;
+    return resolveImageUrl(candidate, fallback);
+  }
+  let s = String(u).trim();
+  if (!s) return fallback;
+  if (s.startsWith('[')) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr) && arr.length > 0) return resolveImageUrl(arr[0], fallback);
+    } catch (e) {}
+  }
+  if (s.includes(',') || s.includes(';') || s.includes('|')) {
+    const first = s.split(/[,|;]+/)[0].trim();
+    return resolveImageUrl(first, fallback);
+  }
+  if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return s;
+  if (s.startsWith('/img') || s.startsWith('/')) return s;
+  return `/img/room/${s}`;
+}
+
 const { Content } = Layout;
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -740,7 +768,7 @@ const CheckoutPage: React.FC = () => {
                         <div style={{ display: "flex", gap: 12 }}>
                           {sr.room.urlAnhPhong && (
                             <img
-                              src={sr.room.urlAnhPhong}
+                              src={resolveImageUrl(sr.room.urlAnhPhong)}
                               alt={sr.room.tenPhong}
                               style={{
                                 width: 80,

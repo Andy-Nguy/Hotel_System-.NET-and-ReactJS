@@ -28,6 +28,7 @@ import {
 import RoomDetail from "../components/RoomDetail";
 import DatePickerInput from "../components/DatePickerInput";
 import GuestSelector from "../components/GuestSelector";
+import RoomSection from "../components/RoomSection";
 
 interface RoomTypeDetailRouteParams {
   idloaiPhong: string;
@@ -117,83 +118,13 @@ const RoomTypeDetail: React.FC = () => {
   };
 
   const renderRoomCard = ({ item }: { item: Room }) => (
-    <TouchableOpacity
-      style={styles.card}
+    <RoomSection
+      room={item}
       onPress={() => {
         setSelectedRoom(item);
         setShowDetails(true);
       }}
-    >
-      {/* Room Image */}
-      <View style={styles.imageContainer}>
-        {item.urlAnhPhong ? (
-          <Image
-            source={{ uri: item.urlAnhPhong }}
-            style={styles.roomImage}
-            contentFit="cover"
-            onError={(e) => console.log("Image load error:", item.urlAnhPhong)}
-          />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <AppIcon name="image" size={40} color="#ccc" />
-          </View>
-        )}
-      </View>
-
-      {/* Room Info */}
-      <View style={styles.content}>
-        {/* Title */}
-        <Text style={styles.roomName} numberOfLines={2}>
-          {item.tenPhong || "Unknown Room"}
-        </Text>
-        <Text style={styles.roomNumber}>Phòng {item.soPhong || "-"}</Text>
-
-        {/* Rating */}
-        <View style={styles.ratingSection}>
-          <Text style={styles.stars}>{renderStars(item.xepHangSao || 0)}</Text>
-          <Text style={styles.ratingText}>
-            {(item.xepHangSao || 0).toFixed(1)}/5
-          </Text>
-        </View>
-
-        {/* Description */}
-        {item.moTa && (
-          <Text style={styles.description} numberOfLines={2}>
-            {item.moTa}
-          </Text>
-        )}
-
-        {/* Amenities Preview */}
-        <View style={styles.amenitiesSection}>
-          <View style={styles.amenityBadge}>
-            <Text style={styles.amenityText}>
-              👥 {item.soNguoiToiDa || "-"} guests
-            </Text>
-          </View>
-          {item.amenities && item.amenities.length > 0 && (
-            <View style={styles.amenityBadge}>
-              <Text style={styles.amenityText}>
-                ✓ {item.amenities.length} amenities
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Price Section */}
-        <View style={styles.priceSection}>
-          <Text style={styles.priceLabel}>Giá/đêm:</Text>
-          <Text style={styles.price}>
-            {Number(item.giaCoBanMotDem || 0).toLocaleString('vi-VN')} đ
-          </Text>
-        </View>
-
-        {/* View Details Button */}
-        <TouchableOpacity style={styles.detailButton}>
-          <Text style={styles.detailButtonText}>Xem chi tiết</Text>
-          <AppIcon name="arrow-right" size={14} color={COLORS.white} />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+    />
   );
 
   // Details modal moved to shared RoomDetail component

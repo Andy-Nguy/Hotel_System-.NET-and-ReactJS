@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { postCheckAvailableRooms } from "../api/roomsApi";
 import { API_CONFIG } from "../api/config";
 
 // Use centralized API config
@@ -78,6 +79,7 @@ const PaymentPage: React.FC = () => {
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [invoiceInfoState, setInvoiceInfoState] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [availabilityChecked, setAvailabilityChecked] = useState(false);
   const [redeemPoints, setRedeemPoints] = useState<number>(0);
   const [redeemMode, setRedeemMode] = useState<'no' | 'part' | 'all'>('no');
   const [promoCode, setPromoCode] = useState<string>("");
@@ -149,6 +151,34 @@ const PaymentPage: React.FC = () => {
     }
   }, []);
 
+  // Local image resolver to normalize room image values
+  function resolveImageUrl(u: any, fallback = '/img/room/default.webp') {
+    if (u == null) return fallback;
+    if (Array.isArray(u)) {
+      const first = u.find((x: any) => !!x);
+      return resolveImageUrl(first, fallback);
+    }
+    if (typeof u === 'object') {
+      const candidate = (u && (u.u || u.url || u.src || u.urlAnhPhong)) || null;
+      return resolveImageUrl(candidate, fallback);
+    }
+    let s = String(u).trim();
+    if (!s) return fallback;
+    if (s.startsWith('[')) {
+      try {
+        const arr = JSON.parse(s);
+        if (Array.isArray(arr) && arr.length > 0) return resolveImageUrl(arr[0], fallback);
+      } catch (e) {}
+    }
+    if (s.includes(',') || s.includes(';') || s.includes('|')) {
+      const first = s.split(/[,|;]+/)[0].trim();
+      return resolveImageUrl(first, fallback);
+    }
+    if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return s;
+    if (s.startsWith('/img') || s.startsWith('/')) return s;
+    return `/img/room/${s}`;
+  }
+
   const calculateNights = () => {
     if (!bookingInfo) return 0;
     const checkInDate = new Date(bookingInfo.checkIn);
@@ -189,6 +219,75 @@ const PaymentPage: React.FC = () => {
     // Thanh toán tại khách sạn sẽ lưu trạng thái chưa thanh toán
     setConfirmModalVisible(true);
   };
+
+  // Save pending booking to localStorage and redirect to login when user wants to use points but is not authenticated
+  const handleSavePendingAndRedirect = () => {
+    try {
+      if (!bookingInfo) {
+        message.error("Không có thông tin đặt phòng để lưu.");
+        return;
+      }
+
+      const pending = {
+        bookingInfo,
+        bookingStatus: "PendingLogin",
+        savedAt: Date.now(),
+      };
+      localStorage.setItem("hs_pending_booking", JSON.stringify(pending));
+      // Include next param to return user to payment after login
+      const next = encodeURIComponent(window.location.pathname || "/payment");
+      window.location.href = `/login?next=${next}`;
+    } catch (err) {
+      console.error("Failed to save pending booking:", err);
+      message.error("Không thể lưu tạm thông tin đặt phòng.");
+    }
+  };
+
+  // After login/restore, verify availability of selected rooms
+  useEffect(() => {
+    const checkAvailability = async () => {
+      if (!profile || !bookingInfo || availabilityChecked) return;
+      try {
+        setAvailabilityChecked(true);
+        const rooms = await postCheckAvailableRooms(bookingInfo.checkIn, bookingInfo.checkOut, bookingInfo.guests || 1);
+        // Normalize available identifiers to compare
+        const availableIds = new Set(rooms.map((r: any) => String(r.soPhong || r.soPhong || r.RoomNumber || r.roomNumber || r.soPhong)));
+
+        const requested = bookingInfo.selectedRooms || [];
+        const missing = requested.some((sr: any) => {
+          const roomNum = String(sr.room?.soPhong ?? sr.roomNumber ?? sr.room?.RoomNumber ?? sr.roomNumber);
+          return roomNum && !availableIds.has(roomNum);
+        });
+
+        if (missing) {
+          Modal.confirm({
+            title: "Phòng không còn sẵn",
+            content: "Phòng bạn chọn vừa hết, vui lòng chọn phòng khác.",
+            okText: "Chọn phòng",
+            cancelText: "Huỷ",
+            onOk: () => {
+              // clear pending booking and redirect to room selection
+              localStorage.removeItem("hs_pending_booking");
+              sessionStorage.removeItem("bookingInfo");
+              window.location.href = "/"; // main page / room selection
+            },
+            onCancel: () => {
+              // user canceled — keep them on payment but booking is effectively invalid
+              message.warning("Đơn tạm thời đã bị huỷ. Vui lòng chọn phòng mới.");
+            },
+          });
+        } else {
+          // available — nothing to do
+        }
+      } catch (err) {
+        console.error("Availability check failed:", err);
+        // don't block the user — just warn
+        message.warning("Kiểm tra tính khả dụng phòng thất bại. Vui lòng thử lại.");
+      }
+    };
+
+    checkAvailability();
+  }, [profile, bookingInfo, availabilityChecked]);
 
   const handleFinalConfirm = async () => {
     setProcessingPayment(true);
@@ -802,7 +901,7 @@ const PaymentPage: React.FC = () => {
               ) : (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #f0f0f0" }}>
                   <Text style={{ display: "block", marginBottom: 8 }}>
-                    Bạn có điểm tích luỹ? <Button type="link" onClick={() => (window.location.href = "/login")}>Đăng nhập để sử dụng</Button>
+                    Bạn có điểm tích luỹ? <Button type="link" onClick={() => handleSavePendingAndRedirect()}>Đăng nhập để sử dụng</Button>
                   </Text>
                 </div>
               )}
@@ -925,7 +1024,7 @@ const PaymentPage: React.FC = () => {
                         }}
                       >
                         <img
-                          src={sr.room?.urlAnhPhong || "/img/placeholder.png"}
+                          src={resolveImageUrl(sr.room?.urlAnhPhong || "/img/placeholder.png")}
                           alt={sr.room?.tenPhong}
                           style={{
                             width: "100%",
@@ -1142,9 +1241,10 @@ const PaymentPage: React.FC = () => {
           footer={null}
           width={480}
           centered
-          styles={{
-            body: { padding: 32 },
-          }}
+          zIndex={9999}
+          maskStyle={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999 }}
+          style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.35)', borderRadius: 16, overflow: 'hidden' }}
+          bodyStyle={{ padding: 32 }}
         >
           <div style={{ textAlign: "center" }}>
             <div
@@ -1525,43 +1625,46 @@ const PaymentPage: React.FC = () => {
           footer={null}
           width={500}
           centered
-          styles={{
-            body: { padding: 40 },
-          }}
+          zIndex={10010}
+          getContainer={() => document.body}
+          maskStyle={{ background: 'rgba(0,0,0,0.5)' }}
+          bodyStyle={{ padding: 0, background: 'transparent' }}
+          closable={false}
         >
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                width: 100,
-                height: 100,
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 24px",
-                boxShadow: "0 8px 24px rgba(82, 196, 26, 0.3)",
-              }}
-            >
-              <CheckCircleOutlined style={{ fontSize: 50, color: "#fff" }} />
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ width: '100%', maxWidth: 600, maxHeight: '90vh', overflow: 'auto', background: '#fff', borderRadius: 12 }}>
+              <div style={{ padding: 40, textAlign: 'center' }}>
+              <div
+                style={{
+                  width: 100,
+                  height: 100,
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 24px",
+                  boxShadow: "0 8px 24px rgba(82, 196, 26, 0.3)",
+                }}
+              >
+                <CheckCircleOutlined style={{ fontSize: 50, color: "#fff" }} />
+              </div>
 
-            <Title level={3} style={{ marginBottom: 12, color: "#52c41a" }}>
-              {selectedMethod === "hotel-payment"
-                ? "Đặt phòng thành công!"
-                : "Thanh toán thành công!"}
-            </Title>
+              <Title level={3} style={{ marginBottom: 12, color: "#52c41a" }}>
+                {selectedMethod === "hotel-payment"
+                  ? "Đặt phòng thành công!"
+                  : "Thanh toán thành công!"}
+              </Title>
 
-            <Paragraph
-              style={{ fontSize: 15, color: "#666", marginBottom: 30 }}
-            >
-              {selectedMethod === "hotel-payment"
-                ? "Đơn đặt phòng của bạn đã được ghi nhận. Vui lòng thanh toán khi nhận phòng."
-                : depositOption === "deposit" &&
-                  selectedMethod === "bank-transfer"
-                ? "Bạn đã đặt cọc thành công. Vui lòng thanh toán phần còn lại khi nhận phòng."
-                : "Đơn đặt phòng của bạn đã được xác nhận và thanh toán hoàn tất"}
-            </Paragraph>
+              <Paragraph
+                style={{ fontSize: 15, color: "#666", marginBottom: 30 }}
+              >
+                {selectedMethod === "hotel-payment"
+                  ? "Đơn đặt phòng của bạn đã được ghi nhận. Vui lòng thanh toán khi nhận phòng."
+                  : (depositOption === "deposit" && selectedMethod === "bank-transfer")
+                  ? "Bạn đã đặt cọc thành công. Vui lòng thanh toán phần còn lại khi nhận phòng."
+                  : "Đơn đặt phòng của bạn đã được xác nhận và thanh toán hoàn tất"}
+              </Paragraph>
 
             <Card
               size="small"
@@ -1671,8 +1774,10 @@ const PaymentPage: React.FC = () => {
               >
                 Đóng
               </Button>
-            </Space>
+              </Space>
+            </div>
           </div>
+        </div>
         </Modal>
       </Content>
 

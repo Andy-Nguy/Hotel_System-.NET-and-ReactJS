@@ -31,6 +31,7 @@ import {
   uploadBanner,
   getPromotionById,
 } from "../../api/promotionApi";
+import { getAllPromotions } from "../../api/promotionApi";
 
 interface PromotionFormProps {
   promotion?: Promotion | null;
@@ -51,7 +52,9 @@ const ServiceAssignPanel: React.FC<{
     checked: boolean,
     service?: { id: string; name: string; price: number }
   ) => void;
-}> = ({ selectedIds, onToggle }) => {
+  conflictingEnds?: Record<string, string>;
+  fromDate?: any;
+}> = ({ selectedIds, onToggle, conflictingEnds = {}, fromDate = null }) => {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -85,34 +88,43 @@ const ServiceAssignPanel: React.FC<{
     <div
       style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}
     >
-      {services.map((s) => (
-        <div
-          key={s.iddichVu}
-          style={{ border: "1px solid #eee", borderRadius: 8, padding: 8 }}
-        >
-          <div style={{ fontWeight: 700 }}>{s.tenDichVu}</div>
-          <div style={{ color: "#666", marginBottom: 8 }}>{s.iddichVu}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={selectedIds.includes(s.iddichVu)}
-                onChange={(e) =>
-                  onToggle(s.iddichVu, e.target.checked, {
-                    id: s.iddichVu,
-                    name: s.tenDichVu,
-                    price: s.gia || 0,
-                  })
-                }
-              />
-              <span style={{ fontSize: 13 }}>Gán dịch vụ</span>
-            </label>
-            <div style={{ marginLeft: "auto", color: "#333", fontWeight: 600 }}>
-              {(s.gia || 0).toLocaleString("vi-VN")} ₫
+      {services.map((s) => {
+        const existingEnd = conflictingEnds[String(s.iddichVu)];
+        const existingEndDate = existingEnd ? new Date(existingEnd) : null;
+        const startDate = fromDate && fromDate.toDate ? fromDate.toDate() : fromDate ? new Date(fromDate) : null;
+        const allowAssignIfStartsAfter = existingEndDate && startDate ? startDate > existingEndDate : false;
+        const isConflicted = !!existingEnd && !allowAssignIfStartsAfter;
+
+        return (
+          <div
+            key={s.iddichVu}
+            style={{ border: "1px solid #eee", borderRadius: 8, padding: 8, opacity: isConflicted ? 0.55 : 1, position: "relative" }}
+          >
+            <div style={{ fontWeight: 700 }}>{s.tenDichVu}</div>
+            <div style={{ color: "#666", marginBottom: 8 }}>{s.iddichVu}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(s.iddichVu)}
+                  disabled={isConflicted}
+                  onChange={(e) => onToggle(s.iddichVu, e.target.checked, { id: s.iddichVu, name: s.tenDichVu, price: s.gia || 0 })}
+                  title={isConflicted ? `Dịch vụ này có KM đến ${existingEndDate ? dayjs(existingEndDate).format("DD/MM/YYYY") : "(không rõ)"}. Để gán, đặt 'Ngày Bắt Đầu' > ngày kết thúc hiện tại.` : undefined}
+                />
+                <span style={{ fontSize: 13 }}>{isConflicted ? "Đã có KM" : "Gán dịch vụ"}</span>
+              </label>
+              <div style={{ marginLeft: "auto", color: "#333", fontWeight: 600 }}>
+                {(s.gia || 0).toLocaleString("vi-VN")} ₫
+              </div>
             </div>
+            {isConflicted && (
+              <div style={{ position: "absolute", top: 8, right: 8, background: "#ffefef", padding: "4px 6px", borderRadius: 6, color: "#c23434", fontSize: 12, fontWeight: 700 }}>
+                Đang có KM đến {existingEndDate ? dayjs(existingEndDate).format("DD/MM/YYYY") : "(không rõ)"}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
@@ -132,6 +144,9 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [roomObjects, setRoomObjects] = useState<any[]>([]);
+  // Map of roomId -> latest existing promotion end date (ISO string)
+  const [conflictingRoomEnds, setConflictingRoomEnds] = useState<Record<string, string>>({});
+  const [conflictingServiceEnds, setConflictingServiceEnds] = useState<Record<string, string>>({});
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [bannerImage, setBannerImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -144,22 +159,48 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
   const renderRoomCard = (r: any) => {
     const imageUrl = (() => {
       const v = r?.urlAnhPhong ?? r?.UrlAnhPhong ?? r?.roomImageUrl ?? r?.roomImage ?? null;
-      if (!v) return "/img/placeholder.png";
+      const backendBase = API_CONFIG.CURRENT || "";
+      const placeholder = `${backendBase}/img/placeholder.png`;
+      if (!v) return placeholder;
+      const resolveString = (s: string) => {
+        if (!s) return placeholder;
+        if (s.startsWith("http://") || s.startsWith("https://")) return s;
+        if (s.startsWith("/")) return `${backendBase}${s}`;
+        return `${backendBase}/img/room/${s}`;
+      };
+
       if (Array.isArray(v)) {
         const first = v[0];
-        if (!first) return "/img/placeholder.png";
-        if (typeof first === "string") return first.startsWith("http") ? first : `/img/room/${first}`;
-        if (typeof first === "object") return first.url || first.path || "/img/placeholder.png";
+        if (!first) return placeholder;
+        if (typeof first === "string") return resolveString(first);
+        if (typeof first === "object") return resolveString(first.url || first.path || "");
       }
-      if (typeof v === "object") return v.url || v.path || "/img/placeholder.png";
-      if (typeof v === "string") return v.startsWith("http") ? v : `/img/room/${v}`;
-      return "/img/placeholder.png";
+
+      if (typeof v === "object") return resolveString(v.url || v.path || "");
+      if (typeof v === "string") return resolveString(v);
+      return placeholder;
     })();
+
+    const existingEnd = conflictingRoomEnds[String(r.idphong)];
+    // Determine whether assignment should be disabled: if there is an existing
+    // promotion end date for this room and the new promotion's start date is
+    // NOT strictly after that end date, we disable the checkbox.
+    const fromField = form.getFieldValue("ngayBatDau");
+    const fromDate = fromField && fromField.toDate ? fromField.toDate() : fromField ? new Date(fromField) : null;
+    const existingEndDate = existingEnd ? new Date(existingEnd) : null;
+    const allowAssignIfStartsAfter = existingEndDate && fromDate ? fromDate > existingEndDate : false;
+    const isConflicted = !!existingEnd && !allowAssignIfStartsAfter;
 
     return (
       <div
         key={r.idphong}
-        style={{ border: "1px solid #eee", borderRadius: 8, overflow: "hidden" }}
+        style={{
+          border: "1px solid #eee",
+          borderRadius: 8,
+          overflow: "hidden",
+          opacity: isConflicted ? 0.55 : 1,
+          position: "relative",
+        }}
       >
         <div
           style={{
@@ -174,20 +215,32 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
           <div style={{ fontSize: 13, fontWeight: 700 }}>{r.tenPhong}</div>
           <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>{r.idphong}</div>
           <div>
-            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={selectedRooms.includes(r.idphong)}
-                onChange={(e) => {
-                  if (e.target.checked)
-                    setSelectedRooms((s) => (s.includes(r.idphong) ? s : [...s, r.idphong]));
-                  else setSelectedRooms((s) => s.filter((x) => x !== r.idphong));
-                }}
-              />
-              <span style={{ fontSize: 13 }}>Gán phòng</span>
-            </label>
+              <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedRooms.includes(r.idphong)}
+                  disabled={isConflicted}
+                  onChange={(e) => {
+                    if (isConflicted) return;
+                    if (e.target.checked)
+                      setSelectedRooms((s) => (s.includes(r.idphong) ? s : [...s, r.idphong]));
+                    else setSelectedRooms((s) => s.filter((x) => x !== r.idphong));
+                  }}
+                  title={
+                    isConflicted
+                      ? `Phòng này đang có KM đến ${existingEndDate ? dayjs(existingEndDate).format("DD/MM/YYYY") : "(không rõ)"}. Để gán, đặt 'Ngày Bắt Đầu' > ngày kết thúc hiện tại.`
+                      : undefined
+                  }
+                />
+                <span style={{ fontSize: 13 }}>{isConflicted ? "Đã có KM" : "Gán phòng"}</span>
+              </label>
           </div>
         </div>
+        {isConflicted && (
+          <div style={{ position: "absolute", top: 8, right: 8, background: "#ffefef", padding: "4px 6px", borderRadius: 6, color: "#c23434", fontSize: 12, fontWeight: 700 }}>
+            Đang có KM đến {existingEndDate ? dayjs(existingEndDate).format("DD/MM/YYYY") : "(không rõ)"}
+          </div>
+        )}
       </div>
     );
   };
@@ -222,6 +275,80 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
     return () => controller.abort();
   }, []);
+
+  // When date fields change, fetch promotions overlapping the selected date range
+  const updateConflictsForDates = async (from?: any, to?: any) => {
+    try {
+      if (!from || !to) {
+        setConflictingRoomEnds({});
+        return;
+      }
+      // Convert dayjs to Date if necessary
+      const fromDate = from.toDate ? from.toDate() : new Date(from);
+      const toDate = to.toDate ? to.toDate() : new Date(to);
+
+      // Some backends may not reliably filter by date; fetch all and filter client-side
+      const promos = await getAllPromotions();
+      if (!promos || promos.length === 0) {
+        setConflictingRoomEnds({});
+        return;
+      }
+
+      // client-side filter: mark promos whose date range overlaps the selected range
+      const newStart = fromDate;
+      const newEnd = toDate;
+      const ends: Record<string, string> = {};
+      const svcEnds: Record<string, string> = {};
+
+      promos.forEach((p) => {
+        try {
+          // exclude current editing promotion from conflicts
+          if (promotion && p.idkhuyenMai === (promotion as any).idkhuyenMai) return;
+
+          const pStartStr = p.ngayBatDau || (p as any).NgayBatDau || (p as any).startDate || (p as any).StartDate;
+          const pEndStr = p.ngayKetThuc || (p as any).NgayKetThuc || (p as any).endDate || (p as any).EndDate;
+          if (!pStartStr || !pEndStr) return;
+          const pStart = new Date(pStartStr);
+          const pEnd = new Date(pEndStr);
+
+          // overlap check: (pStart <= newEnd) && (pEnd >= newStart)
+          if (!(pStart <= newEnd && pEnd >= newStart)) return;
+
+          (p.khuyenMaiPhongs || []).forEach((kp: any) => {
+            const id = kp.idphong || kp.Idphong || kp.id || kp.idPhong || null;
+            if (!id) return;
+            const existing = ends[String(id)];
+            // keep the latest end date if multiple promos
+            if (!existing) ends[String(id)] = pEnd.toISOString();
+            else {
+              const cur = new Date(existing);
+              if (pEnd > cur) ends[String(id)] = pEnd.toISOString();
+            }
+          });
+
+          // collect service-level conflicts too
+          ((p.khuyenMaiDichVus as any) || (p as any).KhuyenMaiDichVus || []).forEach((sv: any) => {
+            const sid = sv.iddichVu || sv.IddichVu || sv.id || null;
+            if (!sid) return;
+            const existingSvc = svcEnds[String(sid)];
+            if (!existingSvc) svcEnds[String(sid)] = pEnd.toISOString();
+            else {
+              const cur = new Date(existingSvc);
+              if (pEnd > cur) svcEnds[String(sid)] = pEnd.toISOString();
+            }
+          });
+        } catch (e) {
+          // ignore malformed dates
+        }
+      });
+
+      setConflictingRoomEnds(ends);
+      setConflictingServiceEnds(svcEnds);
+    } catch (err) {
+      console.error("Failed to fetch promotions for conflict check", err);
+      setConflictingRoomEnds({});
+    }
+  };
 
   // Populate form and selected IDs in Edit mode
   useEffect(() => {
@@ -313,9 +440,21 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
 
             setSelectedServiceIds(allComboItems.map((x) => x.id));
             setComboServices(allComboItems);
+          } else if (promoType === "room" || promoType === undefined) {
+            const selectedPhongIds =
+              full.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
+            setSelectedRooms(selectedPhongIds);
+            setSelectedServiceIds([]);
+            setComboServices([]);
           }
           // Set banner image from canonical data
           setBannerImage(full.hinhAnhBanner || null);
+          // Update conflicts for the dates in this promotion edit
+          try {
+            await updateConflictsForDates(dayjs(full.ngayBatDau), dayjs(full.ngayKetThuc));
+          } catch (e) {
+            // ignore
+          }
         } catch (err) {
           console.error("Error loading promotion details for edit", err);
           // Fallback to whatever was passed in if fetch fails
@@ -380,6 +519,12 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
             setSelectedRooms(selectedPhongIds);
             setSelectedServiceIds(allComboItems.map((x) => x.id));
             setComboServices(allComboItems);
+          } else if (promoType === "room" || promoType === undefined) {
+            const selectedPhongIds =
+              promotion.khuyenMaiPhongs?.map((kmp: any) => kmp.idphong || kmp.Idphong) || [];
+            setSelectedRooms(selectedPhongIds);
+            setSelectedServiceIds([]);
+            setComboServices([]);
           }
           setBannerImage(promotion.hinhAnhBanner || null);
         }
@@ -494,6 +639,17 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
           layout="vertical"
           onFinish={handleSubmit}
           autoComplete="off"
+          onValuesChange={(changedValues, allValues) => {
+            // listen for date changes to update conflicts
+            if (
+              changedValues &&
+              (changedValues.ngayBatDau !== undefined || changedValues.ngayKetThuc !== undefined)
+            ) {
+              const from = allValues.ngayBatDau;
+              const to = allValues.ngayKetThuc;
+              updateConflictsForDates(from, to);
+            }
+          }}
         >
           <Row gutter={16}>
             <Col xs={24} md={12}>
@@ -716,23 +872,62 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
               <Form.Item
                 noStyle
                 shouldUpdate={(prev, cur) =>
-                  prev.loaiKhuyenMai !== cur.loaiKhuyenMai
+                  prev.loaiKhuyenMai !== cur.loaiKhuyenMai ||
+                  prev.tenKhuyenMai !== cur.tenKhuyenMai ||
+                  prev.loaiGiamGia !== cur.loaiGiamGia ||
+                  prev.giaTriGiam !== cur.giaTriGiam ||
+                  prev.ngayBatDau !== cur.ngayBatDau ||
+                  prev.ngayKetThuc !== cur.ngayKetThuc
                 }
               >
                 {({ getFieldValue }) => {
                   const promoType = getFieldValue("loaiKhuyenMai");
+
+                  // required fields that must be filled before allowing assignment
+                  const ten = getFieldValue("tenKhuyenMai");
+                  const loaiGiam = getFieldValue("loaiGiamGia");
+                  const gia = getFieldValue("giaTriGiam");
+                  const from = getFieldValue("ngayBatDau");
+                  const to = getFieldValue("ngayKetThuc");
+
+                  const requiredFilled =
+                    ten && String(ten).trim() !== "" &&
+                    loaiGiam &&
+                    (gia !== undefined && gia !== null) &&
+                    from &&
+                    to;
+
+                  const missing: string[] = [];
+                  if (!ten || String(ten).trim() === "") missing.push("Tên");
+                  if (!loaiGiam) missing.push("Loại giảm");
+                  if (gia === undefined || gia === null) missing.push("Giá trị giảm");
+                  if (!from) missing.push("Ngày bắt đầu");
+                  if (!to) missing.push("Ngày kết thúc");
+
+                  const btnTitle = !requiredFilled
+                    ? `Vui lòng điền: ${missing.join(", ")}`
+                    : undefined;
+
+                  const handleClick = () => {
+                    if (!requiredFilled) {
+                      message.warning(btnTitle || "Vui lòng điền các thông tin bắt buộc");
+                      return;
+                    }
+                    setAssignModalVisible(true);
+                  };
+
                   return (
                     <div>
                       {promoType === "service" ? (
-                        <Button onClick={() => setAssignModalVisible(true)}>
+                        <Button onClick={handleClick} disabled={!requiredFilled} title={btnTitle}>
                           Gán Dịch Vụ
                         </Button>
                       ) : promoType === "combo" ? (
-                        <Button onClick={() => setAssignModalVisible(true)}>
+                        <Button onClick={handleClick} disabled={!requiredFilled} title={btnTitle}>
                           Gán Combo Dịch Vụ
                         </Button>
                       ) : (
-                        <Button onClick={() => setAssignModalVisible(true)}>
+                        <Button onClick={handleClick} disabled={!requiredFilled} title={btnTitle}>
                           Gán Phòng
                         </Button>
                       )}
@@ -1054,6 +1249,8 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                         );
                       else setSelectedRooms((s) => s.filter((x) => x !== id));
                     }}
+                    conflictingEnds={conflictingServiceEnds}
+                    fromDate={form.getFieldValue("ngayBatDau")}
                   />
                 ) : form.getFieldValue("loaiKhuyenMai") === "combo" ? (
                   // Combo Dịch Vụ: Chỉ chọn 2-3 dịch vụ, tính tổng tiền
@@ -1081,6 +1278,8 @@ const PromotionForm: React.FC<PromotionFormProps> = ({
                           );
                         }
                       }}
+                      conflictingEnds={conflictingServiceEnds}
+                      fromDate={form.getFieldValue("ngayBatDau")}
                     />
                     {selectedServiceIds.length > 0 && (
                       <div
