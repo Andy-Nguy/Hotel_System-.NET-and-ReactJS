@@ -53,6 +53,8 @@ export type Room = {
   xepHangSao: number;
   trangThai: string;
   urlAnhPhong: string;
+  // Image coming specifically for room TYPE in some API versions
+  urlAnhLoaiPhong?: string;
   amenities?: Amenity[];
   promotions?: Promotion[];
 };
@@ -154,7 +156,7 @@ async function tryFetchRooms(): Promise<Room[] | null> {
 
       const processedData = (data || []).map((r: any) => {
         const normalizedUrl = normalizeImageUrl(
-          r.urlAnhPhong ?? r.UrlAnhPhong,
+          r.urlAnhLoaiPhong ?? r.urlAnhPhong ?? r.UrlAnhPhong ?? r.UrlAnhLoaiPhong,
           baseUrl
         );
         console.log(
@@ -173,7 +175,7 @@ async function tryFetchRooms(): Promise<Room[] | null> {
           giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
           xepHangSao: r.xepHangSao ?? r.XepHangSao ?? 0,
           trangThai: r.trangThai ?? r.TrangThai,
-          urlAnhPhong: normalizedUrl, // Force normalized URL last
+          urlAnhPhong: normalizedUrl, // Force normalized URL last (may be urlAnhLoaiPhong normalized)
           // Add amenities and promotions from API
           amenities: r.amenities ?? [],
           promotions: r.promotions ?? [],
@@ -238,6 +240,53 @@ export async function getRoomById(id: string): Promise<Room> {
     return await handleRes(res);
   } catch (error) {
     throw new Error(`Failed to fetch room by ID from ${baseUrl}: ${error}`);
+  }
+}
+
+/**
+ * Fetch room types (LoaiPhong) and normalize fields for mobile usage
+ */
+export type RoomTypeMobile = {
+  idloaiPhong: string;
+  tenLoaiPhong?: string | null;
+  moTa?: string | null;
+  urlAnhLoaiPhong?: string | null;
+};
+
+export async function getRoomTypes(): Promise<RoomTypeMobile[]> {
+  const cacheKey = getCacheKey("getRoomTypes");
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
+  const baseUrl = API_CONFIG.CURRENT;
+  try {
+    const res = await fetch(`${baseUrl}/api/LoaiPhong`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      console.warn(`Failed to fetch RoomTypes: ${res.status}`);
+      setCachedData(cacheKey, []);
+      return [];
+    }
+
+    const data = await handleRes(res);
+    const arr = Array.isArray(data) ? data : data && Array.isArray(data.data) ? data.data : [];
+
+    const normalized = (arr || []).map((rt: any) => ({
+      idloaiPhong:
+        rt.idloaiPhong ?? rt.idLoaiPhong ?? rt.IdloaiPhong ?? rt.IdLoaiPhong ?? String(rt.id) ?? "",
+      tenLoaiPhong: rt.tenLoaiPhong ?? rt.TenLoaiPhong ?? null,
+      moTa: rt.moTa ?? rt.MoTa ?? null,
+      urlAnhLoaiPhong: normalizeImageUrl(rt.urlAnhLoaiPhong ?? rt.UrlAnhLoaiPhong ?? rt.urlAnhLoaiPhong ?? null, baseUrl) ?? null,
+    }));
+
+    setCachedData(cacheKey, normalized);
+    return normalized;
+  } catch (error) {
+    console.warn("Error fetching room types:", error);
+    setCachedData(cacheKey, []);
+    return [];
   }
 }
 
@@ -491,4 +540,5 @@ export default {
   checkAvailableRooms,
   checkAvailableRoomsByType,
   getTopRooms2025,
+  getRoomTypes,
 };

@@ -131,6 +131,24 @@ const LoginPage: React.FC = () => {
         setMessage("Đăng nhập thành công! Đang chuyển về trang chủ...");
         setTimeout(() => {
           try {
+            // If there is a pending booking saved prior to login, restore it to sessionStorage
+            const pendingRaw = localStorage.getItem("hs_pending_booking");
+            if (pendingRaw) {
+              try {
+                const pending = JSON.parse(pendingRaw);
+                if (pending && pending.bookingInfo) {
+                  sessionStorage.setItem("bookingInfo", JSON.stringify(pending.bookingInfo));
+                  // remove pending marker
+                  localStorage.removeItem("hs_pending_booking");
+                  // redirect back to payment page to continue flow
+                  window.location.href = "/payment";
+                  return;
+                }
+              } catch (e) {
+                console.warn("Could not parse pending booking:", e);
+              }
+            }
+
             console.log(
               "[Login] Navigating to home, userInfoSaved:",
               userInfoSaved

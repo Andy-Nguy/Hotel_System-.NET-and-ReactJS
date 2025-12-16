@@ -42,6 +42,13 @@ namespace Hotel_System.API.Controllers
         // - Luôn set HoaDon.TienThanhToan rõ ràng
         // - Đồng bộ DatPhong.TongTien & DatPhong.TrangThaiThanhToan (cash/quầy = 1; online = 2)
         // - Gửi email hóa đơn khi đã thanh toán (online) VỚI BODY
+        // 
+        // LOYALTY POINTS SYSTEM:
+        //   - Earning: 500,000 VND = 1 point (cứ 500k tiền thanh toán được +1 điểm)
+        //   - Redeeming: 1 point = 100 VND discount (1 điểm có thể dùng để giảm 100đ)
+        //   - Max redeem: 50% of total invoice amount
+        //   - Points are deducted when payment completes (status = 2 = Đã thanh toán đầy đủ)
+        //   - Points are earned when payment completes (status = 2)
         // ===========================
         [HttpPost("hoa-don")]
         public async Task<IActionResult> CreateInvoice([FromBody] HoaDonPaymentRequest request)
@@ -167,9 +174,13 @@ namespace Hotel_System.API.Controllers
                 // Apply VAT 10% and round to nearest integer
                 decimal tongTien = Math.Round(totalBeforeVat * 1.1m, 0, MidpointRounding.AwayFromZero);
                 _logger.LogInformation("PaymentController: computed tongTien server-side room={Room} services={Services} tongTien={TongTien}", roomTotal, servicesTotal, tongTien);
+                // Keep a copy of the pre-discount total so earned points are calculated
+                // from the invoice total (before applying redeemed points).
+                decimal tongTienBeforePoints = tongTien;
 
                 // ============ LOYALTY POINTS: Validate and apply discount ============
-                const int POINT_VALUE_VND = 100; // 1 point = 100 VND
+                const decimal POINT_VALUE_VND = 10000m; // 1 point redeemed = 10,000 VND discount
+                const decimal POINTS_EARN_RATE = 500000m; // 500,000 VND earned = 1 point awarded
                 const decimal MAX_REDEEM_PERCENT = 0.5m; // Max 50% invoice discount
                 int pointsToUse = request.RedeemPoints ?? 0;
                 int customerCurrentPoints = datPhong.IdkhachHangNavigation?.TichDiem ?? 0;
@@ -436,8 +447,10 @@ namespace Hotel_System.API.Controllers
                             pointsToUse, datPhong.IdkhachHangNavigation.IdkhachHang, datPhong.IdkhachHangNavigation.TichDiem);
                     }
 
-                    // Add earned points based on final amount paid (tongTien after discount)
-                    int pointsToAdd = (int)Math.Floor((double)(tongTien / POINT_VALUE_VND));
+                    // Add earned points based on invoice total BEFORE point discount
+                    // (business rule: earn points on total invoice amount)
+                    // 500,000 VND = 1 point
+                    int pointsToAdd = (int)Math.Floor((double)(tongTienBeforePoints / POINTS_EARN_RATE));
                     if (pointsToAdd > 0)
                     {
                         datPhong.IdkhachHangNavigation.TichDiem = (datPhong.IdkhachHangNavigation.TichDiem ?? 0) + pointsToAdd;

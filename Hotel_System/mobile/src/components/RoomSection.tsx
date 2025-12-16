@@ -78,6 +78,17 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
     return () => { cancelled = true; };
   }, [room.idphong]);
 
+  // Format promotion label based on type: percent -> "-10%", amount -> "- 1.000.000 VND"
+  const promoLabel = (() => {
+    if (!promotion) return null;
+    const val = Number(promotion.value ?? 0);
+    if (promotion.type === "percent" || String(promotion.type).toLowerCase() === "percent") {
+      return `-${val}%`;
+    }
+    // treat other types (amount) as currency VND
+    return `- ${val.toLocaleString("vi-VN")} VND`;
+  })();
+
   return (
     <TouchableOpacity
       style={styles.roomCard}
@@ -118,11 +129,7 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
         {/* Promotion Badge */}
         {room.promotions && room.promotions.length > 0 && (
           <View style={styles.promotionBadge}>
-            <Text style={styles.promotionBadgeText}>
-              {room.promotions[0].type === 'percent' 
-                ? `-${room.promotions[0].value}%` 
-                : `- ${room.promotions[0].value}`}
-            </Text>
+            <Text style={styles.promotionBadgeText}>{promoLabel}</Text>
           </View>
         )}
       </View>
