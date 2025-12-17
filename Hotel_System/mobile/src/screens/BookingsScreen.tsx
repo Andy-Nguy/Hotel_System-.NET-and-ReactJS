@@ -118,6 +118,8 @@ const mapBookingStatusText = (status: number | undefined | null) => {
       return "Đang sử dụng";
     case 4:
       return "Hoàn thành";
+    case 5:
+      return "Quá hạn";
     default:
       return "Không xác định";
   }

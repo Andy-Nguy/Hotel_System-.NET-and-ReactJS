@@ -758,8 +758,8 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                         headerRow.RelativeItem().Column(col =>
                         {
                             col.Item().Text("Khách sạn Robins Villa").FontSize(20).SemiBold();
-                            col.Item().Text("Địa chỉ: 123 Đường Ví Dụ, Quận 1, TP. HCM").FontSize(10);
-                            col.Item().Text("Hotline: 1900-xxxx").FontSize(10);
+                            col.Item().Text("Địa chỉ: 4 Đường Dã Tượng, Phường 6, Thành phố 5, Lâm Đồng, Việt Nam").FontSize(10);
+                            col.Item().Text("Hotline: 0123 456 789").FontSize(10);
                         });
 
                         headerRow.ConstantItem(220).Column(col =>
@@ -784,13 +784,6 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                                 c.Item().Text($"SĐT: {booking?.IdkhachHangNavigation?.SoDienThoai ?? "-"}");
                             });
 
-                            row.ConstantItem(220).Column(c =>
-                            {
-                                c.Item().AlignRight().Text("Chi tiết thanh toán").SemiBold();
-                                c.Item().AlignRight().Text($"Tiền phòng: {(hd.TienPhong ?? 0):N0} đ");
-                                c.Item().AlignRight().Text($"Tiền cọc: {(hd.TienCoc ?? 0m):N0} đ");
-                                c.Item().AlignRight().Text($"Tổng phải trả: {hd.TongTien:N0} đ");
-                            });
                         });
 
                         // Rooms table
@@ -847,7 +840,7 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                             }
                         });
 
-                        // Totals and notes
+                       
                         col.Item().PaddingTop(10).AlignRight().Column(totalCol =>
                         {
                             var total = hd.TongTien;
@@ -856,11 +849,11 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                             totalCol.Item().Text($"Đã thanh toán: {paid:N0} đ");
                             var due = Math.Max(0m, total - paid);
                             totalCol.Item().Text($"Còn nợ: {due:N0} đ");
-                            if (!string.IsNullOrWhiteSpace(hd.GhiChu)) totalCol.Item().PaddingTop(6).Text($"Ghi chú: {hd.GhiChu}");
+                            
                         });
                     });
 
-                    page.Footer().AlignCenter().Text(x => x.Span("Khách sạn Robins Villa - Hóa đơn tự động | Hotline: 1900-xxxx"));
+                    page.Footer().AlignCenter().Text(x => x.Span("Khách sạn Robins Villa - Hóa đơn tự động | Hotline: 0123 456 789"));
                 });
             });
 

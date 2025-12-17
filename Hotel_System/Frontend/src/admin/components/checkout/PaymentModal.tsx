@@ -309,15 +309,9 @@ const PaymentModal: React.FC<Props> = ({
     };
   }, [visible, summary, dbServices, paymentRow]);
 
-  // Dịch vụ mới (chưa lưu CSDL) – chỉ hiển thị, chưa vào DB
-  const clientServices = Array.isArray(selectedServices)
-    ? selectedServices.map((v: any) => ({
-        serviceName: v.serviceName ?? v.tenDichVu ?? v.name ?? '',
-        price: Number(v.price ?? 0),
-        amount: Number((v.price ?? 0) * (v.quantity ?? 1)),
-        qty: Number(v.quantity ?? 1)
-      }))
-    : [];
+  // Dịch vụ mới (chưa lưu CSDL) – KHÔNG dùng selectedServices vì nó đã được merge vào summary.services ở CheckoutManager
+  // clientServices = [] để tránh nhân đôi
+  const clientServices: any[] = [];
 
   const combinedServices = [...(dbServices || []), ...clientServices];
   // Tổng dịch vụ
@@ -468,7 +462,8 @@ const PaymentModal: React.FC<Props> = ({
       0
   );
 
-  let serviceTotal = serviceTotalServerPreferred;
+  // Use calculated total from displayed services to avoid mismatch between rows and total
+  let serviceTotal = serviceTotalFromCombined;
   let subTotal = subTotalFromServer > 0 ? subTotalFromServer : roomTotal + serviceTotal;
   let vat = vatFromServer > 0 ? vatFromServer : Math.round(subTotal * 0.1);
   let total = totalFromServer > 0 ? totalFromServer : subTotal + vat;

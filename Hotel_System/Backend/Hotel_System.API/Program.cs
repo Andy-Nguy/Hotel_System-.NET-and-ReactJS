@@ -74,8 +74,8 @@ builder.Services.AddHostedService<HoldExpiryBackgroundService>();
 // Background service: monitor overdue bookings and add late fees
 builder.Services.AddHostedService<OverdueMonitorService>();
 
-// Background service: send review reminder emails
-builder.Services.AddHostedService<ReviewReminderService>();
+// Background service: send review reminder emails - DISABLED: only send on manual checkout button click
+// builder.Services.AddHostedService<ReviewReminderService>();
 
 // Configure JWT authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");
