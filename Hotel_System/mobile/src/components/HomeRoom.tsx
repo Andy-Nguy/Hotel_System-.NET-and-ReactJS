@@ -6,9 +6,9 @@ import {
   ImageBackground,
   TouchableOpacity,
   ActivityIndicator,
-  FlatList,
 } from "react-native";
 import { getRooms, Room } from "../api/roomsApi";
+import { getPrimaryRoomImage } from "../utils/imageUtils";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 
 const HomeRoom: React.FC = () => {
@@ -37,7 +37,7 @@ const HomeRoom: React.FC = () => {
 
   const renderRoom = ({ item: room }: { item: Room }) => {
     const imageUrl =
-      room.urlAnhPhong ||
+      getPrimaryRoomImage(room) ||
       "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800";
 
     return (
@@ -124,15 +124,15 @@ const HomeRoom: React.FC = () => {
           <Text style={styles.emptyText}>No rooms with 4+ stars found.</Text>
         </View>
       ) : (
-        <FlatList
-          data={rooms}
-          renderItem={renderRoom}
-          keyExtractor={(item) =>
-            item.idphong ?? item.soPhong ?? Math.random().toString()
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContainer}
-        />
+        <View style={styles.listContainer}>
+          {rooms.map((item) => (
+            <View
+              key={item.idphong ?? item.soPhong ?? Math.random().toString()}
+            >
+              {renderRoom({ item })}
+            </View>
+          ))}
+        </View>
       )}
     </View>
   );

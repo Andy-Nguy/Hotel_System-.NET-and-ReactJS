@@ -6,11 +6,11 @@ import {
   Text,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
   Modal,
   ActivityIndicator,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import AppIcon from "../components/AppIcon";

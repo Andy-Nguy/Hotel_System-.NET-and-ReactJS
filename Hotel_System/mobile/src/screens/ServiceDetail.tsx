@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,13 +6,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  SafeAreaView,
   Image,
   Alert,
-} from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
-import { COLORS, SIZES, FONTS } from '../constants/theme';
-import servicesApi, { Service } from '../api/servicesApi';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRoute, useNavigation } from "@react-navigation/native";
+import { COLORS, SIZES, FONTS } from "../constants/theme";
+import servicesApi, { Service } from "../api/servicesApi";
 
 interface ServiceDetailRouteParams {
   serviceId: string;
@@ -36,14 +36,16 @@ const ServiceDetail: React.FC = () => {
       setLoading(true);
       setError(null);
       if (!serviceId) {
-        setError('Không tìm thấy ID dịch vụ');
+        setError("Không tìm thấy ID dịch vụ");
         return;
       }
       const data = await servicesApi.getServiceById(serviceId);
       setService(data);
     } catch (err) {
-      console.error('Error loading service detail:', err);
-      setError(err instanceof Error ? err.message : 'Không thể tải chi tiết dịch vụ');
+      console.error("Error loading service detail:", err);
+      setError(
+        err instanceof Error ? err.message : "Không thể tải chi tiết dịch vụ"
+      );
     } finally {
       setLoading(false);
     }
@@ -51,10 +53,17 @@ const ServiceDetail: React.FC = () => {
 
   const handleBooking = () => {
     if (!service) return;
-    Alert.alert('Đặt dịch vụ', `Bạn có muốn đặt dịch vụ "${service.tenDichVu}"?`, [
-      { text: 'Huỷ', onPress: () => {}, style: 'cancel' },
-      { text: 'Đồng ý', onPress: () => Alert.alert('Thành công', 'Đã thêm vào giỏ hàng') },
-    ]);
+    Alert.alert(
+      "Đặt dịch vụ",
+      `Bạn có muốn đặt dịch vụ "${service.tenDichVu}"?`,
+      [
+        { text: "Huỷ", onPress: () => {}, style: "cancel" },
+        {
+          text: "Đồng ý",
+          onPress: () => Alert.alert("Thành công", "Đã thêm vào giỏ hàng"),
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -86,8 +95,13 @@ const ServiceDetail: React.FC = () => {
         </View>
         <View style={styles.center}>
           <Text style={styles.errorText}>⚠️</Text>
-          <Text style={styles.errorMessage}>{error || 'Không tìm thấy dịch vụ'}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadServiceDetail}>
+          <Text style={styles.errorMessage}>
+            {error || "Không tìm thấy dịch vụ"}
+          </Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={loadServiceDetail}
+          >
             <Text style={styles.retryText}>Thử lại</Text>
           </TouchableOpacity>
         </View>
@@ -109,23 +123,31 @@ const ServiceDetail: React.FC = () => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Image */}
         {service.hinhDichVu && (
-          <Image source={{ uri: service.hinhDichVu }} style={styles.image} resizeMode="cover" />
+          <Image
+            source={{ uri: service.hinhDichVu }}
+            style={styles.image}
+            resizeMode="cover"
+          />
         )}
 
         {/* Title Section */}
         <View style={styles.titleSection}>
-          <Text style={styles.title}>{service.tenDichVu || 'Dịch vụ'}</Text>
-          {typeof service.tienDichVu === 'number' && (
-            <Text style={styles.price}>{(service.tienDichVu).toLocaleString('vi-VN')} VND</Text>
+          <Text style={styles.title}>{service.tenDichVu || "Dịch vụ"}</Text>
+          {typeof service.tienDichVu === "number" && (
+            <Text style={styles.price}>
+              {service.tienDichVu.toLocaleString("vi-VN")} VND
+            </Text>
           )}
         </View>
 
         {/* Info Grid */}
         <View style={styles.infoGrid}>
-          {typeof service.thoiLuongUocTinh === 'number' && (
+          {typeof service.thoiLuongUocTinh === "number" && (
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>⏱️ Thời lượng</Text>
-              <Text style={styles.infoValue}>{service.thoiLuongUocTinh} phút</Text>
+              <Text style={styles.infoValue}>
+                {service.thoiLuongUocTinh} phút
+              </Text>
             </View>
           )}
           {service.trangThai && (
@@ -142,10 +164,14 @@ const ServiceDetail: React.FC = () => {
             <Text style={styles.sectionTitle}>⏰ Thời gian phục vụ</Text>
             <View style={styles.timeBox}>
               {service.thoiGianBatDau && (
-                <Text style={styles.timeText}>Bắt đầu: {service.thoiGianBatDau}</Text>
+                <Text style={styles.timeText}>
+                  Bắt đầu: {service.thoiGianBatDau}
+                </Text>
               )}
               {service.thoiGianKetThuc && (
-                <Text style={styles.timeText}>Kết thúc: {service.thoiGianKetThuc}</Text>
+                <Text style={styles.timeText}>
+                  Kết thúc: {service.thoiGianKetThuc}
+                </Text>
               )}
             </View>
           </View>
@@ -185,31 +211,31 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding * 0.8,
     backgroundColor: COLORS.white,
     borderBottomWidth: 1,
-    borderBottomColor: '#e8e8e8',
+    borderBottomColor: "#e8e8e8",
   },
   closeButton: {
     fontSize: 24,
     color: COLORS.secondary,
-    fontWeight: '600',
+    fontWeight: "600",
     width: 30,
-    textAlign: 'center',
+    textAlign: "center",
   },
   headerTitle: {
     ...FONTS.h4,
     color: COLORS.secondary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding * 0.6,
     marginTop: 30,
@@ -219,14 +245,14 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     ...FONTS.h2,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.secondary,
     fontSize: 20,
   },
   center: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   errorText: {
     fontSize: 48,
@@ -236,7 +262,7 @@ const styles = StyleSheet.create({
     ...FONTS.body3,
     color: COLORS.gray,
     marginBottom: SIZES.padding * 2,
-    textAlign: 'center',
+    textAlign: "center",
   },
   retryButton: {
     backgroundColor: COLORS.primary,
@@ -247,34 +273,34 @@ const styles = StyleSheet.create({
   retryText: {
     ...FONTS.body4,
     color: COLORS.white,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   content: {
     flex: 1,
   },
   image: {
-    width: '100%',
+    width: "100%",
     height: 280,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: "#f0f0f0",
   },
   titleSection: {
     padding: SIZES.padding,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   title: {
     ...FONTS.h3,
     color: COLORS.secondary,
     marginBottom: SIZES.padding * 0.5,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   price: {
     ...FONTS.h4,
     color: COLORS.primary,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   infoGrid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding,
     gap: SIZES.padding,
@@ -285,7 +311,7 @@ const styles = StyleSheet.create({
     padding: SIZES.padding,
     borderRadius: SIZES.radiusLarge,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: "#f0f0f0",
   },
   infoLabel: {
     ...FONTS.body5,
@@ -295,22 +321,22 @@ const styles = StyleSheet.create({
   infoValue: {
     ...FONTS.body3,
     color: COLORS.secondary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   section: {
     paddingHorizontal: SIZES.padding,
     paddingVertical: SIZES.padding * 1.2,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   sectionTitle: {
     ...FONTS.h4,
     color: COLORS.secondary,
     marginBottom: SIZES.padding,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   timeBox: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: "#f9f9f9",
     padding: SIZES.padding,
     borderRadius: SIZES.radiusLarge,
     borderLeftWidth: 4,
@@ -326,7 +352,7 @@ const styles = StyleSheet.create({
     ...FONTS.body3,
     color: COLORS.secondary,
     lineHeight: 24,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: "#f9f9f9",
     padding: SIZES.padding,
     borderRadius: SIZES.radiusLarge,
   },
@@ -334,11 +360,11 @@ const styles = StyleSheet.create({
     ...FONTS.body3,
     color: COLORS.secondary,
     lineHeight: 24,
-    backgroundColor: '#fff8f0',
+    backgroundColor: "#fff8f0",
     padding: SIZES.padding,
     borderRadius: SIZES.radiusLarge,
     borderLeftWidth: 4,
-    borderLeftColor: '#FFB84D',
+    borderLeftColor: "#FFB84D",
   },
   bookButton: {
     backgroundColor: COLORS.primary,
@@ -346,8 +372,8 @@ const styles = StyleSheet.create({
     marginVertical: SIZES.padding,
     paddingVertical: SIZES.padding * 1.2,
     borderRadius: SIZES.radiusLarge,
-    alignItems: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -356,7 +382,7 @@ const styles = StyleSheet.create({
   bookButtonText: {
     ...FONTS.h4,
     color: COLORS.white,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
 

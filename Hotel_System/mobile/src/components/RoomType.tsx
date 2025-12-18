@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
+import { getPrimaryRoomImage } from "../utils/imageUtils";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
 import { getRooms, getRoomTypes, Room } from "../api/roomsApi";
@@ -45,7 +46,8 @@ const RoomType: React.FC = () => {
 
       const typesMap = new Map<string, { urlAnhLoaiPhong?: string | null }>();
       types.forEach((t: any) => {
-        if (t && t.idloaiPhong) typesMap.set(t.idloaiPhong, { urlAnhLoaiPhong: t.urlAnhLoaiPhong });
+        if (t && t.idloaiPhong)
+          typesMap.set(t.idloaiPhong, { urlAnhLoaiPhong: t.urlAnhLoaiPhong });
       });
 
       // Group rooms by loại phòng and get min price for each type
@@ -100,9 +102,9 @@ const RoomType: React.FC = () => {
     >
       {/* Full image card with rounded corners */}
       <View style={styles.imageContainer}>
-        {item.urlAnhPhong ? (
+        {getPrimaryRoomImage(item) ? (
           <Image
-            source={{ uri: item.urlAnhPhong }}
+            source={{ uri: getPrimaryRoomImage(item) || "" }}
             style={styles.roomImage}
             contentFit="cover"
             onError={(e) => console.log("Image load error:", item.urlAnhPhong)}

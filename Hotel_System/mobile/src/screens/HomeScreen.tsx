@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   ImageBackground,
-  FlatList,
   Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -21,7 +20,6 @@ import Promotion from "../components/Promotion";
 import RoomType from "../components/RoomType";
 import Services from "../components/Services";
 
-
 const HomeScreen: React.FC = () => {
   const { userInfo } = useAuth();
   const navigation = useNavigation();
@@ -30,31 +28,31 @@ const HomeScreen: React.FC = () => {
   const [loadingLoyalty, setLoadingLoyalty] = useState(false);
 
   useEffect(() => {
-  if (!userInfo) {
-    setLoyalty(null);
-    return;
-  }
+    if (!userInfo) {
+      setLoyalty(null);
+      return;
+    }
 
-  let isMounted = true;
-  setLoadingLoyalty(true);
+    let isMounted = true;
+    setLoadingLoyalty(true);
 
-  getLoyalty()
-    .then((data) => {
-      if (isMounted) {
-        setLoyalty(data);
-      }
-    })
-    .catch((err) => {
-      console.log("load loyalty error:", err?.message || err);
-    })
-    .finally(() => {
-      if (isMounted) setLoadingLoyalty(false);
-    });
+    getLoyalty()
+      .then((data) => {
+        if (isMounted) {
+          setLoyalty(data);
+        }
+      })
+      .catch((err) => {
+        console.log("load loyalty error:", err?.message || err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingLoyalty(false);
+      });
 
-  return () => {
-    isMounted = false;
-  };
-}, [userInfo]);
+    return () => {
+      isMounted = false;
+    };
+  }, [userInfo]);
 
   const getUserName = () => {
     if (!userInfo) return "Nguyen";
@@ -134,13 +132,15 @@ const HomeScreen: React.FC = () => {
           <Text style={styles.bottomLabel}>Xin chào, {getUserName()}</Text>
         </View>
         <TouchableOpacity style={styles.bottomRight}>
-  <Text style={styles.bottomStats}>
-    {loadingLoyalty
-      ? "Đang tải..."
-      : `${loyalty?.totalNights ?? 0} Đêm • ${loyalty?.tichDiem ?? 0} Điểm`}
-  </Text>
-  <Text style={styles.bottomArrow}>›</Text>
-</TouchableOpacity>
+          <Text style={styles.bottomStats}>
+            {loadingLoyalty
+              ? "Đang tải..."
+              : `${loyalty?.totalNights ?? 0} Đêm • ${
+                  loyalty?.tichDiem ?? 0
+                } Điểm`}
+          </Text>
+          <Text style={styles.bottomArrow}>›</Text>
+        </TouchableOpacity>
       </View>
 
       <AboutUs />

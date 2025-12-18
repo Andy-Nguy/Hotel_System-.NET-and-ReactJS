@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ImageBackground,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
   Dimensions,
 } from "react-native";
@@ -17,9 +16,9 @@ type BlogData = BlogPost;
 const getCategoryColor = (category?: string): string => {
   const colors: { [key: string]: string } = {
     "Travel Trip": COLORS.primary,
-    "Camping": COLORS.secondary,
-    "Event": COLORS.warning,
-    "Blog": COLORS.primary,
+    Camping: COLORS.secondary,
+    Event: COLORS.warning,
+    Blog: COLORS.primary,
     "Khách sạn Sang Trọng": COLORS.primary,
     "CẢNH BÁO KHẨN CẤP": COLORS.error,
     "Ẩm thực": COLORS.secondary,
@@ -62,7 +61,9 @@ const BlogSection: React.FC = () => {
   const renderBlog = ({ item, index }: { item: BlogData; index: number }) => {
     const isLarge = index === 0 || index === 1;
     const height = isLarge ? 300 : 200;
-    console.log(`🎨 Rendering blog ${index}: ${item.title}, image: ${item.image}`);
+    console.log(
+      `🎨 Rendering blog ${index}: ${item.title}, image: ${item.image}`
+    );
 
     return (
       <TouchableOpacity
@@ -108,7 +109,11 @@ const BlogSection: React.FC = () => {
           <Text style={styles.span}>Hotel News</Text>
           <Text style={styles.h2}>Our Blog & Event</Text>
         </View>
-        <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
+        <ActivityIndicator
+          size="large"
+          color={COLORS.primary}
+          style={{ marginTop: 40 }}
+        />
       </View>
     );
   }
@@ -123,7 +128,9 @@ const BlogSection: React.FC = () => {
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📰</Text>
           <Text style={styles.emptyText}>Không có bài viết nào</Text>
-          <Text style={styles.emptySubtext}>Vui lòng kiểm tra kết nối mạng và thử lại</Text>
+          <Text style={styles.emptySubtext}>
+            Vui lòng kiểm tra kết nối mạng và thử lại
+          </Text>
         </View>
       </View>
     );
@@ -136,14 +143,11 @@ const BlogSection: React.FC = () => {
         <Text style={styles.h2}>Our Blog & Event</Text>
       </View>
 
-      <FlatList
-        data={blogsData}
-        renderItem={renderBlog}
-        keyExtractor={(item) => item.id.toString()}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContainer}
-        scrollEnabled={true}
-      />
+      <View style={styles.listContainer}>
+        {blogsData.map((item) => (
+          <View key={item.id.toString()}>{renderBlog({ item })}</View>
+        ))}
+      </View>
     </View>
   );
 };
