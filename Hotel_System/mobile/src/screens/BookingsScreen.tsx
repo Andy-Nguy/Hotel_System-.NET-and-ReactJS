@@ -72,6 +72,13 @@ const getStatusBadgeStyle = (
           textColor: AppColors.success,
         };
         break;
+      case 5: // Overdue
+        style = {
+          backgroundColor: "#fef2f0",
+          borderColor: "#ff7875",
+          textColor: "#ff7875",
+        };
+        break;
     }
   } else if (type === "payment") {
     switch (status) {
@@ -267,51 +274,15 @@ const BookingsScreen: React.FC = () => {
     }
   };
 
-  // When bookings change, schedule refreshes for bookings whose checkout
-  // time is in the future and whose status is not yet 'Completed' (4).
-  // If a booking's checkout time already passed but the server hasn't
-  // updated status to 4, trigger an immediate refresh so the review button
-  // can become enabled.
+  // When bookings change, do NOT auto-refresh based on checkout time.
+  // Only allow manual refresh (pull-to-refresh or reload button) to avoid flickering.
+  // This ensures all statuses (1, 2, 3, 4, 5) display smoothly without constant reloading.
   useEffect(() => {
     // Clear existing timers
     try {
       refreshTimers.current.forEach((t) => clearTimeout(t));
     } catch (e) {}
     refreshTimers.current = [];
-
-    const now = new Date();
-    let shouldRefreshImmediately = false;
-
-    bookings.forEach((item) => {
-      const checkout = item?.ngayTraPhong ? new Date(item.ngayTraPhong) : null;
-      const rawStatus = getProp(item, "trangThai", "TrangThai");
-      const statusCode =
-        rawStatus !== undefined ? Number(rawStatus) : undefined;
-
-      if (!checkout) return;
-
-      const msUntil = checkout.getTime() - now.getTime();
-
-      // If checkout already passed but server hasn't marked completed, refresh now
-      if (msUntil <= 0 && statusCode !== 4) {
-        shouldRefreshImmediately = true;
-        return;
-      }
-
-      // Otherwise schedule a refresh right after checkout time to get latest status
-      if (msUntil > 0 && statusCode !== 4) {
-        const t = setTimeout(() => {
-          loadBookings();
-        }, msUntil + 1000); // +1s buffer
-        refreshTimers.current.push(t as any);
-      }
-    });
-
-    if (shouldRefreshImmediately) {
-      // debounce a short bit to avoid spamming
-      const t = setTimeout(() => loadBookings(), 500);
-      refreshTimers.current.push(t as any);
-    }
 
     return () => {
       try {
@@ -502,7 +473,7 @@ const BookingsScreen: React.FC = () => {
     const checkoutDate = checkoutRaw ? new Date(checkoutRaw) : null;
     const now = new Date();
     const canOpenReview =
-      statusCode === 4 || (!!checkoutDate && now >= checkoutDate);
+      statusCode === 4 || statusCode === 5 || (!!checkoutDate && now >= checkoutDate);
 
     const bookingStatusStyle = getStatusBadgeStyle("booking", statusCode);
     const paymentStatusStyle = getStatusBadgeStyle("payment", paymentCode);
@@ -657,8 +628,8 @@ const BookingsScreen: React.FC = () => {
                 // Use bookingId (DB id) for API calls; bookingCode is for display
                 const bId = String(bookingId);
 
-                // If status isn't marked completed, try completing checkout
-                if (statusCode !== 4) {
+                // If status isn't marked completed (4) and not overdue (5), try completing checkout
+                if (statusCode !== 4 && statusCode !== 5) {
                   try {
                     setCompletingId(bId);
                     const r = await reviewApi.completeCheckout(bId);
