@@ -9,7 +9,7 @@ export const API_CONFIG = {
   // Local development API (when running .NET API locally)
   // Check launchSettings.json for the correct port
   // Usually: https://localhost:5001 (HTTPS) or http://localhost:5171 (HTTP)
-  LOCAL: "http://192.168.1.4:8080",
+  LOCAL: "http://192.168.1.129:8080",
 
   // Railway production API
   RAILWAY: "https://hotelsystem-net-and-reactjs-production.up.railway.app",
@@ -41,15 +41,24 @@ export function buildApiUrl(path: string, base = API_CONFIG.CURRENT) {
   // When running on Android emulator, 'localhost' refers to the device itself.
   // Map to 10.0.2.2 (Android emulator) so fetches hit the host machine.
   try {
-    const host = base;
-    if (Platform.OS === "android" && host.includes("localhost")) {
-      return host.replace("localhost", "10.0.2.2") + path;
+    const host = (base || "").trim();
+    // Map common hostnames to Android emulator host if needed
+    if (Platform.OS === "android") {
+      // If using localhost or loopback addresses on emulator, map to 10.0.2.2
+      if (
+        host.includes("localhost") ||
+        host.includes("127.0.0.1") ||
+        host.includes("0.0.0.0")
+      ) {
+        return (
+          host.replace(/localhost|127\.0\.0\.1|0\.0\.0\.0/, "10.0.2.2") + path
+        );
+      }
     }
+    return `${host}${path}`;
   } catch (e) {
     // ignore platform read errors in non-RN env
   }
-
-  return `${base}${path}`;
 }
 
 export default {

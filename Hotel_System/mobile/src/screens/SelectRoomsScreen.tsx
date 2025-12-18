@@ -5,14 +5,16 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   Modal,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
+import { getPrimaryRoomImage, getRoomImages } from "../utils/imageUtils";
+import { getRoomById } from "../api/roomsApi";
+import RoomDetail from "../components/RoomDetail";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import AppIcon from "../components/AppIcon";
@@ -55,6 +57,7 @@ const SelectRoomsScreen: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedRoomDetail, setSelectedRoomDetail] =
     useState<AvailableRoom | null>(null);
+  const [modalImageIndex, setModalImageIndex] = useState(0);
 
   useEffect(() => {
     loadBookingData();
@@ -275,9 +278,25 @@ const SelectRoomsScreen: React.FC = () => {
     AsyncStorage.setItem("bookingData", JSON.stringify(bookingData));
   };
 
-  const openRoomDetail = (room: AvailableRoom) => {
-    setSelectedRoomDetail(room);
+  const openRoomDetail = async (room: AvailableRoom) => {
+    const base = {
+      ...room,
+      idphong: (room as any).idphong || (room as any).roomId,
+    };
+    setSelectedRoomDetail(base);
+    setModalImageIndex(0);
     setModalVisible(true);
+    try {
+      const full = await getRoomById(String(room.roomId));
+      const merged = {
+        ...base,
+        ...full,
+        idphong: full?.idphong ?? base.idphong,
+      };
+      setSelectedRoomDetail(merged);
+    } catch (err) {
+      console.warn("SelectRoomsScreen: failed to load full room details", err);
+    }
   };
 
   const closeRoomDetail = () => {
@@ -405,13 +424,13 @@ const SelectRoomsScreen: React.FC = () => {
           </Text>
 
           {availableForSelection.length > 0 ? (
-            <FlatList
-              data={availableForSelection}
-              renderItem={renderRoomItem}
-              keyExtractor={(item) => item.roomId}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
+            <View style={{ gap: 16 }}>
+              {availableForSelection.map((item) => (
+                <View key={item.roomId} style={{ width: "100%" }}>
+                  {renderRoomItem({ item })}
+                </View>
+              ))}
+            </View>
           ) : (
             <View style={styles.noRooms}>
               <AppIcon name="bed" size={40} color={COLORS.gray} />
@@ -450,99 +469,12 @@ const SelectRoomsScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Room Detail Modal */}
-      <Modal
+      {/* Use shared RoomDetail component to keep UI consistent */}
+      <RoomDetail
+        selectedRoom={selectedRoomDetail}
         visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeRoomDetail}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chi tiết phòng</Text>
-              <TouchableOpacity
-                onPress={closeRoomDetail}
-                style={styles.closeButton}
-              >
-                <AppIcon name="close" size={24} color={COLORS.secondary} />
-              </TouchableOpacity>
-            </View>
-
-            {selectedRoomDetail && (
-              <ScrollView style={styles.modalBody}>
-                <View style={styles.modalImageContainer}>
-                  {selectedRoomDetail.roomImageUrl ? (
-                    <Image
-                      source={{ uri: selectedRoomDetail.roomImageUrl }}
-                      style={styles.modalImage}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={styles.modalImagePlaceholder}>
-                      <Text style={styles.modalImagePlaceholderText}>🏨</Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.modalInfo}>
-                  <Text style={styles.modalRoomName}>
-                    {selectedRoomDetail.roomTypeName}
-                  </Text>
-                  <Text style={styles.modalRoomNumber}>
-                    Phòng {selectedRoomDetail.roomNumber}
-                  </Text>
-
-                  <View style={styles.modalRating}>
-                    <Text style={styles.modalStars}>{renderStars(4.5)}</Text>
-                    <Text style={styles.modalRatingText}>4.5/5</Text>
-                  </View>
-
-                  {selectedRoomDetail.description && (
-                    <Text style={styles.modalDescription}>
-                      {selectedRoomDetail.description}
-                    </Text>
-                  )}
-
-                  <View style={styles.modalPriceSection}>
-                    <Text style={styles.modalPriceLabel}>Giá/đêm:</Text>
-                    <Text style={styles.modalPrice}>
-                      {Number(
-                        selectedRoomDetail.basePricePerNight || 0
-                      ).toLocaleString()}
-                      đ
-                    </Text>
-                  </View>
-
-                  <Text style={styles.modalNights}>
-                    Số đêm: {calculateNights()} | Tổng:
-                    {(
-                      Number(selectedRoomDetail.basePricePerNight || 0) *
-                      calculateNights()
-                    ).toLocaleString()}
-                    đ
-                  </Text>
-                </View>
-              </ScrollView>
-            )}
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={closeRoomDetail}
-              >
-                <Text style={styles.modalCancelText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmButton}
-                onPress={confirmSelectRoom}
-              >
-                <Text style={styles.modalConfirmText}>Chọn phòng</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={closeRoomDetail}
+      />
     </SafeAreaView>
   );
 };
@@ -752,6 +684,32 @@ const styles = StyleSheet.create({
   },
   modalImagePlaceholderText: {
     fontSize: 64,
+  },
+  imageDots: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.7)",
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.12)",
+  },
+  dotActive: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+    marginHorizontal: 4,
   },
   modalInfo: {
     padding: 24,
