@@ -52,7 +52,8 @@ export type Room = {
   giaCoBanMotDem: number;
   xepHangSao: number;
   trangThai: string;
-  urlAnhPhong: string;
+  urlAnhPhong?: string;
+  roomImageUrls?: string[];
   // Image coming specifically for room TYPE in some API versions
   urlAnhLoaiPhong?: string;
   amenities?: Amenity[];
@@ -75,7 +76,8 @@ export type AvailableRoom = {
   roomNumber: string;
   description: string;
   basePricePerNight: number;
-  roomImageUrl: string;
+  roomImageUrl?: string | null;
+  roomImageUrls?: string[];
   roomTypeName: string;
   maxOccupancy: number;
 };
@@ -155,10 +157,25 @@ async function tryFetchRooms(): Promise<Room[] | null> {
       }
 
       const processedData = (data || []).map((r: any) => {
-        const normalizedUrl = normalizeImageUrl(
-          r.urlAnhLoaiPhong ?? r.urlAnhPhong ?? r.UrlAnhPhong ?? r.UrlAnhLoaiPhong,
-          baseUrl
-        );
+        // Support both array (JsonB) and single-string image fields
+        const rawImages =
+          r.UrlAnhPhong ??
+          r.urlAnhPhong ??
+          r.urlAnhLoaiPhong ??
+          r.UrlAnhLoaiPhong ??
+          null;
+        let roomImageUrls: string[] | undefined = undefined;
+        let normalizedUrl: string | undefined = undefined;
+
+        if (Array.isArray(rawImages)) {
+          roomImageUrls = rawImages
+            .map((img: any) => normalizeImageUrl(img, baseUrl))
+            .filter((s): s is string => !!s);
+          normalizedUrl = roomImageUrls.length ? roomImageUrls[0] : undefined;
+        } else {
+          normalizedUrl = normalizeImageUrl(rawImages, baseUrl);
+        }
+
         console.log(
           `🔄 Normalizing URL for ${r.tenPhong}: "${r.urlAnhPhong}" → "${normalizedUrl}"`
         );
@@ -175,7 +192,8 @@ async function tryFetchRooms(): Promise<Room[] | null> {
           giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
           xepHangSao: r.xepHangSao ?? r.XepHangSao ?? 0,
           trangThai: r.trangThai ?? r.TrangThai,
-          urlAnhPhong: normalizedUrl, // Force normalized URL last (may be urlAnhLoaiPhong normalized)
+          urlAnhPhong: normalizedUrl, // primary image (first in array) for backwards compatibility
+          roomImageUrls: roomImageUrls, // optional array of normalized images
           // Add amenities and promotions from API
           amenities: r.amenities ?? [],
           promotions: r.promotions ?? [],
@@ -271,14 +289,30 @@ export async function getRoomTypes(): Promise<RoomTypeMobile[]> {
     }
 
     const data = await handleRes(res);
-    const arr = Array.isArray(data) ? data : data && Array.isArray(data.data) ? data.data : [];
+    const arr = Array.isArray(data)
+      ? data
+      : data && Array.isArray(data.data)
+      ? data.data
+      : [];
 
     const normalized = (arr || []).map((rt: any) => ({
       idloaiPhong:
-        rt.idloaiPhong ?? rt.idLoaiPhong ?? rt.IdloaiPhong ?? rt.IdLoaiPhong ?? String(rt.id) ?? "",
+        rt.idloaiPhong ??
+        rt.idLoaiPhong ??
+        rt.IdloaiPhong ??
+        rt.IdLoaiPhong ??
+        String(rt.id) ??
+        "",
       tenLoaiPhong: rt.tenLoaiPhong ?? rt.TenLoaiPhong ?? null,
       moTa: rt.moTa ?? rt.MoTa ?? null,
-      urlAnhLoaiPhong: normalizeImageUrl(rt.urlAnhLoaiPhong ?? rt.UrlAnhLoaiPhong ?? rt.urlAnhLoaiPhong ?? null, baseUrl) ?? null,
+      urlAnhLoaiPhong:
+        normalizeImageUrl(
+          rt.urlAnhLoaiPhong ??
+            rt.UrlAnhLoaiPhong ??
+            rt.urlAnhLoaiPhong ??
+            null,
+          baseUrl
+        ) ?? null,
     }));
 
     setCachedData(cacheKey, normalized);
@@ -330,11 +364,48 @@ export async function checkAvailableRooms(
       const data = await handleRes(res);
       console.log(`✅ Available rooms from ${baseUrl}:`, data);
 
-      // Normalize image URLs for mobile app
-      const processedData = (data || []).map((room: any) => ({
-        ...room,
-        roomImageUrl: normalizeImageUrl(room.roomImageUrl, baseUrl),
-      }));
+      // Normalize image URLs for mobile app (support arrays and different field names)
+      const processedData = (data || []).map((room: any) => {
+        // Collect possible image sources
+        const rawArray =
+          room.UrlAnhPhong ??
+          room.urlAnhPhong ??
+          room.RoomImageUrls ??
+          room.roomImageUrls ??
+          null;
+        let roomImageUrls: string[] | undefined = undefined;
+        let primary: string | undefined = undefined;
+
+        if (Array.isArray(rawArray) && rawArray.length) {
+          roomImageUrls = rawArray
+            .map((img: any) => normalizeImageUrl(img, baseUrl))
+            .filter((s): s is string => !!s);
+          primary = roomImageUrls.length ? roomImageUrls[0] : undefined;
+        } else {
+          // Fallbacks: single fields in various names
+          const single =
+            room.roomImageUrl ??
+            room.urlAnhPhong ??
+            room.UrlAnhPhong ??
+            room.urlAnhLoaiPhong ??
+            room.UrlAnhLoaiPhong ??
+            null;
+          primary = normalizeImageUrl(single, baseUrl);
+          if (primary) roomImageUrls = [primary];
+        }
+
+        console.log(
+          `🔄 checkAvailableRooms normalize for ${
+            room.roomTypeName || room.tenPhong
+          }: primary=${primary}`
+        );
+
+        return {
+          ...room,
+          roomImageUrl: primary,
+          roomImageUrls: roomImageUrls,
+        };
+      });
 
       // Cache the result
       setCachedData(cacheKey, processedData || []);
@@ -500,18 +571,46 @@ export async function getTopRooms2025(top: number = 5): Promise<TopRoom[]> {
 
       // Handle response structure
       if (Array.isArray(data)) {
-        // Normalize image URLs
-        const normalized = data.map((room: any) => ({
-          ...room,
-          urlAnhPhong: normalizeImageUrl(room.urlAnhPhong, baseUrl),
-        }));
+        // Normalize image URLs and support array JsonB
+        const normalized = data.map((room: any) => {
+          const rawImages = room.UrlAnhPhong ?? room.urlAnhPhong ?? null;
+          let roomImageUrls: string[] | undefined = undefined;
+          let mainUrl: string | undefined = undefined;
+          if (Array.isArray(rawImages)) {
+            roomImageUrls = rawImages
+              .map((img: any) => normalizeImageUrl(img, baseUrl))
+              .filter((s): s is string => !!s);
+            mainUrl = roomImageUrls.length ? roomImageUrls[0] : undefined;
+          } else {
+            mainUrl = normalizeImageUrl(room.urlAnhPhong, baseUrl);
+          }
+          return {
+            ...room,
+            urlAnhPhong: mainUrl,
+            roomImageUrls,
+          };
+        });
         setCachedData(cacheKey, normalized);
         return normalized;
       } else if (data && Array.isArray(data.data)) {
-        const normalized = data.data.map((room: any) => ({
-          ...room,
-          urlAnhPhong: normalizeImageUrl(room.urlAnhPhong, baseUrl),
-        }));
+        const normalized = data.data.map((room: any) => {
+          const rawImages = room.UrlAnhPhong ?? room.urlAnhPhong ?? null;
+          let roomImageUrls: string[] | undefined = undefined;
+          let mainUrl: string | undefined = undefined;
+          if (Array.isArray(rawImages)) {
+            roomImageUrls = rawImages
+              .map((img: any) => normalizeImageUrl(img, baseUrl))
+              .filter((s): s is string => !!s);
+            mainUrl = roomImageUrls.length ? roomImageUrls[0] : undefined;
+          } else {
+            mainUrl = normalizeImageUrl(room.urlAnhPhong, baseUrl);
+          }
+          return {
+            ...room,
+            urlAnhPhong: mainUrl,
+            roomImageUrls,
+          };
+        });
         setCachedData(cacheKey, normalized);
         return normalized;
       } else {

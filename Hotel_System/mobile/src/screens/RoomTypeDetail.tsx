@@ -7,7 +7,6 @@ import {
   FlatList,
   ActivityIndicator,
   Modal,
-  SafeAreaView,
   ScrollView,
   Image as RNImage,
   TextInput,
@@ -15,6 +14,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS } from "../constants/theme";

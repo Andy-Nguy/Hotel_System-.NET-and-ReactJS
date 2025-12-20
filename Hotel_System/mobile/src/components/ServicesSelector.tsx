@@ -270,12 +270,11 @@ const ServicesSelector: React.FC<ServicesSelectorProps> = ({
           ) : available.length === 0 ? (
             <Text style={styles.emptyText}>Không có dịch vụ nào</Text>
           ) : (
-            <FlatList
-              data={available}
-              renderItem={renderServiceItem}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-            />
+            <View style={{ gap: 12 }}>
+              {available.map((svc) => (
+                <View key={svc.id}>{renderServiceItem({ item: svc })}</View>
+              ))}
+            </View>
           )}
         </View>
       )}
@@ -283,12 +282,13 @@ const ServicesSelector: React.FC<ServicesSelectorProps> = ({
       {selectedServices.length > 0 && (
         <View style={styles.summary}>
           <Text style={styles.summaryTitle}>Dịch vụ đã chọn</Text>
-          <FlatList
-            data={selectedServices}
-            renderItem={renderSelectedService}
-            keyExtractor={(item) => item.serviceId}
-            showsVerticalScrollIndicator={false}
-          />
+          <View style={{ gap: 10 }}>
+            {selectedServices.map((sv) => (
+              <View key={sv.serviceId}>
+                {renderSelectedService({ item: sv })}
+              </View>
+            ))}
+          </View>
           <View style={styles.total}>
             <Text style={styles.totalLabel}>Tổng dịch vụ:</Text>
             <Text style={styles.totalAmount}>

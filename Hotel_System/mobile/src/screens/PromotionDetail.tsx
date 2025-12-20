@@ -7,16 +7,20 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ImageBackground,
-  FlatList,
   Dimensions,
   TextInput,
   Alert,
-  SafeAreaView,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import { getPromotions, calculateDiscountedPrice, getServiceDetails } from "../api/promotionApi";
+import {
+  getPromotions,
+  calculateDiscountedPrice,
+  getServiceDetails,
+} from "../api/promotionApi";
+import { getPrimaryRoomImage } from "../utils/imageUtils";
 import { checkAvailableRooms } from "../api/roomsApi";
 import { getAmenitiesForRoom } from "../api/amenitiesApi";
 
@@ -368,8 +372,16 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
 
         {/* Promotion Type Specific Content */}
         {(() => {
-          const combos = (promotion as any)?.khuyenMaiCombos || (promotion as any)?.khuyenMaiCombo || (promotion as any)?.combos || [];
-          const promoServices = (promotion as any)?.khuyenMaiDichVus || (promotion as any)?.khuyenMaiDichVu || (promotion as any)?.dichVus || null;
+          const combos =
+            (promotion as any)?.khuyenMaiCombos ||
+            (promotion as any)?.khuyenMaiCombo ||
+            (promotion as any)?.combos ||
+            [];
+          const promoServices =
+            (promotion as any)?.khuyenMaiDichVus ||
+            (promotion as any)?.khuyenMaiDichVu ||
+            (promotion as any)?.dichVus ||
+            null;
 
           if (Array.isArray(combos) && combos.length > 0) {
             // Render combo list
@@ -378,18 +390,71 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
                 <Text style={styles.sectionTitle}>🎁 Combo Dịch Vụ</Text>
                 <View style={{ marginBottom: 12 }}>
                   {combos.map((combo: any, idx: number) => {
-                    const services = combo.khuyenMaiComboDichVus || combo.KhuyenMaiComboDichVus || combo.services || [];
-                    const originalPrice = (services || []).reduce((sum: number, s: any) => sum + Number(s.tienDichVu ?? s.TienDichVu ?? s.price ?? 0), 0);
+                    const services =
+                      combo.khuyenMaiComboDichVus ||
+                      combo.KhuyenMaiComboDichVus ||
+                      combo.services ||
+                      [];
+                    const originalPrice = (services || []).reduce(
+                      (sum: number, s: any) =>
+                        sum +
+                        Number(s.tienDichVu ?? s.TienDichVu ?? s.price ?? 0),
+                      0
+                    );
                     const promoType = (promotion as any)?.loaiGiamGia;
-                    const promoVal = Number((promotion as any)?.giaTriGiam ?? 0);
-                    const discounted = promoType === "percent" ? Math.round(originalPrice * (1 - promoVal / 100)) : Math.max(0, Math.round(originalPrice - promoVal));
+                    const promoVal = Number(
+                      (promotion as any)?.giaTriGiam ?? 0
+                    );
+                    const discounted =
+                      promoType === "percent"
+                        ? Math.round(originalPrice * (1 - promoVal / 100))
+                        : Math.max(0, Math.round(originalPrice - promoVal));
 
                     return (
-                      <View key={combo.idkhuyenMaiCombo ?? combo.IdkhuyenMaiCombo ?? idx} style={{ padding: 12, backgroundColor: "#fff", borderRadius: 8, borderWidth: 1, borderColor: "#eee", marginBottom: 12 }}>
-                        <Text style={{ fontWeight: "700", fontSize: 16, marginBottom: 6 }}>{combo.tenCombo || combo.TenCombo || combo.name || `Combo ${idx + 1}`}</Text>
-                        <Text style={{ color: "#666", marginBottom: 8 }}>{combo.moTa || combo.MoTa || ""}</Text>
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#ff4d4f" }}>Giá sau khuyến mãi: {discounted?.toLocaleString()} ₫</Text>
-                        <Text style={{ fontSize: 12, color: "#999", marginTop: 6 }}>Gồm {services.length} dịch vụ</Text>
+                      <View
+                        key={
+                          combo.idkhuyenMaiCombo ??
+                          combo.IdkhuyenMaiCombo ??
+                          idx
+                        }
+                        style={{
+                          padding: 12,
+                          backgroundColor: "#fff",
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: "#eee",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontWeight: "700",
+                            fontSize: 16,
+                            marginBottom: 6,
+                          }}
+                        >
+                          {combo.tenCombo ||
+                            combo.TenCombo ||
+                            combo.name ||
+                            `Combo ${idx + 1}`}
+                        </Text>
+                        <Text style={{ color: "#666", marginBottom: 8 }}>
+                          {combo.moTa || combo.MoTa || ""}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: "600",
+                            color: "#ff4d4f",
+                          }}
+                        >
+                          Giá sau khuyến mãi: {discounted?.toLocaleString()} ₫
+                        </Text>
+                        <Text
+                          style={{ fontSize: 12, color: "#999", marginTop: 6 }}
+                        >
+                          Gồm {services.length} dịch vụ
+                        </Text>
                       </View>
                     );
                   })}
@@ -516,7 +581,9 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
                 {checking ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.checkButtonText}>Kiểm Tra Phòng Trống</Text>
+                  <Text style={styles.checkButtonText}>
+                    Kiểm Tra Phòng Trống
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -535,13 +602,8 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
                 </Text>
               </View>
             ) : (
-              <FlatList
-                scrollEnabled={false}
-                data={availableRooms}
-                keyExtractor={(item) =>
-                  item.idphong || item.roomId || Math.random().toString()
-                }
-                renderItem={({ item: room }) => {
+              <View style={{ gap: 12 }}>
+                {availableRooms.map((room) => {
                   const roomId = room.idphong || room.roomId || "";
                   // Try multiple field names for room name/type
                   const roomName =
@@ -563,11 +625,7 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
                     0;
                   const description =
                     room.moTa || room.description || room.MoTa || "";
-                  const imageUrl =
-                    room.urlAnhPhong ||
-                    room.roomImageUrl ||
-                    room.UrlAnhPhong ||
-                    "";
+                  const imageUrl = getPrimaryRoomImage(room) || "";
 
                   // Calculate discounted price
                   const discountPercent =
@@ -751,8 +809,8 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
                       )}
                     </View>
                   );
-                }}
-              />
+                })}
+              </View>
             )}
           </View>
         )}
@@ -1204,21 +1262,68 @@ const ServiceCardWithImage: React.FC<ServiceCardProps> = ({
     }
   };
 
-  const svc = serviceInfo || serviceData.service || serviceData.dichVu || serviceData.serviceDetail || serviceData;
-  const name = svc?.tenDichVu || svc?.TenDichVu || svc?.name || serviceData.tenDichVu || serviceData.TenDichVu || `Dịch vụ`;
+  const svc =
+    serviceInfo ||
+    serviceData.service ||
+    serviceData.dichVu ||
+    serviceData.serviceDetail ||
+    serviceData;
+  const name =
+    svc?.tenDichVu ||
+    svc?.TenDichVu ||
+    svc?.name ||
+    serviceData.tenDichVu ||
+    serviceData.TenDichVu ||
+    `Dịch vụ`;
   const image = svc?.hinhDichVu || svc?.HinhDichVu || svc?.image || null;
-  const original = Number(svc?.tienDichVu ?? svc?.TienDichVu ?? svc?.price ?? 0);
+  const original = Number(
+    svc?.tienDichVu ?? svc?.TienDichVu ?? svc?.price ?? 0
+  );
   const promoType = promotion?.loaiGiamGia;
   const promoVal = Number(promotion?.giaTriGiam ?? 0);
-  const discounted = calculateDiscountedPrice(original, promoType || "percent", promoVal);
-  const discountPercent = promoType === "percent" ? promoVal : ((original - discounted) / original * 100).toFixed(0);
+  const discounted = calculateDiscountedPrice(
+    original,
+    promoType || "percent",
+    promoVal
+  );
+  const discountPercent =
+    promoType === "percent"
+      ? promoVal
+      : (((original - discounted) / original) * 100).toFixed(0);
 
   return (
-    <View style={{ padding: 12, backgroundColor: "#fff", borderRadius: 8, borderWidth: 1, borderColor: "#eee", marginBottom: 12, flexDirection: "row", gap: 12 }}>
+    <View
+      style={{
+        padding: 12,
+        backgroundColor: "#fff",
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#eee",
+        marginBottom: 12,
+        flexDirection: "row",
+        gap: 12,
+      }}
+    >
       {/* Service Image */}
-      <View style={{ width: 100, height: 100, borderRadius: 8, overflow: "hidden", backgroundColor: "#f0f0f0", flexShrink: 0 }}>
+      <View
+        style={{
+          width: 100,
+          height: 100,
+          borderRadius: 8,
+          overflow: "hidden",
+          backgroundColor: "#f0f0f0",
+          flexShrink: 0,
+        }}
+      >
         {loading ? (
-          <View style={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center" }}>
+          <View
+            style={{
+              width: "100%",
+              height: "100%",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
             <ActivityIndicator size="small" color="#999" />
           </View>
         ) : image ? (
@@ -1229,7 +1334,15 @@ const ServiceCardWithImage: React.FC<ServiceCardProps> = ({
             onError={(e) => console.log("Service image load error:", image, e)}
           />
         ) : (
-          <View style={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center", backgroundColor: "#e0e0e0" }}>
+          <View
+            style={{
+              width: "100%",
+              height: "100%",
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "#e0e0e0",
+            }}
+          >
             <Text style={{ fontSize: 24 }}>🎁</Text>
           </View>
         )}
@@ -1237,22 +1350,57 @@ const ServiceCardWithImage: React.FC<ServiceCardProps> = ({
 
       {/* Service Info */}
       <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-          <Text style={{ fontWeight: "600", fontSize: 15, flex: 1, paddingRight: 8 }}>{name}</Text>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: 6,
+          }}
+        >
+          <Text
+            style={{
+              fontWeight: "600",
+              fontSize: 15,
+              flex: 1,
+              paddingRight: 8,
+            }}
+          >
+            {name}
+          </Text>
           {promoVal > 0 && (
-            <View style={{ backgroundColor: "#ff4d4f", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>-{discountPercent}%</Text>
+            <View
+              style={{
+                backgroundColor: "#ff4d4f",
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 4,
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>
+                -{discountPercent}%
+              </Text>
             </View>
           )}
         </View>
-        
+
         {original > 0 && (
           <View style={{ marginTop: 6 }}>
-            <Text style={{ color: "#999", marginBottom: 4, textDecorationLine: original !== discounted ? "line-through" : "none", fontSize: 13 }}>
+            <Text
+              style={{
+                color: "#999",
+                marginBottom: 4,
+                textDecorationLine:
+                  original !== discounted ? "line-through" : "none",
+                fontSize: 13,
+              }}
+            >
               {original.toLocaleString()} ₫
             </Text>
             {original !== discounted && (
-              <Text style={{ color: "#ff4d4f", fontWeight: "700", fontSize: 15 }}>
+              <Text
+                style={{ color: "#ff4d4f", fontWeight: "700", fontSize: 15 }}
+              >
                 {discounted?.toLocaleString()} ₫
               </Text>
             )}

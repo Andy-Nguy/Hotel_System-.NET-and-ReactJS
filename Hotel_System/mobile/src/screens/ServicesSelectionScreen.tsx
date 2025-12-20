@@ -3,14 +3,13 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
-  SafeAreaView,
   StyleSheet,
   Alert,
   Modal,
   ScrollView,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import AppIcon from "../components/AppIcon";
@@ -280,13 +279,11 @@ const ServicesSelectionScreen: React.FC = () => {
           </Text>
         </View>
 
-        <FlatList
-          data={services}
-          renderItem={renderServiceItem}
-          keyExtractor={(item) => item.iddichVu}
-          scrollEnabled={false}
-          contentContainerStyle={{ paddingHorizontal: SIZES.padding }}
-        />
+        <View style={{ paddingHorizontal: SIZES.padding, gap: 12 }}>
+          {services.map((s) => (
+            <View key={s.iddichVu}>{renderServiceItem({ item: s })}</View>
+          ))}
+        </View>
       </ScrollView>
 
       <View style={styles.bottomBar}>

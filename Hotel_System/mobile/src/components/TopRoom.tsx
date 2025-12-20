@@ -9,8 +9,13 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
+import { getPrimaryRoomImage } from "../utils/imageUtils";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
-import { TopRoom as TopRoomType, getTopRooms2025, getRooms } from "../api/roomsApi";
+import {
+  TopRoom as TopRoomType,
+  getTopRooms2025,
+  getRooms,
+} from "../api/roomsApi";
 import { useNavigation } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
@@ -60,7 +65,7 @@ const TopRoom: React.FC<TopRoomProps> = ({ topCount = 5, onRoomPress }) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       try {
         const topRoomsData = await getTopRooms2025(topCount);
         if (topRoomsData && topRoomsData.length > 0) {
@@ -69,7 +74,10 @@ const TopRoom: React.FC<TopRoomProps> = ({ topCount = 5, onRoomPress }) => {
           return;
         }
       } catch (topErr) {
-        console.warn("⚠️ Failed to get top rooms, falling back to random rooms:", topErr);
+        console.warn(
+          "⚠️ Failed to get top rooms, falling back to random rooms:",
+          topErr
+        );
       }
 
       // Fallback: lấy đại 5 phòng ngẫu nhiên nếu không có phòng top
@@ -137,7 +145,7 @@ const TopRoom: React.FC<TopRoomProps> = ({ topCount = 5, onRoomPress }) => {
           >
             {/* Room Image */}
             <Image
-              source={{ uri: room.urlAnhPhong }}
+              source={{ uri: getPrimaryRoomImage(room) || "" }}
               style={styles.cardImage}
               contentFit="cover"
               transition={300}
@@ -147,8 +155,15 @@ const TopRoom: React.FC<TopRoomProps> = ({ topCount = 5, onRoomPress }) => {
             <View style={styles.cardContent}>
               {/* Category Badge */}
               {room.tenLoaiPhong && (
-                <View style={[styles.categoryBadge, getCategoryBadgeColor(room.tenLoaiPhong)]}>
-                  <Text style={styles.categoryBadgeText}>{room.tenLoaiPhong}</Text>
+                <View
+                  style={[
+                    styles.categoryBadge,
+                    getCategoryBadgeColor(room.tenLoaiPhong),
+                  ]}
+                >
+                  <Text style={styles.categoryBadgeText}>
+                    {room.tenLoaiPhong}
+                  </Text>
                 </View>
               )}
 
@@ -159,7 +174,10 @@ const TopRoom: React.FC<TopRoomProps> = ({ topCount = 5, onRoomPress }) => {
 
               {/* Description from backend (moTa / description) with safe fallback */}
               <Text style={styles.description} numberOfLines={3}>
-                {room.moTa ?? room.description ?? room.mota ?? "Trải nghiệm sang trọng với đầy đủ tiện nghi hiện đại."}
+                {room.moTa ??
+                  room.description ??
+                  room.mota ??
+                  "Trải nghiệm sang trọng với đầy đủ tiện nghi hiện đại."}
               </Text>
 
               {/* Footer: Avatar + Rating + Date */}
@@ -170,7 +188,9 @@ const TopRoom: React.FC<TopRoomProps> = ({ topCount = 5, onRoomPress }) => {
                   </View>
                   <View style={styles.metaInfo}>
                     <Text style={styles.metaName}>Top Room</Text>
-                    <Text style={styles.metaDate}>{room.soLanSuDung} lượt đặt</Text>
+                    <Text style={styles.metaDate}>
+                      {room.soLanSuDung} lượt đặt
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -186,7 +206,10 @@ const getCategoryBadgeColor = (category: string) => {
   const lowerCategory = category.toLowerCase();
   if (lowerCategory.includes("vip") || lowerCategory.includes("deluxe")) {
     return styles.badgeAutomobile;
-  } else if (lowerCategory.includes("standard") || lowerCategory.includes("tiêu chuẩn")) {
+  } else if (
+    lowerCategory.includes("standard") ||
+    lowerCategory.includes("tiêu chuẩn")
+  ) {
     return styles.badgeTechnology;
   }
   return styles.badgeFood;
@@ -206,7 +229,7 @@ const styles = StyleSheet.create({
     ...FONTS.h2,
     color: COLORS.primary,
   },
-  
+
   scrollContent: {
     paddingHorizontal: SIZES.base,
   },
