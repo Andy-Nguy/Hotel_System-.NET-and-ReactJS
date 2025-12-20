@@ -34,7 +34,7 @@ export const DEFAULT_BASE_URL = API_CONFIG.CURRENT;
 // Helper to build a full URL from a path
 import { Platform } from "react-native";
 
-export function buildApiUrl(path: string, base = API_CONFIG.CURRENT) {
+export function buildApiUrl(path: string, base = API_CONFIG.CURRENT): string {
   if (!path) return base;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   if (!path.startsWith("/")) path = "/" + path;
@@ -58,6 +58,7 @@ export function buildApiUrl(path: string, base = API_CONFIG.CURRENT) {
     return `${host}${path}`;
   } catch (e) {
     // ignore platform read errors in non-RN env
+    return `${base}${path}`;
   }
 }
 

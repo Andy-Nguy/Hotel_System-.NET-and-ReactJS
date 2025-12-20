@@ -269,6 +269,13 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
   const isCheckAvailableDisabled =
     !checkIn || !checkOut || !isGuestCountValid || checking;
 
+  // Determine if promotion contains combos so we can hide global title/description
+  const combosList =
+    (promotion as any)?.khuyenMaiCombos ||
+    (promotion as any)?.khuyenMaiCombo ||
+    (promotion as any)?.combos ||
+    [];
+
   return (
     <SafeAreaView style={styles.outerContainer}>
       {/* Back Arrow Button */}
@@ -298,8 +305,10 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
           )}
         </View>
 
-        {/* Title */}
-        <Text style={styles.title}>{promotion.tenKhuyenMai}</Text>
+        {/* Title (hidden when combos present) */}
+        {!(Array.isArray(combosList) && combosList.length > 0) && (
+          <Text style={styles.title}>{promotion.tenKhuyenMai}</Text>
+        )}
 
         {/* Status Badge */}
         <View style={styles.statusBadgeContainer}>
@@ -326,8 +335,8 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
           </View>
         </View>
 
-        {/* Description */}
-        {promotion.moTa && (
+        {/* Description (hidden when combos present) */}
+        {(!(Array.isArray(combosList) && combosList.length > 0) && promotion.moTa) && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Chi tiết khuyến mãi</Text>
             <Text style={styles.description}>{promotion.moTa}</Text>
@@ -384,7 +393,7 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
             null;
 
           if (Array.isArray(combos) && combos.length > 0) {
-            // Render combo list
+            // Render combo list: show services applied with original and discounted totals
             return (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>🎁 Combo Dịch Vụ</Text>
@@ -395,28 +404,24 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
                       combo.KhuyenMaiComboDichVus ||
                       combo.services ||
                       [];
+
                     const originalPrice = (services || []).reduce(
                       (sum: number, s: any) =>
                         sum +
                         Number(s.tienDichVu ?? s.TienDichVu ?? s.price ?? 0),
                       0
                     );
+
                     const promoType = (promotion as any)?.loaiGiamGia;
-                    const promoVal = Number(
-                      (promotion as any)?.giaTriGiam ?? 0
-                    );
-                    const discounted =
+                    const promoVal = Number((promotion as any)?.giaTriGiam ?? 0);
+                    const discountedTotal =
                       promoType === "percent"
                         ? Math.round(originalPrice * (1 - promoVal / 100))
                         : Math.max(0, Math.round(originalPrice - promoVal));
 
                     return (
                       <View
-                        key={
-                          combo.idkhuyenMaiCombo ??
-                          combo.IdkhuyenMaiCombo ??
-                          idx
-                        }
+                        key={combo.idkhuyenMaiCombo ?? combo.IdkhuyenMaiCombo ?? idx}
                         style={{
                           padding: 12,
                           backgroundColor: "#fff",
@@ -426,35 +431,27 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
                           marginBottom: 12,
                         }}
                       >
-                        <Text
-                          style={{
-                            fontWeight: "700",
-                            fontSize: 16,
-                            marginBottom: 6,
-                          }}
-                        >
-                          {combo.tenCombo ||
-                            combo.TenCombo ||
-                            combo.name ||
-                            `Combo ${idx + 1}`}
-                        </Text>
-                        <Text style={{ color: "#666", marginBottom: 8 }}>
-                          {combo.moTa || combo.MoTa || ""}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 14,
-                            fontWeight: "600",
-                            color: "#ff4d4f",
-                          }}
-                        >
-                          Giá sau khuyến mãi: {discounted?.toLocaleString()} ₫
-                        </Text>
-                        <Text
-                          style={{ fontSize: 12, color: "#999", marginTop: 6 }}
-                        >
-                          Gồm {services.length} dịch vụ
-                        </Text>
+                        {/* Services list */}
+                        <View style={{ marginBottom: 8 }}>
+                          {(services || []).map((svc: any, si: number) => (
+                            <ServiceCardWithImage
+                              key={svc.iddichVu ?? svc.IddichVu ?? svc.serviceId ?? si}
+                              serviceId={svc.iddichVu || svc.IddichVu || svc.serviceId}
+                              serviceData={svc}
+                              promotion={promotion}
+                            />
+                          ))}
+                        </View>
+
+                        {/* Totals */}
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                          <Text style={{ color: "#999" }}>
+                            Giá gốc: {originalPrice.toLocaleString()} ₫
+                          </Text>
+                          <Text style={{ color: "#ff4d4f", fontWeight: "700" }}>
+                            {discountedTotal.toLocaleString()} ₫
+                          </Text>
+                        </View>
                       </View>
                     );
                   })}
