@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Modal, List, Tag, Image, Button, Select, message as antdMessage, Alert, notification } from 'antd';
+import { FiUser, FiHome, FiCalendar, FiInfo, FiCreditCard, FiFileText } from 'react-icons/fi';
 import RefundForm from '../payment/RefundForm';
 import checkinApi, { UsingBooking } from "../../../api/checkinApi";
 import invoiceApi from '../../../api/invoiceApi';
@@ -713,221 +714,144 @@ const CheckinSectionNewFixed: React.FC = () => {
       {/* Modal: booking details */}
       {showModal && selectedBooking && (
         <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, backdropFilter: "blur(4px)" }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 }}
           onClick={closeModal}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "96%", maxWidth: 900, maxHeight: "90vh", overflow: "auto", background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)", borderRadius: 20, padding: 0, boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
-            {/* Header with gradient */}
-            <div style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", padding: "24px 28px", borderRadius: "20px 20px 0 0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <h2 style={{ margin: 0, color: "#fff", fontWeight: 700, fontSize: 22 }}>🏨 Chi tiết đặt phòng</h2>
-                  <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, marginTop: 6 }}>
-                    <span style={{ background: "rgba(255,255,255,0.2)", padding: "4px 10px", borderRadius: 6, marginRight: 8 }}>{selectedBooking.iddatPhong}</span>
-                    {selectedBooking.tenKhachHang || "N/A"}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <div style={{ padding: "8px 16px", borderRadius: 999, background: "rgba(255,255,255,0.95)", color: getStatusColor(selectedBooking.trangThai), fontWeight: 700, fontSize: 13, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
-                    {getStatusLabel(selectedBooking.trangThai)}
-                  </div>
-                  <button onClick={closeModal} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "rgba(255,255,255,0.9)", color: "#374151", fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>✕ Đóng</button>
-                </div>
-              </div>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "96%", maxWidth: 920, maxHeight: "90vh", overflow: "auto", background: "#ffffff", borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.12)" }}>
+            {/* Header */}
+            {/* Header */}
+<div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '24px 28px', borderBottom: '1px solid #e5e7eb', fontFamily: 'sans-serif', backgroundColor: '#e0f2ff' }}>
+  <div style={{ width: 48, height: 48, borderRadius: 12, background: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <polyline points="13 2 13 9 20 9" />
+    </svg>
+  </div>
+  <div>
+    <div style={{ fontSize: 18, fontWeight: 400, color: '#111827' }}>Chi tiết đặt phòng</div>
+    <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>#{selectedBooking?.iddatPhong ?? 'N/A'}</div>
+  </div>
+</div>
+
+{/* Content */}
+<div style={{ padding: '28px', fontFamily: 'sans-serif', lineHeight: 1.5, backgroundColor: '#ffffff' }}>
+  {/* 2 Columns Layout */}
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, marginBottom: 32 }}>
+    {/* Left Column */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Khách hàng */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 400, color: '#6b7280', textTransform: 'none', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FiUser style={{ color: '#6b7280' }} />
+          <span>Khách hàng</span>
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 400, color: '#111827' }}>{selectedBooking?.tenKhachHang ?? 'N/A'}</div>
+        <div style={{ fontSize: 13, color: '#4b5563', marginTop: 2 }}>{selectedBooking?.email ?? ''}</div>
+      </div>
+
+      {/* Thời gian lưu trú */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 400, color: '#6b7280', textTransform: 'none', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FiCalendar style={{ color: '#6b7280' }} />
+          <span>Thời gian lưu trú</span>
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 400, color: '#111827' }}>
+          {(selectedBooking?.ngayNhanPhong && selectedBooking?.ngayTraPhong)
+            ? `${new Date(selectedBooking.ngayNhanPhong).toLocaleDateString('vi-VN')} — ${new Date(selectedBooking.ngayTraPhong).toLocaleDateString('vi-VN')}`
+            : '—'}
+        </div>
+        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>({selectedBooking?.soDem ?? 1} đêm)</div>
+      </div>
+
+      {/* Trạng thái đơn */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 400, color: '#6b7280', textTransform: 'none', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FiInfo style={{ color: '#6b7280' }} />
+          <span>Trạng thái</span>
+        </div>
+        <span style={{ display: 'inline-block', padding: '6px 12px', borderRadius: 9999, background: '#dcfce7', color: '#166534', fontWeight: 400, fontSize: 13 }}>
+          {getStatusLabel(selectedBooking?.trangThai ?? 'N/A')}
+        </span>
+      </div>
+    </div>
+
+    {/* Right Column */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Phòng */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 400, color: '#6b7280', textTransform: 'none', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FiHome style={{ color: '#6b7280' }} />
+          <span>Phòng</span>
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 400, color: '#111827' }}>{selectedBooking?.tenPhong ?? '—'}</div>
+        <div style={{ fontSize: 13, color: '#4b5563', marginTop: 2 }}>Số phòng: {selectedBooking?.soPhong ?? '—'}</div>
+      </div>
+
+      {/* Thanh toán */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 400, color: '#6b7280', textTransform: 'none', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FiCreditCard style={{ color: '#6b7280' }} />
+          <span>Tổng tiền</span>
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 400, color: '#0284c7' }}>{Number(selectedBooking?.tongTien ?? 0).toLocaleString('vi-VN')} VND</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+          <span style={{
+            padding: '4px 10px', borderRadius: 9999,
+            background: (selectedBooking?.tienCoc ?? 0) > 0 ? '#f0f9ff' : '#e5e7eb',
+            color: (selectedBooking?.tienCoc ?? 0) > 0 ? '#0284c7' : '#6b7280',
+            fontWeight: 400, fontSize: 12
+          }}>
+            {(selectedBooking?.tienCoc ?? 0) > 0 ? 'Đã đặt cọc' : 'Không cọc'}
+          </span>
+          {(selectedBooking?.tienCoc ?? 0) > 0 && (
+            <span style={{ padding: '4px 10px', borderRadius: 9999, background: '#f0f9ff', color: '#0284c7', fontWeight: 400, fontSize: 12 }}>
+              Cọc: {(Number(selectedBooking?.tienCoc ?? 0)).toLocaleString('vi-VN')}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Ghi chú */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 400, color: '#6b7280', textTransform: 'none', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FiFileText style={{ color: '#6b7280' }} />
+          <span>Ghi chú</span>
+        </div>
+        <div style={{ fontSize: 13, color: '#4b5563' }}>{selectedBooking?.ghiChu ?? 'Không có'}</div>
+      </div>
+    </div>
+  </div>
+
+  {/* Chi tiết phòng đặt: 2 cột */}
+  <div>
+    <div style={{ fontSize: 14, fontWeight: 400, color: '#111827', marginBottom: 12 }}>Chi tiết phòng đặt</div>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      {(selectedBooking?.chiTietDatPhongs ?? []).map((l: any, idx: number) => {
+        const roomName = l?.tenLoaiPhong ?? l?.tenPhong ?? 'Phòng';
+        const nights = l?.soDem ?? 1;
+        const price = Number(l?.giaPhong ?? 0);
+        const total = price * nights;
+        return (
+          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px', background: '#f0f9ff', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+            <div style={{ flex: 1, paddingRight: 8 }}>
+              <div style={{ fontWeight: 400, color: '#111827', fontSize: 14 }}>{roomName}</div>
+              <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{nights} đêm × {price.toLocaleString('vi-VN')} đ</div>
+              {l?.ghiChu && <div style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', marginTop: 4 }}>"{l?.ghiChu}"</div>}
             </div>
+            <div style={{ color: '#0284c7', fontWeight: 400, fontSize: 16, minWidth: 100, textAlign: 'right' }}>{total.toLocaleString('vi-VN')} đ</div>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+</div>
 
-            <div style={{ padding: "24px 28px" }}>
-              {/* Customer & Payment Info Cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                {/* Customer Card */}
-                <div style={{ background: "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)", borderRadius: 16, padding: 20, border: "1px solid #7dd3fc" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                    <span style={{ fontSize: 24 }}>👤</span>
-                    <h4 style={{ margin: 0, color: "#0369a1", fontWeight: 700 }}>Thông tin khách hàng</h4>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#64748b" }}>Họ tên:</span>
-                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{selectedBooking.idkhachHangNavigation?.hoTen || selectedBooking.tenKhachHang || "N/A"}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#64748b" }}>Email:</span>
-                      <span style={{ fontWeight: 500, color: "#0f172a", fontSize: 13 }}>{selectedBooking.idkhachHangNavigation?.email || selectedBooking.emailKhachHang || "N/A"}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#64748b" }}>ID khách:</span>
-                      <span style={{ fontWeight: 500, color: "#0f172a" }}>{selectedBooking.idkhachHang ?? (selectedBooking.idkhachHangNavigation?.id ?? "N/A")}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#64748b" }}>Số đêm:</span>
-                      <span style={{ fontWeight: 600, color: "#0369a1" }}>{selectedBooking.soDem ?? "N/A"} đêm</span>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Payment Card */}
-                <div style={{ background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)", borderRadius: 16, padding: 20, border: "1px solid #fbbf24" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                    <span style={{ fontSize: 24 }}>💳</span>
-                    <h4 style={{ margin: 0, color: "#b45309", fontWeight: 700 }}>Thanh toán</h4>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#78716c" }}>Tiền cọc:</span>
-                      <span style={{ fontWeight: 600, color: "#0f172a" }}>{selectedBooking.tienCoc ? Number(selectedBooking.tienCoc).toLocaleString('vi-VN') + " ₫" : "N/A"}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#78716c" }}>Đã thanh toán:</span>
-                      <span style={{ fontWeight: 700, color: "#16a34a", fontSize: 16 }}>{
-                        (() => {
-                          try {
-                            const paidFromInvDetail = (selectedBooking as any)?.invoiceDetail?.tienThanhToan ?? null;
-                            if (paidFromInvDetail != null) return Number(paidFromInvDetail).toLocaleString('vi-VN') + ' ₫';
-                            const inv = (selectedBooking.hoaDons && selectedBooking.hoaDons[0]) || selectedBooking.hoaDon || (selectedBooking.HoaDons && selectedBooking.HoaDons[0]) || null;
-                            const paid = inv?.TienThanhToan ?? inv?.tienThanhToan ?? selectedBooking.tienCoc ?? selectedBooking.TienCoc ?? null;
-                            return paid != null ? Number(paid).toLocaleString('vi-VN') + ' ₫' : 'N/A';
-                          } catch (e) { return 'N/A'; }
-                        })()
-                      }</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ color: "#78716c" }}>Trạng thái:</span>
-                      <span style={{ padding: "4px 12px", borderRadius: 999, background: getPaymentStatusColor(selectedBooking.trangThaiThanhToan).bg, color: getPaymentStatusColor(selectedBooking.trangThaiThanhToan).color, fontWeight: 600, fontSize: 12 }}>{getPaymentStatusLabel(selectedBooking.trangThaiThanhToan)}</span>
-                    </div>
-                    <div style={{ borderTop: "1px dashed #d97706", paddingTop: 10, marginTop: 6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "#b45309", fontWeight: 600 }}>Tổng tiền:</span>
-                        <span style={{ fontWeight: 800, color: "#dc2626", fontSize: 18 }}>{selectedBooking.tongTien ? Number(selectedBooking.tongTien).toLocaleString('vi-VN') + " ₫" : "N/A"}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Room Info Card */}
-              <div style={{ background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)", borderRadius: 16, padding: 20, marginTop: 20, border: "1px solid #86efac" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <span style={{ fontSize: 24 }}>🛏️</span>
-                  <h4 style={{ margin: 0, color: "#166534", fontWeight: 700 }}>Thông tin phòng</h4>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-                  <div style={{ background: "#fff", borderRadius: 12, padding: 14, textAlign: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                    <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>Phòng</div>
-                    <div style={{ fontWeight: 700, color: "#166534", fontSize: 15 }}>{selectedBooking.idphongNavigation?.tenPhong || selectedBooking.tenPhong || selectedBooking.idphong}</div>
-                    <div style={{ color: "#64748b", fontSize: 12 }}>({selectedBooking.idphongNavigation?.soPhong || selectedBooking.soPhong || "N/A"})</div>
-                  </div>
-                  <div style={{ background: "#fff", borderRadius: 12, padding: 14, textAlign: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                    <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>📅 Nhận phòng</div>
-                    <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 14 }}>{selectedBooking.ngayNhanPhong ? new Date(selectedBooking.ngayNhanPhong).toLocaleDateString('vi-VN') : "N/A"}</div>
-                    <div style={{ color: "#64748b", fontSize: 11 }}>{selectedBooking.ngayNhanPhong ? new Date(selectedBooking.ngayNhanPhong).toLocaleTimeString('vi-VN') : ""}</div>
-                  </div>
-                  <div style={{ background: "#fff", borderRadius: 12, padding: 14, textAlign: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                    <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>📅 Trả phòng</div>
-                    <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 14 }}>{selectedBooking.ngayTraPhong ? new Date(selectedBooking.ngayTraPhong).toLocaleDateString('vi-VN') : "N/A"}</div>
-                    <div style={{ color: "#64748b", fontSize: 11 }}>{selectedBooking.ngayTraPhong ? new Date(selectedBooking.ngayTraPhong).toLocaleTimeString('vi-VN') : ""}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div style={{ background: "#f8fafc", borderRadius: 12, padding: 16, marginTop: 16, border: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <span>📝</span>
-                  <strong style={{ color: "#475569" }}>Ghi chú / Thông tin thêm:</strong>
-                </div>
-                <div style={{ color: "#64748b", fontStyle: (selectedBooking as any).ghiChu || (selectedBooking as any).note ? "normal" : "italic" }}>{(selectedBooking as any).ghiChu || (selectedBooking as any).note || "Không có ghi chú"}</div>
-              </div>
-
-              {/* Room Details */}
-              <div style={{ marginTop: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 20 }}>🛎️</span>
-                  <strong style={{ color: "#374151", fontSize: 15 }}>Chi tiết các phòng trong đơn:</strong>
-                </div>
-                { (selectedBooking as any).chiTietDatPhongs && (selectedBooking as any).chiTietDatPhongs.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {(selectedBooking as any).chiTietDatPhongs.map((ct: any, idx: number) => (
-                      <div key={ct.idChiTiet || idx} style={{ background: "linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)", borderRadius: 12, padding: 16, border: "1px solid #d8b4fe", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                          <div style={{ fontWeight: 700, color: "#7c3aed", fontSize: 15 }}>{ct.tenPhongChiTiet || ct.idPhong}</div>
-                          <div style={{ color: "#7c3aed", fontSize: 13, marginTop: 4 }}>{ct.soDem} đêm • {Number(ct.giaPhong || 0).toLocaleString('vi-VN')} ₫/đêm</div>
-                          {ct.ghiChu && <div style={{ color: "#a78bfa", fontSize: 12, marginTop: 4 }}>💬 {ct.ghiChu}</div>}
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontWeight: 800, color: "#7c3aed", fontSize: 18 }}>{Number(ct.thanhTien || 0).toLocaleString('vi-VN')} ₫</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ color: "#94a3b8", padding: 16, background: "#f8fafc", borderRadius: 10, textAlign: "center" }}>Không có chi tiết nào.</div>
-                ) }
-              </div>
-
-              {/* Action Buttons */}
-              <div style={{ marginTop: 24, paddingTop: 20, borderTop: "2px solid #e2e8f0", display: "flex", gap: 12, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
-                <select
-                  value={(selectedBooking as any).trangThai}
-                  onChange={async (e) => {
-                    const v = parseInt(e.target.value);
-                    if (!selectedBooking) return;
-                    await handleUpdateStatus(selectedBooking.iddatPhong, v);
-                    await loadBookings();
-                    const updated = bookings.find((x) => x.iddatPhong === selectedBooking.iddatPhong) || null;
-                    setSelectedBooking(updated);
-                  }}
-                  style={{ padding: "10px 16px", borderRadius: 10, border: "2px solid #c7d2fe", background: "#eef2ff", color: "#4338ca", fontWeight: 600, cursor: "pointer" }}
-                >
-                  <option value={0}>🚫 Đã hủy</option>
-                  <option value={1}>⏳ Chờ xác nhận</option>
-                  <option value={2}>✅ Đã xác nhận</option>
-                  <option value={3}>🔑 Đang sử dụng</option>
-                </select>
-
-                <select
-                  value={(selectedBooking as any).trangThaiThanhToan}
-                  onChange={async (e) => {
-                    const v = parseInt(e.target.value);
-                    if (!selectedBooking) return;
-                    await handleUpdatePaymentStatus(selectedBooking.iddatPhong, v);
-                    await loadBookings();
-                    const updated = bookings.find((x) => x.iddatPhong === selectedBooking.iddatPhong) || null;
-                    setSelectedBooking(updated);
-                  }}
-                  style={{ padding: "10px 16px", borderRadius: 10, border: "2px solid #fde68a", background: "#fffbeb", color: "#b45309", fontWeight: 600, cursor: "pointer" }}
-                >
-                  <option value={0}>💰 Chưa thanh toán</option>
-                  <option value={1}>📋 Đã đặt cọc</option>
-                  <option value={2}>✅ Đã thanh toán</option>
-                </select>
-
-                <button
-                  onClick={async () => {
-                    if (!selectedBooking) return;
-                    if (!confirm("Xác nhận xóa?")) return;
-                    await handleDelete(selectedBooking.iddatPhong);
-                    closeModal();
-                  }}
-                  style={{ padding: "10px 20px", background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 12px rgba(239,68,68,0.3)" }}
-                >
-                  🗑️ Xóa
-                </button>
-                <button
-                  onClick={async () => {
-                    if (!selectedBooking) return;
-                    const inv = (selectedBooking.hoaDons && selectedBooking.hoaDons[0]) || selectedBooking.hoaDon || (selectedBooking.HoaDons && selectedBooking.HoaDons[0]) || null;
-                    const invId = inv?.IdHoaDon ?? inv?.idHoaDon ?? inv?.id ?? null;
-                    setRefundInvoiceId(invId || null);
-                    const suggested = inv?.RefundAmount ?? inv?.refundAmount ?? null;
-                    setRefundAmount(suggested ?? null);
-                    setRefundBookingDetail(selectedBooking || null);
-                    setRefundVisible(true);
-                  }}
-                  style={{ padding: "10px 20px", background: "linear-gradient(135deg, #10b981 0%, #059669 100%)", color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 12px rgba(16,185,129,0.3)" }}
-                >
-                  💸 Hoàn tiền
-                </button>
-              </div>
+            {/* Close button */}
+            <div style={{ padding: '16px 28px', borderTop: '1px solid #e5e7eb', textAlign: 'right' }}>
+              <button onClick={closeModal} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #d1d5db', background: '#ffffff', color: '#6b7280', cursor: 'pointer', fontSize: 13, fontWeight: 600, transition: 'all 200ms' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }} onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; }}>
+                ✕ Đóng
+              </button>
             </div>
           </div>
         </div>
@@ -963,7 +887,7 @@ const CheckinSectionNewFixed: React.FC = () => {
                 </td>
                 <td style={{ padding: 12, color: "#475569" }}>
                   <div>{b.tenPhong || b.idphong}</div>
-                  <div style={{ fontSize: 12, color: "#94a3b8" }}>Phòng {b.soPhong || "—"}</div>
+                  <div style={{ fontSize: 12, color: "#94a3b8" }}>Phòng {b.soPhong || ""}</div>
                 </td>
                 <td style={{ padding: 12, color: "#475569" }}>
                   <div>{b.ngayNhanPhong ? new Date(b.ngayNhanPhong).toLocaleDateString("vi-VN") : "-"}</div>
@@ -987,17 +911,12 @@ const CheckinSectionNewFixed: React.FC = () => {
                       <button onClick={(e) => { e.stopPropagation(); handleConfirm(b.iddatPhong); }}>Xác nhận</button>
                     )}
 
-                    {/* Show Đổi phòng button for status 3 (Đang sử dụng) - hidden after operator confirms checkin */}
-                    {b.trangThai === 3 && !disabledConfirmIds.has(b.iddatPhong) && (
-                      <button onClick={(e) => { e.stopPropagation(); openReassignModal(b.iddatPhong); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #3b82f6", background: "#eff6ff", color: "#3b82f6", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Đổi phòng</button>
+                    {/* Show Cancel button: visible only when Confirm button is visible, hidden after confirm */}
+                    {b.trangThai === 2 && !disabledConfirmIds.has(b.iddatPhong) && (
+                      <button onClick={(e) => { e.stopPropagation(); handleCancel(b.iddatPhong); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ef4444", background: "#fff", color: "#ef4444", cursor: "pointer", fontSize: 12 }}>Hủy</button>
                     )}
 
-                    {/* Show a single Cancel button for any non-cancelled booking; hide after operator confirms checkin */}
-                    {b.trangThai !== 0 && !disabledConfirmIds.has(b.iddatPhong) && (
-                      <button onClick={(e) => { e.stopPropagation(); handleCancelBooking(b.iddatPhong); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ef4444", background: "#fff", color: "#ef4444", cursor: "pointer", fontSize: 12 }}>Hủy</button>
-                    )}
-
-                    <button onClick={(e) => { e.stopPropagation(); openModal(b); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontSize: 12 }}>Chi tiết</button>
+                    {/* Row-level detail button removed; open modal via row click */}
                     {(b as any).pendingRefund && Number((b as any).pendingRefund) > 0 ? (
                       <button onClick={async (e) => { e.stopPropagation(); await handleRowRefund(e, b); }} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #10b981", background: "#ecfdf5", color: "#065f46", cursor: "pointer", fontSize: 12, fontWeight: 700, marginLeft: 6 }}>Hoàn tiền</button>
                     ) : null}

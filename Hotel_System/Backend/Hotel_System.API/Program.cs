@@ -74,8 +74,8 @@ builder.Services.AddHostedService<HoldExpiryBackgroundService>();
 // Background service: monitor overdue bookings and add late fees
 builder.Services.AddHostedService<OverdueMonitorService>();
 
-// Background service: send review reminder emails
-builder.Services.AddHostedService<ReviewReminderService>();
+// Background service: send review reminder emails - DISABLED: only send on manual checkout button click
+// builder.Services.AddHostedService<ReviewReminderService>();
 
 // Configure JWT authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -119,7 +119,7 @@ builder.Services.AddCors(options =>
                 "http://localhost:5173",     // Vite dev server
                 "http://localhost:3000",    // React dev server
                 "http://10.0.2.2:8080",    // Android emulator accessing host
-                "http://192.168.1.129:8080", // Physical device on same network
+                "http://192.168.2.62:8080", // Physical device on same network
                 "http://localhost:19006",  // Expo dev server
                 "http://localhost:19000"   // Expo dev tools
             };
