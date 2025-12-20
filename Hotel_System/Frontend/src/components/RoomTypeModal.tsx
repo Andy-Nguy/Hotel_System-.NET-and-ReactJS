@@ -484,12 +484,12 @@ const RoomTypeModal: React.FC<Props> = ({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                       <div style={{ fontWeight: 700, fontSize: '16px', color: '#333' }}>{room.tenPhong} {room.soPhong ? `- ${room.soPhong}` : ''}</div>
-                      {/* assignment badge if this room is selected for a slot */}
+                      {/* assignment badge if this room is selected for a slot
                       {selectedRoomIds && selectedRoomIds.indexOf(room.idphong) !== -1 && (
                         <span style={{ background: '#2f855a', color: '#fff', padding: '4px 8px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
                           Phòng {selectedRoomIds.indexOf(room.idphong) + 1}
                         </span>
-                      )}
+                      )} */}
                     </div>
                     <div style={{ color: '#666', fontSize: '13px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       <span>{room.soNguoiToiDa ? `👥 Tối đa ${room.soNguoiToiDa} người` : '—'}</span>

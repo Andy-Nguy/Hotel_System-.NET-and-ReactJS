@@ -82,9 +82,7 @@ const HomeScreen: React.FC = () => {
       {/* Hero Banner - Full Screen with Image */}
       <View style={styles.heroContainer}>
         <ImageBackground
-          source={{
-            uri: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500&h=600",
-          }}
+          source={require("../assets/img/gallery/Hotel/2.jpg")}
           style={styles.heroBanner}
           imageStyle={styles.heroImage}
         >
