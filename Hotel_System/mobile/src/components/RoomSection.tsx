@@ -222,9 +222,7 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
               </View>
             )}
           </View>
-          <TouchableOpacity style={styles.ctaButton} onPress={onPress}>
-            <Text style={styles.ctaButtonText}>Đặt phòng</Text>
-          </TouchableOpacity>
+          
         </View>
       </View>
     </TouchableOpacity>

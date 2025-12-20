@@ -31,8 +31,8 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
   const basePrice = Number(
     selectedRoom
       ? selectedRoom.giaCoBanMotDem ??
-          selectedRoom.basePricePerNight ??
-          selectedRoom.giaCoBan ??
+          (selectedRoom as any).basePricePerNight ??
+          (selectedRoom as any).giaCoBan ??
           0
       : 0
   );
@@ -47,7 +47,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
     ? selectedRoom!.amenities
     : [];
   if (promotions.length > 0) {
-    const promo = promotions[0];
+    const promo = promotions[0] as any;
     hasDiscount = true;
     if (promo.type === "percent" || promo.loaiGiamGia === "percent") {
       const percent = Number(promo.value ?? promo.giaTriGiam ?? 0);
@@ -193,15 +193,15 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
           <View style={styles.detailsSection}>
             <Text style={styles.detailTitle}>
               {selectedRoom?.tenPhong ??
-                selectedRoom?.roomTypeName ??
+                (selectedRoom as any)?.roomTypeName ??
                 selectedRoom?.tenLoaiPhong ??
                 "Phòng"}
             </Text>
             <Text style={styles.detailSubtitle}>
               Phòng{" "}
               {selectedRoom?.soPhong ??
-                selectedRoom?.roomNumber ??
-                selectedRoom?.roomId ??
+                (selectedRoom as any)?.roomNumber ??
+                (selectedRoom as any)?.roomId ??
                 "-"}
             </Text>
 
@@ -276,25 +276,27 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
             {promotions.length > 0 && (
               <View style={styles.promotionSection}>
                 <Text style={styles.sectionLabel}>Khuyến mãi</Text>
-                {promotions.map((promo) => (
+                {promotions.map((promo) => {
+                  const p = promo as any;
+                  return (
                   <View key={promo.id} style={styles.promotionItem}>
                     <Text style={styles.promotionName}>
-                      {promo.name || promo.tenKhuyenMai}
+                      {promo.name || p.tenKhuyenMai}
                     </Text>
-                    {promo.description && (
+                    {(promo.description || p.moTa) && (
                       <Text style={styles.promotionDesc}>
-                        {promo.description || promo.moTa}
+                        {promo.description || p.moTa}
                       </Text>
                     )}
                     <Text style={styles.promotionValue}>
                       {promo.type === "percent"
-                        ? `Giảm ${promo.value ?? promo.giaTriGiam}%`
+                        ? `Giảm ${promo.value ?? p.giaTriGiam}%`
                         : `Giảm ${Number(
-                            promo.value ?? promo.giaTriGiam
+                            promo.value ?? p.giaTriGiam
                           ).toLocaleString()} VND`}
                     </Text>
                   </View>
-                ))}
+                )})}
               </View>
             )}
 
@@ -314,10 +316,6 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
                 {Number(discountPrice).toLocaleString()} VND
               </Text>
             </View>
-
-            <TouchableOpacity style={styles.bookButton}>
-              <Text style={styles.bookButtonText}>Đặt phòng ngay</Text>
-            </TouchableOpacity>
 
             <View style={{ height: SIZES.padding * 2 }} />
           </View>
