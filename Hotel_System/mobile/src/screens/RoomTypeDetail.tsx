@@ -28,6 +28,7 @@ import {
 import RoomDetail from "../components/RoomDetail";
 import DatePickerInput from "../components/DatePickerInput";
 import GuestSelector from "../components/GuestSelector";
+import HeaderScreen from "../components/HeaderScreen";
 import RoomSection from "../components/RoomSection";
 
 interface RoomTypeDetailRouteParams {
@@ -49,7 +50,7 @@ const RoomTypeDetail: React.FC = () => {
   const [checkInDate, setCheckInDate] = useState<Date | null>(null);
   const [checkOutDate, setCheckOutDate] = useState<Date | null>(null);
   const [numberGuests, setNumberGuests] = useState<number>(1);
-  const [showSearchForm, setShowSearchForm] = useState<boolean>(true);
+  const [showSearchForm, setShowSearchForm] = useState<boolean>(false);
   const anim = useRef(new Animated.Value(showSearchForm ? 1 : 0)).current;
   const [searching, setSearching] = useState(false);
   const [availabilityResult, setAvailabilityResult] = useState<
@@ -132,13 +133,10 @@ const RoomTypeDetail: React.FC = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.closeButton}>✕</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>{tenLoaiPhong}</Text>
-          <View style={{ width: 30 }} />
-        </View>
+        <HeaderScreen
+          title={tenLoaiPhong}
+          onClose={() => navigation.goBack()}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
@@ -149,13 +147,10 @@ const RoomTypeDetail: React.FC = () => {
   if (error && rooms.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.closeButton}>✕</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>{tenLoaiPhong}</Text>
-          <View style={{ width: 30 }} />
-        </View>
+        <HeaderScreen
+          title={tenLoaiPhong}
+          onClose={() => navigation.goBack()}
+        />
         <View style={styles.errorContainer}>
           <AppIcon name="exclamation-circle" size={48} color={COLORS.primary} />
           <Text style={styles.errorText}>{error}</Text>
@@ -172,14 +167,10 @@ const RoomTypeDetail: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.modalHeader}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.closeButton}>✕</Text>
-        </TouchableOpacity>
-        <Text style={styles.modalTitle}>{tenLoaiPhong}</Text>
-        <View style={{ width: 30 }} />
-      </View>
+      <HeaderScreen
+        title={tenLoaiPhong}
+        onClose={() => navigation.goBack()}
+      />
 
       {/* Small action row under title: show/hide search form */}
       <View style={styles.headerActionContainer}>
@@ -570,30 +561,6 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding * 0.6,
-    marginTop: 30,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
-  },
-  modalTitle: {
-    ...FONTS.h2,
-    fontWeight: "700",
-    color: COLORS.secondary,
-    fontSize: 20,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: COLORS.secondary,
-    fontWeight: "600",
-    width: 30,
-    textAlign: "center",
   },
   toggleButton: {
     width: 36,

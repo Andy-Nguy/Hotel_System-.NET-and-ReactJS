@@ -9,13 +9,14 @@ import {
   ScrollView,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import AppIcon from "../components/AppIcon";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import { DEFAULT_BASE_URL } from "../config/apiConfig";
 import BookingProgress from "../components/BookingProgress";
+import HeaderScreen from "../components/HeaderScreen";
 
 type Service = {
   iddichVu: string;
@@ -62,6 +63,7 @@ type SelectedCombo = {
 const ServicesSelectionScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { selectedRooms, checkIn, checkOut, guests, rooms } =
     route.params as any;
 
@@ -369,16 +371,11 @@ const ServicesSelectionScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Dịch vụ thêm</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <HeaderScreen
+        title="Dịch vụ thêm"
+        onClose={() => navigation.goBack()}
+        leftIcon={<AppIcon name="arrow-left" size={24} color={COLORS.secondary} />}
+      />
 
       <BookingProgress
         currentStage="services"
@@ -474,7 +471,14 @@ const ServicesSelectionScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[
+        styles.bottomBar,
+        {
+          bottom: Platform.OS === 'ios' 
+            ? insets.bottom + 0
+            : 0,
+        },
+      ]}>
         <View style={styles.totalContainer}>
           <Text style={styles.totalLabel}>
             {selectedCombo ? `Combo: ${selectedCombo.comboName}` : "Tổng dịch vụ"}
@@ -696,7 +700,6 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,

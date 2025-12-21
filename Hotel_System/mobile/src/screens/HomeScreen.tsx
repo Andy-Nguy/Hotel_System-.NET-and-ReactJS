@@ -8,13 +8,15 @@ import {
   TextInput,
   ImageBackground,
   Image,
-  RefreshControl,
+  Dimensions,
+  Platform,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
 import { getLoyalty, LoyaltyInfo } from "../api/authApi";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
@@ -51,6 +53,10 @@ const HomeScreen: React.FC = () => {
         setTimeout(() => setRefreshing(false), 600);
       });
   }, [userInfo]);
+
+  const { width } = Dimensions.get("window");
+  const isSmallDevice = width < 375;
+  const isMediumDevice = width >= 375 && width < 414;
 
   useEffect(() => {
     if (!userInfo) {
@@ -122,34 +128,48 @@ const HomeScreen: React.FC = () => {
             {/* Overlay */}
             <View style={styles.heroOverlay} />
 
-            {/* Hero Header - Logo */}
-            <View
-              style={[
-                styles.heroHeader,
-                { paddingTop: insets.top + SIZES.padding },
-              ]}
-            >
-              <Text style={styles.logoText}>ROBIN'S VILLA</Text>
-            </View>
+          {/* Hero Header - Logo */}
+          <View style={[
+            styles.heroHeader,
+            {
+              paddingTop: Platform.OS === 'ios' 
+                ? insets.top + (isSmallDevice ? 30 : isMediumDevice ? 40 : 50) 
+                : (isSmallDevice ? 30 : isMediumDevice ? 40 : 50),
+              marginHorizontal: isSmallDevice ? width * 0.08 : isMediumDevice ? width * 0.1 : width * 0.12,
+            },
+          ]}>
+            <Text style={[
+              styles.logoText,
+              {
+                fontSize: isSmallDevice ? 28 : isMediumDevice ? 32 : 36,
+              },
+            ]}>
+              ROBIN'S VILLA
+            </Text>
+          </View>
 
-            {/* Hero Search Bar - Floating */}
-            <View style={styles.heroSearchContainer}>
-              <View style={styles.searchBox}>
-                <AppIcon
-                  name="search"
-                  size={20}
-                  color="#999"
-                  style={styles.searchIcon}
-                />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Tìm phòng phù hợp với bạn ..."
-                  placeholderTextColor="#999"
-                  value={searchText}
-                  onChangeText={setSearchText}
-                  onFocus={handleSearchFocus}
-                />
-              </View>
+          {/* Hero Search Bar - Floating */}
+          <View style={[
+            styles.heroSearchContainer,
+            {
+              marginTop: isSmallDevice ? 3 : isMediumDevice ? 4 : 5,
+            },
+          ]}>
+            <View style={styles.searchBox}>
+              <AppIcon
+                name="search"
+                size={20}
+                color="#999"
+                style={styles.searchIcon}
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm phòng phù hợp với bạn ..."
+                placeholderTextColor="#999"
+                value={searchText}
+                onChangeText={setSearchText}
+                onFocus={handleSearchFocus}
+              />
             </View>
 
             {/* Hero Content - Bottom */}
@@ -217,8 +237,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.2)",
   },
   heroHeader: {
-    paddingTop: SIZES.padding * 6,
-    paddingHorizontal: SIZES.padding,
     zIndex: 20,
   },
   logoText: {
@@ -226,12 +244,13 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: "700",
     textAlign: "center",
-    fontSize: 28,
     letterSpacing: 3,
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
   },
   heroSearchContainer: {
     paddingHorizontal: SIZES.padding,
-    marginTop: SIZES.padding * -7,
     marginBottom: SIZES.padding * 2,
     zIndex: 25,
   },

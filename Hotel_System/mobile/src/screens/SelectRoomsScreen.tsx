@@ -11,6 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { getPrimaryRoomImage, getRoomImages } from "../utils/imageUtils";
 import { getRoomById } from "../api/roomsApi";
@@ -23,6 +24,7 @@ import BookingProgress from "../components/BookingProgress";
 import ServicesSelector from "../components/ServicesSelector";
 import AvailableRoomCard from "../components/AvailableRoomCard";
 import { AvailableRoom } from "../api/roomsApi";
+import HeaderScreen from "../components/HeaderScreen";
 
 interface SelectedRoom {
   roomNumber: number;
@@ -32,6 +34,7 @@ interface SelectedRoom {
 const SelectRoomsScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const {
     checkIn,
     checkOut,
@@ -285,16 +288,10 @@ const SelectRoomsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chọn phòng</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <HeaderScreen
+        title="Chọn phòng"
+        onClose={() => navigation.goBack()}
+      />
 
       <BookingProgress
         currentStage="select"
@@ -389,7 +386,14 @@ const SelectRoomsScreen: React.FC = () => {
 
       {/* Bottom Action Bar */}
       {selectedRooms.length > 0 && (
-        <View style={styles.bottomBar}>
+        <View style={[
+          styles.bottomBar,
+          {
+            bottom: Platform.OS === 'ios' 
+              ? insets.bottom + 0
+              : 0,
+          },
+        ]}>
           <View style={styles.totalContainer}>
             <Text style={styles.totalLabel}>Tổng cộng</Text>
             <Text style={styles.totalPrice}>
@@ -426,24 +430,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding,
-    backgroundColor: COLORS.white,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: "#F5F5F5",
-  },
-  headerTitle: {
-    ...FONTS.h3,
-    fontWeight: "700",
-    color: COLORS.secondary,
   },
   scrollContent: {
     flex: 1,
@@ -541,7 +527,6 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,

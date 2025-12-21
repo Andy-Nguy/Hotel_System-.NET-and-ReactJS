@@ -7,19 +7,21 @@ import {
   Modal,
   Dimensions,
   TouchableOpacity,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { getPrimaryRoomImage, getRoomImages } from "../utils/imageUtils";
-import { Room } from "../api/roomsApi";
+import { Room, AvailableRoom } from "../api/roomsApi";
 import { COLORS, SIZES } from "../constants/theme";
 import reviewApi from "../api/reviewApi";
 import { useEffect, useState } from "react";
 import StarRating from "./StarRating";
 import RoomReviews from "./RoomReviews";
+import HeaderScreen from "./HeaderScreen";
 
 interface Props {
-  selectedRoom: Room | null;
+  selectedRoom: Room | AvailableRoom | null;
   visible: boolean;
   onClose: () => void;
 }
@@ -30,7 +32,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
   // Determine base price from whichever field is available (backend may return different schemas)
   const basePrice = Number(
     selectedRoom
-      ? selectedRoom.giaCoBanMotDem ??
+      ? (selectedRoom as any).giaCoBanMotDem ??
           (selectedRoom as any).basePricePerNight ??
           (selectedRoom as any).giaCoBan ??
           0
@@ -40,11 +42,11 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
   let hasDiscount = false;
 
   // Safely handle promotions and amenities even when selectedRoom is null
-  const promotions = Array.isArray(selectedRoom?.promotions)
-    ? selectedRoom!.promotions
+  const promotions = Array.isArray((selectedRoom as any)?.promotions)
+    ? (selectedRoom as any)!.promotions
     : [];
-  const amenities = Array.isArray(selectedRoom?.amenities)
-    ? selectedRoom!.amenities
+  const amenities = Array.isArray((selectedRoom as any)?.amenities)
+    ? (selectedRoom as any)!.amenities
     : [];
   if (promotions.length > 0) {
     const promo = promotions[0] as any;
@@ -83,7 +85,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
   useEffect(() => {
     // Reset gallery index whenever a different room is shown
     setGalleryIndex(0);
-  }, [selectedRoom?.idphong]);
+  }, [(selectedRoom as any)?.idphong, (selectedRoom as any)?.roomId]);
 
   // Derived display fields to support multiple API shapes
   const displayRoomType = selectedRoom
@@ -103,9 +105,10 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      if (!selectedRoom?.idphong) return;
+      const roomId = (selectedRoom as any)?.idphong || (selectedRoom as any)?.roomId;
+      if (!roomId) return;
       try {
-        const s = await reviewApi.getRoomStats(String(selectedRoom.idphong));
+        const s = await reviewApi.getRoomStats(String(roomId));
         if (cancelled) return;
         setStats(s);
       } catch (err) {
@@ -117,7 +120,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
       cancelled = true;
     };
     // keep dependency as id only so hook runs consistently
-  }, [selectedRoom?.idphong]);
+  }, [(selectedRoom as any)?.idphong, (selectedRoom as any)?.roomId]);
 
   const insets = useSafeAreaInsets();
 
@@ -131,14 +134,11 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={[styles.modalContainer, { paddingTop: insets.top }]}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={styles.closeButton}>✕</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Chi tiết phòng</Text>
-          <View style={{ width: 30 }} />
-        </View>
+      <View style={[
+        styles.modalContainer, 
+        { paddingTop: Platform.OS === 'ios' ? insets.top : 0 }
+      ]}>
+        <HeaderScreen title="Chi tiết phòng" onClose={onClose} />
 
         <ScrollView
           style={styles.modalContent}
@@ -192,14 +192,14 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
 
           <View style={styles.detailsSection}>
             <Text style={styles.detailTitle}>
-              {selectedRoom?.tenPhong ??
+              {(selectedRoom as any)?.tenPhong ??
                 (selectedRoom as any)?.roomTypeName ??
-                selectedRoom?.tenLoaiPhong ??
+                (selectedRoom as any)?.tenLoaiPhong ??
                 "Phòng"}
             </Text>
             <Text style={styles.detailSubtitle}>
               Phòng{" "}
-              {selectedRoom?.soPhong ??
+              {(selectedRoom as any)?.soPhong ??
                 (selectedRoom as any)?.roomNumber ??
                 (selectedRoom as any)?.roomId ??
                 "-"}
@@ -211,7 +211,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
                 const avg =
                   stats && typeof stats.averageRating === "number"
                     ? stats.averageRating
-                    : selectedRoom?.xepHangSao || 0;
+                    : (selectedRoom as any)?.xepHangSao || 0;
                 return (
                   <>
                     <TouchableOpacity
@@ -234,7 +234,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
             {/* Room reviews modal (opens when tapping rating text) */}
             {showReviews && (
               <RoomReviews
-                roomId={String(selectedRoom?.idphong ?? "")}
+                roomId={String((selectedRoom as any)?.idphong || (selectedRoom as any)?.roomId || "")}
                 visible={showReviews}
                 onClose={() => setShowReviews(false)}
               />
@@ -255,7 +255,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
             <View style={styles.descriptionSection}>
               <Text style={styles.sectionLabel}>Mô tả</Text>
               <Text style={styles.descriptionText}>
-                {selectedRoom?.moTa ?? "Không có mô tả"}
+                {(selectedRoom as any)?.moTa || (selectedRoom as any)?.description || "Không có mô tả"}
               </Text>
             </View>
 
@@ -263,7 +263,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
               <View style={styles.amenitiesSection}>
                 <Text style={styles.sectionLabel}>Tiện nghi</Text>
                 <View style={styles.amenitiesList}>
-                  {amenities.map((amenity) => (
+                  {amenities.map((amenity: any) => (
                     <View key={amenity.id} style={styles.amenityItem}>
                       <Text style={styles.amenityBullet}>✓</Text>
                       <Text style={styles.amenityText}>{amenity.name}</Text>
@@ -276,7 +276,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
             {promotions.length > 0 && (
               <View style={styles.promotionSection}>
                 <Text style={styles.sectionLabel}>Khuyến mãi</Text>
-                {promotions.map((promo) => {
+                {promotions.map((promo: any) => {
                   const p = promo as any;
                   return (
                   <View key={promo.id} style={styles.promotionItem}>
@@ -305,8 +305,10 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
                 <Text style={styles.priceLabel}>Giá mỗi đêm</Text>
                 {hasDiscount && (
                   <Text style={styles.originalPrice}>
-                    {selectedRoom?.giaCoBanMotDem != null
-                      ? Number(selectedRoom.giaCoBanMotDem).toLocaleString()
+                    {(selectedRoom as any)?.giaCoBanMotDem != null
+                      ? Number((selectedRoom as any).giaCoBanMotDem).toLocaleString()
+                      : (selectedRoom as any)?.basePricePerNight != null
+                      ? Number((selectedRoom as any).basePricePerNight).toLocaleString()
                       : ""}{" "}
                     VND
                   </Text>
@@ -330,27 +332,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.white,
   },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  closeButton: {
-    fontSize: 24,
-    color: COLORS.secondary,
-    fontWeight: "600",
-    width: 30,
-    textAlign: "center",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.secondary,
-  },
+
   modalContent: { flex: 1, backgroundColor: COLORS.white },
   modalImage: { width: Dimensions.get("window").width, height: 250 },
   galleryContainer: { width: "100%", height: 250, backgroundColor: "#F8F9FA" },

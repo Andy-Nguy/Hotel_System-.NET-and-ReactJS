@@ -21,8 +21,11 @@ import {
   getServiceDetails,
 } from "../api/promotionApi";
 import { getPrimaryRoomImage } from "../utils/imageUtils";
-import { checkAvailableRooms } from "../api/roomsApi";
+import { checkAvailableRooms, AvailableRoom as ApiAvailableRoom } from "../api/roomsApi";
 import { getAmenitiesForRoom } from "../api/amenitiesApi";
+import HeaderScreen from "../components/HeaderScreen";
+import AppIcon from "../components/AppIcon";
+import { COLORS } from "../constants/theme";
 
 const windowWidth = Dimensions.get("window").width;
 
@@ -44,27 +47,22 @@ interface Promotion {
   khuyenMaiPhongs?: any[];
 }
 
-interface AvailableRoom {
+// Extend the API type to support additional properties from backend
+interface AvailableRoom extends Partial<ApiAvailableRoom> {
   idphong?: string;
-  roomId?: string;
   tenPhong?: string;
   tenLoaiPhong?: string;
   TenLoaiPhong?: string;
-  roomNumber?: string;
   soPhong?: string;
   SoPhong?: string;
   giaCoBanMotDem?: number;
   GiaCoBanMotDem?: number;
-  basePricePerNight?: number;
   soNguoiToiDa?: number;
   SoNguoiToiDa?: number;
-  maxOccupancy?: number;
   urlAnhPhong?: string;
   UrlAnhPhong?: string;
-  roomImageUrl?: string;
   moTa?: string;
   MoTa?: string;
-  description?: string;
 }
 
 const PromotionDetail: React.FC<PromotionDetailProps> = ({
@@ -278,14 +276,15 @@ const PromotionDetail: React.FC<PromotionDetailProps> = ({
 
   return (
     <SafeAreaView style={styles.outerContainer}>
-      {/* Back Arrow Button */}
+      {/* Header */}
       {navigation && (
-        <TouchableOpacity
-          style={styles.backArrowButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backArrowText}>‹</Text>
-        </TouchableOpacity>
+        <HeaderScreen
+          title="Chi tiết khuyến mãi"
+          onClose={() => navigation.goBack()}
+          leftIcon={
+            <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
+          }
+        />
       )}
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* Banner Image */}
@@ -825,18 +824,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     paddingHorizontal: 12,
-  },
-  backArrowButton: {
-    paddingLeft: 12,
-    paddingRight: 16,
-    paddingVertical: 8,
-    justifyContent: "center",
-    alignItems: "flex-start",
-  },
-  backArrowText: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#000",
   },
   bannerContainer: {
     marginVertical: 12,

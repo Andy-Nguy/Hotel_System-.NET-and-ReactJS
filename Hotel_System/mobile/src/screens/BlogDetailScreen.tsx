@@ -17,6 +17,8 @@ import { useRoute, useNavigation } from "@react-navigation/native";
 import { API_CONFIG } from "../config/apiConfig";
 import * as theme from "../constants/theme";
 import { getBlogById, getPublishedBlogs, BlogPost } from "../api/blogApi";
+import HeaderScreen from "../components/HeaderScreen";
+import AppIcon from "../components/AppIcon";
 
 const { width } = Dimensions.get("window");
 const baseConfig = API_CONFIG && (API_CONFIG as any).CURRENT;
@@ -192,11 +194,10 @@ const BlogDetailScreen: React.FC = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButton}>← Quay lại</Text>
-          </TouchableOpacity>
-        </View>
+        <HeaderScreen
+          title="Blog"
+          onClose={() => navigation.goBack()}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.COLORS.primary} />
         </View>
@@ -207,11 +208,10 @@ const BlogDetailScreen: React.FC = () => {
   if (!post) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButton}>← Quay lại</Text>
-          </TouchableOpacity>
-        </View>
+        <HeaderScreen
+          title="Blog"
+          onClose={() => navigation.goBack()}
+        />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Bài viết không tìm thấy</Text>
         </View>
@@ -226,12 +226,16 @@ const BlogDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>←</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleShare}>
-          <Text style={styles.shareButton}>📤</Text>
+      <View style={styles.headerContainer}>
+        <HeaderScreen
+          title="Blog"
+          onClose={() => navigation.goBack()}
+        />
+        <TouchableOpacity 
+          style={styles.shareButtonContainer}
+          onPress={handleShare}
+        >
+          <AppIcon name="share-2" size={22} library="Feather" color={theme.COLORS.secondary} />
         </TouchableOpacity>
       </View>
 
@@ -446,25 +450,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.COLORS.white,
   },
-  header: {
-    paddingHorizontal: theme.SIZES.padding,
-    paddingVertical: 12,
-    marginTop: 5,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: theme.COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+  headerContainer: {
+    position: 'relative',
   },
-  backButton: {
-    ...theme.FONTS.body4,
-    color: theme.COLORS.primary,
-    fontWeight: "700",
-    fontSize: 18,
-  },
-  shareButton: {
-    fontSize: 18,
+  shareButtonContainer: {
+    position: 'absolute',
+    right: theme.SIZES.padding,
+    top: '50%',
+    transform: [{ translateY: -9 }],
+    zIndex: 10,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
