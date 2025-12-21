@@ -17,7 +17,13 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getRooms, Room, checkAvailableRooms, AvailableRoom } from "../api/roomsApi";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getRooms,
+  Room,
+  checkAvailableRooms,
+  AvailableRoom,
+} from "../api/roomsApi";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import RoomDetail from "../components/RoomDetail";
 import RoomSection from "../components/RoomSection";
@@ -43,7 +49,7 @@ const RoomsScreen: React.FC = () => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // Search form states
   const [showSearchForm, setShowSearchForm] = useState(false);
   const [checkIn, setCheckIn] = useState(
@@ -56,10 +62,11 @@ const RoomsScreen: React.FC = () => {
   const [roomsCount, setRoomsCount] = useState(1);
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>([]);
   const [searched, setSearched] = useState(false);
-  
+
   // Date picker states
   const [isCheckInPickerVisible, setCheckInPickerVisibility] = useState(false);
-  const [isCheckOutPickerVisible, setCheckOutPickerVisibility] = useState(false);
+  const [isCheckOutPickerVisible, setCheckOutPickerVisibility] =
+    useState(false);
 
   useEffect(() => {
     loadRooms();
@@ -174,9 +181,15 @@ const RoomsScreen: React.FC = () => {
       });
       setAvailableRooms(rooms);
       setSearched(true);
-      
+
       // Auto navigate to SelectRooms screen after successful search
       if (rooms.length > 0) {
+        // Clear old booking data before starting new booking flow
+        await AsyncStorage.multiRemove(["bookingData", "finalBookingData"]);
+        console.log(
+          "🧹 Cleared old booking data before navigating to SelectRooms"
+        );
+
         (navigation as any).navigate("SelectRooms", {
           checkIn,
           checkOut,
@@ -185,7 +198,10 @@ const RoomsScreen: React.FC = () => {
           availableRooms: rooms,
         });
       } else {
-        Alert.alert("Thông báo", "Không tìm thấy phòng trống trong khoảng thời gian này.");
+        Alert.alert(
+          "Thông báo",
+          "Không tìm thấy phòng trống trong khoảng thời gian này."
+        );
       }
     } catch (error) {
       Alert.alert("Lỗi", "Không thể kiểm tra phòng trống. Vui lòng thử lại.");
@@ -215,7 +231,9 @@ const RoomsScreen: React.FC = () => {
 
   const handleTopRoomPress = (roomId: string) => {
     // Try to find the full room object from loaded rooms
-    const found = rooms.find((r) => r.idphong === roomId || r.idphong === roomId);
+    const found = rooms.find(
+      (r) => r.idphong === roomId || r.idphong === roomId
+    );
     if (found) {
       setSelectedRoom(found);
       setShowDetails(true);
@@ -257,7 +275,6 @@ const RoomsScreen: React.FC = () => {
       {/* Header with Logo and Search */}
       <View style={styles.header}>
         <Text style={styles.logo}>ROBINS VILLA</Text>
-
       </View>
 
       {/* Date Picker Modals */}
@@ -294,130 +311,166 @@ const RoomsScreen: React.FC = () => {
           <>
             {/* Search Form */}
             <View style={styles.searchForm}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowSearchForm(!showSearchForm)}
                 activeOpacity={0.7}
               >
                 <View style={styles.formHeader}>
                   <Text style={styles.formTitle}>Tìm kiếm phòng nghỉ</Text>
-                  <AppIcon 
-                    name={showSearchForm ? "chevron-up" : "chevron-down"} 
-                    size={24} 
-                    color={COLORS.primary} 
+                  <AppIcon
+                    name={showSearchForm ? "chevron-up" : "chevron-down"}
+                    size={24}
+                    color={COLORS.primary}
                   />
                 </View>
               </TouchableOpacity>
-              
+
               {showSearchForm && (
-              <>
-              <Text style={styles.formSubtitle}>
-                Chọn thời gian và số lượng khách
-              </Text>
+                <>
+                  <Text style={styles.formSubtitle}>
+                    Chọn thời gian và số lượng khách
+                  </Text>
 
-              {/* Date Selection Row */}
-              <View style={styles.dateRow}>
-                {/* Check-in Date */}
-                <TouchableOpacity
-                  style={styles.dateInput}
-                  onPress={() => setCheckInPickerVisibility(true)}
-                >
-                  <View style={styles.iconContainer}>
-                    <AppIcon name="calendar" size={20} color={COLORS.primary} />
-                  </View>
-                  <View style={styles.dateContent}>
-                    <Text style={styles.inputLabel}>Nhận phòng</Text>
-                    <Text style={styles.dateValue}>{formatDateShort(checkIn)}</Text>
-                  </View>
-                </TouchableOpacity>
-
-                <View style={styles.dateDivider} />
-
-                {/* Check-out Date */}
-                <TouchableOpacity
-                  style={styles.dateInput}
-                  onPress={() => setCheckOutPickerVisibility(true)}
-                >
-                  <View style={styles.iconContainer}>
-                    <AppIcon name="calendar" size={20} color={COLORS.primary} />
-                  </View>
-                  <View style={styles.dateContent}>
-                    <Text style={styles.inputLabel}>Trả phòng</Text>
-                    <Text style={styles.dateValue}>
-                      {formatDateShort(checkOut)}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              {/* Guests & Rooms Row */}
-              <View style={styles.selectionRow}>
-                <View style={styles.selectionItem}>
-                  <Text style={styles.inputLabel}>Số khách</Text>
-                  <View style={styles.counterContainer}>
+                  {/* Date Selection Row */}
+                  <View style={styles.dateRow}>
+                    {/* Check-in Date */}
                     <TouchableOpacity
-                      style={styles.counterBtn}
-                      onPress={() => setGuests(Math.max(1, guests - 1))}
+                      style={styles.dateInput}
+                      onPress={() => setCheckInPickerVisibility(true)}
                     >
-                      <AppIcon name="minus" size={14} color={COLORS.secondary} />
+                      <View style={styles.iconContainer}>
+                        <AppIcon
+                          name="calendar"
+                          size={20}
+                          color={COLORS.primary}
+                        />
+                      </View>
+                      <View style={styles.dateContent}>
+                        <Text style={styles.inputLabel}>Nhận phòng</Text>
+                        <Text style={styles.dateValue}>
+                          {formatDateShort(checkIn)}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
-                    <Text style={styles.counterValue}>{guests}</Text>
+
+                    <View style={styles.dateDivider} />
+
+                    {/* Check-out Date */}
                     <TouchableOpacity
-                      style={styles.counterBtn}
-                      onPress={() => setGuests(Math.min(10, guests + 1))}
+                      style={styles.dateInput}
+                      onPress={() => setCheckOutPickerVisibility(true)}
                     >
-                      <AppIcon name="plus" size={14} color={COLORS.secondary} />
+                      <View style={styles.iconContainer}>
+                        <AppIcon
+                          name="calendar"
+                          size={20}
+                          color={COLORS.primary}
+                        />
+                      </View>
+                      <View style={styles.dateContent}>
+                        <Text style={styles.inputLabel}>Trả phòng</Text>
+                        <Text style={styles.dateValue}>
+                          {formatDateShort(checkOut)}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   </View>
-                </View>
 
-                <View style={styles.verticalDivider} />
+                  {/* Guests & Rooms Row */}
+                  <View style={styles.selectionRow}>
+                    <View style={styles.selectionItem}>
+                      <Text style={styles.inputLabel}>Số khách</Text>
+                      <View style={styles.counterContainer}>
+                        <TouchableOpacity
+                          style={styles.counterBtn}
+                          onPress={() => setGuests(Math.max(1, guests - 1))}
+                        >
+                          <AppIcon
+                            name="minus"
+                            size={14}
+                            color={COLORS.secondary}
+                          />
+                        </TouchableOpacity>
+                        <Text style={styles.counterValue}>{guests}</Text>
+                        <TouchableOpacity
+                          style={styles.counterBtn}
+                          onPress={() => setGuests(Math.min(10, guests + 1))}
+                        >
+                          <AppIcon
+                            name="plus"
+                            size={14}
+                            color={COLORS.secondary}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
 
-                <View style={styles.selectionItem}>
-                  <Text style={styles.inputLabel}>Số phòng</Text>
-                  <View style={styles.counterContainer}>
-                    <TouchableOpacity
-                      style={styles.counterBtn}
-                      onPress={() => setRoomsCount(Math.max(1, roomsCount - 1))}
-                    >
-                      <AppIcon name="minus" size={14} color={COLORS.secondary} />
-                    </TouchableOpacity>
-                    <Text style={styles.counterValue}>{roomsCount}</Text>
-                    <TouchableOpacity
-                      style={styles.counterBtn}
-                      onPress={() => setRoomsCount(Math.min(10, roomsCount + 1))}
-                    >
-                      <AppIcon name="plus" size={14} color={COLORS.secondary} />
-                    </TouchableOpacity>
+                    <View style={styles.verticalDivider} />
+
+                    <View style={styles.selectionItem}>
+                      <Text style={styles.inputLabel}>Số phòng</Text>
+                      <View style={styles.counterContainer}>
+                        <TouchableOpacity
+                          style={styles.counterBtn}
+                          onPress={() =>
+                            setRoomsCount(Math.max(1, roomsCount - 1))
+                          }
+                        >
+                          <AppIcon
+                            name="minus"
+                            size={14}
+                            color={COLORS.secondary}
+                          />
+                        </TouchableOpacity>
+                        <Text style={styles.counterValue}>{roomsCount}</Text>
+                        <TouchableOpacity
+                          style={styles.counterBtn}
+                          onPress={() =>
+                            setRoomsCount(Math.min(10, roomsCount + 1))
+                          }
+                        >
+                          <AppIcon
+                            name="plus"
+                            size={14}
+                            color={COLORS.secondary}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
-                </View>
-              </View>
 
-              <TouchableOpacity
-                style={[
-                  styles.searchButton,
-                  loading && styles.searchButtonDisabled,
-                ]}
-                onPress={handleSearchRooms}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={COLORS.white} />
-                ) : (
-                  <>
-                    <Text style={styles.searchButtonText}>
-                      Kiểm tra phòng trống
-                    </Text>
-                    <AppIcon name="arrow-right" size={20} color={COLORS.white} />
-                  </>
-                )}
-              </TouchableOpacity>
-              </>
+                  <TouchableOpacity
+                    style={[
+                      styles.searchButton,
+                      loading && styles.searchButtonDisabled,
+                    ]}
+                    onPress={handleSearchRooms}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color={COLORS.white} />
+                    ) : (
+                      <>
+                        <Text style={styles.searchButtonText}>
+                          Kiểm tra phòng trống
+                        </Text>
+                        <AppIcon
+                          name="arrow-right"
+                          size={20}
+                          color={COLORS.white}
+                        />
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
               )}
             </View>
 
             <View style={[styles.sectionTitle, styles.sectionTitleSpacing]}>
               <Text style={styles.span}>TOP PHÒNG ĐƯỢC ƯA CHUỘNG</Text>
-              <Text style={styles.h2}>Phong cách thượng lưu  Điểm nhấn của năm</Text>
+              <Text style={styles.h2}>
+                Phong cách thượng lưu Điểm nhấn của năm
+              </Text>
             </View>
 
             <TopRoom topCount={5} onRoomPress={handleTopRoomPress} />

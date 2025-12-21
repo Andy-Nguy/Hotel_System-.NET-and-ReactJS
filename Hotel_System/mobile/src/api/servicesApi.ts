@@ -77,12 +77,18 @@ async function tryFetchServices(): Promise<Service[] | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    const res = await fetch(`${baseUrl}/api/dich-vu/lay-danh-sach`, {
+
+    const url = `${baseUrl}/api/dich-vu/lay-danh-sach`;
+    console.log(`[servicesApi] GET ${url}`);
+
+    const res = await fetch(url, {
       method: "GET",
-      headers: { "Content-Type": "application/json" },
+      headers: { Accept: "application/json" },
       signal: controller.signal,
     });
+
     clearTimeout(timeout);
+
     if (res.ok) {
       const data = await handleRes(res);
       if (!data || data.length === 0) throw new Error("No services data");
@@ -101,11 +107,22 @@ async function tryFetchServices(): Promise<Service[] | null> {
         ghiChu: d.ghiChu,
         trangThai: d.trangThai,
       })) as Service[];
+      console.log(`[servicesApi] fetched ${processed.length} services`);
       return processed;
     } else {
-      throw new Error(`Failed to fetch services: ${res.status}`);
+      const text = await res.text().catch(() => "<no-body>");
+      console.warn(
+        `[servicesApi] failed GET ${url}: ${res.status} ${res.statusText}`,
+        text
+      );
+      throw new Error(`Failed to fetch services: ${res.status} ${text}`);
     }
   } catch (error: any) {
+    console.warn(
+      "[servicesApi] fetch error:",
+      error?.name || error,
+      error?.message || error
+    );
     throw error;
   }
 }

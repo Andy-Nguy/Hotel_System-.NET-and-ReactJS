@@ -63,95 +63,38 @@ const SelectRoomsScreen: React.FC = () => {
   const [modalImageIndex, setModalImageIndex] = useState(0);
 
   useEffect(() => {
-    loadBookingData();
+    // IMPORTANT: Always clear old booking data when entering this screen
+    // to prevent stale room selections from previous booking sessions
+    clearAndInitBooking();
   }, []);
 
-  const loadBookingData = async () => {
+  const clearAndInitBooking = async () => {
     try {
-      const bookingData = await AsyncStorage.getItem("bookingData");
+      // Clear old booking data first to ensure fresh state
+      await AsyncStorage.removeItem("bookingData");
+      console.log("🧹 Cleared old bookingData from AsyncStorage");
+
       const params = route.params as any;
       const initialSelectedRoom = params?.initialSelectedRoom;
 
-      if (bookingData) {
-        const parsed = JSON.parse(bookingData);
-        if (
-          parsed.checkIn === checkIn &&
-          parsed.checkOut === checkOut &&
-          parsed.guests === guests &&
-          parsed.rooms === rooms
-        ) {
-          // Same session, load saved data
-          setSelectedRooms(parsed.selectedRooms || []);
-          setTotalRooms(parsed.totalRooms || rooms || 1);
-          setCurrentRoomNumber(parsed.currentRoomNumber || 1);
-          setSelectedServices(parsed.selectedServices || []);
+      // Always start fresh
+      setTotalRooms(rooms || 1);
+      setSelectedServices([]);
 
-          // If we have an initial selection but it's not in the saved list (and we have space), add it?
-          // Or maybe we should prioritize the user's explicit click over saved state if it's a "new" navigation action?
-          // For simplicity, if the user clicked "Select" on the previous screen, let's assume they want that room selected
-          // even if they had a previous session. But we must be careful not to duplicate.
-
-          if (initialSelectedRoom) {
-            const alreadySelected = (parsed.selectedRooms || []).some(
-              (sr: any) => sr.room.roomId === initialSelectedRoom.roomId
-            );
-            if (
-              !alreadySelected &&
-              (parsed.selectedRooms || []).length < (parsed.totalRooms || rooms)
-            ) {
-              // Add it
-              const newSelected = [
-                ...(parsed.selectedRooms || []),
-                {
-                  roomNumber: parsed.currentRoomNumber || 1,
-                  room: initialSelectedRoom,
-                },
-              ];
-              setSelectedRooms(newSelected);
-              // Update current room number
-              let nextRoomNum = 1;
-              const selectedNumbers = newSelected.map((r: any) => r.roomNumber);
-              while (
-                selectedNumbers.includes(nextRoomNum) &&
-                nextRoomNum <= (parsed.totalRooms || rooms)
-              ) {
-                nextRoomNum++;
-              }
-              setCurrentRoomNumber(
-                nextRoomNum <= (parsed.totalRooms || rooms)
-                  ? nextRoomNum
-                  : parsed.totalRooms || rooms
-              );
-            }
-          }
-        } else {
-          // Different booking session, start fresh
-          setTotalRooms(rooms || 1);
-          setSelectedServices([]);
-
-          if (initialSelectedRoom) {
-            setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
-            setCurrentRoomNumber(rooms > 1 ? 2 : 1);
-          } else {
-            setSelectedRooms([]);
-            setCurrentRoomNumber(1);
-          }
-        }
+      if (initialSelectedRoom) {
+        console.log(
+          "📦 Setting initial selected room:",
+          initialSelectedRoom.roomName
+        );
+        setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
+        setCurrentRoomNumber(rooms > 1 ? 2 : 1);
       } else {
-        // No stored data
-        setTotalRooms(rooms || 1);
-        setSelectedServices([]);
-
-        if (initialSelectedRoom) {
-          setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
-          setCurrentRoomNumber(rooms > 1 ? 2 : 1);
-        } else {
-          setSelectedRooms([]);
-          setCurrentRoomNumber(1);
-        }
+        console.log("📦 No initial room, starting with empty selection");
+        setSelectedRooms([]);
+        setCurrentRoomNumber(1);
       }
     } catch (error) {
-      console.error("Error loading booking data:", error);
+      console.error("Error initializing booking data:", error);
       setTotalRooms(rooms || 1);
       setCurrentRoomNumber(1);
       setSelectedRooms([]);

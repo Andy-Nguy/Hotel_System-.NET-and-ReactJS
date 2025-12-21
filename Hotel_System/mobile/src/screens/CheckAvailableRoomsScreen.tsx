@@ -17,6 +17,7 @@ import { useNavigation } from "@react-navigation/native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import AppIcon from "../components/AppIcon";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   checkAvailableRooms,
   AvailableRoom,
@@ -177,20 +178,31 @@ const CheckAvailableRoomsScreen: React.FC = () => {
     return stars.join("");
   };
 
+  // Helper to clear old booking data before navigating to SelectRooms
+  const navigateToSelectRooms = async (initialSelectedRoom?: AvailableRoom) => {
+    try {
+      await AsyncStorage.multiRemove(["bookingData", "finalBookingData"]);
+      console.log(
+        "🧹 Cleared old booking data before navigating to SelectRooms"
+      );
+    } catch (e) {
+      console.warn("Failed to clear booking data", e);
+    }
+    (navigation as any).navigate("SelectRooms", {
+      checkIn,
+      checkOut,
+      guests,
+      rooms,
+      availableRooms,
+      ...(initialSelectedRoom && { initialSelectedRoom }),
+    });
+  };
+
   const renderRoomItem = ({ item }: { item: AvailableRoom }) => (
     <AvailableRoomCard
       room={item}
       onOpenDetail={() => openRoomDetail(item)}
-      onSelect={() =>
-        (navigation as any).navigate("SelectRooms", {
-          checkIn,
-          checkOut,
-          guests,
-          rooms,
-          availableRooms,
-          initialSelectedRoom: item,
-        })
-      }
+      onSelect={() => navigateToSelectRooms(item)}
     />
   );
 
@@ -372,15 +384,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
             {availableRooms.length > 0 && (
               <TouchableOpacity
                 style={styles.continueButton}
-                onPress={() =>
-                  (navigation as any).navigate("SelectRooms", {
-                    checkIn,
-                    checkOut,
-                    guests,
-                    rooms,
-                    availableRooms,
-                  })
-                }
+                onPress={() => navigateToSelectRooms()}
               >
                 <Text style={styles.continueButtonText}>
                   Tiếp tục chọn phòng

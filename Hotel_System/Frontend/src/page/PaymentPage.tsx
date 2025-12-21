@@ -81,7 +81,7 @@ const PaymentPage: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [availabilityChecked, setAvailabilityChecked] = useState(false);
   const [redeemPoints, setRedeemPoints] = useState<number>(0);
-  const [redeemMode, setRedeemMode] = useState<'no' | 'part' | 'all'>('no');
+  const [redeemMode, setRedeemMode] = useState<"no" | "part" | "all">("no");
   const [promoCode, setPromoCode] = useState<string>("");
   const [expandedSummary, setExpandedSummary] = useState(true);
   const [depositOption, setDepositOption] = useState<"deposit" | "full">(
@@ -152,30 +152,36 @@ const PaymentPage: React.FC = () => {
   }, []);
 
   // Local image resolver to normalize room image values
-  function resolveImageUrl(u: any, fallback = '/img/room/default.webp') {
+  function resolveImageUrl(u: any, fallback = "/img/room/default.webp") {
     if (u == null) return fallback;
     if (Array.isArray(u)) {
       const first = u.find((x: any) => !!x);
       return resolveImageUrl(first, fallback);
     }
-    if (typeof u === 'object') {
+    if (typeof u === "object") {
       const candidate = (u && (u.u || u.url || u.src || u.urlAnhPhong)) || null;
       return resolveImageUrl(candidate, fallback);
     }
     let s = String(u).trim();
     if (!s) return fallback;
-    if (s.startsWith('[')) {
+    if (s.startsWith("[")) {
       try {
         const arr = JSON.parse(s);
-        if (Array.isArray(arr) && arr.length > 0) return resolveImageUrl(arr[0], fallback);
+        if (Array.isArray(arr) && arr.length > 0)
+          return resolveImageUrl(arr[0], fallback);
       } catch (e) {}
     }
-    if (s.includes(',') || s.includes(';') || s.includes('|')) {
+    if (s.includes(",") || s.includes(";") || s.includes("|")) {
       const first = s.split(/[,|;]+/)[0].trim();
       return resolveImageUrl(first, fallback);
     }
-    if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return s;
-    if (s.startsWith('/img') || s.startsWith('/')) return s;
+    if (
+      s.startsWith("http://") ||
+      s.startsWith("https://") ||
+      s.startsWith("//")
+    )
+      return s;
+    if (s.startsWith("/img") || s.startsWith("/")) return s;
     return `/img/room/${s}`;
   }
 
@@ -249,13 +255,32 @@ const PaymentPage: React.FC = () => {
       if (!profile || !bookingInfo || availabilityChecked) return;
       try {
         setAvailabilityChecked(true);
-        const rooms = await postCheckAvailableRooms(bookingInfo.checkIn, bookingInfo.checkOut, bookingInfo.guests || 1);
+        const rooms = await postCheckAvailableRooms(
+          bookingInfo.checkIn,
+          bookingInfo.checkOut,
+          bookingInfo.guests || 1
+        );
         // Normalize available identifiers to compare
-        const availableIds = new Set(rooms.map((r: any) => String(r.soPhong || r.soPhong || r.RoomNumber || r.roomNumber || r.soPhong)));
+        const availableIds = new Set(
+          rooms.map((r: any) =>
+            String(
+              r.soPhong ||
+                r.soPhong ||
+                r.RoomNumber ||
+                r.roomNumber ||
+                r.soPhong
+            )
+          )
+        );
 
         const requested = bookingInfo.selectedRooms || [];
         const missing = requested.some((sr: any) => {
-          const roomNum = String(sr.room?.soPhong ?? sr.roomNumber ?? sr.room?.RoomNumber ?? sr.roomNumber);
+          const roomNum = String(
+            sr.room?.soPhong ??
+              sr.roomNumber ??
+              sr.room?.RoomNumber ??
+              sr.roomNumber
+          );
           return roomNum && !availableIds.has(roomNum);
         });
 
@@ -273,7 +298,9 @@ const PaymentPage: React.FC = () => {
             },
             onCancel: () => {
               // user canceled — keep them on payment but booking is effectively invalid
-              message.warning("Đơn tạm thời đã bị huỷ. Vui lòng chọn phòng mới.");
+              message.warning(
+                "Đơn tạm thời đã bị huỷ. Vui lòng chọn phòng mới."
+              );
             },
           });
         } else {
@@ -282,7 +309,9 @@ const PaymentPage: React.FC = () => {
       } catch (err) {
         console.error("Availability check failed:", err);
         // don't block the user — just warn
-        message.warning("Kiểm tra tính khả dụng phòng thất bại. Vui lòng thử lại.");
+        message.warning(
+          "Kiểm tra tính khả dụng phòng thất bại. Vui lòng thử lại."
+        );
       }
     };
 
@@ -492,14 +521,14 @@ const PaymentPage: React.FC = () => {
   const subtotal = totalPrice + servicesTotal;
   const tax = subtotal * 0.1;
   const grandTotal = subtotal + tax;
-  
+
   // Points system: 500,000 VND = 1 point, 1 point = 10,000 VND discount
   const POINTS_RATE = 500000; // VND per point earned
   const POINT_VALUE = 10000; // VND per point redeemed
   const earnedPoints = Math.floor(grandTotal / POINTS_RATE); // Points earned from this invoice
   const currentPoints = profile?.TichDiem ?? profile?.tichDiem ?? 0;
   const totalAvailablePoints = currentPoints + earnedPoints;
-  
+
   const discountFromPoints = (redeemPoints || 0) * POINT_VALUE;
   const displayedGrandTotal = Math.max(0, grandTotal - discountFromPoints);
 
@@ -728,7 +757,9 @@ const PaymentPage: React.FC = () => {
             >
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                 <TagOutlined style={{ color: "#dfa974" }} />
-                <Text strong style={{ color: "#2c3e50" }}>Mã khuyến mãi</Text>
+                <Text strong style={{ color: "#2c3e50" }}>
+                  Mã khuyến mãi
+                </Text>
               </div>
 
               <Input.Search
@@ -742,12 +773,28 @@ const PaymentPage: React.FC = () => {
 
               {/* Loyalty / points usage (Option B) */}
               {profile ? (
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #f0f0f0" }}>
-                  <Title level={5} style={{ margin: "0 0 16px 0", color: "#2c3e50" }}>
+                <div
+                  style={{
+                    marginTop: 12,
+                    paddingTop: 12,
+                    borderTop: "1px dashed #f0f0f0",
+                  }}
+                >
+                  <Title
+                    level={5}
+                    style={{ margin: "0 0 16px 0", color: "#2c3e50" }}
+                  >
                     💎 Sử dụng điểm tích lũy
                   </Title>
 
-                  <div style={{ background: "#fef8f1", padding: 12, borderRadius: 8, marginBottom: 12 }}>
+                  <div
+                    style={{
+                      background: "#fef8f1",
+                      padding: 12,
+                      borderRadius: 8,
+                      marginBottom: 12,
+                    }}
+                  >
                     <Text style={{ display: "block", marginBottom: 6 }}>
                       <span style={{ color: "#2c3e50" }}>Điểm hiện có: </span>
                       <Text strong style={{ color: "#dfa974", fontSize: 16 }}>
@@ -756,45 +803,66 @@ const PaymentPage: React.FC = () => {
                       <span style={{ color: "#7f8c8d" }}> điểm</span>
                     </Text>
                     {currentPoints > 0 && (
-                      <Text type="secondary" style={{ display: "block", fontSize: 12 }}>
-                        ➕ Sẽ kiếm được: <Text strong style={{ color: "#27ae60" }}>{earnedPoints} điểm</Text> từ đơn hàng này (cứ 500,000đ = 1 điểm)
+                      <Text
+                        type="secondary"
+                        style={{ display: "block", fontSize: 12 }}
+                      >
+                        ➕ Sẽ kiếm được:{" "}
+                        <Text strong style={{ color: "#27ae60" }}>
+                          {earnedPoints} điểm
+                        </Text>{" "}
+                        từ đơn hàng này (cứ 500,000đ = 1 điểm)
                       </Text>
                     )}
                   </div>
 
                   {currentPoints > 0 ? (
                     <>
-                      <Text type="secondary" style={{ display: "block", marginBottom: 12, fontSize: 13 }}>
+                      <Text
+                        type="secondary"
+                        style={{
+                          display: "block",
+                          marginBottom: 12,
+                          fontSize: 13,
+                        }}
+                      >
                         Cách sử dụng: 1 điểm = 10,000đ giảm giá
                       </Text>
 
                       <Radio.Group
                         value={redeemMode}
                         onChange={(e) => {
-                          const val = e.target.value as 'no' | 'part' | 'all';
-                          if (val === 'no') {
-                            setRedeemMode('no');
+                          const val = e.target.value as "no" | "part" | "all";
+                          if (val === "no") {
+                            setRedeemMode("no");
                             setRedeemPoints(0);
-                          } else if (val === 'all') {
-                            setRedeemMode('all');
+                          } else if (val === "all") {
+                            setRedeemMode("all");
                             const pts = currentPoints;
                             setRedeemPoints(pts);
                           } else {
                             // part
-                            setRedeemMode('part');
+                            setRedeemMode("part");
                             if (!redeemPoints) setRedeemPoints(0);
                           }
                         }}
                       >
                         <Space direction="vertical" style={{ width: "100%" }}>
                           <Radio value="no">
-                            <span style={{ color: "#2c3e50" }}>Không sử dụng điểm</span>
+                            <span style={{ color: "#2c3e50" }}>
+                              Không sử dụng điểm
+                            </span>
                           </Radio>
                           <Radio value="part">
-                            <span style={{ color: "#2c3e50" }}>Sử dụng một phần điểm</span>
+                            <span style={{ color: "#2c3e50" }}>
+                              Sử dụng một phần điểm
+                            </span>
                           </Radio>
                           <Radio value="all">
-                            <span style={{ color: "#2c3e50" }}>Sử dụng tất cả {currentPoints.toLocaleString()} điểm</span>
+                            <span style={{ color: "#2c3e50" }}>
+                              Sử dụng tất cả {currentPoints.toLocaleString()}{" "}
+                              điểm
+                            </span>
                           </Radio>
                         </Space>
                       </Radio.Group>
@@ -814,18 +882,37 @@ const PaymentPage: React.FC = () => {
                   )}
 
                   {/* Input only when using a part of points */}
-                  {(redeemMode === 'part' && currentPoints > 0) && (
-                    <div style={{ marginTop: 16, padding: 12, background: "#f0f2f5", borderRadius: 8 }}>
+                  {redeemMode === "part" && currentPoints > 0 && (
+                    <div
+                      style={{
+                        marginTop: 16,
+                        padding: 12,
+                        background: "#f0f2f5",
+                        borderRadius: 8,
+                      }}
+                    >
                       {(() => {
-                        const maxByAmount = Math.floor((grandTotal * 0.5) / POINT_VALUE);
-                        const maxAllowed = Math.max(0, Math.min(currentPoints, maxByAmount));
-                        const currentDiscount = (redeemPoints || 0) * POINT_VALUE;
-                        const percentOfTotal = ((currentDiscount / grandTotal) * 100).toFixed(1);
+                        const maxByAmount = Math.floor(
+                          (grandTotal * 0.5) / POINT_VALUE
+                        );
+                        const maxAllowed = Math.max(
+                          0,
+                          Math.min(currentPoints, maxByAmount)
+                        );
+                        const currentDiscount =
+                          (redeemPoints || 0) * POINT_VALUE;
+                        const percentOfTotal = (
+                          (currentDiscount / grandTotal) *
+                          100
+                        ).toFixed(1);
 
                         return (
                           <>
                             <div style={{ marginBottom: 12 }}>
-                              <Text strong style={{ color: "#2c3e50", fontSize: 13 }}>
+                              <Text
+                                strong
+                                style={{ color: "#2c3e50", fontSize: 13 }}
+                              >
                                 Nhập số điểm muốn sử dụng
                               </Text>
                               <div style={{ marginTop: 6 }}>
@@ -854,12 +941,35 @@ const PaymentPage: React.FC = () => {
                               message={
                                 <div>
                                   <div style={{ marginBottom: 6 }}>
-                                    <strong>Giảm giá: {currentDiscount.toLocaleString()}đ ({percentOfTotal}% tổng hoá đơn)</strong>
+                                    <strong>
+                                      Giảm giá:{" "}
+                                      {currentDiscount.toLocaleString()}đ (
+                                      {percentOfTotal}% tổng hoá đơn)
+                                    </strong>
                                   </div>
-                                  <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-                                    <div>• Tối đa được dùng: <strong>{maxAllowed.toLocaleString()} điểm</strong> ({(maxAllowed * POINT_VALUE).toLocaleString()}đ)</div>
-                                    <div>• Hạn chế: không vượt quá <strong>50%</strong> tổng hoá đơn ({(grandTotal * 0.5).toLocaleString()}đ)</div>
-                                    <div>• Điểm sẽ được trừ sau khi thanh toán thành công</div>
+                                  <div
+                                    style={{ fontSize: 12, lineHeight: 1.5 }}
+                                  >
+                                    <div>
+                                      • Tối đa được dùng:{" "}
+                                      <strong>
+                                        {maxAllowed.toLocaleString()} điểm
+                                      </strong>{" "}
+                                      (
+                                      {(
+                                        maxAllowed * POINT_VALUE
+                                      ).toLocaleString()}
+                                      đ)
+                                    </div>
+                                    <div>
+                                      • Hạn chế: không vượt quá{" "}
+                                      <strong>50%</strong> tổng hoá đơn (
+                                      {(grandTotal * 0.5).toLocaleString()}đ)
+                                    </div>
+                                    <div>
+                                      • Điểm sẽ được trừ sau khi thanh toán
+                                      thành công
+                                    </div>
                                   </div>
                                 </div>
                               }
@@ -878,14 +988,26 @@ const PaymentPage: React.FC = () => {
                   )}
 
                   {/* Summary when using all points */}
-                  {redeemMode === 'all' && currentPoints > 0 && (
+                  {redeemMode === "all" && currentPoints > 0 && (
                     <Alert
                       message={
                         <div>
                           <div style={{ marginBottom: 6 }}>
-                            <strong>Giảm giá: {(currentPoints * POINT_VALUE).toLocaleString()}đ ({((currentPoints * POINT_VALUE / grandTotal) * 100).toFixed(1)}% tổng hoá đơn)</strong>
+                            <strong>
+                              Giảm giá:{" "}
+                              {(currentPoints * POINT_VALUE).toLocaleString()}đ
+                              (
+                              {(
+                                ((currentPoints * POINT_VALUE) / grandTotal) *
+                                100
+                              ).toFixed(1)}
+                              % tổng hoá đơn)
+                            </strong>
                           </div>
-                          <div style={{ fontSize: 12 }}>Sẽ sử dụng tất cả {currentPoints.toLocaleString()} điểm tích lũy</div>
+                          <div style={{ fontSize: 12 }}>
+                            Sẽ sử dụng tất cả {currentPoints.toLocaleString()}{" "}
+                            điểm tích lũy
+                          </div>
                         </div>
                       }
                       type="success"
@@ -899,9 +1021,21 @@ const PaymentPage: React.FC = () => {
                   )}
                 </div>
               ) : (
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #f0f0f0" }}>
+                <div
+                  style={{
+                    marginTop: 12,
+                    paddingTop: 12,
+                    borderTop: "1px dashed #f0f0f0",
+                  }}
+                >
                   <Text style={{ display: "block", marginBottom: 8 }}>
-                    Bạn có điểm tích luỹ? <Button type="link" onClick={() => handleSavePendingAndRedirect()}>Đăng nhập để sử dụng</Button>
+                    Bạn có điểm tích luỹ?{" "}
+                    <Button
+                      type="link"
+                      onClick={() => handleSavePendingAndRedirect()}
+                    >
+                      Đăng nhập để sử dụng
+                    </Button>
                   </Text>
                 </div>
               )}
@@ -1024,7 +1158,9 @@ const PaymentPage: React.FC = () => {
                         }}
                       >
                         <img
-                          src={resolveImageUrl(sr.room?.urlAnhPhong || "/img/placeholder.png")}
+                          src={resolveImageUrl(
+                            sr.room?.urlAnhPhong || "/img/placeholder.png"
+                          )}
                           alt={sr.room?.tenPhong}
                           style={{
                             width: "100%",
@@ -1176,12 +1312,19 @@ const PaymentPage: React.FC = () => {
                             <Text type="secondary">Giảm từ điểm</Text>
                             <div>
                               <Text strong style={{ color: "#fa541c" }}>
-                                -{Math.round(discountFromPoints).toLocaleString()}đ
+                                -
+                                {Math.round(
+                                  discountFromPoints
+                                ).toLocaleString()}
+                                đ
                               </Text>
                             </div>
                           </div>
 
-                          <Text strong style={{ fontSize: 20, color: "#dfa974" }}>
+                          <Text
+                            strong
+                            style={{ fontSize: 20, color: "#dfa974" }}
+                          >
                             {Math.round(displayedGrandTotal).toLocaleString()}đ
                           </Text>
                         </>
@@ -1242,8 +1385,12 @@ const PaymentPage: React.FC = () => {
           width={480}
           centered
           zIndex={9999}
-          maskStyle={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999 }}
-          style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.35)', borderRadius: 16, overflow: 'hidden' }}
+          maskStyle={{ backgroundColor: "rgba(0,0,0,0.7)", zIndex: 9999 }}
+          style={{
+            boxShadow: "0 8px 40px rgba(0,0,0,0.35)",
+            borderRadius: 16,
+            overflow: "hidden",
+          }}
           bodyStyle={{ padding: 32 }}
         >
           <div style={{ textAlign: "center" }}>
@@ -1329,12 +1476,19 @@ const PaymentPage: React.FC = () => {
                       <div style={{ textAlign: "right" }}>
                         {discountFromPoints > 0 ? (
                           <>
-                            <Text strong style={{ color: "#dfa974", fontSize: 14 }}>
-                              {Math.round(displayedGrandTotal).toLocaleString()}đ
+                            <Text
+                              strong
+                              style={{ color: "#dfa974", fontSize: 14 }}
+                            >
+                              {Math.round(displayedGrandTotal).toLocaleString()}
+                              đ
                             </Text>
                           </>
                         ) : (
-                          <Text strong style={{ color: "#dfa974", fontSize: 14 }}>
+                          <Text
+                            strong
+                            style={{ color: "#dfa974", fontSize: 14 }}
+                          >
                             {Math.round(displayedGrandTotal).toLocaleString()}đ
                           </Text>
                         )}
@@ -1409,26 +1563,38 @@ const PaymentPage: React.FC = () => {
                   <div>
                     {depositOption === "deposit" ? (
                       <>
-                        <Text strong style={{ marginRight: 8, color: "#dfa974" }}>
+                        <Text
+                          strong
+                          style={{ marginRight: 8, color: "#dfa974" }}
+                        >
                           {DEPOSIT_AMOUNT.toLocaleString()}đ
                         </Text>
                         <Button
                           type="text"
                           size="small"
                           icon={<CopyOutlined />}
-                          onClick={() => copyToClipboard(DEPOSIT_AMOUNT.toString())}
+                          onClick={() =>
+                            copyToClipboard(DEPOSIT_AMOUNT.toString())
+                          }
                         />
                       </>
                     ) : (
                       <>
-                        <Text strong style={{ marginRight: 8, color: "#dfa974" }}>
+                        <Text
+                          strong
+                          style={{ marginRight: 8, color: "#dfa974" }}
+                        >
                           {Math.round(displayedGrandTotal).toLocaleString()}đ
                         </Text>
                         <Button
                           type="text"
                           size="small"
                           icon={<CopyOutlined />}
-                          onClick={() => copyToClipboard(Math.round(displayedGrandTotal).toString())}
+                          onClick={() =>
+                            copyToClipboard(
+                              Math.round(displayedGrandTotal).toString()
+                            )
+                          }
                         />
                       </>
                     )}
@@ -1627,157 +1793,193 @@ const PaymentPage: React.FC = () => {
           centered
           zIndex={10010}
           getContainer={() => document.body}
-          maskStyle={{ background: 'rgba(0,0,0,0.5)' }}
-          bodyStyle={{ padding: 0, background: 'transparent' }}
+          maskStyle={{ background: "rgba(0,0,0,0.5)" }}
+          bodyStyle={{ padding: 0, background: "transparent" }}
           closable={false}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <div style={{ width: '100%', maxWidth: 600, maxHeight: '90vh', overflow: 'auto', background: '#fff', borderRadius: 12 }}>
-              <div style={{ padding: 40, textAlign: 'center' }}>
-              <div
-                style={{
-                  width: 100,
-                  height: 100,
-                  borderRadius: "50%",
-                  background: "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 24px",
-                  boxShadow: "0 8px 24px rgba(82, 196, 26, 0.3)",
-                }}
-              >
-                <CheckCircleOutlined style={{ fontSize: 50, color: "#fff" }} />
-              </div>
-
-              <Title level={3} style={{ marginBottom: 12, color: "#52c41a" }}>
-                {selectedMethod === "hotel-payment"
-                  ? "Đặt phòng thành công!"
-                  : "Thanh toán thành công!"}
-              </Title>
-
-              <Paragraph
-                style={{ fontSize: 15, color: "#666", marginBottom: 30 }}
-              >
-                {selectedMethod === "hotel-payment"
-                  ? "Đơn đặt phòng của bạn đã được ghi nhận. Vui lòng thanh toán khi nhận phòng."
-                  : (depositOption === "deposit" && selectedMethod === "bank-transfer")
-                  ? "Bạn đã đặt cọc thành công. Vui lòng thanh toán phần còn lại khi nhận phòng."
-                  : "Đơn đặt phòng của bạn đã được xác nhận và thanh toán hoàn tất"}
-              </Paragraph>
-
-            <Card
-              size="small"
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 20,
+            }}
+          >
+            <div
               style={{
-                marginBottom: 24,
-                textAlign: "left",
-                background: "#f8f9fa",
-                border: "none",
+                width: "100%",
+                maxWidth: 600,
+                maxHeight: "90vh",
+                overflow: "auto",
+                background: "#fff",
                 borderRadius: 12,
               }}
             >
-              <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <div style={{ padding: 40, textAlign: "center" }}>
                 <div
-                  style={{ display: "flex", justifyContent: "space-between" }}
+                  style={{
+                    width: 100,
+                    height: 100,
+                    borderRadius: "50%",
+                    background:
+                      "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 24px",
+                    boxShadow: "0 8px 24px rgba(82, 196, 26, 0.3)",
+                  }}
                 >
-                  <Text type="secondary">Phương thức</Text>
-                  <Text strong>
-                    {selectedMethod === "bank-transfer" && "Chuyển khoản"}
-                    {selectedMethod === "credit-card" && "Thẻ tín dụng"}
-                    {selectedMethod === "momo" && "Ví MoMo"}
-                    {selectedMethod === "hotel-payment" &&
-                      "Thanh toán tại khách sạn"}
-                  </Text>
+                  <CheckCircleOutlined
+                    style={{ fontSize: 50, color: "#fff" }}
+                  />
                 </div>
-                <div
-                  style={{ display: "flex", justifyContent: "space-between" }}
+
+                <Title level={3} style={{ marginBottom: 12, color: "#52c41a" }}>
+                  {selectedMethod === "hotel-payment"
+                    ? "Đặt phòng thành công!"
+                    : "Thanh toán thành công!"}
+                </Title>
+
+                <Paragraph
+                  style={{ fontSize: 15, color: "#666", marginBottom: 30 }}
                 >
-                  <Text type="secondary">
-                    {selectedMethod === "hotel-payment"
-                      ? "Tổng tiền cần thanh toán"
-                      : depositOption === "deposit" &&
-                        selectedMethod === "bank-transfer"
-                      ? "Số tiền đã đặt cọc"
-                      : "Số tiền đã thanh toán"}
-                  </Text>
-                  <Text strong style={{ fontSize: 18, color: "#dfa974" }}>
-                    {selectedMethod === "hotel-payment"
-                      ? Math.round(grandTotal).toLocaleString()
-                      : depositOption === "deposit" &&
-                        selectedMethod === "bank-transfer"
-                      ? DEPOSIT_AMOUNT.toLocaleString()
-                      : Math.round(grandTotal).toLocaleString()}
-                    đ
-                  </Text>
-                </div>
-                {depositOption === "deposit" &&
-                  selectedMethod === "bank-transfer" && (
+                  {selectedMethod === "hotel-payment"
+                    ? "Đơn đặt phòng của bạn đã được ghi nhận. Vui lòng thanh toán khi nhận phòng."
+                    : depositOption === "deposit" &&
+                      selectedMethod === "bank-transfer"
+                    ? "Bạn đã đặt cọc thành công. Vui lòng thanh toán phần còn lại khi nhận phòng."
+                    : "Đơn đặt phòng của bạn đã được xác nhận và thanh toán hoàn tất"}
+                </Paragraph>
+
+                <Card
+                  size="small"
+                  style={{
+                    marginBottom: 24,
+                    textAlign: "left",
+                    background: "#f8f9fa",
+                    border: "none",
+                    borderRadius: 12,
+                  }}
+                >
+                  <Space
+                    direction="vertical"
+                    size={16}
+                    style={{ width: "100%" }}
+                  >
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
                       }}
                     >
-                      <Text type="secondary">Còn lại cần thanh toán</Text>
-                      <Text strong style={{ fontSize: 16, color: "#fa8c16" }}>
-                        {(
-                          Math.round(grandTotal) - DEPOSIT_AMOUNT
-                        ).toLocaleString()}
+                      <Text type="secondary">Phương thức</Text>
+                      <Text strong>
+                        {selectedMethod === "bank-transfer" && "Chuyển khoản"}
+                        {selectedMethod === "credit-card" && "Thẻ tín dụng"}
+                        {selectedMethod === "momo" && "Ví MoMo"}
+                        {selectedMethod === "hotel-payment" &&
+                          "Thanh toán tại khách sạn"}
+                      </Text>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text type="secondary">
+                        {selectedMethod === "hotel-payment"
+                          ? "Tổng tiền cần thanh toán"
+                          : depositOption === "deposit" &&
+                            selectedMethod === "bank-transfer"
+                          ? "Số tiền đã đặt cọc"
+                          : "Số tiền đã thanh toán"}
+                      </Text>
+                      <Text strong style={{ fontSize: 18, color: "#dfa974" }}>
+                        {selectedMethod === "hotel-payment"
+                          ? Math.round(grandTotal).toLocaleString()
+                          : depositOption === "deposit" &&
+                            selectedMethod === "bank-transfer"
+                          ? DEPOSIT_AMOUNT.toLocaleString()
+                          : Math.round(grandTotal).toLocaleString()}
                         đ
                       </Text>
                     </div>
-                  )}
-                {paymentRef && (
-                  <div
-                    style={{ display: "flex", justifyContent: "space-between" }}
+                    {depositOption === "deposit" &&
+                      selectedMethod === "bank-transfer" && (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <Text type="secondary">Còn lại cần thanh toán</Text>
+                          <Text
+                            strong
+                            style={{ fontSize: 16, color: "#fa8c16" }}
+                          >
+                            {(
+                              Math.round(grandTotal) - DEPOSIT_AMOUNT
+                            ).toLocaleString()}
+                            đ
+                          </Text>
+                        </div>
+                      )}
+                    {paymentRef && (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Text type="secondary">Mã GD</Text>
+                        <Text strong style={{ fontFamily: "monospace" }}>
+                          {paymentRef}
+                        </Text>
+                      </div>
+                    )}
+                  </Space>
+                </Card>
+
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <Button
+                    type="primary"
+                    size="large"
+                    block
+                    onClick={async () => {
+                      // Close modal and run the same final confirm flow to create invoice
+                      setConfirmModalVisible(false);
+                      await handleFinalConfirm();
+                    }}
+                    style={{
+                      height: 50,
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      background:
+                        "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
+                      border: "none",
+                    }}
                   >
-                    <Text type="secondary">Mã GD</Text>
-                    <Text strong style={{ fontFamily: "monospace" }}>
-                      {paymentRef}
-                    </Text>
-                  </div>
-                )}
-              </Space>
-            </Card>
+                    Xác nhận và lưu
+                  </Button>
 
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Button
-                type="primary"
-                size="large"
-                block
-                onClick={async () => {
-                  // Close modal and run the same final confirm flow to create invoice
-                  setConfirmModalVisible(false);
-                  await handleFinalConfirm();
-                }}
-                style={{
-                  height: 50,
-                  borderRadius: 8,
-                  fontWeight: 600,
-                  background:
-                    "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
-                  border: "none",
-                }}
-              >
-                Xác nhận và lưu
-              </Button>
-
-              <Button
-                size="large"
-                block
-                onClick={() => setConfirmModalVisible(false)}
-                style={{
-                  height: 50,
-                  borderRadius: 8,
-                  fontWeight: 600,
-                }}
-              >
-                Đóng
-              </Button>
-              </Space>
+                  <Button
+                    size="large"
+                    block
+                    onClick={() => setConfirmModalVisible(false)}
+                    style={{
+                      height: 50,
+                      borderRadius: 8,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Đóng
+                  </Button>
+                </Space>
+              </div>
             </div>
           </div>
-        </div>
         </Modal>
       </Content>
 
