@@ -14,31 +14,12 @@ import { useNavigation, useIsFocused } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import authApi from "../api/authApi";
 import { useAuth } from "../context/AuthContext";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
-// === LUXURY COLORS ===
-const COLORS = {
-  primary: "#0F172A",
-  accentGold: "#D4AF37",
-  accentGoldLight: "#F5E6B3",
-  background: "#F8FAFC",
-  cardBg: "rgba(255, 255, 255, 0.95)",
-  text: "#1E293B",
-  textLight: "#64748B",
-  border: "rgba(226, 232, 240, 0.6)",
-  error: "#DC2626",
-};
-
-const SIZES = { padding: 24, margin: 16, radius: 20, radiusLarge: 28 };
-
-// === FONTS ĐÃ FIX TYPESCRIPT ===
-const FONTS = {
-  h1: { fontSize: 48, fontWeight: "800" as const },
-  h2: { fontSize: 28, fontWeight: "700" as const },
-  h3: { fontSize: 22, fontWeight: "600" as const },
-  body1: { fontSize: 17, fontWeight: "500" as const },
-  body2: { fontSize: 16, fontWeight: "500" as const },
-  body3: { fontSize: 15, fontWeight: "400" as const },
-} as const;
+import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 
 const ProfileScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
@@ -47,6 +28,7 @@ const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
   const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (isFocused && isLoggedIn) loadProfile();
@@ -80,7 +62,7 @@ const ProfileScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.accentGold} />
+        <ActivityIndicator size="large" color={COLORS.warning} />
         <Text style={styles.loadingText}>Đang tải hồ sơ...</Text>
       </View>
     );
@@ -104,170 +86,175 @@ const ProfileScreen: React.FC = () => {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: tabBarHeight + 40 }}
-    >
-      {/* Header sang trọng */}
-      <LinearGradient
-        colors={["#0F172A", "#1E293B", "#334155"]}
-        style={styles.header}
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.scrollContent}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + 40 }}
       >
-        <ImageBackground
-          source={{
-            uri: "https://images.unsplash.com/photo-1520250497591-1930b33a6002?w=800",
-          }}
-          style={{ flex: 1 }}
-          imageStyle={{ opacity: 0.3 }}
+        {/* Header sang trọng */}
+        <LinearGradient
+          colors={[COLORS.secondary, COLORS.primary]}
+          style={styles.header}
         >
-          <View style={styles.headerContent}>
-            <View style={styles.avatarWrapper}>
-              <View style={styles.goldRing}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarLetter}>
-                    {getDisplayName()[0]?.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <Text style={styles.name}>{getDisplayName()}</Text>
-            <Text style={styles.email}>{getDisplayEmail()}</Text>
-
-            <View style={styles.tierBadge}>
-              <Text style={styles.tierText}>✦ {tier.name} Member</Text>
-              <Text style={styles.pointsText}>
-                {getPoints().toLocaleString()} điểm tích lũy
-              </Text>
-            </View>
-          </View>
-        </ImageBackground>
-      </LinearGradient>
-
-      {/* Thông tin cá nhân */}
-      <View style={styles.section}>
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("EditProfile")}
-            >
-              <Text style={styles.editText}>Chỉnh sửa</Text>
-            </TouchableOpacity>
-          </View>
-
-          {[
-            { label: "Họ và tên", value: getDisplayName() },
-            { label: "Email", value: getDisplayEmail() },
-            { label: "Số điện thoại", value: getPhone() },
-            {
-              label: "Điểm tích lũy",
-              value: `${getPoints().toLocaleString()} điểm`,
-            },
-          ].map((item, i) => (
-            <View key={i}>
-              {i > 0 && <View style={styles.divider} />}
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>{item.label}</Text>
-                <Text style={styles.infoValue}>{item.value}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* Menu Section */}
-      <View style={styles.menuSection}>
-        <Text style={styles.menuTitle}>Tài khoản & Dịch vụ</Text>
-
-        <View style={styles.menuGrid}>
-          {[
-            {
-              icon: "📋",
-              title: "Lịch sử đặt phòng",
-              screen: "Trips",
-              gradient: [COLORS.accentGold, COLORS.accentGoldLight] as const,
-            },
-            {
-              icon: "🔒",
-              title: "Đổi mật khẩu",
-              screen: "ChangePassword",
-              gradient: [COLORS.primary, "#1E293B"] as const,
-            },
-          ].map((item, i) => (
-            <TouchableOpacity
-              key={i}
-              style={styles.menuCard}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate(item.screen)}
-            >
-              <LinearGradient
-                colors={item.gradient}
-                style={styles.menuCardGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <View style={styles.menuIconContainer}>
-                  <Text style={styles.menuIcon}>{item.icon}</Text>
-                </View>
-                <Text
-                  style={styles.menuCardTitle}
-                  numberOfLines={2}
-                  adjustsFontSizeToFit
-                >
-                  {item.title}
-                </Text>
-                <View style={styles.menuArrow}>
-                  <Text style={styles.menuArrowText}>›</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-          <LinearGradient
-            colors={["#DC2626", "#B91C1C"]}
-            style={styles.logoutGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+          <ImageBackground
+            source={{
+              uri: "https://images.unsplash.com/photo-1520250497591-1930b33a6002?w=800",
+            }}
+            style={{ flex: 1 }}
+            imageStyle={{ opacity: 0.3 }}
           >
-            <Text style={styles.logoutIcon}>🚪</Text>
-            <Text style={styles.logoutButtonText}>Đăng xuất</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+            <View
+              style={[styles.headerContent, { paddingTop: insets.top + 20 }]}
+            >
+              <View style={styles.avatarWrapper}>
+                <View style={styles.goldRing}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarLetter}>
+                      {getDisplayName()[0]?.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <Text style={styles.name}>{getDisplayName()}</Text>
+              <Text style={styles.email}>{getDisplayEmail()}</Text>
+
+              <View style={styles.tierBadge}>
+                <Text style={styles.tierText}>✦ {tier.name} Member</Text>
+                <Text style={styles.pointsText}>
+                  {getPoints().toLocaleString()} điểm tích lũy
+                </Text>
+              </View>
+            </View>
+          </ImageBackground>
+        </LinearGradient>
+
+        {/* Thông tin cá nhân */}
+        <View style={styles.section}>
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("EditProfile")}
+              >
+                <Text style={styles.editText}>Chỉnh sửa</Text>
+              </TouchableOpacity>
+            </View>
+
+            {[
+              { label: "Họ và tên", value: getDisplayName() },
+              { label: "Email", value: getDisplayEmail() },
+              { label: "Số điện thoại", value: getPhone() },
+              {
+                label: "Điểm tích lũy",
+                value: `${getPoints().toLocaleString()} điểm`,
+              },
+            ].map((item, i) => (
+              <View key={i}>
+                {i > 0 && <View style={styles.divider} />}
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>{item.label}</Text>
+                  <Text style={styles.infoValue}>{item.value}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Menu Section */}
+        <View style={styles.menuSection}>
+          <Text style={styles.menuTitle}>Tài khoản & Dịch vụ</Text>
+
+          <View style={styles.menuGrid}>
+            {[
+              {
+                icon: "🧾",
+                title: "Lịch sử đặt phòng",
+                screen: "Trips",
+                color: COLORS.primary,
+              },
+              {
+                icon: "💳",
+                title: "Phương thức thanh toán",
+                screen: "Payment",
+                color: COLORS.warning,
+              },
+              {
+                icon: "⭐",
+                title: "Thẻ thành viên",
+                screen: "Loyalty",
+                color: COLORS.primary,
+              },
+              {
+                icon: "☎️",
+                title: "Hỗ trợ & Liên hệ",
+                screen: "Support",
+                color: COLORS.gray,
+              },
+            ].map((item, i) => (
+              <TouchableOpacity
+                key={i}
+                style={styles.menuCard}
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate(item.screen)}
+              >
+                <View style={styles.menuCardInner}>
+                  <View
+                    style={[styles.iconCircle, { backgroundColor: item.color }]}
+                  >
+                    <Text style={styles.menuIcon}>{item.icon}</Text>
+                  </View>
+                  <Text style={styles.menuCardTitle}>{item.title}</Text>
+                  <View style={styles.menuCardRight}>
+                    <Text style={styles.menuArrowText}>›</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Logout Button */}
+          <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+            <LinearGradient
+              colors={[COLORS.error, "#B91C1C"]}
+              style={styles.logoutGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text style={styles.logoutIcon}>🚪</Text>
+              <Text style={styles.logoutButtonText}>Đăng xuất</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  scrollContent: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { ...FONTS.body3, color: COLORS.textLight, marginTop: 16 },
+  loadingText: { ...FONTS.body3, color: COLORS.gray, marginTop: 16 },
 
-  header: { height: 360 },
+  header: { height: 340 },
   headerContent: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "flex-start",
     alignItems: "center",
-    paddingTop: 50,
+    paddingTop: 40,
+    paddingBottom: 16,
   },
-  avatarWrapper: { marginBottom: 20 },
+  avatarWrapper: { marginTop: 8, marginBottom: 20 },
   goldRing: {
     width: 124,
     height: 124,
     borderRadius: 62,
-    backgroundColor: COLORS.accentGold,
+    backgroundColor: COLORS.warning,
     padding: 6,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: COLORS.accentGold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 15,
+    ...SHADOWS.dark,
   },
   avatar: {
     width: "100%",
@@ -280,30 +267,26 @@ const styles = StyleSheet.create({
   avatarLetter: {
     fontSize: 48,
     fontWeight: "800" as const,
-    color: COLORS.primary,
+    color: COLORS.secondary,
   },
   name: { ...FONTS.h2, color: "#fff", marginTop: 12 },
   email: { ...FONTS.body2, color: "#E2E8F0", marginTop: 4 },
   tierBadge: { alignItems: "center", marginTop: 20 },
   tierText: {
-    color: COLORS.accentGoldLight,
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: "700" as const,
   },
-  pointsText: { color: "#E2E8F0", fontSize: 15, marginTop: 6 },
+  pointsText: { color: COLORS.lightGray, fontSize: 15, marginTop: 6 },
 
   section: { paddingHorizontal: SIZES.padding, marginTop: 24 },
   card: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: SIZES.radiusLarge,
+    backgroundColor: COLORS.white,
+    borderRadius: Math.max(SIZES.radiusLarge, 12),
     padding: 24,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 12,
+    ...SHADOWS.medium,
   },
   cardHeader: {
     flexDirection: "row",
@@ -311,18 +294,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  sectionTitle: { ...FONTS.h3, color: COLORS.text },
-  editText: { color: COLORS.accentGold, fontWeight: "600" as const },
+  sectionTitle: { ...FONTS.h3, color: COLORS.secondary },
+  editText: { color: COLORS.warning, fontWeight: "600" as const },
 
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 12,
   },
-  infoLabel: { ...FONTS.body3, color: COLORS.textLight },
+  infoLabel: { ...FONTS.body3, color: COLORS.gray },
   infoValue: {
     ...FONTS.body2,
-    color: COLORS.text,
+    color: COLORS.secondary,
     fontWeight: "600" as const,
     textAlign: "right",
   },
@@ -342,14 +325,14 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   actionIcon: { fontSize: 26, marginRight: 16 },
-  actionText: { ...FONTS.body1, color: COLORS.text, flex: 1 },
-  arrow: { fontSize: 28, color: COLORS.textLight },
+  actionText: { ...FONTS.body1, color: COLORS.secondary, flex: 1 },
+  arrow: { fontSize: 28, color: COLORS.gray },
 
   // New Menu Styles
   menuSection: { paddingHorizontal: SIZES.padding, marginTop: 32 },
   menuTitle: {
     ...FONTS.h3,
-    color: COLORS.text,
+    color: COLORS.secondary,
     marginBottom: 20,
     textAlign: "center",
   },
@@ -357,61 +340,49 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 32,
+    marginBottom: 24,
   },
   menuCard: {
     width: "48%",
-    height: 160,
-    borderRadius: SIZES.radiusLarge,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 12,
   },
-  menuCardGradient: {
+  menuCardInner: {
     flex: 1,
+    backgroundColor: COLORS.white,
     borderRadius: SIZES.radiusLarge,
-    padding: 20,
+    padding: 16,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
+    ...SHADOWS.light,
   },
-  menuIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12,
+    marginRight: 12,
   },
-  menuIcon: { fontSize: 24 },
+  menuIcon: { fontSize: 22 },
   menuCardTitle: {
     ...FONTS.body2,
-    color: "#fff",
-    fontWeight: "600" as const,
+    color: COLORS.secondary,
+    fontWeight: "700" as const,
     flex: 1,
   },
-  menuArrow: {
-    alignSelf: "flex-end",
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    justifyContent: "center",
+  menuCardRight: {
     alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
   },
-  menuArrowText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  menuArrowText: { color: COLORS.gray, fontSize: 18, fontWeight: "bold" },
 
   logoutButton: {
-    height: 60,
+    height: 56,
     borderRadius: SIZES.radiusLarge,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
+    ...SHADOWS.medium,
+    marginTop: 8,
   },
   logoutGradient: {
     flex: 1,
@@ -421,10 +392,10 @@ const styles = StyleSheet.create({
     borderRadius: SIZES.radiusLarge,
     paddingHorizontal: 24,
   },
-  logoutIcon: { fontSize: 24, marginRight: 12 },
+  logoutIcon: { fontSize: 22, marginRight: 12 },
   logoutButtonText: {
-    color: "#fff",
-    fontSize: 18,
+    color: COLORS.white,
+    fontSize: 16,
     fontWeight: "700" as const,
   },
 
@@ -451,24 +422,24 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     ...FONTS.h2,
-    color: COLORS.text,
+    color: COLORS.secondary,
     textAlign: "center",
     marginBottom: 12,
   },
   welcomeSubtitle: {
     ...FONTS.body2,
-    color: COLORS.textLight,
+    color: COLORS.gray,
     textAlign: "center",
     marginBottom: 40,
   },
   luxuryBtn: {
-    backgroundColor: COLORS.accentGold,
+    backgroundColor: COLORS.warning,
     paddingHorizontal: 50,
     paddingVertical: 16,
     borderRadius: 30,
   },
   luxuryBtnText: {
-    color: COLORS.primary,
+    color: COLORS.secondary,
     fontSize: 18,
     fontWeight: "700" as const,
   },
