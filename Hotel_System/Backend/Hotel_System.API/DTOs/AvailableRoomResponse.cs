@@ -14,6 +14,7 @@ namespace Hotel_System.API.DTOs
         public List<string>? RoomImageUrls { get; set; } // Multiple images for carousel
         public string RoomTypeName { get; set; } = string.Empty;
         public int MaxOccupancy { get; set; }
+        public decimal? Rating { get; set; } // Average rating from reviews (xepHangSao)
     }
 }
 

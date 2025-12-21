@@ -6,6 +6,7 @@ import AppIcon from "./AppIcon";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import { AvailableRoom } from "../api/roomsApi";
 import { getPromotions } from "../api/promotionApi";
+import reviewApi from "../api/reviewApi";
 
 type Props = {
   room: AvailableRoom;
@@ -20,6 +21,7 @@ const AvailableRoomCard: React.FC<Props> = ({
 }) => {
   const [promotion, setPromotion] = useState<any>(null);
   const [discountedPrice, setDiscountedPrice] = useState<number | null>(null);
+  const [stats, setStats] = useState<any | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +57,23 @@ const AvailableRoomCard: React.FC<Props> = ({
     return () => {
       cancelled = true;
     };
+  }, [room.roomId]);
+
+  // Load review stats to get actual rating
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const s = await reviewApi.getRoomStats(String(room.roomId));
+        if (cancelled) return;
+        console.log(`AvailableRoomCard: stats for roomId=${room.roomId}`, s);
+        setStats(s);
+      } catch (err) {
+        console.debug('AvailableRoomCard: failed to load review stats', err);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, [room.roomId]);
 
   const priceText = () => {
@@ -141,10 +160,19 @@ const AvailableRoomCard: React.FC<Props> = ({
             </Text>
             <Text style={styles.roomNumber}>Phòng {room.roomNumber}</Text>
           </View>
-          <View style={styles.ratingContainer}>
-            <AppIcon name="star" size={14} color="#FFD700" />
-            <Text style={styles.ratingText}>4.5</Text>
-          </View>
+          {(() => {
+            const displayRating = (stats && typeof stats.averageRating === 'number') ? stats.averageRating : (room.rating ?? null);
+            // Display rating whenever it's available (from stats or room data)
+            if (displayRating !== null && displayRating !== undefined) {
+              return (
+                <View style={styles.ratingContainer}>
+                  <AppIcon name="star" size={14} color="#FFD700" />
+                  <Text style={styles.ratingText}>{Number(displayRating).toFixed(1)}</Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
         </View>
 
         {room.description ? (

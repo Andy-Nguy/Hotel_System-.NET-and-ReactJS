@@ -141,7 +141,8 @@ namespace Hotel_System.API.Services
                     BasePricePerNight = p.GiaCoBanMotDem ?? 0,
                     RawImageUrls = p.UrlAnhPhong,
                     RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong ?? "" : "",
-                    MaxOccupancy = p.SoNguoiToiDa ?? 0
+                    MaxOccupancy = p.SoNguoiToiDa ?? 0,
+                    Rating = p.XepHangSao ?? 0
                 })
                 .OrderBy(p => p.RoomNumber)
                 .ToListAsync();
@@ -178,7 +179,8 @@ namespace Hotel_System.API.Services
                         ? r.RawImageUrls.Select(img => ResolveImageUrl(img) ?? "").Where(u => !string.IsNullOrEmpty(u)).ToList()
                         : new List<string>(),
                     RoomTypeName = r.RoomTypeName,
-                    MaxOccupancy = r.MaxOccupancy
+                    MaxOccupancy = r.MaxOccupancy,
+                    Rating = (decimal)r.Rating
                 };
 
                 // Apply promotion if available
@@ -269,7 +271,8 @@ namespace Hotel_System.API.Services
                     BasePricePerNight = p.GiaCoBanMotDem ?? 0,
                     RawImageUrls = p.UrlAnhPhong,
                     RoomTypeName = p.IdloaiPhongNavigation != null ? p.IdloaiPhongNavigation.TenLoaiPhong ?? "" : "",
-                    MaxOccupancy = p.SoNguoiToiDa ?? 0
+                    MaxOccupancy = p.SoNguoiToiDa ?? 0,
+                    Rating = p.XepHangSao ?? 0
                 })
                 .OrderBy(p => p.RoomNumber)
                 .ToListAsync();
@@ -306,7 +309,8 @@ namespace Hotel_System.API.Services
                         ? r.RawImageUrls.Select(img => ResolveImageUrl(img) ?? "").Where(u => !string.IsNullOrEmpty(u)).ToList()
                         : new List<string>(),
                     RoomTypeName = r.RoomTypeName,
-                    MaxOccupancy = r.MaxOccupancy
+                    MaxOccupancy = r.MaxOccupancy,
+                    Rating = (decimal)r.Rating
                 };
 
                 // Apply promotion if available

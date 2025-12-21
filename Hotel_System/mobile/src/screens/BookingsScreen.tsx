@@ -472,8 +472,10 @@ const BookingsScreen: React.FC = () => {
     const checkoutRaw = getProp(item, "ngayTraPhong", "NgayTraPhong");
     const checkoutDate = checkoutRaw ? new Date(checkoutRaw) : null;
     const now = new Date();
-    const canOpenReview =
-      statusCode === 4 || statusCode === 5 || (!!checkoutDate && now >= checkoutDate);
+    // Only allow review when booking status is explicitly 'Hoàn thành' (4)
+    // Previous behavior also allowed review when checkout date passed (now >= checkoutDate)
+    // which caused the button to appear for many non-completed bookings. Restrict to 4.
+    const canOpenReview = statusCode === 4;
 
     const bookingStatusStyle = getStatusBadgeStyle("booking", statusCode);
     const paymentStatusStyle = getStatusBadgeStyle("payment", paymentCode);

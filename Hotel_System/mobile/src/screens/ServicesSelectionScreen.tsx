@@ -14,7 +14,7 @@ import { Image } from "expo-image";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import AppIcon from "../components/AppIcon";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
-import { DEFAULT_BASE_URL } from "../config/apiConfig";
+import { DEFAULT_BASE_URL, buildApiUrl } from "../config/apiConfig";
 import BookingProgress from "../components/BookingProgress";
 import HeaderScreen from "../components/HeaderScreen";
 
@@ -182,7 +182,24 @@ const ServicesSelectionScreen: React.FC = () => {
       return Math.round(originalTotal * (1 - discountValue / 100));
     } else {
       // Fixed amount discount
-      return Math.max(0, originalTotal - discountValue);
+        return Math.max(0, originalTotal - discountValue);
+      }
+    };
+  
+    const resolveServiceImageUri = (u: any) => {
+    if (!u) return buildApiUrl('/img/services/default.webp');
+    try {
+      if (typeof u !== 'string') {
+        if (Array.isArray(u)) u = u.find(x => !!x) || u[0];
+        else u = JSON.stringify(u);
+      }
+      const s = String(u).trim();
+      if (!s) return buildApiUrl('/img/services/default.webp');
+      if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return s;
+      if (s.startsWith('/img') || s.startsWith('/')) return buildApiUrl(s);
+      return buildApiUrl(`/img/services/${encodeURI(s)}`);
+    } catch (e) {
+      return buildApiUrl('/img/services/default.webp');
     }
   };
 
@@ -303,8 +320,8 @@ const ServicesSelectionScreen: React.FC = () => {
         <View style={styles.serviceImageContainer}>
           {item.hinhDichVu ? (
             <Image
-              source={{ uri: item.hinhDichVu }}
-              style={[styles.serviceImage, isInCombo && { opacity: 0.5 }]}
+              source={{ uri: resolveServiceImageUri(item.hinhDichVu) }}
+              style={[styles.serviceImage, isInCombo ? { opacity: 0.5 } : undefined]}
               contentFit="cover"
             />
           ) : (
@@ -386,7 +403,8 @@ const ServicesSelectionScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scrollContent}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        // Increased bottom padding to account for fixed bottomBar + native tab bar
+        contentContainerStyle={{ paddingBottom: 220 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.introSection}>
@@ -517,7 +535,7 @@ const ServicesSelectionScreen: React.FC = () => {
                 <View style={styles.modalImageContainer}>
                   {selectedServiceDetail.hinhDichVu ? (
                     <Image
-                      source={{ uri: selectedServiceDetail.hinhDichVu }}
+                      source={{ uri: resolveServiceImageUri(selectedServiceDetail.hinhDichVu) }}
                       style={styles.modalImage}
                       contentFit="cover"
                     />

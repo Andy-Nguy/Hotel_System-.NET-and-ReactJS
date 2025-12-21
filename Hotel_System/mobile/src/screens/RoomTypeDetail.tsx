@@ -342,7 +342,7 @@ const RoomTypeDetail: React.FC = () => {
                     moTa: ar.description,
                     soNguoiToiDa: ar.maxOccupancy,
                     giaCoBanMotDem: ar.basePricePerNight,
-                    xepHangSao: 0,
+                    xepHangSao: ar.rating || 0,
                     trangThai: "Available",
                     urlAnhPhong: ar.roomImageUrl || "",
                     amenities: [],

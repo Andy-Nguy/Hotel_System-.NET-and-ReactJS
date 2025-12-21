@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  DeviceEventEmitter,
 } from "react-native";
 import { Image } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -74,6 +75,7 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
         if (cancelled) return;
         if (s) {
           statsCache.set(key, s);
+          console.log(`[RoomSection] Stats loaded for roomId=${key}:`, s);
           setStats(s);
         }
       } catch (err) {
