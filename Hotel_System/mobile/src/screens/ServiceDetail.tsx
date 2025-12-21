@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
 import servicesApi, { Service } from "../api/servicesApi";
+import HeaderScreen from "../components/HeaderScreen";
 
 interface ServiceDetailRouteParams {
   serviceId: string;
@@ -69,13 +70,10 @@ const ServiceDetail: React.FC = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.closeButton}>✕</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Chi tiết dịch vụ</Text>
-          <View style={{ width: 30 }} />
-        </View>
+        <HeaderScreen
+          title="Chi tiết dịch vụ"
+          onClose={() => navigation.goBack()}
+        />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
@@ -86,13 +84,10 @@ const ServiceDetail: React.FC = () => {
   if (error || !service) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.closeButton}>✕</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Chi tiết dịch vụ</Text>
-          <View style={{ width: 30 }} />
-        </View>
+        <HeaderScreen
+          title="Chi tiết dịch vụ"
+          onClose={() => navigation.goBack()}
+        />
         <View style={styles.center}>
           <Text style={styles.errorText}>⚠️</Text>
           <Text style={styles.errorMessage}>
@@ -111,14 +106,10 @@ const ServiceDetail: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.modalHeader}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.closeButton}>✕</Text>
-        </TouchableOpacity>
-        <Text style={styles.modalTitle}>Chi tiết dịch vụ</Text>
-        <View style={{ width: 30 }} />
-      </View>
+      <HeaderScreen
+        title="Chi tiết dịch vụ"
+        onClose={() => navigation.goBack()}
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Image */}
@@ -197,10 +188,7 @@ const ServiceDetail: React.FC = () => {
         <View style={{ height: SIZES.padding * 4 }} />
       </ScrollView>
 
-      {/* Footer Button */}
-      <TouchableOpacity style={styles.bookButton} onPress={handleBooking}>
-        <Text style={styles.bookButtonText}>Đặt ngay</Text>
-      </TouchableOpacity>
+      
     </SafeAreaView>
   );
 };
@@ -209,45 +197,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding * 0.8,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e8e8e8",
-  },
-  closeButton: {
-    fontSize: 24,
-    color: COLORS.secondary,
-    fontWeight: "600",
-    width: 30,
-    textAlign: "center",
-  },
-  headerTitle: {
-    ...FONTS.h4,
-    color: COLORS.secondary,
-    fontWeight: "600",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding * 0.6,
-    marginTop: 30,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.lightGray,
-  },
-  modalTitle: {
-    ...FONTS.h2,
-    fontWeight: "700",
-    color: COLORS.secondary,
-    fontSize: 20,
   },
   center: {
     flex: 1,

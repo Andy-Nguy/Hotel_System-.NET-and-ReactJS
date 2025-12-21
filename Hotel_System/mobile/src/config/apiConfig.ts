@@ -9,7 +9,7 @@ export const API_CONFIG = {
   // Local development API (when running .NET API locally)
   // Check launchSettings.json for the correct port
   // Usually: https://localhost:5001 (HTTPS) or http://localhost:5171 (HTTP)
-  LOCAL: "http://192.168.2.62:8080",
+  LOCAL: "http://192.168.1.43:8080",
 
   // Railway production API
   RAILWAY: "https://hotelsystem-net-and-reactjs-production.up.railway.app",

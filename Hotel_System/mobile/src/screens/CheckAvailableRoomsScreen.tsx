@@ -24,6 +24,7 @@ import {
 } from "../api/roomsApi";
 import AvailableRoomCard from "../components/AvailableRoomCard";
 import RoomDetail from "../components/RoomDetail";
+import HeaderScreen from "../components/HeaderScreen";
 
 const CheckAvailableRoomsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -196,16 +197,13 @@ const CheckAvailableRoomsScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
+      <HeaderScreen
+        title="Đặt phòng"
+        onClose={() => navigation.goBack()}
+        leftIcon={
           <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Đặt phòng</Text>
-        <View style={{ width: 40 }} />
-      </View>
+        }
+      />
 
       <ScrollView
         style={styles.scrollContent}
@@ -409,24 +407,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding,
-    backgroundColor: COLORS.white,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: "#F5F5F5",
-  },
-  headerTitle: {
-    ...FONTS.h3,
-    color: COLORS.secondary,
-    fontWeight: "700",
   },
   scrollContent: {
     flex: 1,

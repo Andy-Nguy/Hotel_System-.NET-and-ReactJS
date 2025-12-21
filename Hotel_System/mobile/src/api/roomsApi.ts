@@ -76,6 +76,7 @@ export type AvailableRoom = {
   roomNumber: string;
   description: string;
   basePricePerNight: number;
+  discountedPrice?: number;
   roomImageUrl?: string | null;
   roomImageUrls?: string[];
   roomTypeName: string;

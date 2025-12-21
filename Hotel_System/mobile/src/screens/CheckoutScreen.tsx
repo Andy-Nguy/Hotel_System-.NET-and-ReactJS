@@ -10,12 +10,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import AppIcon from "../components/AppIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BookingProgress from "../components/BookingProgress";
+import HeaderScreen from "../components/HeaderScreen";
 import { useAuth } from "../context/AuthContext";
 import { DEFAULT_BASE_URL } from "../config/apiConfig";
 
@@ -37,6 +38,7 @@ interface BookingInfo {
 const CheckoutScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { userInfo, isLoggedIn } = useAuth();
   const [bookingInfo, setBookingInfo] = useState<BookingInfo | null>(null);
   const [customerInfo, setCustomerInfo] = useState({
@@ -313,16 +315,11 @@ const CheckoutScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Thông tin khách hàng</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <HeaderScreen
+        title="Thông tin khách hàng"
+        onClose={() => navigation.goBack()}
+        leftIcon={<AppIcon name="arrow-left" size={24} color={COLORS.secondary} />}
+      />
 
       <BookingProgress
         currentStage="checkout"
@@ -717,7 +714,14 @@ const CheckoutScreen: React.FC = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <View style={styles.bottomBar}>
+      <View style={[
+        styles.bottomBar,
+        {
+          bottom: Platform.OS === 'ios' 
+            ? insets.bottom + 0
+            : 0,
+        },
+      ]}>
         <View style={styles.totalContainer}>
           <Text style={styles.bottomTotalLabel}>Tổng cộng</Text>
           <Text style={styles.bottomTotalPrice}>
@@ -1076,7 +1080,6 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,

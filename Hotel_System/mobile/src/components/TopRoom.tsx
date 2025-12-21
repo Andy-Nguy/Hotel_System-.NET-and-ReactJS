@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { getPrimaryRoomImage } from "../utils/imageUtils";
@@ -18,9 +19,21 @@ import {
 } from "../api/roomsApi";
 import { useNavigation } from "@react-navigation/native";
 
-const { width } = Dimensions.get("window");
-const CARD_WIDTH = width * 0.85;
-const CARD_SPACING = 16;
+const { width, height } = Dimensions.get("window");
+
+// Responsive calculations
+const isSmallDevice = width < 375;
+const isMediumDevice = width >= 375 && width < 414;
+const isLargeDevice = width >= 414;
+
+const CARD_WIDTH = isSmallDevice 
+  ? width * 0.88 
+  : isMediumDevice 
+  ? width * 0.85 
+  : width * 0.82;
+
+const CARD_SPACING = isSmallDevice ? 12 : 16;
+const IMAGE_HEIGHT = isSmallDevice ? 180 : isMediumDevice ? 200 : 220;
 
 interface TopRoomProps {
   topCount?: number;
@@ -146,7 +159,10 @@ const TopRoom: React.FC<TopRoomProps> = ({ topCount = 5, onRoomPress }) => {
             {/* Room Image */}
             <Image
               source={{ uri: getPrimaryRoomImage(room) || "" }}
-              style={styles.cardImage}
+              style={[
+                styles.cardImage,
+                { height: IMAGE_HEIGHT }
+              ]}
               contentFit="cover"
               transition={300}
             />
@@ -232,15 +248,18 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     paddingHorizontal: SIZES.base,
+    paddingVertical: Platform.OS === 'ios' ? 4 : 2,
   },
   card: {
     width: CARD_WIDTH,
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: isSmallDevice ? 12 : 16,
     marginHorizontal: CARD_SPACING / 2,
     overflow: "hidden",
     marginBottom: SIZES.padding * 1.5,
     ...SHADOWS.medium,
+    // Add elevation for Android
+    elevation: Platform.OS === 'android' ? 8 : 0,
   },
   firstCard: {
     marginLeft: SIZES.padding,
@@ -250,20 +269,19 @@ const styles = StyleSheet.create({
   },
   cardImage: {
     width: "100%",
-    height: 220,
     backgroundColor: COLORS.lightGray,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: isSmallDevice ? 12 : 16,
+    borderTopRightRadius: isSmallDevice ? 12 : 16,
   },
   cardContent: {
-    padding: 16,
+    padding: isSmallDevice ? 12 : 16,
   },
   categoryBadge: {
     alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginBottom: 12,
+    paddingHorizontal: isSmallDevice ? 10 : 12,
+    paddingVertical: isSmallDevice ? 5 : 6,
+    borderRadius: isSmallDevice ? 12 : 16,
+    marginBottom: isSmallDevice ? 8 : 12,
   },
   badgeTechnology: {
     backgroundColor: "#4A90E2",
@@ -277,20 +295,23 @@ const styles = StyleSheet.create({
   categoryBadgeText: {
     color: COLORS.white,
     ...FONTS.body5,
+    fontSize: isSmallDevice ? 11 : FONTS.body5.fontSize,
     fontWeight: "600",
     textTransform: "capitalize",
   },
   roomName: {
     ...FONTS.h3,
+    fontSize: isSmallDevice ? 16 : isMediumDevice ? 18 : FONTS.h3.fontSize,
     color: COLORS.secondary,
-    marginBottom: 8,
+    marginBottom: isSmallDevice ? 6 : 8,
     fontWeight: "600",
   },
   description: {
     ...FONTS.body4,
+    fontSize: isSmallDevice ? 13 : FONTS.body4.fontSize,
     color: COLORS.gray,
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: isSmallDevice ? 18 : 20,
+    marginBottom: isSmallDevice ? 12 : 16,
   },
   footer: {
     flexDirection: "row",
@@ -303,17 +324,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: isSmallDevice ? 36 : 40,
+    height: isSmallDevice ? 36 : 40,
+    borderRadius: isSmallDevice ? 18 : 20,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 10,
+    marginRight: isSmallDevice ? 8 : 10,
   },
   avatarText: {
     color: COLORS.white,
     ...FONTS.body3,
+    fontSize: isSmallDevice ? 13 : FONTS.body3.fontSize,
     fontWeight: "700",
   },
   metaInfo: {
@@ -321,12 +343,14 @@ const styles = StyleSheet.create({
   },
   metaName: {
     ...FONTS.body4,
+    fontSize: isSmallDevice ? 13 : FONTS.body4.fontSize,
     color: COLORS.secondary,
     fontWeight: "600",
     marginBottom: 2,
   },
   metaDate: {
     ...FONTS.body5,
+    fontSize: isSmallDevice ? 11 : FONTS.body5.fontSize,
     color: COLORS.gray,
   },
 });
