@@ -22,8 +22,10 @@ const BookingForm: React.FC<BookingFormProps> = ({
   onResults,
 }) => {
   const toDateInput = (d: Date) => d.toISOString().slice(0, 10);
+  const addDays = (d: Date, days: number) =>
+    new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
   const today = new Date();
-  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrow = addDays(today, 1);
   const [checkIn, setCheckIn] = useState<string>(toDateInput(today));
   const [checkOut, setCheckOut] = useState<string>(toDateInput(tomorrow));
   const [guests, setGuests] = useState<number>(2);
@@ -142,7 +144,11 @@ const BookingForm: React.FC<BookingFormProps> = ({
             xepHangSao: r.xepHangSao ?? null, // Not in sample
             trangThai: r.trangThai ?? "Trống", // Assume available
             // Prioritize multiple images (RoomImageUrls) over single image
-            urlAnhPhong: r.roomImageUrls ?? r.RoomImageUrls ?? r.roomImageUrl ?? r.RoomImageUrl,
+            urlAnhPhong:
+              r.roomImageUrls ??
+              r.RoomImageUrls ??
+              r.roomImageUrl ??
+              r.RoomImageUrl,
             // keep original raw object for debugging if needed
             __raw: r,
           };
@@ -269,7 +275,18 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 type="date"
                 id="date-in"
                 value={checkIn}
-                onChange={(ev) => setCheckIn(ev.target.value)}
+                min={toDateInput(today)}
+                onChange={(ev) => {
+                  const v = ev.target.value;
+                  const minDate = toDateInput(today);
+                  const chosen = new Date(v) < new Date(minDate) ? minDate : v;
+                  setCheckIn(chosen);
+                  // Ensure checkOut is at least one day after checkIn
+                  const minOut = toDateInput(addDays(new Date(chosen), 1));
+                  if (new Date(checkOut) <= new Date(chosen)) {
+                    setCheckOut(minOut);
+                  }
+                }}
                 style={{
                   position: "absolute",
                   left: 0,
@@ -323,7 +340,13 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 type="date"
                 id="date-out"
                 value={checkOut}
-                onChange={(ev) => setCheckOut(ev.target.value)}
+                min={toDateInput(addDays(new Date(checkIn), 1))}
+                onChange={(ev) => {
+                  const v = ev.target.value;
+                  const minOut = toDateInput(addDays(new Date(checkIn), 1));
+                  const chosen = new Date(v) < new Date(minOut) ? minOut : v;
+                  setCheckOut(chosen);
+                }}
                 style={{
                   position: "absolute",
                   left: 0,
@@ -404,7 +427,17 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 type="date"
                 id="date-in-compact"
                 value={checkIn}
-                onChange={(ev) => setCheckIn(ev.target.value)}
+                min={toDateInput(today)}
+                onChange={(ev) => {
+                  const v = ev.target.value;
+                  const minDate = toDateInput(today);
+                  const chosen = new Date(v) < new Date(minDate) ? minDate : v;
+                  setCheckIn(chosen);
+                  const minOut = toDateInput(addDays(new Date(chosen), 1));
+                  if (new Date(checkOut) <= new Date(chosen)) {
+                    setCheckOut(minOut);
+                  }
+                }}
                 style={inputStyle}
               />
             </div>
@@ -414,7 +447,13 @@ const BookingForm: React.FC<BookingFormProps> = ({
                 type="date"
                 id="date-out-compact"
                 value={checkOut}
-                onChange={(ev) => setCheckOut(ev.target.value)}
+                min={toDateInput(addDays(new Date(checkIn), 1))}
+                onChange={(ev) => {
+                  const v = ev.target.value;
+                  const minOut = toDateInput(addDays(new Date(checkIn), 1));
+                  const chosen = new Date(v) < new Date(minOut) ? minOut : v;
+                  setCheckOut(chosen);
+                }}
                 style={inputStyle}
               />
             </div>

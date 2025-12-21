@@ -8,7 +8,12 @@ import {
   TextInput,
   ImageBackground,
   Image,
+  RefreshControl,
 } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { getLoyalty, LoyaltyInfo } from "../api/authApi";
@@ -23,9 +28,29 @@ import Services from "../components/Services";
 const HomeScreen: React.FC = () => {
   const { userInfo } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [searchText, setSearchText] = useState("");
   const [loyalty, setLoyalty] = useState<LoyaltyInfo | null>(null);
   const [loadingLoyalty, setLoadingLoyalty] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    setLoadingLoyalty(true);
+
+    getLoyalty()
+      .then((data) => {
+        setLoyalty(data);
+      })
+      .catch((err) => {
+        console.log("refresh loyalty error:", err?.message || err);
+      })
+      .finally(() => {
+        setLoadingLoyalty(false);
+        // keep spinner visible briefly so user sees feedback
+        setTimeout(() => setRefreshing(false), 600);
+      });
+  }, [userInfo]);
 
   useEffect(() => {
     if (!userInfo) {
@@ -74,85 +99,99 @@ const HomeScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      scrollEventThrottle={16}
-    >
-      {/* Hero Banner - Full Screen with Image */}
-      <View style={styles.heroContainer}>
-        <ImageBackground
-          source={require("../assets/img/gallery/Hotel/2.jpg")}
-          style={styles.heroBanner}
-          imageStyle={styles.heroImage}
-        >
-          {/* Overlay */}
-          <View style={styles.heroOverlay} />
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
+        {/* Hero Banner - Full Screen with Image */}
+        <View style={styles.heroContainer}>
+          <ImageBackground
+            source={require("../assets/img/gallery/Hotel/2.jpg")}
+            style={styles.heroBanner}
+            imageStyle={styles.heroImage}
+          >
+            {/* Overlay */}
+            <View style={styles.heroOverlay} />
 
-          {/* Hero Header - Logo */}
-          <View style={styles.heroHeader}>
-            <Text style={styles.logoText}>ROBIN'S VILLA</Text>
-          </View>
-
-          {/* Hero Search Bar - Floating */}
-          <View style={styles.heroSearchContainer}>
-            <View style={styles.searchBox}>
-              <AppIcon
-                name="search"
-                size={20}
-                color="#999"
-                style={styles.searchIcon}
-              />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Tìm phòng phù hợp với bạn ..."
-                placeholderTextColor="#999"
-                value={searchText}
-                onChangeText={setSearchText}
-                onFocus={handleSearchFocus}
-              />
+            {/* Hero Header - Logo */}
+            <View
+              style={[
+                styles.heroHeader,
+                { paddingTop: insets.top + SIZES.padding },
+              ]}
+            >
+              <Text style={styles.logoText}>ROBIN'S VILLA</Text>
             </View>
-          </View>
 
-          {/* Hero Content - Bottom */}
-          <View style={styles.heroContent}>
-            <Text style={styles.heroTitle}>
-              Đẳng cấp chờ đón bạn – Ưu đãi không giới hạn
-            </Text>
-            {/* <Text style={styles.heroSubtext}>Nhận ưu đãi ngay →</Text> */}
-          </View>
-        </ImageBackground>
-      </View>
+            {/* Hero Search Bar - Floating */}
+            <View style={styles.heroSearchContainer}>
+              <View style={styles.searchBox}>
+                <AppIcon
+                  name="search"
+                  size={20}
+                  color="#999"
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Tìm phòng phù hợp với bạn ..."
+                  placeholderTextColor="#999"
+                  value={searchText}
+                  onChangeText={setSearchText}
+                  onFocus={handleSearchFocus}
+                />
+              </View>
+            </View>
 
-      {/* Bottom Info Bar */}
-      <View style={styles.bottomBar}>
-        <View style={styles.bottomLeft}>
-          <Text style={styles.bottomLabel}>Xin chào, {getUserName()}</Text>
+            {/* Hero Content - Bottom */}
+            <View style={styles.heroContent}>
+              <Text style={styles.heroTitle}>
+                Đẳng cấp chờ đón bạn – Ưu đãi không giới hạn
+              </Text>
+              {/* <Text style={styles.heroSubtext}>Nhận ưu đãi ngay →</Text> */}
+            </View>
+          </ImageBackground>
         </View>
-        <TouchableOpacity style={styles.bottomRight}>
-          <Text style={styles.bottomStats}>
-            {loadingLoyalty
-              ? "Đang tải..."
-              : `${loyalty?.totalNights ?? 0} Đêm • ${
-                  loyalty?.tichDiem ?? 0
-                } Điểm`}
-          </Text>
-          <Text style={styles.bottomArrow}>›</Text>
-        </TouchableOpacity>
-      </View>
 
-      <AboutUs />
+        {/* Bottom Info Bar */}
+        <View style={styles.bottomBar}>
+          <View style={styles.bottomLeft}>
+            <Text style={styles.bottomLabel}>Xin chào, {getUserName()}</Text>
+          </View>
+          <TouchableOpacity style={styles.bottomRight}>
+            <Text style={styles.bottomStats}>
+              {loadingLoyalty
+                ? "Đang tải..."
+                : `${loyalty?.totalNights ?? 0} Đêm • ${
+                    loyalty?.tichDiem ?? 0
+                  } Điểm`}
+            </Text>
+            <Text style={styles.bottomArrow}>›</Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* Promotion: Promotion will fetch latest promotion itself when no props provided */}
-      <Promotion navigation={navigation} />
+        <AboutUs />
 
-      <RoomType />
-      <Services />
-      {/* Bottom Spacing */}
-      <View style={styles.spacing} />
+        {/* Promotion: Promotion will fetch latest promotion itself when no props provided */}
+        <Promotion navigation={navigation} />
 
-      <BlogSection />
-    </ScrollView>
+        <RoomType />
+        <Services />
+        {/* Bottom Spacing */}
+        <View style={styles.spacing} />
+
+        <BlogSection />
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -309,6 +348,9 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: "600",
     marginRight: 10,
+  },
+  scrollContent: {
+    flex: 1,
   },
 });
 

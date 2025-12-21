@@ -67,18 +67,21 @@ const PaymentScreen: React.FC = () => {
       const invoiceData = await AsyncStorage.getItem("finalBookingData");
       if (invoiceData) {
         const parsed = JSON.parse(invoiceData);
-        
+
         // Calculate service total including combo + individual services
         let serviceTotal = 0;
         if (parsed.selectedCombo) {
           serviceTotal += parsed.selectedCombo.price || 0;
         }
         if (parsed.selectedServices && Array.isArray(parsed.selectedServices)) {
-          serviceTotal += parsed.selectedServices.reduce((sum: number, s: any) => {
-            return sum + (s.price || 0) * (s.quantity || 1);
-          }, 0);
+          serviceTotal += parsed.selectedServices.reduce(
+            (sum: number, s: any) => {
+              return sum + (s.price || 0) * (s.quantity || 1);
+            },
+            0
+          );
         }
-        
+
         setInvoiceInfo({
           ...parsed,
           grandTotal: parsed.pricing?.totalAmount || parsed.totalAmount || 0,
@@ -204,7 +207,7 @@ const PaymentScreen: React.FC = () => {
         // Tạo payload cho API hóa đơn (giống Web)
         // Build Services array including combo (if any) and individual services
         const services: any[] = [];
-        
+
         // Add combo to services list with special format (combo:COMBOID)
         if (invoiceInfo.selectedCombo && invoiceInfo.selectedCombo.comboId) {
           services.push({
@@ -214,9 +217,12 @@ const PaymentScreen: React.FC = () => {
             TienDichVu: invoiceInfo.selectedCombo.price,
           });
         }
-        
+
         // Add individual services
-        if (invoiceInfo.selectedServices && invoiceInfo.selectedServices.length > 0) {
+        if (
+          invoiceInfo.selectedServices &&
+          invoiceInfo.selectedServices.length > 0
+        ) {
           invoiceInfo.selectedServices.forEach((svc: any) => {
             services.push({
               IddichVu: svc.serviceId,
@@ -354,25 +360,34 @@ const PaymentScreen: React.FC = () => {
             <View style={styles.invoiceRow}>
               <Text style={styles.invoiceLabel}>Tiền phòng</Text>
               <Text style={styles.invoiceValue}>
-                {(invoiceInfo.rooms.reduce((sum: number, r: any) => {
-                  const price = r.room?.discountedPrice || r.room?.basePricePerNight || 0;
-                  return sum + price * invoiceInfo.nights;
-                }, 0)).toLocaleString()}
+                {invoiceInfo.rooms
+                  .reduce((sum: number, r: any) => {
+                    const price =
+                      r.room?.discountedPrice || r.room?.basePricePerNight || 0;
+                    return sum + price * invoiceInfo.nights;
+                  }, 0)
+                  .toLocaleString()}
                 đ
               </Text>
             </View>
-            {((invoiceInfo.selectedCombo && invoiceInfo.selectedCombo.price > 0) || 
-              (invoiceInfo.selectedServices && invoiceInfo.selectedServices.length > 0)) && (
+            {((invoiceInfo.selectedCombo &&
+              invoiceInfo.selectedCombo.price > 0) ||
+              (invoiceInfo.selectedServices &&
+                invoiceInfo.selectedServices.length > 0)) && (
               <View style={styles.invoiceRow}>
                 <Text style={styles.invoiceLabel}>Dịch vụ</Text>
                 <Text style={styles.invoiceValue}>
                   {(() => {
                     const comboPrice = invoiceInfo.selectedCombo?.price || 0;
                     const servicesPrice = invoiceInfo.selectedServices
-                      ? invoiceInfo.selectedServices.reduce((s: any, i: any) => s + i.price * i.quantity, 0)
+                      ? invoiceInfo.selectedServices.reduce(
+                          (s: any, i: any) => s + i.price * i.quantity,
+                          0
+                        )
                       : 0;
                     return (comboPrice + servicesPrice).toLocaleString();
-                  })()}đ
+                  })()}
+                  đ
                 </Text>
               </View>
             )}
@@ -387,7 +402,12 @@ const PaymentScreen: React.FC = () => {
                 <Text style={[styles.invoiceLabel, { color: "#16A34A" }]}>
                   Giảm điểm ({invoiceInfo.pointsUsed} điểm)
                 </Text>
-                <Text style={[styles.invoiceValue, { color: "#16A34A", fontWeight: "700" }]}>
+                <Text
+                  style={[
+                    styles.invoiceValue,
+                    { color: "#16A34A", fontWeight: "700" },
+                  ]}
+                >
                   -{invoiceInfo.pointsDiscount.toLocaleString()}đ
                 </Text>
               </View>
