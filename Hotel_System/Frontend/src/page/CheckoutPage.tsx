@@ -1225,7 +1225,7 @@ const CheckoutPage: React.FC = () => {
                     <Text
                       style={{ color: "#666", fontSize: 14, marginLeft: 24 }}
                     >
-                      123 Đường ABC, Quận 1, TP.HCM
+                      4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng
                     </Text>
                   </div>
                 </div>
