@@ -10,13 +10,13 @@ import {
   Image,
   Dimensions,
   Platform,
+  RefreshControl,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
 import { getLoyalty, LoyaltyInfo } from "../api/authApi";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
@@ -171,15 +171,16 @@ const HomeScreen: React.FC = () => {
                 onFocus={handleSearchFocus}
               />
             </View>
+          </View>
 
-            {/* Hero Content - Bottom */}
-            <View style={styles.heroContent}>
-              <Text style={styles.heroTitle}>
-                Đẳng cấp chờ đón bạn – Ưu đãi không giới hạn
-              </Text>
-              {/* <Text style={styles.heroSubtext}>Nhận ưu đãi ngay →</Text> */}
-            </View>
-          </ImageBackground>
+          {/* Hero Content - Bottom */}
+          <View style={styles.heroContent}>
+            <Text style={styles.heroTitle}>
+              Đẳng cấp chờ đón bạn – Ưu đãi không giới hạn
+            </Text>
+            {/* <Text style={styles.heroSubtext}>Nhận ưu đãi ngay →</Text> */}
+          </View>
+        </ImageBackground>
         </View>
 
         {/* Bottom Info Bar */}

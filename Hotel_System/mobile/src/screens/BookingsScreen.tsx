@@ -196,6 +196,7 @@ const BookingsScreen: React.FC = () => {
   >(null);
   const refreshTimers = useRef<Array<any>>([]);
   const [completingId, setCompletingId] = useState<string | null>(null);
+  const [reviewStatusMap, setReviewStatusMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     // Enable LayoutAnimation for Android
@@ -243,6 +244,31 @@ const BookingsScreen: React.FC = () => {
         count: sortedData.length,
         sample: sortedData[0],
       });
+
+      // Check review status for all completed bookings
+      const statusMap: Record<string, boolean> = {};
+      for (const booking of sortedData) {
+        const statusCode = getProp(booking, "trangThai", "TrangThai");
+        if (Number(statusCode) === 4) { // Only check for completed bookings
+          const bookingId = getProp(
+            booking,
+            "IddatPhong",
+            "iddatPhong",
+            "IDDatPhong"
+          );
+          if (bookingId) {
+            try {
+              const res = await reviewApi.getReviewStatus(String(bookingId));
+              if (res?.ok && res.data?.hasReview) {
+                statusMap[String(bookingId)] = true;
+              }
+            } catch (err) {
+              console.debug("Error checking review status for booking", bookingId, err);
+            }
+          }
+        }
+      }
+      setReviewStatusMap(statusMap);
     } catch (e: any) {
       // Map backend/internal errors to friendly user-facing messages.
       const rawMsg = (e?.message || "").toString();
@@ -667,6 +693,8 @@ const BookingsScreen: React.FC = () => {
 
                   if (res && res.ok && res.data) {
                     if (res.data.hasReview) {
+                      // Cập nhật review status map
+                      setReviewStatusMap(prev => ({ ...prev, [bId]: true }));
                       Alert.alert(
                         "Đã đánh giá",
                         "Bạn đã gửi đánh giá cho đặt phòng này rồi."
@@ -687,7 +715,7 @@ const BookingsScreen: React.FC = () => {
               }}
               disabled={completingId === String(bookingId)}
               style={{
-                backgroundColor: COLORS.primary,
+                backgroundColor: reviewStatusMap[String(bookingId)] ? "#52c41a" : COLORS.primary,
                 paddingVertical: 6,
                 paddingHorizontal: 12,
                 borderRadius: 6,
@@ -698,7 +726,7 @@ const BookingsScreen: React.FC = () => {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={{ color: "#fff", fontWeight: "700" }}>
-                  Đánh giá
+                  {reviewStatusMap[String(bookingId)] ? "Đã đánh giá" : "Đánh giá"}
                 </Text>
               )}
             </TouchableOpacity>

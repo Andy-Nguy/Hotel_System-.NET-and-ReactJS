@@ -174,15 +174,13 @@ namespace Hotel_System.API.Controllers
                     return NotFound(new { error = "Không tìm thấy phòng đặt" });
                 }
 
-                // Check if review already exists for this booking
-                // Since the DB schema may not have an IDDatPhong column, detect
-                // an existing review by the same customer for the same room
+                // Check if review already exists for THIS BOOKING specifically
                 var existingReview = await _context.DanhGia
-                    .FirstOrDefaultAsync(r => r.IdkhachHang == booking.IdkhachHang && r.Idphong == booking.Idphong);
+                    .FirstOrDefaultAsync(r => r.IddatPhong == request.IddatPhong);
 
                 if (existingReview != null)
                 {
-                    return BadRequest(new { error = "Bạn đã đánh giá phòng này rồi" });
+                    return BadRequest(new { error = "Bạn đã đánh giá cho đặt phòng này rồi" });
                 }
 
                 // Ensure we associate review with the correct room and customer
@@ -252,15 +250,9 @@ namespace Hotel_System.API.Controllers
         {
             try
             {
-                // Find booking, then check for a review by the same customer for that room
-                var booking = await _context.DatPhongs.FirstOrDefaultAsync(b => b.IddatPhong == IddatPhong);
-                if (booking == null)
-                {
-                    return NotFound(new { error = "Không tìm thấy phòng đặt" });
-                }
-
+                // Check if review exists for THIS BOOKING specifically
                 var review = await _context.DanhGia
-                    .FirstOrDefaultAsync(r => r.IdkhachHang == booking.IdkhachHang && r.Idphong == booking.Idphong);
+                    .FirstOrDefaultAsync(r => r.IddatPhong == IddatPhong);
 
                 return Ok(new
                 {
@@ -292,8 +284,9 @@ namespace Hotel_System.API.Controllers
                     return NotFound(new { error = "Không tìm thấy phòng đặt" });
                 }
 
+                // Return reviews specifically tied to this booking (IddatPhong)
                 var reviews = await _context.DanhGia
-                    .Where(r => r.IdkhachHang == booking.IdkhachHang && r.Idphong == booking.Idphong)
+                    .Where(r => r.IddatPhong == IddatPhong)
                     .Select(r => new
                     {
                         id = r.IddanhGia,
@@ -635,8 +628,9 @@ namespace Hotel_System.API.Controllers
                 }
 
                 // Check if review already exists for the same customer & room
+                // Only skip sending reminder if there's already a review for THIS booking
                 var existingReview = await _context.DanhGia
-                    .FirstOrDefaultAsync(r => r.IdkhachHang == booking.IdkhachHang && r.Idphong == booking.Idphong);
+                    .FirstOrDefaultAsync(r => r.IddatPhong == request.IddatPhong);
 
                 if (existingReview != null)
                 {

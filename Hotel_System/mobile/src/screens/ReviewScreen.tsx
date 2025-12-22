@@ -22,6 +22,38 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
   const [isAnonym, setIsAnonym] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState<any>(null);
+
+  // Check review status when component mounts or booking ID changes
+  useEffect(() => {
+    const checkReviewStatus = async () => {
+      if (!bookingId && !bookingCode) return;
+      
+      setCheckingStatus(true);
+      try {
+        const bookingIdToCheck = bookingId || bookingCode;
+        const response = await fetch(
+          `http://localhost:5147/api/Review/status/${encodeURIComponent(bookingIdToCheck)}`,
+          {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setReviewStatus(data);
+          console.debug('[ReviewScreen] Review status:', data);
+        }
+      } catch (err) {
+        console.debug('[ReviewScreen] Error checking review status:', err);
+      } finally {
+        setCheckingStatus(false);
+      }
+    };
+
+    checkReviewStatus();
+  }, [bookingId, bookingCode]);
 
   // Reset form when bookingId or bookingCode changes so each open shows fresh state
   useEffect(() => {
@@ -69,6 +101,8 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
       const res = await reviewApi.submitReview(payload as any);
       if (res?.ok) {
         setSubmitted(true);
+        // Cập nhật lại review status sau khi submit thành công
+        setReviewStatus({ ...reviewStatus, hasReview: true });
       } else {
         Alert.alert('Lỗi', res?.message || 'Gửi đánh giá thất bại');
       }
@@ -127,7 +161,12 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        {submitted ? (
+        {checkingStatus ? (
+          <View style={{ alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={{ marginTop: 12, color: COLORS.black }}>Đang kiểm tra trạng thái...</Text>
+          </View>
+        ) : reviewStatus?.hasReview && submitted ? (
           <View style={{ alignItems: 'center', marginTop: 8 }}>
             <MaterialIcons name="check-circle" size={72} color={COLORS.primary} />
             <Text style={{ fontSize: 22, fontWeight: '700', color: COLORS.primary, marginTop: 12 }}>Đánh giá thành công!</Text>
@@ -137,6 +176,22 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
               <Text style={{ fontWeight: '600', marginBottom: 6 }}>Thông tin đặt phòng</Text>
               <View style={styles.infoRow}><Text style={styles.infoLabel}>Mã đặt phòng:</Text><Text style={styles.infoValue}>{displayBookingCode}</Text></View>
               <View style={styles.infoRow}><Text style={styles.infoLabel}>Trạng thái:</Text><Text style={[styles.infoValue, { color: COLORS.primary }]}>Đã gửi đánh giá</Text></View>
+            </View>
+
+            <TouchableOpacity style={[styles.submit, styles.outlinedSubmit]} onPress={goHome}>
+              <Text style={[styles.submitText, styles.outlinedSubmitText]}>Quay về trang chủ</Text>
+            </TouchableOpacity>
+          </View>
+        ) : reviewStatus?.hasReview && !submitted ? (
+          <View style={{ alignItems: 'center', marginTop: 8 }}>
+            <MaterialIcons name="done-all" size={72} color={COLORS.primary} />
+            <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.black, marginTop: 12 }}>Đã đánh giá</Text>
+            <Text style={{ color: COLORS.black, marginTop: 8, textAlign: 'center' }}>Bạn đã gửi đánh giá cho đặt phòng này rồi.</Text>
+
+            <View style={styles.infoBox}>
+              <Text style={{ fontWeight: '600', marginBottom: 6 }}>Thông tin đặt phòng</Text>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Mã đặt phòng:</Text><Text style={styles.infoValue}>{displayBookingCode}</Text></View>
+              <View style={styles.infoRow}><Text style={styles.infoLabel}>Trạng thái:</Text><Text style={[styles.infoValue, { color: COLORS.primary }]}>Đã đánh giá</Text></View>
             </View>
 
             <TouchableOpacity style={[styles.submit, styles.outlinedSubmit]} onPress={goHome}>
