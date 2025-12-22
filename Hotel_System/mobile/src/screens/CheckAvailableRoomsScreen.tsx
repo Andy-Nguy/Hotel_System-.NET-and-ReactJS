@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -26,6 +26,7 @@ import {
 import AvailableRoomCard from "../components/AvailableRoomCard";
 import RoomDetail from "../components/RoomDetail";
 import HeaderScreen from "../components/HeaderScreen";
+import reviewApi from "../api/reviewApi";
 
 const CheckAvailableRoomsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -46,6 +47,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
   const [searched, setSearched] = useState(false);
   const [modalImageIndex, setModalImageIndex] = useState(0);
   const [modalLoading, setModalLoading] = useState(false);
+  const [roomStats, setRoomStats] = useState<any | null>(null);
 
   // Date picker states
   const [isCheckInPickerVisible, setCheckInPickerVisibility] = useState(false);
@@ -61,6 +63,24 @@ const CheckAvailableRoomsScreen: React.FC = () => {
       day: "numeric",
     });
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (modalVisible && selectedRoomDetail) {
+      const load = async () => {
+        try {
+          const s = await reviewApi.getRoomStats(String(selectedRoomDetail.roomId));
+          if (cancelled) return;
+          console.log(`CheckAvailableRoomsScreen: stats for roomId=${selectedRoomDetail.roomId}`, s);
+          setRoomStats(s);
+        } catch (err) {
+          console.debug('CheckAvailableRoomsScreen: failed to load review stats', err);
+        }
+      };
+      load();
+    }
+    return () => { cancelled = true; };
+  }, [modalVisible, selectedRoomDetail?.roomId]);
 
   const formatDateShort = (dateString: string) => {
     const date = new Date(dateString);

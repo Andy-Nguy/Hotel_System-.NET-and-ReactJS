@@ -25,6 +25,7 @@ import ServicesSelector from "../components/ServicesSelector";
 import AvailableRoomCard from "../components/AvailableRoomCard";
 import { AvailableRoom } from "../api/roomsApi";
 import HeaderScreen from "../components/HeaderScreen";
+import reviewApi from "../api/reviewApi";
 
 interface SelectedRoom {
   roomNumber: number;
@@ -61,6 +62,7 @@ const SelectRoomsScreen: React.FC = () => {
   const [selectedRoomDetail, setSelectedRoomDetail] =
     useState<AvailableRoom | null>(null);
   const [modalImageIndex, setModalImageIndex] = useState(0);
+  const [roomStats, setRoomStats] = useState<any | null>(null);
 
   useEffect(() => {
     // IMPORTANT: Always clear old booking data when entering this screen

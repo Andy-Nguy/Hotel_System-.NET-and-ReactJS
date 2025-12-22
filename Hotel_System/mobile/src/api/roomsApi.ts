@@ -81,6 +81,7 @@ export type AvailableRoom = {
   roomImageUrls?: string[];
   roomTypeName: string;
   maxOccupancy: number;
+  rating?: number; // average rating / xepHangSao from backend
 };
 
 export type CheckAvailableRoomsRequest = {
@@ -489,6 +490,7 @@ export async function checkAvailableRoomsByType(
                 r.giaCoBanMotDem ??
                 r.GiaCoBanMotDem ??
                 0,
+              discountedPrice: r.discountedPrice ?? r.DiscountedPrice ?? undefined,
               roomImageUrl: normalizeImageUrl(
                 r.roomImageUrl ?? r.urlAnh ?? r.UrlAnhPhong ?? r.urlAnhPhong,
                 baseUrl
@@ -497,6 +499,7 @@ export async function checkAvailableRoomsByType(
                 r.roomTypeName ?? r.tenLoaiPhong ?? r.TenLoaiPhong ?? "",
               maxOccupancy:
                 r.maxOccupancy ?? r.soNguoiToiDa ?? r.SoNguoiToiDa ?? 1,
+              rating: Number(r.rating ?? r.xepHangSao ?? r.xephangSao ?? r.XepHangSao ?? 0) || 0,
             } as AvailableRoom)
         );
 
