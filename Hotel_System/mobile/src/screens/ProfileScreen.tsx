@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ImageBackground,
   Modal,
+  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,6 +23,7 @@ import {
 
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { API_CONFIG } from "../config/apiConfig";
 
 const ProfileScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
@@ -113,11 +115,22 @@ const ProfileScreen: React.FC = () => {
             >
               <View style={styles.avatarWrapper}>
                 <View style={styles.goldRing}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarLetter}>
-                      {getDisplayName()[0]?.toUpperCase()}
-                    </Text>
-                  </View>
+                  {profile?.avatar || profile?.Avatar ? (
+                    <Image
+                      source={{
+                        uri: (profile?.avatar || profile?.Avatar)?.startsWith("http")
+                          ? profile?.avatar || profile?.Avatar
+                          : `${API_CONFIG.CURRENT}${profile?.avatar || profile?.Avatar}`,
+                      }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarLetter}>
+                        {getDisplayName()[0]?.toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -589,6 +602,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 56,
   },
   avatarLetter: {
     fontSize: 48,
