@@ -144,7 +144,7 @@ namespace Hotel_System.API.Services
                 .Replace("{{TotalAmount}}", booking.TongTien.ToString("N0"))
                 .Replace("{{ReviewLink}}", reviewLink)
                 .Replace("{{HotelAddress}}", _configuration["Hotel:Address"] ?? _configuration["Smtp:From"] ?? "Khách sạn")
-                .Replace("{{HotelPhone}}", _configuration["Hotel:Phone"] ?? "1900 xxxx")
+                .Replace("{{HotelPhone}}", _configuration["Hotel:Phone"] ?? "(+84) 263 3888 999")
                 .Replace("{{HotelEmail}}", _configuration["Hotel:Email"] ?? _configuration["Smtp:From"] ?? "")
                 .Replace("{{HotelName}}", _configuration["Hotel:Name"] ?? "Khách sạn");
 

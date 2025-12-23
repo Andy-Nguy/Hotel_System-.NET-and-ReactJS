@@ -142,7 +142,7 @@ const HeaderSection: React.FC = () => {
               <div className="col-lg-6">
                 <ul className="tn-left">
                   <li>
-                    <i className="fa fa-phone"></i> 0123 456 789
+                    <i className="fa fa-phone"></i> (+84) 263 3888 999
                   </li>
                   <li>
                     <i className="fa fa-envelope"></i>{" "}

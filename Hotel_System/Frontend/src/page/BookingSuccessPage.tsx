@@ -421,7 +421,7 @@ const BookingSuccessPage: React.FC = () => {
                       marginRight: 8,
                     }}
                   />
-                  Nếu có thắc mắc, vui lòng liên hệ: <strong>1900-xxxx</strong>
+                    Nếu có thắc mắc, vui lòng liên hệ: <strong>(+84) 263 3888 999</strong>
                 </Paragraph>
               </Card>
 

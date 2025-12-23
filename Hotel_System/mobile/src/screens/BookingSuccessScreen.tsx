@@ -344,7 +344,7 @@ const BookingSuccessScreen: React.FC = () => {
 
           <View style={styles.noteItem}>
             <AppIcon name="phone" size={16} color={COLORS.primary} />
-            <Text style={styles.noteText}>Hỗ trợ 24/7: 1900-xxxx</Text>
+            <Text style={styles.noteText}>Hỗ trợ 24/7: (+84) 263 3888 999</Text>
           </View>
         </View>
       </ScrollView>
