@@ -8,6 +8,7 @@ import {
   Dimensions,
   TouchableOpacity,
   Platform,
+  DeviceEventEmitter,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -116,8 +117,22 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
       }
     };
     load();
+
+    // Listen for review updates to refresh stats in real-time
+    const subscription = DeviceEventEmitter.addListener(
+      'reviewSubmitted',
+      (data: { roomId: string }) => {
+        const currentRoomId = String((selectedRoom as any)?.idphong || (selectedRoom as any)?.roomId || '');
+        if (data.roomId === currentRoomId) {
+          console.log(`[RoomDetail] Review submitted for room ${currentRoomId}, refreshing stats`);
+          load();
+        }
+      }
+    );
+
     return () => {
       cancelled = true;
+      subscription.remove();
     };
     // keep dependency as id only so hook runs consistently
   }, [(selectedRoom as any)?.idphong, (selectedRoom as any)?.roomId]);

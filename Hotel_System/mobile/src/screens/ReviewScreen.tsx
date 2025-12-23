@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, DeviceEventEmitter } from 'react-native';
 import reviewApi from '../api/reviewApi';
 import StarRating from '../components/StarRating';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -103,6 +103,15 @@ const ReviewScreen: React.FC<Props> = ({ route, navigation }) => {
         setSubmitted(true);
         // Cập nhật lại review status sau khi submit thành công
         setReviewStatus({ ...reviewStatus, hasReview: true });
+        
+        // Emit event to notify other components about the new review
+        if (reviewStatus?.roomId) {
+          DeviceEventEmitter.emit('reviewSubmitted', { 
+            roomId: String(reviewStatus.roomId),
+            bookingId: bookingId || bookingCode
+          });
+          console.log(`[ReviewScreen] Emitted reviewSubmitted event for room ${reviewStatus.roomId}`);
+        }
       } else {
         Alert.alert('Lỗi', res?.message || 'Gửi đánh giá thất bại');
       }

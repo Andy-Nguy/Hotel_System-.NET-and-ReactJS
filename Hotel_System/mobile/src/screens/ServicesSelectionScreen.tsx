@@ -48,6 +48,7 @@ type Combo = {
     iddichVu: string;
     tenDichVu: string;
     tienDichVu: number;
+    hinhDichVu?: string;
   }>;
   trangThai?: string;
   hinhAnhCombo?: string;
@@ -123,19 +124,19 @@ const ServicesSelectionScreen: React.FC = () => {
             return (item.khuyenMaiCombos || []).map((combo: any) => {
               // Get services from combo's dichVus
               const services = (combo.khuyenMaiComboDichVus || []).map((dv: any) => {
-                // Try to get price from navigation, otherwise look up from loaded services
-                let tienDichVu = dv.iddichVuNavigation?.tienDichVu;
+                // Look up service from loaded services first for accurate data
+                const serviceData = loadedServices.find((s: Service) => s.iddichVu === dv.iddichVu);
                 
-                // Fallback: look up price from the services we loaded
-                if (!tienDichVu || tienDichVu === 0) {
-                  const serviceData = loadedServices.find((s: Service) => s.iddichVu === dv.iddichVu);
-                  tienDichVu = serviceData?.tienDichVu || 0;
-                }
+                // Try to get from navigation as fallback
+                const tenDichVu = serviceData?.tenDichVu || dv.iddichVuNavigation?.tenDichVu || `Dịch vụ ${dv.iddichVu}`;
+                const tienDichVu = serviceData?.tienDichVu || dv.iddichVuNavigation?.tienDichVu || 0;
+                const hinhDichVu = serviceData?.hinhDichVu || dv.iddichVuNavigation?.hinhDichVu;
 
                 return {
                   iddichVu: dv.iddichVu,
-                  tenDichVu: dv.iddichVuNavigation?.tenDichVu || dv.iddichVu,
+                  tenDichVu: tenDichVu,
                   tienDichVu: tienDichVu,
+                  hinhDichVu: hinhDichVu,
                 };
               });
 
@@ -441,10 +442,35 @@ const ServicesSelectionScreen: React.FC = () => {
                   activeOpacity={isDisabled ? 0.6 : 0.7}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.comboName}>{combo.tenCombo}</Text>
-                    <Text style={styles.comboServices} numberOfLines={1}>
-                      {combo.dichVus.map((dv) => dv.tenDichVu).join(" + ")}
-                    </Text>
+                    <View style={styles.comboHeader}>
+                      <Text style={styles.comboName}>{combo.tenCombo}</Text>
+                      {isSelected && (
+                        <View style={styles.comboCheckmark}>
+                          <AppIcon name="check" size={16} color={COLORS.white} />
+                        </View>
+                      )}
+                    </View>
+                    
+                    {/* Detailed service list */}
+                    <View style={styles.comboServicesList}>
+                      {combo.dichVus.map((dv, index) => (
+                        <View key={dv.iddichVu} style={styles.comboServiceItem}>
+                          <AppIcon name="check-circle" size={14} color={COLORS.primary} />
+                          <Text style={styles.comboServiceName} numberOfLines={1}>
+                            {dv.tenDichVu || "Dịch vụ"}
+                          </Text>
+                          <Text style={styles.comboServicePrice}>
+                            ({(dv.tienDichVu || 0).toLocaleString()}đ)
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    {isDisabled && (
+                      <Text style={styles.comboDisabledText}>
+                        ⚠️ Chứa dịch vụ đã chọn
+                      </Text>
+                    )}
                   </View>
 
                   <View style={styles.comboPriceSection}>
@@ -460,18 +486,6 @@ const ServicesSelectionScreen: React.FC = () => {
                       </Text>
                     )}
                   </View>
-
-                  {isSelected && (
-                    <View style={styles.comboCheckmark}>
-                      <AppIcon name="check" size={20} color={COLORS.white} />
-                    </View>
-                  )}
-
-                  {isDisabled && (
-                    <Text style={styles.comboDisabledText}>
-                      Chứa dịch vụ đã chọn
-                    </Text>
-                  )}
                 </TouchableOpacity>
               );
             })}
@@ -871,7 +885,7 @@ const styles = StyleSheet.create({
   },
   comboCard: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: COLORS.white,
     borderRadius: 12,
     padding: 12,
@@ -887,11 +901,35 @@ const styles = StyleSheet.create({
   comboCardDisabled: {
     opacity: 0.6,
   },
+  comboHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
   comboName: {
     fontSize: 16,
     fontWeight: "700",
     color: COLORS.secondary,
-    marginBottom: 4,
+    flex: 1,
+  },
+  comboServicesList: {
+    gap: 4,
+  },
+  comboServiceItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  comboServiceName: {
+    fontSize: 13,
+    color: COLORS.secondary,
+    flex: 1,
+  },
+  comboServicePrice: {
+    fontSize: 12,
+    color: COLORS.gray,
+    fontWeight: "600",
   },
   comboServices: {
     fontSize: 12,
@@ -919,12 +957,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   comboCheckmark: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
+    marginLeft: 8,
   },
   comboDisabledText: {
     fontSize: 11,

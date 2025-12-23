@@ -170,6 +170,8 @@ const RoomTypeModal: React.FC<Props> = ({
 }) => {
   const [numberOfGuests, setNumberOfGuests] = useState(1);
   const [numberOfRooms, setNumberOfRooms] = useState(1);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const checkoutRef = useRef<HTMLInputElement | null>(null);
 
   const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>(() => {
@@ -190,6 +192,19 @@ const RoomTypeModal: React.FC<Props> = ({
       return next;
     });
   }, [numberOfRooms, availableRooms, rooms]);
+
+  // Toast notification when availability check completes
+  useEffect(() => {
+    if (hasCheckedAvailability && !loadingAvailability && checkin && checkout) {
+      const message = availableRooms.length > 0
+        ? `✅ Có ${availableRooms.length} phòng trống`
+        : '❌ Không có phòng trống';
+      setToastMessage(message);
+      setShowToast(true);
+      const timer = setTimeout(() => setShowToast(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [hasCheckedAvailability, loadingAvailability, availableRooms.length, checkin, checkout]);
 
   const handleSelectRoom = (index: number, id: string) => {
     setSelectedRoomIds((prev) => {
@@ -370,10 +385,29 @@ const RoomTypeModal: React.FC<Props> = ({
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10010, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
       onClick={onClose}
     >
+
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 1000, maxHeight: '90vh', overflow: 'auto', background: '#fff', borderRadius: 12, padding: 0 }}
+        style={{ position: 'relative', width: '100%', maxWidth: 1000, maxHeight: '90vh', overflow: 'auto', background: '#fff', borderRadius: 12, padding: 0 }}
       >
+        {/* Toast Notification */}
+        {showToast && (
+          <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10011, background: '#fff', padding: '16px 20px', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: '15px', fontWeight: 500, animation: 'slideIn 0.3s ease-in-out', maxWidth: 300 }}>
+            {toastMessage}
+          </div>
+        )}
+        <style>{`
+          @keyframes slideIn {
+            from {
+              transform: translateX(400px);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+        `}</style>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px', borderBottom: '1px solid #eee', background: '#fafafa' }}>
           <div>
@@ -462,7 +496,14 @@ const RoomTypeModal: React.FC<Props> = ({
 
         {/* Room List Section */}
         <div style={{ padding: '24px' }}>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600 }}>Danh sách phòng</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Danh sách phòng</h3>
+            {hasCheckedAvailability && availableRooms.length > 0 && (
+              <span style={{ background: '#d4edda', color: '#155724', padding: '4px 12px', borderRadius: 20, fontSize: '13px', fontWeight: 600 }}>
+                {availableRooms.length} phòng trống
+              </span>
+            )}
+          </div>
 
           {hasCheckedAvailability && availableRooms.length === 0 && !loadingAvailability && checkin && checkout && (
             <div style={{ padding: 16, background: '#fdecea', borderRadius: 8, color: '#c0392b', textAlign: 'center', fontSize: '16px', fontWeight: 500 }}>
