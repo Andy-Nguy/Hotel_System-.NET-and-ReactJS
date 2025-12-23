@@ -307,6 +307,29 @@ namespace Hotel_System.API.Controllers
         {
             try
             {
+                // Validate loaiPhongId
+                if (string.IsNullOrWhiteSpace(loaiPhongId))
+                {
+                    return BadRequest("loaiPhongId is required.");
+                }
+
+                // Validate numberOfGuests
+                if (numberOfGuests <= 0)
+                {
+                    return BadRequest("Number of guests must be greater than 0.");
+                }
+
+                if (numberOfGuests > 20)
+                {
+                    return BadRequest("Number of guests cannot exceed 20.");
+                }
+
+                // Validate date parameters
+                if (string.IsNullOrWhiteSpace(checkin) || string.IsNullOrWhiteSpace(checkout))
+                {
+                    return BadRequest("Check-in and check-out dates are required.");
+                }
+
                 // Parse incoming dates. The frontend commonly sends either ISO (YYYY-MM-DD)
                 // or local Vietnamese format (dd/MM/yyyy). Try both so API is tolerant.
                 DateOnly checkInDate, checkOutDate;
