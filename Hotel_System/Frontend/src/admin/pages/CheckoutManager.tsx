@@ -68,6 +68,8 @@ const CheckoutManager: React.FC = () => {
   const [data, setData] = useState<BookingRow[]>([]);
   const [keyword, setKeyword] = useState('');
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
+  const [filterFromDate, setFilterFromDate] = useState<Dayjs | null>(null);
+  const [filterToDate, setFilterToDate] = useState<Dayjs | null>(null);
 
   const [viewMode, setViewMode] = useState<'using' | 'checkout' | 'overdue'>('checkout');
   const [summaryMap, setSummaryMap] = useState<Record<string, any>>({});
@@ -2048,9 +2050,28 @@ const handleForceCancelSubmit = async (data: {
         // Show only overdue bookings (TrangThai == 5)
         if ((d.TrangThai ?? 0) !== 5) return false;
       } else {
-        // checkout mode: trả phòng hôm nay
-        if (!checkout || checkout !== todayStr) return false;
-        // Hiển thị Đang sử dụng (3), Hoàn tất (4), Quá hạn (5) chung trong "Trả phòng hôm nay"
+        // checkout mode: áp dụng date range filter nếu có, otherwise mặc định hôm nay
+        if (!checkout) return false;
+        
+        const checkoutDate = dayjs(checkout);
+        
+        // Nếu có cả từ ngày và đến ngày, kiểm tra checkout nằm trong khoảng
+        if (filterFromDate && filterToDate) {
+          if (checkoutDate.isBefore(filterFromDate, 'day') || checkoutDate.isAfter(filterToDate, 'day')) {
+            return false;
+          }
+        } else if (filterFromDate) {
+          // Chỉ có từ ngày, kiểm tra checkout >= từ ngày
+          if (checkoutDate.isBefore(filterFromDate, 'day')) return false;
+        } else if (filterToDate) {
+          // Chỉ có đến ngày, kiểm tra checkout <= đến ngày
+          if (checkoutDate.isAfter(filterToDate, 'day')) return false;
+        } else {
+          // Không có filter ngày, mặc định hiển thị checkout hôm nay
+          if (checkout !== todayStr) return false;
+        }
+        
+        // Hiển thị Đang sử dụng (3), Hoàn tất (4), Quá hạn (5) chung trong "Trả phòng"
         if (!((d.TrangThai ?? 0) === 3 || (d.TrangThai ?? 0) === 4 || (d.TrangThai ?? 0) === 5)) return false;
       }
       if (keyword && keyword.trim()) {
@@ -2059,7 +2080,7 @@ const handleForceCancelSubmit = async (data: {
       }
       return true;
     });
-  }, [data, keyword, viewMode, selectedDate]);
+  }, [data, keyword, viewMode, selectedDate, filterFromDate, filterToDate]);
 
   const roomLines = useMemo(() => {
     if (!paymentRow) return [] as string[];
@@ -2163,6 +2184,10 @@ const handleForceCancelSubmit = async (data: {
                 setKeyword={setKeyword}
                 selectedDate={selectedDate}
                 setSelectedDate={setSelectedDate}
+                filterFromDate={filterFromDate}
+                setFilterFromDate={setFilterFromDate}
+                filterToDate={filterToDate}
+                setFilterToDate={setFilterToDate}
                 onReload={load}
               />
             </Card>

@@ -19,6 +19,8 @@ public partial class KhachHang
 
     public int? TichDiem { get; set; }
 
+    public string? Avatar { get; set; }
+
     public virtual ICollection<DanhGium> DanhGia { get; set; } = new List<DanhGium>();
 
     public virtual ICollection<DatPhong> DatPhongs { get; set; } = new List<DatPhong>();

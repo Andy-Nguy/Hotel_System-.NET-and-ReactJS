@@ -159,7 +159,9 @@ namespace Hotel_System.API.Controllers
                 var tongCong = tongTien + thue;
 
                 // 3. Tạo DatPhong (đồng thời lưu thời hạn giữ phòng - `ThoiHan`)
-                var datPhongId = $"DP{DateTime.Now:yyyyMMddHHmmssfff}";
+                // Mã booking: IsDirectBooking = true -> "TT...", false -> "DP..."
+                var prefix = request.IsDirectBooking ? "TT" : "DP";
+                var datPhongId = $"{prefix}{DateTime.Now:yyyyMMddHHmmssfff}";
                 // // Thiết lập thời hạn giữ phòng (test): 1 phút
                 // var holdExpiresAt = DateTime.UtcNow.AddMinutes(1);
                 var holdExpiresAt = DateTime.UtcNow.AddMinutes(15);
@@ -179,7 +181,7 @@ namespace Hotel_System.API.Controllers
                     TongTien = tongCong,
                     TienCoc = 0,
                     TrangThai = 1, // 1 = Chờ xác nhận
-                    TrangThaiThanhToan = 0, // 0 = Chưa thanh toán
+                    TrangThaiThanhToan = request.TrangThaiThanhToan, // Từ request hoặc mặc định = 0
                     ThoiHan = holdExpiresAt
                 };
                 _context.DatPhongs.Add(datPhong);

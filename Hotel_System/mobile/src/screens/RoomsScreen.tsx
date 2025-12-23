@@ -13,16 +13,25 @@ import {
   TextInput,
   Pressable,
   ImageBackground,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getRooms, Room } from "../api/roomsApi";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getRooms,
+  Room,
+  checkAvailableRooms,
+  AvailableRoom,
+} from "../api/roomsApi";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import RoomDetail from "../components/RoomDetail";
 import RoomSection from "../components/RoomSection";
 import DatePickerInput from "../components/DatePickerInput";
 import TopRoom from "../components/TopRoom";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
+import AppIcon from "../components/AppIcon";
 
 interface RoomType {
   loaiPhong: string;
@@ -40,24 +49,36 @@ const RoomsScreen: React.FC = () => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showRoomsDropdown, setShowRoomsDropdown] = useState(false);
-  const [showGuestsDropdown, setShowGuestsDropdown] = useState(false);
-  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
-  const [showAllFilters, setShowAllFilters] = useState(true);
-  const [filters, setFilters] = useState({
-    location: "",
-    checkInDate: new Date(),
-    checkOutDate: new Date(Date.now() + 86400000),
-    rooms: 1,
-    guests: 1,
-    roomType: "Tất cả",
-    stars: "Tất cả",
-    priceRange: [0, 10000000],
-  });
+
+  // Search form states
+  const [showSearchForm, setShowSearchForm] = useState(false);
+  const [checkIn, setCheckIn] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [checkOut, setCheckOut] = useState(
+    new Date(Date.now() + 86400000).toISOString().split("T")[0]
+  );
+  const [guests, setGuests] = useState(1);
+  const [roomsCount, setRoomsCount] = useState(1);
+  const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>([]);
+  const [searched, setSearched] = useState(false);
+
+  // Date picker states
+  const [isCheckInPickerVisible, setCheckInPickerVisibility] = useState(false);
+  const [isCheckOutPickerVisible, setCheckOutPickerVisibility] =
+    useState(false);
 
   useEffect(() => {
     loadRooms();
   }, []);
+
+  // Reset search form and reload data when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      setShowSearchForm(false);
+      loadRooms();
+    }, [])
+  );
 
   const navigation = useNavigation();
 
@@ -108,6 +129,89 @@ const RoomsScreen: React.FC = () => {
     });
   };
 
+  const formatDateShort = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  const handleCheckInConfirm = (date: Date) => {
+    const dateString = date.toISOString().split("T")[0];
+    setCheckIn(dateString);
+    setCheckInPickerVisibility(false);
+
+    // Auto-adjust check-out if it's before or same as check-in
+    const checkOutDate = new Date(checkOut);
+    if (checkOutDate <= date) {
+      const nextDay = new Date(date);
+      nextDay.setDate(nextDay.getDate() + 1);
+      setCheckOut(nextDay.toISOString().split("T")[0]);
+    }
+  };
+
+  const handleCheckOutConfirm = (date: Date) => {
+    const dateString = date.toISOString().split("T")[0];
+    setCheckOut(dateString);
+    setCheckOutPickerVisibility(false);
+  };
+
+  const handleSearchRooms = async () => {
+    if (!checkIn || !checkOut) {
+      Alert.alert("Lỗi", "Vui lòng chọn ngày nhận phòng và trả phòng");
+      return;
+    }
+
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+
+    if (checkInDate >= checkOutDate) {
+      Alert.alert("Lỗi", "Ngày trả phòng phải sau ngày nhận phòng");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const rooms = await checkAvailableRooms({
+        checkIn,
+        checkOut,
+        numberOfGuests: guests,
+      });
+      setAvailableRooms(rooms);
+      setSearched(true);
+
+      // Auto navigate to SelectRooms screen after successful search
+      if (rooms.length > 0) {
+        // Clear old booking data before starting new booking flow
+        await AsyncStorage.multiRemove(["bookingData", "finalBookingData"]);
+        console.log(
+          "🧹 Cleared old booking data before navigating to SelectRooms"
+        );
+
+        (navigation as any).navigate("SelectRooms", {
+          checkIn,
+          checkOut,
+          guests,
+          rooms: roomsCount,
+          availableRooms: rooms,
+        });
+      } else {
+        Alert.alert(
+          "Thông báo",
+          "Không tìm thấy phòng trống trong khoảng thời gian này."
+        );
+      }
+    } catch (error) {
+      Alert.alert("Lỗi", "Không thể kiểm tra phòng trống. Vui lòng thử lại.");
+      setAvailableRooms([]);
+      setSearched(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderRoomCard = (room: Room) => (
     <RoomSection
       key={room.idphong}
@@ -127,7 +231,9 @@ const RoomsScreen: React.FC = () => {
 
   const handleTopRoomPress = (roomId: string) => {
     // Try to find the full room object from loaded rooms
-    const found = rooms.find((r) => r.idphong === roomId || r.idphong === roomId);
+    const found = rooms.find(
+      (r) => r.idphong === roomId || r.idphong === roomId
+    );
     if (found) {
       setSelectedRoom(found);
       setShowDetails(true);
@@ -169,261 +275,32 @@ const RoomsScreen: React.FC = () => {
       {/* Header with Logo and Search */}
       <View style={styles.header}>
         <Text style={styles.logo}>ROBINS VILLA</Text>
-        <View style={styles.searchBox}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm phòng..."
-            placeholderTextColor="#999"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
       </View>
 
-      {/* Inline Filter Section - Vertical Layout */}
-      {showAllFilters && (
-        <View style={styles.filterBar}>
-          {/* Row 1: Check-in & Check-out Dates */}
-          <View style={styles.filterRow}>
-            <View style={[styles.filterDateGroup, { flex: 1 }]}>
-              <DatePickerInput
-                label="📅 Nhận"
-                value={filters.checkInDate}
-                onChange={(date) => setFilters({ ...filters, checkInDate: date })}
-                minimumDate={new Date()}
-              />
-            </View>
-            <View style={[styles.filterDateGroup, { flex: 1 }]}>
-              <DatePickerInput
-                label="📅 Trả"
-                value={filters.checkOutDate}
-                onChange={(date) => setFilters({ ...filters, checkOutDate: date })}
-                minimumDate={filters.checkInDate}
-              />
-            </View>
-          </View>
+      {/* Date Picker Modals */}
+      <DateTimePickerModal
+        isVisible={isCheckInPickerVisible}
+        mode="date"
+        date={new Date(checkIn)}
+        minimumDate={new Date()}
+        onConfirm={handleCheckInConfirm}
+        onCancel={() => setCheckInPickerVisibility(false)}
+        confirmTextIOS="Xác nhận"
+        cancelTextIOS="Hủy"
+      />
 
-          {/* Row 2: Rooms & Guests Dropdowns & Advanced Filter Toggle */}
-          <View style={styles.filterRow}>
-            {/* Rooms Dropdown */}
-            <View style={{ flex: 1, zIndex: 200 }}>
-              <TouchableOpacity 
-                style={styles.filterDropdown}
-                onPress={() => {
-                  setShowRoomsDropdown(!showRoomsDropdown);
-                  setShowGuestsDropdown(false);
-                }}
-              >
-                <Text style={styles.filterDropdownLabel}>🏠 Phòng</Text>
-                <View style={styles.filterDropdownContent}>
-                  <Text style={styles.filterDropdownValue}>{filters.rooms}</Text>
-                  <Text style={[styles.filterDropdownArrow, { transform: [{ rotate: showRoomsDropdown ? '180deg' : '0deg' }] }]}>▼</Text>
-                </View>
-              </TouchableOpacity>
-              
-              {showRoomsDropdown && (
-                <View style={[styles.dropdownMenu, { width: '100%' }]}>
-                  {[1, 2, 3, 4, 5].map((num) => (
-                    <TouchableOpacity 
-                      key={num}
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setFilters({ ...filters, rooms: num });
-                        setShowRoomsDropdown(false);
-                      }}
-                    >
-                      <Text style={[styles.dropdownItemText, filters.rooms === num && styles.dropdownItemActive]}>
-                        {num} phòng
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
+      <DateTimePickerModal
+        isVisible={isCheckOutPickerVisible}
+        mode="date"
+        date={new Date(checkOut)}
+        minimumDate={new Date(checkIn)}
+        onConfirm={handleCheckOutConfirm}
+        onCancel={() => setCheckOutPickerVisibility(false)}
+        confirmTextIOS="Xác nhận"
+        cancelTextIOS="Hủy"
+      />
 
-            {/* Guests Dropdown */}
-            <View style={{ flex: 1, zIndex: 100, marginLeft: 8 }}>
-              <TouchableOpacity 
-                style={styles.filterDropdown}
-                onPress={() => {
-                  setShowGuestsDropdown(!showGuestsDropdown);
-                  setShowRoomsDropdown(false);
-                }}
-              >
-                <Text style={styles.filterDropdownLabel}>👥 Người</Text>
-                <View style={styles.filterDropdownContent}>
-                  <Text style={styles.filterDropdownValue}>{filters.guests}</Text>
-                  <Text style={[styles.filterDropdownArrow, { transform: [{ rotate: showGuestsDropdown ? '180deg' : '0deg' }] }]}>▼</Text>
-                </View>
-              </TouchableOpacity>
-              
-              {showGuestsDropdown && (
-                <View style={[styles.dropdownMenu, { width: '100%' }]}>
-                  {[1, 2, 3, 4, 5, 6].map((num) => (
-                    <TouchableOpacity 
-                      key={num}
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setFilters({ ...filters, guests: num });
-                        setShowGuestsDropdown(false);
-                      }}
-                    >
-                      <Text style={[styles.dropdownItemText, filters.guests === num && styles.dropdownItemActive]}>
-                        {num} người
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Advanced Filter Toggle */}
-            <TouchableOpacity 
-              style={styles.advancedFilterToggleBtn}
-              onPress={() => setShowAdvancedFilter(!showAdvancedFilter)}
-            >
-              <Text style={styles.advancedFilterToggleBtnText}>
-                {showAdvancedFilter ? "▲" : "▼"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Row 3: Check Availability & Reset Buttons */}
-          <View style={[styles.filterRow, { gap: 8 }]}>
-            <TouchableOpacity style={[styles.filterCheckButton, { flex: 2 }]}>
-              <Text style={styles.filterCheckButtonText}>🔍 Kiểm tra phòng trống</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.filterResetBtn, { flex: 1 }]}
-              onPress={() => setFilters({
-                location: "",
-                checkInDate: new Date(),
-                checkOutDate: new Date(Date.now() + 86400000),
-                rooms: 1,
-                guests: 1,
-                roomType: "Tất cả",
-                stars: "Tất cả",
-                priceRange: [0, 10000000],
-              })}
-            >
-              <Text style={styles.filterResetText}>🔄 Đặt lại</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Row 4: Advanced Filter (Hidden/Shown) */}
-          {showAdvancedFilter && (
-            <View style={styles.advancedFilterRow}>
-              {/* Room Type Tags */}
-              <View style={styles.advancedFilterSection}>
-                <Text style={styles.advancedFilterSectionTitle}>🛏️ Loại phòng</Text>
-                <View style={styles.tagRow}>
-                  {["Tất cả", "Phòng đơn", "Phòng đôi", "Phòng gia đình"].map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={[
-                        styles.tag,
-                        filters.roomType === type && styles.tagActive,
-                      ]}
-                      onPress={() => setFilters({ ...filters, roomType: type })}
-                    >
-                      <Text
-                        style={[
-                          styles.tagText,
-                          filters.roomType === type && styles.tagTextActive,
-                        ]}
-                      >
-                        {type}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Stars Tags */}
-              <View style={styles.advancedFilterSection}>
-                <Text style={styles.advancedFilterSectionTitle}>⭐ Hạng sao</Text>
-                <View style={styles.tagRow}>
-                  {["Tất cả", "1 ⭐", "2 ⭐", "3 ⭐", "4 ⭐", "5 ⭐"].map((star) => (
-                    <TouchableOpacity
-                      key={star}
-                      style={[
-                        styles.tag,
-                        filters.stars === star && styles.tagActive,
-                      ]}
-                      onPress={() => setFilters({ ...filters, stars: star })}
-                    >
-                      <Text
-                        style={[
-                          styles.tagText,
-                          filters.stars === star && styles.tagTextActive,
-                        ]}
-                      >
-                        {star}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Price Range */}
-              <View style={styles.advancedFilterSection}>
-                <Text style={styles.advancedFilterSectionTitle}>💰 Khoảng giá (VND)</Text>
-                <View style={styles.priceInputRow}>
-                  <TextInput
-                    style={styles.priceInput}
-                    placeholder="Từ"
-                    placeholderTextColor="#999"
-                    keyboardType="numeric"
-                    value={filters.priceRange[0].toString()}
-                    onChangeText={(text) =>
-                      setFilters({
-                        ...filters,
-                        priceRange: [parseInt(text) || 0, filters.priceRange[1]],
-                      })
-                    }
-                  />
-                  <Text style={styles.priceSeparator}>—</Text>
-                  <TextInput
-                    style={styles.priceInput}
-                    placeholder="Đến"
-                    placeholderTextColor="#999"
-                    keyboardType="numeric"
-                    value={filters.priceRange[1].toString()}
-                    onChangeText={(text) =>
-                      setFilters({
-                        ...filters,
-                        priceRange: [filters.priceRange[0], parseInt(text) || 10000000],
-                      })
-                    }
-                  />
-                </View>
-              </View>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* Collapse/Expand All Filters Button */}
-      {!showAllFilters && (
-        <TouchableOpacity 
-          style={styles.toggleAllFiltersBtn}
-          onPress={() => setShowAllFilters(true)}
-        >
-          <Text style={styles.toggleAllFiltersBtnText}>▼ Hiển thị bộ lọc</Text>
-        </TouchableOpacity>
-      )}
-
-      {showAllFilters && (
-        <TouchableOpacity 
-          style={styles.collapseAllFiltersBtn}
-          onPress={() => setShowAllFilters(false)}
-        >
-          <Text style={styles.collapseAllFiltersBtnText}>▲ Ẩn bộ lọc</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Room List - TopRoom is now inside as ListHeaderComponent so it scrolls with content */}
+      {/* Room List with Search Form in Header */}
       <FlatList
         data={roomTypes}
         renderItem={renderRoomType}
@@ -432,9 +309,168 @@ const RoomsScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
+            {/* Search Form */}
+            <View style={styles.searchForm}>
+              <TouchableOpacity
+                onPress={() => setShowSearchForm(!showSearchForm)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.formHeader}>
+                  <Text style={styles.formTitle}>Tìm kiếm phòng nghỉ</Text>
+                  <AppIcon
+                    name={showSearchForm ? "chevron-up" : "chevron-down"}
+                    size={24}
+                    color={COLORS.primary}
+                  />
+                </View>
+              </TouchableOpacity>
+
+              {showSearchForm && (
+                <>
+                  <Text style={styles.formSubtitle}>
+                    Chọn thời gian và số lượng khách
+                  </Text>
+
+                  {/* Date Selection Row */}
+                  <View style={styles.dateRow}>
+                    {/* Check-in Date */}
+                    <TouchableOpacity
+                      style={styles.dateInput}
+                      onPress={() => setCheckInPickerVisibility(true)}
+                    >
+                      <View style={styles.iconContainer}>
+                        <AppIcon
+                          name="calendar"
+                          size={20}
+                          color={COLORS.primary}
+                        />
+                      </View>
+                      <View style={styles.dateContent}>
+                        <Text style={styles.inputLabel}>Nhận phòng</Text>
+                        <Text style={styles.dateValue}>
+                          {formatDateShort(checkIn)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    <View style={styles.dateDivider} />
+
+                    {/* Check-out Date */}
+                    <TouchableOpacity
+                      style={styles.dateInput}
+                      onPress={() => setCheckOutPickerVisibility(true)}
+                    >
+                      <View style={styles.iconContainer}>
+                        <AppIcon
+                          name="calendar"
+                          size={20}
+                          color={COLORS.primary}
+                        />
+                      </View>
+                      <View style={styles.dateContent}>
+                        <Text style={styles.inputLabel}>Trả phòng</Text>
+                        <Text style={styles.dateValue}>
+                          {formatDateShort(checkOut)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Guests & Rooms Row */}
+                  <View style={styles.selectionRow}>
+                    <View style={styles.selectionItem}>
+                      <Text style={styles.inputLabel}>Số khách</Text>
+                      <View style={styles.counterContainer}>
+                        <TouchableOpacity
+                          style={styles.counterBtn}
+                          onPress={() => setGuests(Math.max(1, guests - 1))}
+                        >
+                          <AppIcon
+                            name="minus"
+                            size={14}
+                            color={COLORS.secondary}
+                          />
+                        </TouchableOpacity>
+                        <Text style={styles.counterValue}>{guests}</Text>
+                        <TouchableOpacity
+                          style={styles.counterBtn}
+                          onPress={() => setGuests(Math.min(10, guests + 1))}
+                        >
+                          <AppIcon
+                            name="plus"
+                            size={14}
+                            color={COLORS.secondary}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={styles.verticalDivider} />
+
+                    <View style={styles.selectionItem}>
+                      <Text style={styles.inputLabel}>Số phòng</Text>
+                      <View style={styles.counterContainer}>
+                        <TouchableOpacity
+                          style={styles.counterBtn}
+                          onPress={() =>
+                            setRoomsCount(Math.max(1, roomsCount - 1))
+                          }
+                        >
+                          <AppIcon
+                            name="minus"
+                            size={14}
+                            color={COLORS.secondary}
+                          />
+                        </TouchableOpacity>
+                        <Text style={styles.counterValue}>{roomsCount}</Text>
+                        <TouchableOpacity
+                          style={styles.counterBtn}
+                          onPress={() =>
+                            setRoomsCount(Math.min(10, roomsCount + 1))
+                          }
+                        >
+                          <AppIcon
+                            name="plus"
+                            size={14}
+                            color={COLORS.secondary}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.searchButton,
+                      loading && styles.searchButtonDisabled,
+                    ]}
+                    onPress={handleSearchRooms}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color={COLORS.white} />
+                    ) : (
+                      <>
+                        <Text style={styles.searchButtonText}>
+                          Kiểm tra phòng trống
+                        </Text>
+                        <AppIcon
+                          name="arrow-right"
+                          size={20}
+                          color={COLORS.white}
+                        />
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+
             <View style={[styles.sectionTitle, styles.sectionTitleSpacing]}>
               <Text style={styles.span}>TOP PHÒNG ĐƯỢC ƯA CHUỘNG</Text>
-              <Text style={styles.h2}>Phong cách thượng lưu  Điểm nhấn của năm</Text>
+              <Text style={styles.h2}>
+                Phong cách thượng lưu Điểm nhấn của năm
+              </Text>
             </View>
 
             <TopRoom topCount={5} onRoomPress={handleTopRoomPress} />
@@ -514,7 +550,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   logo: {
-    fontSize: 18,
+    fontSize: 25,
     fontWeight: "700",
     color: "#dfa974",
     letterSpacing: 1,
@@ -924,6 +960,176 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: COLORS.secondary,
     marginBottom: 6,
+  },
+  // Search Form Styles (from CheckAvailableRoomsScreen)
+  searchForm: {
+    backgroundColor: COLORS.white,
+    margin: SIZES.padding,
+    padding: 20,
+    borderRadius: 24,
+    marginBottom: 40,
+    ...SHADOWS.medium,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+  },
+  formHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  formTitle: {
+    ...FONTS.h3,
+    color: COLORS.secondary,
+  },
+  formSubtitle: {
+    ...FONTS.body3,
+    color: COLORS.gray,
+    marginBottom: 24,
+  },
+  dateRow: {
+    flexDirection: "row",
+    backgroundColor: "#F8F9FA",
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#E9ECEF",
+  },
+  dateInput: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+  },
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(223, 169, 116, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  dateContent: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 11,
+    color: COLORS.gray,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  dateValue: {
+    fontSize: 15,
+    color: COLORS.secondary,
+    fontWeight: "700",
+  },
+  dateDivider: {
+    width: 1,
+    backgroundColor: "#E9ECEF",
+    marginVertical: 8,
+  },
+  selectionRow: {
+    flexDirection: "row",
+    backgroundColor: "#F8F9FA",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#E9ECEF",
+    alignItems: "center",
+  },
+  selectionItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  verticalDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: "#E9ECEF",
+    marginHorizontal: 8,
+  },
+  counterContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    gap: 12,
+  },
+  counterBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#DEE2E6",
+    ...SHADOWS.light,
+  },
+  counterValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    minWidth: 20,
+    textAlign: "center",
+  },
+  searchButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  searchButtonDisabled: {
+    opacity: 0.7,
+  },
+  searchButtonText: {
+    fontSize: 16,
+    color: COLORS.white,
+    fontWeight: "700",
+  },
+  resultsSection: {
+    paddingHorizontal: SIZES.padding,
+    paddingBottom: 20,
+  },
+  resultsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: 16,
+  },
+  resultsTitle: {
+    ...FONTS.h3,
+    color: COLORS.secondary,
+  },
+  resultsCount: {
+    fontSize: 13,
+    color: COLORS.gray,
+    fontWeight: "500",
+  },
+  continueButton: {
+    backgroundColor: COLORS.secondary,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  continueButtonText: {
+    fontSize: 16,
+    color: COLORS.white,
+    fontWeight: "700",
   },
 });
 

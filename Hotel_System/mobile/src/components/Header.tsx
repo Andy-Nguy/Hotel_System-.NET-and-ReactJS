@@ -8,6 +8,8 @@ import {
   ScrollView,
   Pressable,
   Image,
+  Dimensions,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -21,6 +23,9 @@ const Header: React.FC = () => {
   const navigation = useNavigation<HeaderNavigationProp>();
   const { isLoggedIn, userInfo, logout } = useAuth();
   const [menuVisible, setMenuVisible] = useState(false);
+  
+  const { width } = Dimensions.get("window");
+  const isSmallDevice = width < 375;
 
   const handleLogout = async () => {
     await logout();
@@ -191,14 +196,24 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: COLORS.white,
-    ...SHADOWS.light,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: SIZES.padding,
-    paddingVertical: 8,
+    paddingVertical: Platform.OS === "ios" ? 10 : 8,
     backgroundColor: COLORS.secondary,
   },
   contactInfo: {
@@ -226,7 +241,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: SIZES.padding,
-    paddingVertical: 12,
+    paddingVertical: Platform.OS === "ios" ? 14 : 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
@@ -235,20 +250,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoImage: {
-    width: 50,
-    height: 50,
+    width: Platform.select({ ios: 55, android: 50 }),
+    height: Platform.select({ ios: 55, android: 50 }),
   },
   menuButton: {
-    padding: 8,
+    padding: Platform.OS === "ios" ? 10 : 8,
+    borderRadius: SIZES.radius,
   },
   menuIcon: {
-    width: 24,
+    width: 26,
     justifyContent: "space-between",
-    height: 18,
+    height: 20,
   },
   menuLine: {
     width: "100%",
-    height: 2,
+    height: 2.5,
     backgroundColor: COLORS.secondary,
     borderRadius: 2,
   },
@@ -261,28 +277,43 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopLeftRadius: SIZES.radiusLarge * 2,
     borderTopRightRadius: SIZES.radiusLarge * 2,
-    maxHeight: "80%",
-    ...SHADOWS.dark,
+    maxHeight: "85%",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   menuHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     padding: SIZES.padding * 1.5,
+    paddingTop: SIZES.padding * 2,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   menuTitle: {
     ...FONTS.h3,
     color: COLORS.secondary,
+    fontWeight: "700",
   },
   closeButton: {
-    fontSize: 28,
+    fontSize: 32,
     color: COLORS.gray,
     fontWeight: "300",
+    width: 32,
+    height: 32,
+    textAlign: "center",
   },
   menuItem: {
-    paddingVertical: SIZES.padding,
+    paddingVertical: SIZES.padding * 1.2,
     paddingHorizontal: SIZES.padding * 1.5,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.lightGray,
@@ -291,6 +322,7 @@ const styles = StyleSheet.create({
     ...FONTS.body2,
     color: COLORS.secondary,
     fontWeight: "500",
+    fontSize: Platform.OS === "ios" ? 16 : 15,
   },
   menuDivider: {
     height: 8,
@@ -303,15 +335,18 @@ const styles = StyleSheet.create({
   userGreeting: {
     ...FONTS.body2,
     color: COLORS.primary,
-    fontWeight: "600",
+    fontWeight: "700",
+    fontSize: Platform.OS === "ios" ? 17 : 16,
   },
   logoutItem: {
     marginTop: SIZES.margin,
+    backgroundColor: "#fff5f5",
   },
   logoutText: {
     ...FONTS.body2,
     color: COLORS.error,
     fontWeight: "600",
+    fontSize: Platform.OS === "ios" ? 16 : 15,
   },
 });
 

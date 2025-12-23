@@ -27,7 +27,6 @@ import {
   Carousel,
 } from "antd";
 import {
-  CreditCardOutlined,
   UserOutlined,
   MailOutlined,
   PhoneOutlined,
@@ -38,6 +37,64 @@ import {
   EnvironmentOutlined,
 } from "@ant-design/icons";
 import BookingProgress from "../components/BookingProgress";
+
+// Local image resolver (keeps behavior consistent with other components)
+function resolveImageUrl(u: any, fallback = '/img/room/default.webp') {
+  if (u == null) return fallback;
+  if (Array.isArray(u)) {
+    const first = u.find((x: any) => !!x);
+    return resolveImageUrl(first, fallback);
+  }
+  if (typeof u === 'object') {
+    const candidate = (u && (u.u || u.url || u.src || u.urlAnhPhong)) || null;
+    return resolveImageUrl(candidate, fallback);
+  }
+  let s = String(u).trim();
+  if (!s) return fallback;
+  if (s.startsWith('[')) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr) && arr.length > 0) return resolveImageUrl(arr[0], fallback);
+    } catch (e) {}
+  }
+  if (s.includes(',') || s.includes(';') || s.includes('|')) {
+    const first = s.split(/[,|;]+/)[0].trim();
+    return resolveImageUrl(first, fallback);
+  }
+  if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return s;
+  if (s.startsWith('/img') || s.startsWith('/')) return s;
+  return `/img/room/${s}`;
+}
+
+// Resolver for service images (folder is /img/services)
+function resolveServiceImageUrl(u: any, fallback = '/img/services/default.webp') {
+  if (u == null) return fallback;
+  if (Array.isArray(u)) {
+    const first = u.find((x: any) => !!x);
+    return resolveServiceImageUrl(first, fallback);
+  }
+  if (typeof u === 'object') {
+    const candidate = (u && (u.HinhDichVu || u.hinhDichVu || u.url || u.u || u.src)) || null;
+    return resolveServiceImageUrl(candidate, fallback);
+  }
+  let s = String(u).trim();
+  if (!s) return fallback;
+  // If JSON array string, parse and use first
+  if (s.startsWith('[')) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr) && arr.length > 0) return resolveServiceImageUrl(arr[0], fallback);
+    } catch (e) {}
+  }
+  if (s.includes(',') || s.includes(';') || s.includes('|')) {
+    const first = s.split(/[,|;]+/)[0].trim();
+    return resolveServiceImageUrl(first, fallback);
+  }
+  if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return s;
+  if (s.startsWith('/img') || s.startsWith('/')) return s;
+  // encode filename to handle spaces
+  return encodeURI(`/img/services/${s}`);
+}
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -289,16 +346,13 @@ const CheckoutPage: React.FC = () => {
         if (!res.ok) throw new Error("Failed to load services");
         const data = await res.json();
         if (!mounted) return;
-        // Map to simple {name,image}
-        const mapped = (data || []).map((s: any) => ({
-          name: s.TenDichVu || s.tenDichVu || s.name || "Dịch vụ",
-          image:
-            s.HinhDichVu ||
-            s.hinhDichVu ||
-            s.hinh ||
-            s.imageUrl ||
-            "https://via.placeholder.com/120x80?text=Service",
-        }));
+        // Map to simple {name,image} using service image resolver
+        const mapped = (data || []).map((s: any) => {
+          const name = s.TenDichVu || s.tenDichVu || s.name || "Dịch vụ";
+          const rawImg = s.HinhDichVu ?? s.hinhDichVu ?? s.hinh ?? s.imageUrl ?? s.url ?? null;
+          const image = rawImg ? resolveServiceImageUrl(rawImg, "https://via.placeholder.com/120x80?text=Service") : "https://via.placeholder.com/120x80?text=Service";
+          return { name, image };
+        });
         setAllServices(mapped);
       } catch (e) {
         console.warn("Could not fetch services for banner:", e);
@@ -333,11 +387,10 @@ const CheckoutPage: React.FC = () => {
       : (bookingInfo as any)?.selectedServices?.length > 0
       ? (bookingInfo as any).selectedServices.map((s: any) => ({
           name: s.serviceName || s.name || s.title || "Dịch vụ",
-          image:
-            s.imageUrl ||
-            s.url ||
-            s.icon ||
-            "https://via.placeholder.com/120x80?text=Service",
+          image: resolveServiceImageUrl(
+            s.HinhDichVu ?? s.hinhDichVu ?? s.imageUrl ?? s.url ?? s.icon ?? null,
+            '/img/services/default.webp'
+          ),
         }))
       : defaultServices;
 
@@ -546,12 +599,6 @@ const CheckoutPage: React.FC = () => {
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12}>
-                      <Form.Item label="CMND/CCCD" name="idNumber">
-                        <Input
-                          placeholder="001234567890"
-                          style={{ height: 44, borderRadius: 8 }}
-                        />
-                      </Form.Item>
                     </Col>
                   </Row>
 
@@ -740,7 +787,7 @@ const CheckoutPage: React.FC = () => {
                         <div style={{ display: "flex", gap: 12 }}>
                           {sr.room.urlAnhPhong && (
                             <img
-                              src={sr.room.urlAnhPhong}
+                              src={resolveImageUrl(sr.room.urlAnhPhong)}
                               alt={sr.room.tenPhong}
                               style={{
                                 width: 80,
@@ -1178,7 +1225,7 @@ const CheckoutPage: React.FC = () => {
                     <Text
                       style={{ color: "#666", fontSize: 14, marginLeft: 24 }}
                     >
-                      123 Đường ABC, Quận 1, TP.HCM
+                      4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng
                     </Text>
                   </div>
                 </div>

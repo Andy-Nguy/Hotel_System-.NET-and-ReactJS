@@ -2143,8 +2143,6 @@ namespace Hotel_System.API.Controllers
             }
             else bookingTotal = tongTienChuan;
 
-            // Khi có gia hạn, KHÔNG ghi đè booking.TongTien vì nó đã bao gồm phí gia hạn
-            // AddServiceToInvoice sẽ cộng thêm dịch vụ mới sau
             if (!hasExtendFee)
             {
                 // Only update booking.TongTien if bookingTotal is positive or if booking has no existing positive total
@@ -2241,12 +2239,6 @@ namespace Hotel_System.API.Controllers
         }
 
         // ===================== GIA HẠN PHÒNG (EXTEND STAY) =========================
-        /// <summary>
-        /// Unified API for checking available rooms. Handles 3 scenarios:
-        /// 1. General availability: GET /api/checkout/available-rooms?checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&guests=1
-        /// 2. Extend with extra nights: GET /api/checkout/available-rooms?idDatPhong=XXX&extraNights=2
-        /// 3. Full extend info: GET /api/checkout/available-rooms?idDatPhong=XXX&mode=extend
-        /// </summary>
         [HttpGet("available-rooms")]
         public async Task<IActionResult> GetAvailableRooms(
             [FromQuery] string? idDatPhong = null,
@@ -3356,13 +3348,13 @@ namespace Hotel_System.API.Controllers
 
             // Map to controller DTO type expected by callers
             var mapped = available.Select(r => new DTOs.AvailableRoomForExtend
-            {
+                {
                 Idphong = r.RoomId,
                 TenPhong = r.RoomName,
                 SoPhong = r.RoomNumber,
                 TenLoaiPhong = r.RoomTypeName,
                 GiaMotDem = r.BasePricePerNight,
-                UrlAnhPhong = r.RoomImageUrl ?? r.RoomImageUrl,
+                UrlAnhPhong = !string.IsNullOrEmpty(r.RoomImageUrl) ? new List<string> { r.RoomImageUrl } : null,
                 SoNguoiToiDa = r.MaxOccupancy,
                 PromotionName = r.PromotionName,
                 DiscountPercent = r.DiscountPercent,
@@ -3370,7 +3362,7 @@ namespace Hotel_System.API.Controllers
                 Description = r.Description
             }).ToList();
 
-            _logger.LogInformation("[FindAvailableRoomsForExtend] Tìm thấy {Count} phòng trống từ {Checkin} đến {Checkout}", mapped.Count, DateOnly.FromDateTime(checkin), DateOnly.FromDateTime(checkout));
+            _logger.LogInformation("[FindAvailableRoomsForExtend] Tìm thấy {Count} phòng trống từ {Checkin} đến {Checkout}", mapped.Count, DateOnly.FromDateTime(checkin).ToString("yyyy-MM-dd"), DateOnly.FromDateTime(checkout).ToString("yyyy-MM-dd"));
 
             return mapped;
         }

@@ -182,6 +182,43 @@ export async function getMyBookingHistory() {
   return handleRes(res);
 }
 
+export async function getToken(): Promise<string | null> {
+  return await AsyncStorage.getItem("hs_token");
+}
+
+export type UpdateProfileRequest = {
+  hoTen?: string;
+  soDienThoai?: string;
+  email?: string;
+  avatar?: string;
+};
+
+export async function updateProfile(request: UpdateProfileRequest) {
+  const token = await AsyncStorage.getItem("hs_token");
+  if (!token) throw new Error("Chưa đăng nhập");
+
+  const url = `${BASE_URL}/api/Auth/profile`;
+  console.log("authApi.updateProfile ->", url);
+  try {
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request),
+      },
+      10000
+    );
+    return handleRes(res);
+  } catch (err: any) {
+    console.error("authApi.updateProfile error:", err?.message || err);
+    throw err;
+  }
+}
+
 export default {
   register,
   verifyOtp,
@@ -190,4 +227,6 @@ export default {
   getLoyalty,
   getBookings,
   getMyBookingHistory,
+  getToken,
+  updateProfile,
 };

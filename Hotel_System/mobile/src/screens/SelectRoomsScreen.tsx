@@ -5,14 +5,17 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   Modal,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
+import { getPrimaryRoomImage, getRoomImages } from "../utils/imageUtils";
+import { getRoomById } from "../api/roomsApi";
+import RoomDetail from "../components/RoomDetail";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import AppIcon from "../components/AppIcon";
@@ -21,6 +24,8 @@ import BookingProgress from "../components/BookingProgress";
 import ServicesSelector from "../components/ServicesSelector";
 import AvailableRoomCard from "../components/AvailableRoomCard";
 import { AvailableRoom } from "../api/roomsApi";
+import HeaderScreen from "../components/HeaderScreen";
+import reviewApi from "../api/reviewApi";
 
 interface SelectedRoom {
   roomNumber: number;
@@ -30,6 +35,7 @@ interface SelectedRoom {
 const SelectRoomsScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const {
     checkIn,
     checkOut,
@@ -55,97 +61,42 @@ const SelectRoomsScreen: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedRoomDetail, setSelectedRoomDetail] =
     useState<AvailableRoom | null>(null);
+  const [modalImageIndex, setModalImageIndex] = useState(0);
+  const [roomStats, setRoomStats] = useState<any | null>(null);
 
   useEffect(() => {
-    loadBookingData();
+    // IMPORTANT: Always clear old booking data when entering this screen
+    // to prevent stale room selections from previous booking sessions
+    clearAndInitBooking();
   }, []);
 
-  const loadBookingData = async () => {
+  const clearAndInitBooking = async () => {
     try {
-      const bookingData = await AsyncStorage.getItem("bookingData");
+      // Clear old booking data first to ensure fresh state
+      await AsyncStorage.removeItem("bookingData");
+      console.log("🧹 Cleared old bookingData from AsyncStorage");
+
       const params = route.params as any;
       const initialSelectedRoom = params?.initialSelectedRoom;
 
-      if (bookingData) {
-        const parsed = JSON.parse(bookingData);
-        if (
-          parsed.checkIn === checkIn &&
-          parsed.checkOut === checkOut &&
-          parsed.guests === guests &&
-          parsed.rooms === rooms
-        ) {
-          // Same session, load saved data
-          setSelectedRooms(parsed.selectedRooms || []);
-          setTotalRooms(parsed.totalRooms || rooms || 1);
-          setCurrentRoomNumber(parsed.currentRoomNumber || 1);
-          setSelectedServices(parsed.selectedServices || []);
+      // Always start fresh
+      setTotalRooms(rooms || 1);
+      setSelectedServices([]);
 
-          // If we have an initial selection but it's not in the saved list (and we have space), add it?
-          // Or maybe we should prioritize the user's explicit click over saved state if it's a "new" navigation action?
-          // For simplicity, if the user clicked "Select" on the previous screen, let's assume they want that room selected
-          // even if they had a previous session. But we must be careful not to duplicate.
-
-          if (initialSelectedRoom) {
-            const alreadySelected = (parsed.selectedRooms || []).some(
-              (sr: any) => sr.room.roomId === initialSelectedRoom.roomId
-            );
-            if (
-              !alreadySelected &&
-              (parsed.selectedRooms || []).length < (parsed.totalRooms || rooms)
-            ) {
-              // Add it
-              const newSelected = [
-                ...(parsed.selectedRooms || []),
-                {
-                  roomNumber: parsed.currentRoomNumber || 1,
-                  room: initialSelectedRoom,
-                },
-              ];
-              setSelectedRooms(newSelected);
-              // Update current room number
-              let nextRoomNum = 1;
-              const selectedNumbers = newSelected.map((r: any) => r.roomNumber);
-              while (
-                selectedNumbers.includes(nextRoomNum) &&
-                nextRoomNum <= (parsed.totalRooms || rooms)
-              ) {
-                nextRoomNum++;
-              }
-              setCurrentRoomNumber(
-                nextRoomNum <= (parsed.totalRooms || rooms)
-                  ? nextRoomNum
-                  : parsed.totalRooms || rooms
-              );
-            }
-          }
-        } else {
-          // Different booking session, start fresh
-          setTotalRooms(rooms || 1);
-          setSelectedServices([]);
-
-          if (initialSelectedRoom) {
-            setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
-            setCurrentRoomNumber(rooms > 1 ? 2 : 1);
-          } else {
-            setSelectedRooms([]);
-            setCurrentRoomNumber(1);
-          }
-        }
+      if (initialSelectedRoom) {
+        console.log(
+          "📦 Setting initial selected room:",
+          initialSelectedRoom.roomName
+        );
+        setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
+        setCurrentRoomNumber(rooms > 1 ? 2 : 1);
       } else {
-        // No stored data
-        setTotalRooms(rooms || 1);
-        setSelectedServices([]);
-
-        if (initialSelectedRoom) {
-          setSelectedRooms([{ roomNumber: 1, room: initialSelectedRoom }]);
-          setCurrentRoomNumber(rooms > 1 ? 2 : 1);
-        } else {
-          setSelectedRooms([]);
-          setCurrentRoomNumber(1);
-        }
+        console.log("📦 No initial room, starting with empty selection");
+        setSelectedRooms([]);
+        setCurrentRoomNumber(1);
       }
     } catch (error) {
-      console.error("Error loading booking data:", error);
+      console.error("Error initializing booking data:", error);
       setTotalRooms(rooms || 1);
       setCurrentRoomNumber(1);
       setSelectedRooms([]);
@@ -275,9 +226,25 @@ const SelectRoomsScreen: React.FC = () => {
     AsyncStorage.setItem("bookingData", JSON.stringify(bookingData));
   };
 
-  const openRoomDetail = (room: AvailableRoom) => {
-    setSelectedRoomDetail(room);
+  const openRoomDetail = async (room: AvailableRoom) => {
+    const base = {
+      ...room,
+      idphong: (room as any).idphong || (room as any).roomId,
+    };
+    setSelectedRoomDetail(base);
+    setModalImageIndex(0);
     setModalVisible(true);
+    try {
+      const full = await getRoomById(String(room.roomId));
+      const merged = {
+        ...base,
+        ...full,
+        idphong: full?.idphong ?? base.idphong,
+      };
+      setSelectedRoomDetail(merged);
+    } catch (err) {
+      console.warn("SelectRoomsScreen: failed to load full room details", err);
+    }
   };
 
   const closeRoomDetail = () => {
@@ -323,16 +290,10 @@ const SelectRoomsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chọn phòng</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <HeaderScreen
+        title="Chọn phòng"
+        onClose={() => navigation.goBack()}
+      />
 
       <BookingProgress
         currentStage="select"
@@ -405,13 +366,13 @@ const SelectRoomsScreen: React.FC = () => {
           </Text>
 
           {availableForSelection.length > 0 ? (
-            <FlatList
-              data={availableForSelection}
-              renderItem={renderRoomItem}
-              keyExtractor={(item) => item.roomId}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
+            <View style={{ gap: 16 }}>
+              {availableForSelection.map((item) => (
+                <View key={item.roomId} style={{ width: "100%" }}>
+                  {renderRoomItem({ item })}
+                </View>
+              ))}
+            </View>
           ) : (
             <View style={styles.noRooms}>
               <AppIcon name="bed" size={40} color={COLORS.gray} />
@@ -427,7 +388,14 @@ const SelectRoomsScreen: React.FC = () => {
 
       {/* Bottom Action Bar */}
       {selectedRooms.length > 0 && (
-        <View style={styles.bottomBar}>
+        <View style={[
+          styles.bottomBar,
+          {
+            bottom: Platform.OS === 'ios' 
+              ? insets.bottom + 0
+              : 0,
+          },
+        ]}>
           <View style={styles.totalContainer}>
             <Text style={styles.totalLabel}>Tổng cộng</Text>
             <Text style={styles.totalPrice}>
@@ -450,99 +418,12 @@ const SelectRoomsScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Room Detail Modal */}
-      <Modal
+      {/* Use shared RoomDetail component to keep UI consistent */}
+      <RoomDetail
+        selectedRoom={selectedRoomDetail}
         visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeRoomDetail}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chi tiết phòng</Text>
-              <TouchableOpacity
-                onPress={closeRoomDetail}
-                style={styles.closeButton}
-              >
-                <AppIcon name="close" size={24} color={COLORS.secondary} />
-              </TouchableOpacity>
-            </View>
-
-            {selectedRoomDetail && (
-              <ScrollView style={styles.modalBody}>
-                <View style={styles.modalImageContainer}>
-                  {selectedRoomDetail.roomImageUrl ? (
-                    <Image
-                      source={{ uri: selectedRoomDetail.roomImageUrl }}
-                      style={styles.modalImage}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={styles.modalImagePlaceholder}>
-                      <Text style={styles.modalImagePlaceholderText}>🏨</Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.modalInfo}>
-                  <Text style={styles.modalRoomName}>
-                    {selectedRoomDetail.roomTypeName}
-                  </Text>
-                  <Text style={styles.modalRoomNumber}>
-                    Phòng {selectedRoomDetail.roomNumber}
-                  </Text>
-
-                  <View style={styles.modalRating}>
-                    <Text style={styles.modalStars}>{renderStars(4.5)}</Text>
-                    <Text style={styles.modalRatingText}>4.5/5</Text>
-                  </View>
-
-                  {selectedRoomDetail.description && (
-                    <Text style={styles.modalDescription}>
-                      {selectedRoomDetail.description}
-                    </Text>
-                  )}
-
-                  <View style={styles.modalPriceSection}>
-                    <Text style={styles.modalPriceLabel}>Giá/đêm:</Text>
-                    <Text style={styles.modalPrice}>
-                      {Number(
-                        selectedRoomDetail.basePricePerNight || 0
-                      ).toLocaleString()}
-                      đ
-                    </Text>
-                  </View>
-
-                  <Text style={styles.modalNights}>
-                    Số đêm: {calculateNights()} | Tổng:
-                    {(
-                      Number(selectedRoomDetail.basePricePerNight || 0) *
-                      calculateNights()
-                    ).toLocaleString()}
-                    đ
-                  </Text>
-                </View>
-              </ScrollView>
-            )}
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={closeRoomDetail}
-              >
-                <Text style={styles.modalCancelText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmButton}
-                onPress={confirmSelectRoom}
-              >
-                <Text style={styles.modalConfirmText}>Chọn phòng</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={closeRoomDetail}
+      />
     </SafeAreaView>
   );
 };
@@ -551,24 +432,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding,
-    backgroundColor: COLORS.white,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: "#F5F5F5",
-  },
-  headerTitle: {
-    ...FONTS.h3,
-    fontWeight: "700",
-    color: COLORS.secondary,
   },
   scrollContent: {
     flex: 1,
@@ -666,7 +529,6 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,
@@ -752,6 +614,32 @@ const styles = StyleSheet.create({
   },
   modalImagePlaceholderText: {
     fontSize: 64,
+  },
+  imageDots: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.7)",
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.12)",
+  },
+  dotActive: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+    marginHorizontal: 4,
   },
   modalInfo: {
     padding: 24,

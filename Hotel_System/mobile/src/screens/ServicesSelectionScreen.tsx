@@ -3,20 +3,20 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
-  SafeAreaView,
   StyleSheet,
   Alert,
   Modal,
   ScrollView,
   Platform,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import AppIcon from "../components/AppIcon";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
-import { DEFAULT_BASE_URL } from "../config/apiConfig";
+import { DEFAULT_BASE_URL, buildApiUrl } from "../config/apiConfig";
 import BookingProgress from "../components/BookingProgress";
+import HeaderScreen from "../components/HeaderScreen";
 
 type Service = {
   iddichVu: string;
@@ -39,9 +39,31 @@ type SelectedService = {
   quantity: number;
 };
 
+type Combo = {
+  idCombo: string;
+  tenCombo: string;
+  moTa?: string;
+  giaCombo: number;
+  dichVus: Array<{
+    iddichVu: string;
+    tenDichVu: string;
+    tienDichVu: number;
+  }>;
+  trangThai?: string;
+  hinhAnhCombo?: string;
+};
+
+type SelectedCombo = {
+  comboId: string;
+  comboName: string;
+  price: number;
+  serviceIds: string[];
+};
+
 const ServicesSelectionScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { selectedRooms, checkIn, checkOut, guests, rooms } =
     route.params as any;
 
@@ -49,6 +71,8 @@ const ServicesSelectionScreen: React.FC = () => {
   const [selectedServices, setSelectedServices] = useState<SelectedService[]>(
     []
   );
+  const [combos, setCombos] = useState<Combo[]>([]);
+  const [selectedCombo, setSelectedCombo] = useState<SelectedCombo | null>(null);
   const [loading, setLoading] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedServiceDetail, setSelectedServiceDetail] =
@@ -67,49 +91,115 @@ const ServicesSelectionScreen: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setServices(data);
+        // Load combos with the services data
+        loadCombos(data);
       } else {
-        // Fallback to mock data
-        const mockServices: Service[] = [
-          {
-            iddichVu: "DV001",
-            tenDichVu: "Spa thư giãn",
-            tienDichVu: 500000,
-            trangThai: "Đang hoạt động",
-            thongTinDv:
-              "Dịch vụ spa thư giãn toàn thân với các liệu pháp massage chuyên nghiệp.",
-            ghiChu: "Thời gian: 60 phút",
-          },
-          {
-            iddichVu: "DV002",
-            tenDichVu: "Hồ bơi",
-            tienDichVu: 200000,
-            trangThai: "Đang hoạt động",
-            thongTinDv: "Truy cập hồ bơi vô cực với view biển tuyệt đẹp.",
-            ghiChu: "Miễn phí cho khách lưu trú",
-          },
-          {
-            iddichVu: "DV003",
-            tenDichVu: "Gym",
-            tienDichVu: 150000,
-            trangThai: "Đang hoạt động",
-            thongTinDv: "Phòng gym hiện đại với trang thiết bị chuyên nghiệp.",
-            ghiChu: "Mở cửa 24/7",
-          },
-          {
-            iddichVu: "DV004",
-            tenDichVu: "Ăn sáng",
-            tienDichVu: 100000,
-            trangThai: "Đang hoạt động",
-            thongTinDv: "Buffet sáng đa dạng các món Á - Âu.",
-            ghiChu: "6:00 - 10:00",
-          },
-        ];
-        setServices(mockServices);
+        console.error("Failed to fetch services, status:", response.status);
+        setServices([]);
+        loadCombos([]);
       }
     } catch (error) {
       console.error("Error loading services:", error);
+      setServices([]);
+      loadCombos([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCombos = async (loadedServices: Service[]) => {
+    try {
+      // Fetch combos from khuyenmai endpoint (without hyphen)
+      const response = await fetch(
+        `${DEFAULT_BASE_URL}/api/khuyenmai`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        // Filter only promotions that have combos (KhuyenMaiCombos)
+        const formattedCombos: Combo[] = (data || [])
+          .filter((item: any) => item.khuyenMaiCombos && item.khuyenMaiCombos.length > 0)
+          .flatMap((item: any) => {
+            // Each KhuyenMai can have multiple combos
+            return (item.khuyenMaiCombos || []).map((combo: any) => {
+              // Get services from combo's dichVus
+              const services = (combo.khuyenMaiComboDichVus || []).map((dv: any) => {
+                // Try to get price from navigation, otherwise look up from loaded services
+                let tienDichVu = dv.iddichVuNavigation?.tienDichVu;
+                
+                // Fallback: look up price from the services we loaded
+                if (!tienDichVu || tienDichVu === 0) {
+                  const serviceData = loadedServices.find((s: Service) => s.iddichVu === dv.iddichVu);
+                  tienDichVu = serviceData?.tienDichVu || 0;
+                }
+
+                return {
+                  iddichVu: dv.iddichVu,
+                  tenDichVu: dv.iddichVuNavigation?.tenDichVu || dv.iddichVu,
+                  tienDichVu: tienDichVu,
+                };
+              });
+
+              // Calculate combo price based on original services total and discount
+              const originalTotal = services.reduce(
+                (sum: number, dv: any) => sum + (dv.tienDichVu || 0),
+                0
+              );
+              const comboPrice = calculateComboPrice(originalTotal, item);
+
+              console.log(`Combo: ${combo.tenCombo}, Services: ${JSON.stringify(services)}, Total: ${originalTotal}, Final Price: ${comboPrice}`);
+
+              return {
+                idCombo: combo.idkhuyenMaiCombo,
+                tenCombo: combo.tenCombo,
+                moTa: item.moTa,
+                giaCombo: comboPrice,
+                dichVus: services,
+                trangThai: item.trangThai,
+                hinhAnhCombo: item.hinhAnhBanner,
+              };
+            });
+          });
+        setCombos(formattedCombos);
+      } else {
+        console.error("Failed to fetch combos, status:", response.status);
+        setCombos([]);
+      }
+    } catch (error) {
+      console.error("Error loading combos:", error);
+      setCombos([]);
+    }
+  };
+
+  const calculateComboPrice = (originalTotal: number, promotionData: any): number => {
+    const discountType = promotionData.loaiGiamGia;
+    const discountValue = Number(promotionData.giaTriGiam || 0);
+
+    if (!discountType || discountValue === 0) {
+      return originalTotal;
+    }
+
+    if (discountType === "percent") {
+      return Math.round(originalTotal * (1 - discountValue / 100));
+    } else {
+      // Fixed amount discount
+        return Math.max(0, originalTotal - discountValue);
+      }
+    };
+  
+    const resolveServiceImageUri = (u: any) => {
+    if (!u) return buildApiUrl('/img/services/default.webp');
+    try {
+      if (typeof u !== 'string') {
+        if (Array.isArray(u)) u = u.find(x => !!x) || u[0];
+        else u = JSON.stringify(u);
+      }
+      const s = String(u).trim();
+      if (!s) return buildApiUrl('/img/services/default.webp');
+      if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return s;
+      if (s.startsWith('/img') || s.startsWith('/')) return buildApiUrl(s);
+      return buildApiUrl(`/img/services/${encodeURI(s)}`);
+    } catch (e) {
+      return buildApiUrl('/img/services/default.webp');
     }
   };
 
@@ -145,14 +235,57 @@ const ServicesSelectionScreen: React.FC = () => {
     }
   };
 
+  const isServiceInSelectedCombo = (serviceId: string): boolean => {
+    return selectedCombo?.serviceIds.includes(serviceId) || false;
+  };
+
+  const isComboDisabled = (combo: Combo): boolean => {
+    // Combo is disabled if any of its services are already selected
+    return combo.dichVus.some((dv) =>
+      selectedServices.some((s) => s.serviceId === dv.iddichVu)
+    );
+  };
+
+  const handleComboSelect = (combo: Combo) => {
+    if (selectedCombo?.comboId === combo.idCombo) {
+      // Deselect combo
+      setSelectedCombo(null);
+    } else {
+      // Select combo - remove any services that are now in the combo
+      const comboServiceIds = combo.dichVus.map((dv) => dv.iddichVu);
+      setSelectedServices(
+        selectedServices.filter((s) => !comboServiceIds.includes(s.serviceId))
+      );
+      
+      // Select the new combo
+      setSelectedCombo({
+        comboId: combo.idCombo,
+        comboName: combo.tenCombo,
+        price: combo.giaCombo,
+        serviceIds: comboServiceIds,
+      });
+    }
+  };
+
   const calculateTotal = () => {
-    return selectedServices.reduce((sum, s) => sum + s.price * s.quantity, 0);
+    let total = 0;
+    
+    // Add combo price if selected
+    if (selectedCombo) {
+      total += selectedCombo.price;
+    }
+    
+    // Add individual services (both combo and non-combo)
+    total += selectedServices.reduce((sum, s) => sum + s.price * s.quantity, 0);
+    
+    return total;
   };
 
   const handleProceed = () => {
     (navigation as any).navigate("Checkout", {
       selectedRooms,
       selectedServices,
+      selectedCombo,
       checkIn,
       checkOut,
       guests,
@@ -175,22 +308,24 @@ const ServicesSelectionScreen: React.FC = () => {
       (s) => s.serviceId === item.iddichVu
     );
     const quantity = selected ? selected.quantity : 0;
+    const isInCombo = isServiceInSelectedCombo(item.iddichVu);
 
     return (
       <TouchableOpacity
         style={styles.serviceCard}
         onPress={() => openServiceDetail(item)}
         activeOpacity={0.9}
+        disabled={isInCombo}
       >
         <View style={styles.serviceImageContainer}>
           {item.hinhDichVu ? (
             <Image
-              source={{ uri: item.hinhDichVu }}
-              style={styles.serviceImage}
+              source={{ uri: resolveServiceImageUri(item.hinhDichVu) }}
+              style={[styles.serviceImage, isInCombo ? { opacity: 0.5 } : undefined]}
               contentFit="cover"
             />
           ) : (
-            <View style={styles.serviceImagePlaceholder}>
+            <View style={[styles.serviceImagePlaceholder, isInCombo && { opacity: 0.5 }]}>
               <AppIcon name="star" size={24} color={COLORS.gray} />
             </View>
           )}
@@ -198,18 +333,22 @@ const ServicesSelectionScreen: React.FC = () => {
 
         <View style={styles.serviceContent}>
           <Text style={styles.serviceName}>{item.tenDichVu}</Text>
-          <Text style={styles.servicePrice}>
+          <Text style={[styles.servicePrice, isInCombo && { color: "#999" }]}>
             {item.tienDichVu.toLocaleString()}đ
           </Text>
-          {item.ghiChu && (
+          {isInCombo ? (
+            <Text style={styles.comboTagText}>✓ Đã bao gồm trong combo</Text>
+          ) : item.ghiChu ? (
             <Text style={styles.serviceNote} numberOfLines={1}>
               {item.ghiChu}
             </Text>
-          )}
+          ) : null}
         </View>
 
         <View style={styles.quantityControl}>
-          {quantity > 0 ? (
+          {isInCombo ? (
+            <View style={styles.lockedService} />
+          ) : quantity > 0 ? (
             <>
               <TouchableOpacity
                 style={styles.qtyBtn}
@@ -249,16 +388,11 @@ const ServicesSelectionScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Dịch vụ thêm</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <HeaderScreen
+        title="Dịch vụ thêm"
+        onClose={() => navigation.goBack()}
+        leftIcon={<AppIcon name="arrow-left" size={24} color={COLORS.secondary} />}
+      />
 
       <BookingProgress
         currentStage="services"
@@ -269,7 +403,8 @@ const ServicesSelectionScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scrollContent}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        // Increased bottom padding to account for fixed bottomBar + native tab bar
+        contentContainerStyle={{ paddingBottom: 220 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.introSection}>
@@ -280,18 +415,92 @@ const ServicesSelectionScreen: React.FC = () => {
           </Text>
         </View>
 
-        <FlatList
-          data={services}
-          renderItem={renderServiceItem}
-          keyExtractor={(item) => item.iddichVu}
-          scrollEnabled={false}
-          contentContainerStyle={{ paddingHorizontal: SIZES.padding }}
-        />
+        {/* Combos Section */}
+        {combos.length > 0 && (
+          <View style={{ paddingHorizontal: SIZES.padding, marginBottom: 16 }}>
+            <Text style={styles.sectionTitle}>🎁 Combo Đặc Biệt</Text>
+            {combos.map((combo) => {
+              const isSelected = selectedCombo?.comboId === combo.idCombo;
+              const isDisabled = isComboDisabled(combo);
+              const totalIndividualPrice = combo.dichVus.reduce(
+                (sum, dv) => sum + dv.tienDichVu,
+                0
+              );
+              const savings = totalIndividualPrice - combo.giaCombo;
+
+              return (
+                <TouchableOpacity
+                  key={combo.idCombo}
+                  style={[
+                    styles.comboCard,
+                    isSelected && styles.comboCardSelected,
+                    isDisabled && styles.comboCardDisabled,
+                  ]}
+                  onPress={() => handleComboSelect(combo)}
+                  disabled={isDisabled}
+                  activeOpacity={isDisabled ? 0.6 : 0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.comboName}>{combo.tenCombo}</Text>
+                    <Text style={styles.comboServices} numberOfLines={1}>
+                      {combo.dichVus.map((dv) => dv.tenDichVu).join(" + ")}
+                    </Text>
+                  </View>
+
+                  <View style={styles.comboPriceSection}>
+                    <Text style={styles.comboOriginalPrice}>
+                      {totalIndividualPrice.toLocaleString()}đ
+                    </Text>
+                    <Text style={[styles.comboPriceTag, isDisabled && { opacity: 0.5 }]}>
+                      {combo.giaCombo.toLocaleString()}đ
+                    </Text>
+                    {savings > 0 && (
+                      <Text style={styles.comboSavings}>
+                        Tiết kiệm {savings.toLocaleString()}đ
+                      </Text>
+                    )}
+                  </View>
+
+                  {isSelected && (
+                    <View style={styles.comboCheckmark}>
+                      <AppIcon name="check" size={20} color={COLORS.white} />
+                    </View>
+                  )}
+
+                  {isDisabled && (
+                    <Text style={styles.comboDisabledText}>
+                      Chứa dịch vụ đã chọn
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Services Section */}
+        <View style={{ paddingHorizontal: SIZES.padding }}>
+          <Text style={styles.sectionTitle}>
+            {selectedCombo ? "Thêm dịch vụ khác (Tùy chọn)" : "Dịch vụ lẻ"}
+          </Text>
+          {services.map((s) => (
+            <View key={s.iddichVu}>{renderServiceItem({ item: s })}</View>
+          ))}
+        </View>
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[
+        styles.bottomBar,
+        {
+          bottom: Platform.OS === 'ios' 
+            ? insets.bottom + 0
+            : 0,
+        },
+      ]}>
         <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Tổng dịch vụ</Text>
+          <Text style={styles.totalLabel}>
+            {selectedCombo ? `Combo: ${selectedCombo.comboName}` : "Tổng dịch vụ"}
+          </Text>
           <Text style={styles.totalPrice}>
             {calculateTotal().toLocaleString()}đ
           </Text>
@@ -326,7 +535,7 @@ const ServicesSelectionScreen: React.FC = () => {
                 <View style={styles.modalImageContainer}>
                   {selectedServiceDetail.hinhDichVu ? (
                     <Image
-                      source={{ uri: selectedServiceDetail.hinhDichVu }}
+                      source={{ uri: resolveServiceImageUri(selectedServiceDetail.hinhDichVu) }}
                       style={styles.modalImage}
                       contentFit="cover"
                     />
@@ -509,7 +718,6 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,
@@ -653,6 +861,87 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: COLORS.secondary,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    marginBottom: 12,
+    marginTop: 16,
+  },
+  comboCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: "#E9ECEF",
+    ...SHADOWS.light,
+  },
+  comboCardSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#FFF8F3",
+  },
+  comboCardDisabled: {
+    opacity: 0.6,
+  },
+  comboName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    marginBottom: 4,
+  },
+  comboServices: {
+    fontSize: 12,
+    color: COLORS.gray,
+  },
+  comboPriceSection: {
+    alignItems: "flex-end",
+    marginHorizontal: 12,
+  },
+  comboOriginalPrice: {
+    fontSize: 12,
+    color: "#999",
+    textDecorationLine: "line-through",
+    marginBottom: 2,
+  },
+  comboPriceTag: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  comboSavings: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: "600",
+  },
+  comboCheckmark: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  comboDisabledText: {
+    fontSize: 11,
+    color: COLORS.gray,
+    fontStyle: "italic",
+  },
+  comboTagText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  lockedService: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F1F3F5",
   },
 });
 

@@ -7,9 +7,15 @@ import {
   TouchableOpacity,
   TextInput,
   ImageBackground,
-  FlatList,
   Image,
+  Dimensions,
+  Platform,
+  RefreshControl,
 } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { getLoyalty, LoyaltyInfo } from "../api/authApi";
@@ -21,40 +27,63 @@ import Promotion from "../components/Promotion";
 import RoomType from "../components/RoomType";
 import Services from "../components/Services";
 
-
 const HomeScreen: React.FC = () => {
   const { userInfo } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [searchText, setSearchText] = useState("");
   const [loyalty, setLoyalty] = useState<LoyaltyInfo | null>(null);
   const [loadingLoyalty, setLoadingLoyalty] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    setLoadingLoyalty(true);
+
+    getLoyalty()
+      .then((data) => {
+        setLoyalty(data);
+      })
+      .catch((err) => {
+        console.log("refresh loyalty error:", err?.message || err);
+      })
+      .finally(() => {
+        setLoadingLoyalty(false);
+        // keep spinner visible briefly so user sees feedback
+        setTimeout(() => setRefreshing(false), 600);
+      });
+  }, [userInfo]);
+
+  const { width } = Dimensions.get("window");
+  const isSmallDevice = width < 375;
+  const isMediumDevice = width >= 375 && width < 414;
 
   useEffect(() => {
-  if (!userInfo) {
-    setLoyalty(null);
-    return;
-  }
+    if (!userInfo) {
+      setLoyalty(null);
+      return;
+    }
 
-  let isMounted = true;
-  setLoadingLoyalty(true);
+    let isMounted = true;
+    setLoadingLoyalty(true);
 
-  getLoyalty()
-    .then((data) => {
-      if (isMounted) {
-        setLoyalty(data);
-      }
-    })
-    .catch((err) => {
-      console.log("load loyalty error:", err?.message || err);
-    })
-    .finally(() => {
-      if (isMounted) setLoadingLoyalty(false);
-    });
+    getLoyalty()
+      .then((data) => {
+        if (isMounted) {
+          setLoyalty(data);
+        }
+      })
+      .catch((err) => {
+        console.log("load loyalty error:", err?.message || err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingLoyalty(false);
+      });
 
-  return () => {
-    isMounted = false;
-  };
-}, [userInfo]);
+    return () => {
+      isMounted = false;
+    };
+  }, [userInfo]);
 
   const getUserName = () => {
     if (!userInfo) return "Nguyen";
@@ -76,30 +105,56 @@ const HomeScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      scrollEventThrottle={16}
-    >
-      {/* Hero Banner - Full Screen with Image */}
-      <View style={styles.heroContainer}>
-        <ImageBackground
-          source={{
-            uri: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500&h=600",
-          }}
-          style={styles.heroBanner}
-          imageStyle={styles.heroImage}
-        >
-          {/* Overlay */}
-          <View style={styles.heroOverlay} />
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
+        {/* Hero Banner - Full Screen with Image */}
+        <View style={styles.heroContainer}>
+          <ImageBackground
+            source={require("../assets/img/gallery/Hotel/2.jpg")}
+            style={styles.heroBanner}
+            imageStyle={styles.heroImage}
+          >
+            {/* Overlay */}
+            <View style={styles.heroOverlay} />
 
           {/* Hero Header - Logo */}
-          <View style={styles.heroHeader}>
-            <Text style={styles.logoText}>ROBIN'S VILLA</Text>
+          <View style={[
+            styles.heroHeader,
+            {
+              paddingTop: Platform.OS === 'ios' 
+                ? insets.top + (isSmallDevice ? 30 : isMediumDevice ? 40 : 50) 
+                : (isSmallDevice ? 30 : isMediumDevice ? 40 : 50),
+              marginHorizontal: isSmallDevice ? width * 0.08 : isMediumDevice ? width * 0.1 : width * 0.12,
+            },
+          ]}>
+            <Text style={[
+              styles.logoText,
+              {
+                fontSize: isSmallDevice ? 28 : isMediumDevice ? 32 : 36,
+              },
+            ]}>
+              ROBIN'S VILLA
+            </Text>
           </View>
 
           {/* Hero Search Bar - Floating */}
-          <View style={styles.heroSearchContainer}>
+          <View style={[
+            styles.heroSearchContainer,
+            {
+              marginTop: isSmallDevice ? 3 : isMediumDevice ? 4 : 5,
+            },
+          ]}>
             <View style={styles.searchBox}>
               <AppIcon
                 name="search"
@@ -126,35 +181,38 @@ const HomeScreen: React.FC = () => {
             {/* <Text style={styles.heroSubtext}>Nhận ưu đãi ngay →</Text> */}
           </View>
         </ImageBackground>
-      </View>
-
-      {/* Bottom Info Bar */}
-      <View style={styles.bottomBar}>
-        <View style={styles.bottomLeft}>
-          <Text style={styles.bottomLabel}>Xin chào, {getUserName()}</Text>
         </View>
-        <TouchableOpacity style={styles.bottomRight}>
-  <Text style={styles.bottomStats}>
-    {loadingLoyalty
-      ? "Đang tải..."
-      : `${loyalty?.totalNights ?? 0} Đêm • ${loyalty?.tichDiem ?? 0} Điểm`}
-  </Text>
-  <Text style={styles.bottomArrow}>›</Text>
-</TouchableOpacity>
-      </View>
 
-      <AboutUs />
+        {/* Bottom Info Bar */}
+        <View style={styles.bottomBar}>
+          <View style={styles.bottomLeft}>
+            <Text style={styles.bottomLabel}>Xin chào, {getUserName()}</Text>
+          </View>
+          <TouchableOpacity style={styles.bottomRight}>
+            <Text style={styles.bottomStats}>
+              {loadingLoyalty
+                ? "Đang tải..."
+                : `${loyalty?.totalNights ?? 0} Đêm • ${
+                    loyalty?.tichDiem ?? 0
+                  } Điểm`}
+            </Text>
+            <Text style={styles.bottomArrow}>›</Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* Promotion: Promotion will fetch latest promotion itself when no props provided */}
-      <Promotion navigation={navigation} />
+        <AboutUs />
 
-      <RoomType />
-      <Services />
-      {/* Bottom Spacing */}
-      <View style={styles.spacing} />
+        {/* Promotion: Promotion will fetch latest promotion itself when no props provided */}
+        <Promotion navigation={navigation} />
 
-      <BlogSection />
-    </ScrollView>
+        <RoomType />
+        <Services />
+        {/* Bottom Spacing */}
+        <View style={styles.spacing} />
+
+        <BlogSection />
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -180,8 +238,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.2)",
   },
   heroHeader: {
-    paddingTop: SIZES.padding * 6,
-    paddingHorizontal: SIZES.padding,
     zIndex: 20,
   },
   logoText: {
@@ -189,12 +245,13 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: "700",
     textAlign: "center",
-    fontSize: 28,
     letterSpacing: 3,
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
   },
   heroSearchContainer: {
     paddingHorizontal: SIZES.padding,
-    marginTop: SIZES.padding * -7,
     marginBottom: SIZES.padding * 2,
     zIndex: 25,
   },
@@ -311,6 +368,9 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: "600",
     marginRight: 10,
+  },
+  scrollContent: {
+    flex: 1,
   },
 });
 

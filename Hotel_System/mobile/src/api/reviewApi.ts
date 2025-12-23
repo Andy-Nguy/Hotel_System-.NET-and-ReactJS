@@ -10,6 +10,7 @@ export async function getRoomStats(
   roomId: string
 ): Promise<StatsResponse | null> {
   try {
+    console.log(`[reviewApi] getRoomStats called for roomId=${roomId}`);
     const res = await fetch(
       `${API_CONFIG.CURRENT}/api/Review/room/${roomId}/stats`,
       {
@@ -19,9 +20,15 @@ export async function getRoomStats(
     );
     if (!res.ok) {
       console.warn("[reviewApi] stats fetch failed", res.status);
+      try {
+        const txt = await res.text();
+        console.warn("[reviewApi] response body:", txt);
+      } catch (e) {}
       return null;
     }
-    return await res.json();
+    const json = await res.json();
+    console.log(`[reviewApi] stats result for ${roomId}:`, json);
+    return json;
   } catch (err) {
     console.debug("[reviewApi] getRoomStats error", err);
     return null;

@@ -86,6 +86,7 @@ namespace Hotel_System.API.Controllers
                 }
                 else
                 {
+                    // Plain filename: keep as-is (allow any image index at any position)
                     outList.Add(v);
                 }
             }
@@ -306,6 +307,29 @@ namespace Hotel_System.API.Controllers
         {
             try
             {
+                // Validate loaiPhongId
+                if (string.IsNullOrWhiteSpace(loaiPhongId))
+                {
+                    return BadRequest("loaiPhongId is required.");
+                }
+
+                // Validate numberOfGuests
+                if (numberOfGuests <= 0)
+                {
+                    return BadRequest("Number of guests must be greater than 0.");
+                }
+
+                if (numberOfGuests > 20)
+                {
+                    return BadRequest("Number of guests cannot exceed 20.");
+                }
+
+                // Validate date parameters
+                if (string.IsNullOrWhiteSpace(checkin) || string.IsNullOrWhiteSpace(checkout))
+                {
+                    return BadRequest("Check-in and check-out dates are required.");
+                }
+
                 // Parse incoming dates. The frontend commonly sends either ISO (YYYY-MM-DD)
                 // or local Vietnamese format (dd/MM/yyyy). Try both so API is tolerant.
                 DateOnly checkInDate, checkOutDate;
@@ -406,8 +430,25 @@ namespace Hotel_System.API.Controllers
             _context.Phongs.Add(payload);
             await _context.SaveChangesAsync();
 
-            // Return created resource (simple shape)
-            return CreatedAtAction(nameof(GetAll), new { id = payload.Idphong }, payload);
+            // Return created resource with normalized image URLs so clients
+            // immediately receive usable paths (e.g. "/img/room/...") instead
+            // of raw filenames which would cause relative 404 requests.
+            var response = new
+            {
+                payload.Idphong,
+                payload.IdloaiPhong,
+                payload.TenPhong,
+                TenLoaiPhong = (payload.IdloaiPhong != null) ? (await _context.LoaiPhongs.FindAsync(payload.IdloaiPhong))?.TenLoaiPhong : null,
+                payload.SoPhong,
+                payload.MoTa,
+                payload.SoNguoiToiDa,
+                payload.GiaCoBanMotDem,
+                payload.XepHangSao,
+                TrangThai = payload.TrangThai,
+                UrlAnhPhong = ResolveImageUrls(payload.UrlAnhPhong),
+            };
+
+            return CreatedAtAction(nameof(GetAll), new { id = payload.Idphong }, response);
         }
 
         // PUT: api/Phong/{id}

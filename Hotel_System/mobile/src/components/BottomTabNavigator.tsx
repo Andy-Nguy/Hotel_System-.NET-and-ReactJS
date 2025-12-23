@@ -1,9 +1,13 @@
 import React from "react";
-import { View, StyleSheet, Text, Platform } from "react-native";
+import { View, StyleSheet, Text, Platform, Dimensions } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, SIZES } from "../constants/theme";
 import { Ionicons } from "@expo/vector-icons";
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const isSmallDevice = SCREEN_HEIGHT < 700;
 import HomeScreen from "../screens/HomeScreen";
 import CheckAvailableRoomsScreen from "../screens/CheckAvailableRoomsScreen";
 import PromotionDetail from "../screens/PromotionDetail";
@@ -18,6 +22,7 @@ import RoomsScreen from "../screens/RoomsScreen";
 import BookingsScreen from "../screens/BookingsScreen";
 import OffersScreen from "../screens/OffersScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import EditProfileScreen from "../screens/EditProfileScreen";
 import BlogDetailScreen from "../screens/BlogDetailScreen";
 import ImageViewerScreen from "../screens/ImageViewerScreen";
 import HotelIntroductionScreen from "../screens/HotelIntroductionScreen";
@@ -56,8 +61,14 @@ export type HomeStackParamList = {
   ImageViewer: { images: string[]; initialIndex?: number };
 };
 
+export type AccountStackParamList = {
+  Profile: undefined;
+  EditProfile: undefined;
+};
+
 const Tab = createBottomTabNavigator<TabParamList>();
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
+const AccountStack = createNativeStackNavigator<AccountStackParamList>();
 
 const HomeStackNavigator: React.FC = () => {
   return (
@@ -84,6 +95,15 @@ const HomeStackNavigator: React.FC = () => {
       <HomeStack.Screen name="BlogDetail" component={BlogDetailScreen} />
       <HomeStack.Screen name="ImageViewer" component={ImageViewerScreen} />
     </HomeStack.Navigator>
+  );
+};
+
+const AccountStackNavigator: React.FC = () => {
+  return (
+    <AccountStack.Navigator screenOptions={{ headerShown: false }}>
+      <AccountStack.Screen name="Profile" component={ProfileScreen} />
+      <AccountStack.Screen name="EditProfile" component={EditProfileScreen} />
+    </AccountStack.Navigator>
   );
 };
 
@@ -121,15 +141,33 @@ const TabIcon: React.FC<TabIconProps> = ({
 );
 
 const BottomTabNavigator: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  
+  // Calculate responsive tab bar height
+  const TAB_BAR_HEIGHT = Platform.select({
+    ios: isSmallDevice ? 75 : 85,
+    android: isSmallDevice ? 60 : 68,
+    default: 68,
+  });
+
+  const totalTabBarHeight = TAB_BAR_HEIGHT + (Platform.OS === 'ios' ? insets.bottom : 0);
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: COLORS.primary || "#1a1a1a",
         tabBarInactiveTintColor: "#8E8E93",
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: {
+          ...styles.tabBar,
+          height: totalTabBarHeight,
+          paddingBottom: Platform.OS === 'ios' ? insets.bottom : 8,
+        },
         tabBarShowLabel: false,
         tabBarHideOnKeyboard: true,
+      }}
+      sceneContainerStyle={{
+        paddingBottom: totalTabBarHeight,
       }}
     >
       <Tab.Screen
@@ -194,7 +232,7 @@ const BottomTabNavigator: React.FC = () => {
 
       <Tab.Screen
         name="Account"
-        component={ProfileScreen}
+        component={AccountStackNavigator}
         options={{
           tabBarIcon: ({ focused, color }) => (
             <TabIcon
@@ -218,8 +256,6 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 0,
-    height: Platform.OS === "ios" ? 88 : 68,
-    paddingBottom: Platform.OS === "ios" ? 28 : 8,
     paddingTop: 8,
     paddingHorizontal: 4,
     shadowColor: "#000",

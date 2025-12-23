@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Image } from "expo-image";
+import { getPrimaryRoomImage } from "../utils/imageUtils";
 import AppIcon from "./AppIcon";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import { AvailableRoom } from "../api/roomsApi";
 import { getPromotions } from "../api/promotionApi";
+import reviewApi from "../api/reviewApi";
 
 type Props = {
   room: AvailableRoom;
@@ -19,6 +21,7 @@ const AvailableRoomCard: React.FC<Props> = ({
 }) => {
   const [promotion, setPromotion] = useState<any>(null);
   const [discountedPrice, setDiscountedPrice] = useState<number | null>(null);
+  const [stats, setStats] = useState<any | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +59,23 @@ const AvailableRoomCard: React.FC<Props> = ({
     };
   }, [room.roomId]);
 
+  // Load review stats to get actual rating
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const s = await reviewApi.getRoomStats(String(room.roomId));
+        if (cancelled) return;
+        console.log(`AvailableRoomCard: stats for roomId=${room.roomId}`, s);
+        setStats(s);
+      } catch (err) {
+        console.debug('AvailableRoomCard: failed to load review stats', err);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [room.roomId]);
+
   const priceText = () => {
     if (
       discountedPrice &&
@@ -66,7 +86,11 @@ const AvailableRoomCard: React.FC<Props> = ({
         <View style={styles.priceContainer}>
           <View style={styles.discountTag}>
             <Text style={styles.discountText}>
-              -{Math.round((1 - discountedPrice / (room.basePricePerNight || 1)) * 100)}%
+              -
+              {Math.round(
+                (1 - discountedPrice / (room.basePricePerNight || 1)) * 100
+              )}
+              %
             </Text>
           </View>
           <View>
@@ -96,14 +120,14 @@ const AvailableRoomCard: React.FC<Props> = ({
 
   return (
     <View style={styles.card}>
-      <TouchableOpacity 
-        activeOpacity={0.9} 
+      <TouchableOpacity
+        activeOpacity={0.9}
         onPress={() => onOpenDetail?.(room)}
         style={styles.imageContainer}
       >
-        {room.roomImageUrl ? (
+        {getPrimaryRoomImage(room) ? (
           <Image
-            source={{ uri: room.roomImageUrl }}
+            source={{ uri: getPrimaryRoomImage(room) || "" }}
             style={styles.image}
             contentFit="cover"
             transition={200}
@@ -124,7 +148,7 @@ const AvailableRoomCard: React.FC<Props> = ({
             </View>
           </View>
         )}
-        
+
         <View style={styles.imageOverlay} />
       </TouchableOpacity>
 
@@ -136,10 +160,19 @@ const AvailableRoomCard: React.FC<Props> = ({
             </Text>
             <Text style={styles.roomNumber}>Phòng {room.roomNumber}</Text>
           </View>
-          <View style={styles.ratingContainer}>
-            <AppIcon name="star" size={14} color="#FFD700" />
-            <Text style={styles.ratingText}>4.5</Text>
-          </View>
+          {(() => {
+            const displayRating = (stats && typeof stats.averageRating === 'number') ? stats.averageRating : (room.rating ?? null);
+            // Display rating whenever it's available (from stats or room data)
+            if (displayRating !== null && displayRating !== undefined) {
+              return (
+                <View style={styles.ratingContainer}>
+                  <AppIcon name="star" size={14} color="#FFD700" />
+                  <Text style={styles.ratingText}>{Number(displayRating).toFixed(1)}</Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
         </View>
 
         {room.description ? (
@@ -151,9 +184,7 @@ const AvailableRoomCard: React.FC<Props> = ({
         <View style={styles.divider} />
 
         <View style={styles.footer}>
-          <View style={styles.priceWrapper}>
-            {priceText()}
-          </View>
+          <View style={styles.priceWrapper}>{priceText()}</View>
 
           <TouchableOpacity
             style={styles.selectButton}
@@ -178,7 +209,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 4,
-    overflow: 'visible', // Allow shadows to show
+    overflow: "visible", // Allow shadows to show
   },
   imageContainer: {
     height: 220,
@@ -206,10 +237,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 80,
-    // gradient effect simulated with background color opacity if needed, 
+    // gradient effect simulated with background color opacity if needed,
     // but react-native doesn't support linear-gradient without a library.
     // We'll just leave it transparent or use a slight dark tint if needed.
-    backgroundColor: 'transparent', 
+    backgroundColor: "transparent",
   },
   badgeContainer: {
     position: "absolute",

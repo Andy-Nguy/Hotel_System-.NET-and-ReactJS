@@ -357,7 +357,7 @@ const HotelIntroductionScreen: React.FC = () => {
             <View style={styles.infoRow}>
               <Ionicons name="location" size={24} color={COLORS.primary} />
               <Text style={styles.infoText}>
-                123 Đường ABC, Quận 1, TP. Hồ Chí Minh
+                4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng
               </Text>
             </View>
             <View style={styles.infoRow}>
