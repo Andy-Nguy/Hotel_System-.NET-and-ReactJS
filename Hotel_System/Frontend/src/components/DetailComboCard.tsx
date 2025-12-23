@@ -18,70 +18,80 @@ const DetailComboCard: React.FC<Props> = ({ visible, combo, onClose }) => {
 
   const services: any[] = combo.serviceDetails || combo.services || [];
 
-  // LOGIC TÍNH GIÁ - ĐIỀU CHỈNH ĐỂ GIỐNG PROMOTIONSECTION.TSX
+  // LOGIC TÍNH GIÁ - UNIFIED (THEO YÊU CẦU NGHIỆP VỤ MỚI)
+  // 1. Original Price: Ưu tiên có sẵn -> Fallback tính tổng dịch vụ
   const originalPrice: number = typeof combo.originalPrice === 'number'
     ? combo.originalPrice
     : services.reduce((s, it) => s + (Number(it.tienDichVu ?? it.TienDichVu ?? 0) || 0), 0);
 
+  // 2. Final Price: Ưu tiên finalPrice -> Tính toán từ comboPrice/giaTriGiam
+  let giaCombo = 0;
   const loai = (combo.loaiGiamGia || combo.LoaiGiamGia || '').toString().toLowerCase();
   const giaTri = Number(combo.giaTriGiam ?? combo.GiaTriGiam ?? 0);
-  
-  // Match PromotionSection.tsx logic
-  let giaCombo = 0;
-  let tietKiem = 0;
-  let savingPercent = 0;
 
-  if (combo.comboPrice !== undefined) {
-    // Interpret combo.comboPrice by loaiGiamGia when possible.
-    // If loaiGiamGia === 'percent' then combo.comboPrice is percent; if 'amount' it's VND.
+  if (combo.finalPrice !== undefined && combo.finalPrice !== null) {
+    giaCombo = Number(combo.finalPrice);
+  } else if (combo.comboPrice !== undefined && combo.comboPrice !== null) {
     const val = Number(combo.comboPrice);
-    const kind = (combo.loaiGiamGia || combo.LoaiGiamGia || '').toString().toLowerCase();
-    if (kind === 'percent') {
-      const pct = val;
-      giaCombo = Math.round(originalPrice * (1 - pct / 100));
-      tietKiem = originalPrice - giaCombo;
-      savingPercent = pct;
-    } else if (kind === 'amount') {
-      const amt = val;
-      giaCombo = Math.max(0, Math.round(originalPrice - amt));
-      tietKiem = Math.min(amt, originalPrice);
-      savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
+    // Fix: Chỉ tính là % nếu giá trị hợp lý (<= 100). 
+    // Nếu val lớn (vd: 2.380.000), coi như là giá cuối cùng (Final Price) bất kể loaiGiamGia là gì.
+    // Điều này xử lý trường hợp ServicesSelector truyền comboPrice là giá cuối nhưng loai vẫn là 'percent'.
+    if (loai === 'percent' && val <= 100) {
+      giaCombo = Math.round(originalPrice * (1 - val / 100));
+    } else if (loai === 'amount' && val < originalPrice / 2) {
+       // Nếu là amount và giá trị nhỏ (< 50% giá gốc), có thể là số tiền giảm
+       giaCombo = Math.max(0, Math.round(originalPrice - val));
     } else {
-      // guess: <=100 -> percent, else -> amount
-      if (val > 0 && val <= 100) {
-        const pct = val;
-        giaCombo = Math.round(originalPrice * (1 - pct / 100));
-        tietKiem = originalPrice - giaCombo;
-        savingPercent = pct;
-      } else {
-        tietKiem = val;
-        giaCombo = Math.max(0, Math.round(originalPrice - tietKiem));
-        savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
-      }
-    }
-  } else if (combo.loaiGiamGia && combo.giaTriGiam !== undefined && combo.giaTriGiam !== null) {
-    // Calculate from discount type and value
-    const discountValue = Number(combo.giaTriGiam);
-    const discountPercent = loai === 'percent' ? discountValue : 0;
-    const discountAmount = loai === 'amount' ? discountValue : 0;
-    
-    if (discountPercent > 0) {
-      giaCombo = Math.round(originalPrice * (1 - discountPercent / 100));
-      tietKiem = originalPrice - giaCombo;
-      savingPercent = discountPercent;
-    } else if (discountAmount > 0) {
-      giaCombo = Math.max(0, Math.round(originalPrice - discountAmount));
-      tietKiem = Math.min(discountAmount, originalPrice);
-      savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
-    } else {
-      giaCombo = originalPrice;
-      tietKiem = 0;
-      savingPercent = 0;
+      // Trường hợp còn lại: coi comboPrice là giá cuối
+      giaCombo = val;
     }
   } else {
-    giaCombo = originalPrice;
-    tietKiem = 0;
-    savingPercent = 0;
+    // Fallback calculation using giaTriGiam
+    if (loai === 'percent') {
+      giaCombo = Math.round(originalPrice * (1 - giaTri / 100));
+    } else if (loai === 'amount') {
+      giaCombo = Math.max(0, Math.round(originalPrice - giaTri));
+    } else {
+      giaCombo = originalPrice;
+    }
+  }
+
+  // 3. Savings & Display
+  const tietKiem = Math.max(0, originalPrice - giaCombo);
+  const savingPercent = originalPrice > 0 ? Math.round((tietKiem / originalPrice) * 100) : 0;
+  
+  // Hiển thị giá trị giảm (nếu có) - infer nếu nguồn không nhất quán
+  const rawComboPrice = combo.comboPrice ?? combo.ComboPrice ?? null;
+  const comboPriceNum = rawComboPrice != null ? Number(rawComboPrice) : null;
+
+  let displayDiscountValue: number | null = null;
+  let displayLoai = loai || '';
+
+  // 1) explicit server-provided discount value
+  if (combo.discountValue !== undefined && combo.discountValue !== null) {
+    displayDiscountValue = Number(combo.discountValue);
+  }
+
+  // 2) if not provided, try known fields
+  if (displayDiscountValue == null) {
+    if (displayLoai === 'percent' && giaTri > 0) {
+      displayDiscountValue = giaTri;
+    } else if (displayLoai === 'amount' && giaTri > 0) {
+      displayDiscountValue = giaTri;
+    } else if (comboPriceNum != null) {
+      // If comboPrice looks like a percent (<=100) treat as percent
+      if (comboPriceNum > 0 && comboPriceNum <= 100) {
+        displayLoai = 'percent';
+        displayDiscountValue = comboPriceNum;
+      } else {
+        // Otherwise treat comboPrice as final price -> compute percent saved
+        displayLoai = 'percent';
+        displayDiscountValue = originalPrice > 0 ? Math.round(((originalPrice - comboPriceNum) / originalPrice) * 100) : 0;
+      }
+    } else {
+      // fallback to giaTri or zero
+      displayDiscountValue = giaTri || 0;
+    }
   }
   // KẾT THÚC LOGIC TÍNH GIÁ
 
@@ -116,7 +126,7 @@ const DetailComboCard: React.FC<Props> = ({ visible, combo, onClose }) => {
         {/* CỘT TRÁI: HÌNH ẢNH VÀ TÓM TẮT GIÁ */}
         <div style={{ flex: '0 0 320px', background: '#f8f8f8', padding: 24, display: 'flex', flexDirection: 'column' }}>
           <Image
-            src={combo.hinhAnhBanner || combo.banner || placeholderCombo}
+            src={combo.hinhAnhBanner || combo.banner || combo.image || combo.Image || (services.length > 0 ? (services[0].HinhDichVu || services[0].hinhDichVu || services[0].image || services[0].Image) : null) || placeholderCombo}
             alt={combo.name || combo.tenCombo}
             preview={false}
             style={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
@@ -143,16 +153,7 @@ const DetailComboCard: React.FC<Props> = ({ visible, combo, onClose }) => {
             </div>
           </div>
 
-          {/* PHỤ: TRẠNG THÁI VÀ NGÀY TẠO */}
-          <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid #eeeeee' }}>
-            <div style={{ marginBottom: 8 }}>
-              {combo.isActive === false ? <Tag color="orange">Ngưng hoạt động</Tag> : <Tag color="green">Đang hoạt động</Tag>}
-            </div>
-            <div style={{ color: '#aaa', fontSize: 11 }}>
-              <div>Tạo: {combo.comboMeta?.createdAt ? dayjs(combo.comboMeta.createdAt).format('DD/MM/YYYY') : (combo.createdAt ? dayjs(combo.createdAt).format('DD/MM/YYYY') : '-')}</div>
-              <div>Cập nhật: {combo.comboMeta?.updatedAt ? dayjs(combo.comboMeta.updatedAt).format('DD/MM/YYYY') : (combo.updatedAt ? dayjs(combo.updatedAt).format('DD/MM/YYYY') : '-')}</div>
-            </div>
-          </div>
+          
         </div>
 
         {/* CỘT PHẢI: CHI TIẾT DỊCH VỤ VÀ NÚT ĐÓNG */}
@@ -202,11 +203,15 @@ const DetailComboCard: React.FC<Props> = ({ visible, combo, onClose }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px 20px', background: '#f8f8f8', padding: 15, borderRadius: 8 }}>
             <div>
               <div style={{ color: LIGHT_TEXT_COLOR, fontSize: 13 }}>Cơ chế giảm giá</div>
-              <div style={{ fontWeight: FONT_WEIGHT_BOLD, color: TEXT_COLOR, textTransform: 'capitalize' }}>{(combo.loaiGiamGia || combo.LoaiGiamGia || '').toString()}</div>
+              <div style={{ fontWeight: FONT_WEIGHT_BOLD, color: TEXT_COLOR, textTransform: 'capitalize' }}>
+                {loai === 'percent' ? 'Percent' : loai === 'amount' ? 'Amount' : (combo.loaiGiamGia || combo.LoaiGiamGia || 'N/A')}
+              </div>
             </div>
             <div>
               <div style={{ color: LIGHT_TEXT_COLOR, fontSize: 13 }}>Giá trị áp dụng</div>
-              <div style={{ fontWeight: FONT_WEIGHT_BOLD, color: TEXT_COLOR }}>{currency.format(tietKiem)}</div>
+              <div style={{ fontWeight: FONT_WEIGHT_BOLD, color: TEXT_COLOR }}>
+                {loai === 'percent' ? `${displayDiscountValue}%` : currency.format(displayDiscountValue)}
+              </div>
             </div>
           </div>
 
