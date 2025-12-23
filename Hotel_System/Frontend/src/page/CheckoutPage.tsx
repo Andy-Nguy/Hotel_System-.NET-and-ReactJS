@@ -1213,7 +1213,7 @@ const CheckoutPage: React.FC = () => {
                     <Text
                       style={{ color: "#666", fontSize: 14, marginLeft: 24 }}
                     >
-                      reservation@hoteljw.vn
+                      info.robinsvilla@gmail.com
                     </Text>
                   </div>
                   <div>
