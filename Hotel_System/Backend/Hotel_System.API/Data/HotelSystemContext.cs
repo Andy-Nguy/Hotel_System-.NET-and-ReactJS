@@ -769,8 +769,8 @@ public partial class HotelSystemContext : DbContext
                             property.SetColumnName("Avatar");
                         }
                         else
-                        {
-                            property.SetColumnName(columnName.ToLower());
+                    {
+                        property.SetColumnName(columnName.ToLower());
                         }
                     }
                 }
