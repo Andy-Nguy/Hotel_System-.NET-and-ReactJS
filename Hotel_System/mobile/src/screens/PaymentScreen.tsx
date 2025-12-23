@@ -4,13 +4,18 @@ import {
   StyleSheet,
   View,
   Text,
+  TextInput,
+  Image,
   TouchableOpacity,
   Alert,
   Modal,
   ActivityIndicator,
   Platform,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import AppIcon from "../components/AppIcon";
@@ -49,6 +54,12 @@ const PaymentScreen: React.FC = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [qrModalVisible, setQrModalVisible] = useState(false);
   const [paymentRef, setPaymentRef] = useState<string>("");
+  const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
+  const [qrAmount, setQrAmount] = useState<number | null>(null);
+  const [qrNote, setQrNote] = useState<string>("");
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [pendingInvoicePayload, setPendingInvoicePayload] = useState<any>(null);
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
 
   const DEPOSIT_AMOUNT = 500000; // 500,000 VND
@@ -119,9 +130,183 @@ const PaymentScreen: React.FC = () => {
     if (selectedMethod === "bank-transfer") {
       const ref = `IVIVU${Date.now().toString().slice(-9)}`;
       setPaymentRef(ref);
-      setQrModalVisible(true);
+      // Start booking flow which will fetch QR and show modal
+      handleCreateBookingAndMaybeShowQr(ref);
     } else {
       setConfirmModalVisible(true);
+    }
+  };
+
+  // Create booking then either generate QR (for bank-transfer) or proceed to invoice creation
+  const handleCreateBookingAndMaybeShowQr = async (ref: string) => {
+    if (!invoiceInfo) return;
+    setProcessingPayment(true);
+    try {
+      const bookingPayload = {
+        hoTen: invoiceInfo.customer.fullName,
+        email: invoiceInfo.customer.email,
+        soDienThoai: invoiceInfo.customer.phone,
+        diaChi: invoiceInfo.customer.address || "",
+        ghiChu: invoiceInfo.customer.notes || "",
+        ngayNhanPhong: invoiceInfo.checkIn,
+        ngayTraPhong: invoiceInfo.checkOut,
+        soLuongKhach: invoiceInfo.guests,
+        rooms: invoiceInfo.rooms.map((r: any) => ({
+          idPhong: r.room.roomId,
+          soPhong: r.room.roomNumber || 0,
+          giaCoBanMotDem:
+            r.room.discountedPrice || r.room.basePricePerNight || 0,
+        })),
+      };
+
+      const response = await fetch(buildApiUrl("/api/datphong/create"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bookingPayload),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        console.error("Booking error:", err);
+        Alert.alert("Lỗi", "Đặt phòng thất bại. Vui lòng thử lại.");
+        return;
+      }
+
+      const result = await response.json();
+      const idDatPhong = result.data?.idDatPhong;
+
+      // Build invoice payload but DO NOT send it yet for bank-transfer (we'll send after user confirms payment)
+      const nights = invoiceInfo.nights || 1;
+      const tienPhong = invoiceInfo.rooms.reduce((sum: number, r: any) => {
+        const price = r.room.discountedPrice || r.room.basePricePerNight || 0;
+        return sum + price * nights;
+      }, 0);
+
+      const services: any[] = [];
+      if (invoiceInfo.selectedCombo && invoiceInfo.selectedCombo.comboId) {
+        services.push({
+          IddichVu: `combo:${invoiceInfo.selectedCombo.comboId}`,
+          SoLuong: 1,
+          DonGia: invoiceInfo.selectedCombo.price,
+          TienDichVu: invoiceInfo.selectedCombo.price,
+        });
+      }
+      if (
+        invoiceInfo.selectedServices &&
+        invoiceInfo.selectedServices.length > 0
+      ) {
+        invoiceInfo.selectedServices.forEach((svc: any) => {
+          services.push({
+            IddichVu: svc.serviceId,
+            SoLuong: svc.quantity || 1,
+            DonGia: svc.price,
+            TienDichVu: svc.price * (svc.quantity || 1),
+          });
+        });
+      }
+
+      const trangThaiThanhToan = 0; // set deposit-like default; final status decided on invoice creation
+      const phuongThucThanhToan = 2; // bank-transfer
+      const tienCoc = depositOption === "deposit" ? DEPOSIT_AMOUNT : 0;
+
+      const invoicePayload = {
+        IDDatPhong: idDatPhong,
+        TienPhong: Math.round(tienPhong),
+        SoLuongNgay: nights,
+        TongTien: Math.round(invoiceInfo.grandTotal),
+        TienCoc: Math.round(tienCoc),
+        TrangThaiThanhToan: trangThaiThanhToan,
+        PhuongThucThanhToan: phuongThucThanhToan,
+        GhiChu: `Mobile - bank-transfer${ref ? ` | Mã GD: ${ref}` : ""}`,
+        PaymentGateway: "VietQR",
+        Services: services,
+        RedeemPoints: invoiceInfo.pointsUsed || 0,
+      };
+
+      setPendingInvoicePayload(invoicePayload);
+      setBookingId(idDatPhong ?? null);
+
+      // Generate QR for this booking (default amount = deposit or full)
+      const defaultAmount =
+        depositOption === "deposit" ? DEPOSIT_AMOUNT : invoiceInfo.grandTotal;
+      setQrAmount(defaultAmount);
+      setQrNote(ref || `Thanh toan ${idDatPhong}`);
+      await generateQr(idDatPhong, defaultAmount, `Thanh toan ${idDatPhong}`);
+      setQrModalVisible(true);
+    } catch (e) {
+      console.error("Error creating booking for QR:", e);
+      Alert.alert("Lỗi", "Không thể tạo đặt phòng. Vui lòng thử lại.");
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const generateQr = async (
+    idDatPhong: string | undefined,
+    amount?: number | null,
+    note?: string
+  ) => {
+    if (!idDatPhong) return;
+    try {
+      setIsGeneratingQr(true);
+      const body: any = { IDDatPhong: idDatPhong };
+      if (amount && Number(amount) > 0)
+        body.Amount = Number(Math.round(amount));
+      if (note) body.Note = note;
+
+      const res = await fetch(buildApiUrl("/api/Checkout/pay-qr"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        console.warn("pay-qr failed:", await res.text());
+        return;
+      }
+      const json = await res.json();
+      if (json.paymentUrl) {
+        setQrImageUrl(json.paymentUrl);
+        setQrAmount(json.amount ?? amount ?? invoiceInfo?.grandTotal ?? null);
+      }
+    } catch (e) {
+      console.warn("generateQr error:", e);
+    } finally {
+      setIsGeneratingQr(false);
+    }
+  };
+
+  // Called when user taps "Tôi đã chuyển khoản" inside QR modal
+  const handleConfirmAfterQr = async () => {
+    // Create invoice now using pendingInvoicePayload (if exists)
+    if (!pendingInvoicePayload) {
+      setQrModalVisible(false);
+      return;
+    }
+    setProcessingPayment(true);
+    try {
+      const invoiceResponse = await fetch(buildApiUrl("/api/Payment/hoa-don"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pendingInvoicePayload),
+      });
+
+      if (!invoiceResponse.ok) {
+        console.warn(
+          "Invoice create after QR failed:",
+          await invoiceResponse.text()
+        );
+      }
+
+      setQrModalVisible(false);
+      setConfirmModalVisible(false);
+      Alert.alert("Thành công", "Đặt phòng thành công!", [
+        { text: "OK", onPress: () => (navigation as any).navigate("Home") },
+      ]);
+    } catch (e) {
+      console.error("Error confirming after QR:", e);
+      Alert.alert("Lỗi", "Không thể hoàn tất tạo hóa đơn.");
+    } finally {
+      setProcessingPayment(false);
     }
   };
 
@@ -323,7 +508,9 @@ const PaymentScreen: React.FC = () => {
       <HeaderScreen
         title="Thanh toán"
         onClose={() => navigation.goBack()}
-        leftIcon={<AppIcon name="arrow-left" size={24} color={COLORS.secondary} />}
+        leftIcon={
+          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
+        }
       />
 
       <BookingProgress
@@ -337,6 +524,7 @@ const PaymentScreen: React.FC = () => {
         style={styles.scrollContent}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
+        Image,
         {/* Invoice Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chi tiết hóa đơn</Text>
@@ -418,7 +606,6 @@ const PaymentScreen: React.FC = () => {
             </View>
           </View>
         </View>
-
         {/* Payment Methods */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Phương thức thanh toán</Text>
@@ -525,7 +712,6 @@ const PaymentScreen: React.FC = () => {
             )}
           </TouchableOpacity>
         </View>
-
         {/* Deposit Option (Only for Bank Transfer) */}
         {selectedMethod === "bank-transfer" && (
           <View style={styles.section}>
@@ -592,14 +778,14 @@ const PaymentScreen: React.FC = () => {
         )}
       </ScrollView>
 
-      <View style={[
-        styles.bottomBar,
-        {
-          bottom: Platform.OS === 'ios' 
-            ? insets.bottom + 0
-            : 0,
-        },
-      ]}>
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            bottom: Platform.OS === "ios" ? insets.bottom + 0 : 0,
+          },
+        ]}
+      >
         <View style={styles.totalContainer}>
           <Text style={styles.bottomTotalLabel}>
             {selectedMethod === "bank-transfer" && depositOption === "deposit"
@@ -629,71 +815,143 @@ const PaymentScreen: React.FC = () => {
         transparent={true}
         onRequestClose={() => setQrModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.qrModalContent}>
-            <Text style={styles.qrTitle}>Quét mã để thanh toán</Text>
-            <Text style={styles.qrSubtitle}>
-              Vui lòng chuyển khoản với nội dung bên dưới
-            </Text>
+        <View style={[styles.modalOverlay, { paddingTop: insets.top + 20 }]}>
+          <ScrollView
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.qrModalContent}>
+              <Text style={styles.qrTitle}>Quét mã để thanh toán</Text>
+              <Text style={styles.qrSubtitle}>
+                Vui lòng chuyển khoản với nội dung bên dưới
+              </Text>
 
-            <View style={styles.qrPlaceholder}>
-              <AppIcon name="qrcode" size={100} color={COLORS.secondary} />
-              <Text style={{ marginTop: 10, color: COLORS.gray }}>QR Code</Text>
-            </View>
+              <View style={styles.qrPlaceholder}>
+                {qrImageUrl ? (
+                  <Image
+                    source={{ uri: qrImageUrl }}
+                    style={{ width: 180, height: 180, borderRadius: 8 }}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <View style={{ alignItems: "center" }}>
+                    <AppIcon
+                      name="qrcode"
+                      size={100}
+                      color={COLORS.secondary}
+                    />
+                    <Text style={{ marginTop: 10, color: COLORS.gray }}>
+                      QR Code
+                    </Text>
+                  </View>
+                )}
+              </View>
 
-            <View style={styles.transferInfo}>
-              <Text style={styles.transferLabel}>Ngân hàng:</Text>
-              <Text style={styles.transferValue}>MB Bank</Text>
-            </View>
-            <View style={styles.transferInfo}>
-              <Text style={styles.transferLabel}>Số tài khoản:</Text>
-              <Text style={styles.transferValue}>0000 1234 56789</Text>
-            </View>
-            <View style={styles.transferInfo}>
-              <Text style={styles.transferLabel}>Chủ tài khoản:</Text>
-              <Text style={styles.transferValue}>HOTEL SYSTEM</Text>
-            </View>
-            <View style={styles.transferInfo}>
-              <Text style={styles.transferLabel}>Số tiền:</Text>
-              <Text
-                style={[
-                  styles.transferValue,
-                  { color: COLORS.primary, fontWeight: "700" },
-                ]}
+              <View style={{ width: "100%", marginBottom: 12 }}>
+                <Text style={[styles.transferLabel, { marginBottom: 6 }]}>
+                  Số tiền
+                </Text>
+                <TextInput
+                  value={qrAmount ? String(qrAmount) : ""}
+                  onChangeText={(t) =>
+                    setQrAmount(Number(t.replace(/[^0-9]/g, "")))
+                  }
+                  keyboardType="numeric"
+                  style={{
+                    backgroundColor: "#F8F9FA",
+                    padding: 12,
+                    borderRadius: 12,
+                    marginBottom: 8,
+                  }}
+                />
+
+                <Text style={[styles.transferLabel, { marginBottom: 6 }]}>
+                  Nội dung
+                </Text>
+                <TextInput
+                  value={qrNote}
+                  onChangeText={setQrNote}
+                  style={{
+                    backgroundColor: "#F8F9FA",
+                    padding: 12,
+                    borderRadius: 12,
+                  }}
+                />
+
+                <TouchableOpacity
+                  style={[styles.paidButton, { marginTop: 12 }]}
+                  onPress={async () => {
+                    if (!bookingId) return;
+                    await generateQr(bookingId, qrAmount, qrNote);
+                  }}
+                  disabled={isGeneratingQr}
+                >
+                  {isGeneratingQr ? (
+                    <ActivityIndicator color={COLORS.white} />
+                  ) : (
+                    <Text style={styles.paidButtonText}>Tạo mã QR</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.transferInfo}>
+                <Text style={styles.transferLabel}>Ngân hàng:</Text>
+                <Text style={styles.transferValue}>MB Bank</Text>
+              </View>
+              <View style={styles.transferInfo}>
+                <Text style={styles.transferLabel}>Số tài khoản:</Text>
+                <Text style={styles.transferValue}>0000 1234 56789</Text>
+              </View>
+              <View style={styles.transferInfo}>
+                <Text style={styles.transferLabel}>Chủ tài khoản:</Text>
+                <Text style={styles.transferValue}>HOTEL SYSTEM</Text>
+              </View>
+              <View style={styles.transferInfo}>
+                <Text style={styles.transferLabel}>Số tiền:</Text>
+                <Text
+                  style={[
+                    styles.transferValue,
+                    { color: COLORS.primary, fontWeight: "700" },
+                  ]}
+                >
+                  {depositOption === "deposit"
+                    ? DEPOSIT_AMOUNT.toLocaleString()
+                    : invoiceInfo.grandTotal.toLocaleString()}
+                  đ
+                </Text>
+              </View>
+              <View style={styles.transferInfo}>
+                <Text style={styles.transferLabel}>Nội dung:</Text>
+                <Text style={[styles.transferValue, { fontWeight: "700" }]}>
+                  {paymentRef}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.paidButton}
+                onPress={handleConfirmAfterQr}
+                disabled={processingPayment}
               >
-                {depositOption === "deposit"
-                  ? DEPOSIT_AMOUNT.toLocaleString()
-                  : invoiceInfo.grandTotal.toLocaleString()}
-                đ
-              </Text>
-            </View>
-            <View style={styles.transferInfo}>
-              <Text style={styles.transferLabel}>Nội dung:</Text>
-              <Text style={[styles.transferValue, { fontWeight: "700" }]}>
-                {paymentRef}
-              </Text>
-            </View>
+                {processingPayment ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <Text style={styles.paidButtonText}>Tôi đã chuyển khoản</Text>
+                )}
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.paidButton}
-              onPress={handleFinalConfirm}
-              disabled={processingPayment}
-            >
-              {processingPayment ? (
-                <ActivityIndicator color={COLORS.white} />
-              ) : (
-                <Text style={styles.paidButtonText}>Tôi đã chuyển khoản</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setQrModalVisible(false)}
-              disabled={processingPayment}
-            >
-              <Text style={styles.closeButtonText}>Đóng</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setQrModalVisible(false)}
+                disabled={processingPayment}
+              >
+                <Text style={styles.closeButtonText}>Đóng</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -943,7 +1201,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 24,
     padding: 24,
-    width: "100%",
+    width: "95%",
+    maxHeight: "90%",
     alignItems: "center",
   },
   qrTitle: {
