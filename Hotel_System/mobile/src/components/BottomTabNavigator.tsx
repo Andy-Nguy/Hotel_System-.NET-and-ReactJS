@@ -22,6 +22,7 @@ import RoomsScreen from "../screens/RoomsScreen";
 import BookingsScreen from "../screens/BookingsScreen";
 import OffersScreen from "../screens/OffersScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import EditProfileScreen from "../screens/EditProfileScreen";
 import BlogDetailScreen from "../screens/BlogDetailScreen";
 import ImageViewerScreen from "../screens/ImageViewerScreen";
 import HotelIntroductionScreen from "../screens/HotelIntroductionScreen";
@@ -60,8 +61,14 @@ export type HomeStackParamList = {
   ImageViewer: { images: string[]; initialIndex?: number };
 };
 
+export type AccountStackParamList = {
+  Profile: undefined;
+  EditProfile: undefined;
+};
+
 const Tab = createBottomTabNavigator<TabParamList>();
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
+const AccountStack = createNativeStackNavigator<AccountStackParamList>();
 
 const HomeStackNavigator: React.FC = () => {
   return (
@@ -88,6 +95,15 @@ const HomeStackNavigator: React.FC = () => {
       <HomeStack.Screen name="BlogDetail" component={BlogDetailScreen} />
       <HomeStack.Screen name="ImageViewer" component={ImageViewerScreen} />
     </HomeStack.Navigator>
+  );
+};
+
+const AccountStackNavigator: React.FC = () => {
+  return (
+    <AccountStack.Navigator screenOptions={{ headerShown: false }}>
+      <AccountStack.Screen name="Profile" component={ProfileScreen} />
+      <AccountStack.Screen name="EditProfile" component={EditProfileScreen} />
+    </AccountStack.Navigator>
   );
 };
 
@@ -216,7 +232,7 @@ const BottomTabNavigator: React.FC = () => {
 
       <Tab.Screen
         name="Account"
-        component={ProfileScreen}
+        component={AccountStackNavigator}
         options={{
           tabBarIcon: ({ focused, color }) => (
             <TabIcon

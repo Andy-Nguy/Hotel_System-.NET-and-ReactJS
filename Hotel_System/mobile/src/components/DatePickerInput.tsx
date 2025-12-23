@@ -71,7 +71,11 @@ const DatePickerInput: React.FC<DatePickerInputProps> = ({
       <DateTimePickerModal
         isVisible={show}
         mode="date"
-        date={value || new Date()}
+        date={
+          value && minimumDate && value < minimumDate
+            ? minimumDate
+            : value || minimumDate || new Date()
+        }
         onConfirm={(date) => handleChange(date)}
         onCancel={() => setShow(false)}
         minimumDate={minimumDate}
