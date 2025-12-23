@@ -9,6 +9,7 @@ import {
   Modal,
   ActivityIndicator,
   Platform,
+  Image,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -394,7 +395,7 @@ const PaymentScreen: React.FC = () => {
                 {invoiceInfo.tax.toLocaleString()}đ
               </Text>
             </View>
-            {invoiceInfo.pointsDiscount && invoiceInfo.pointsDiscount > 0 && (
+            {(invoiceInfo.pointsDiscount || 0) > 0 && (
               <View style={styles.invoiceRow}>
                 <Text style={[styles.invoiceLabel, { color: "#16A34A" }]}>
                   Giảm điểm ({invoiceInfo.pointsUsed} điểm)
@@ -405,7 +406,7 @@ const PaymentScreen: React.FC = () => {
                     { color: "#16A34A", fontWeight: "700" },
                   ]}
                 >
-                  -{invoiceInfo.pointsDiscount.toLocaleString()}đ
+                  -{(invoiceInfo.pointsDiscount || 0).toLocaleString()}đ
                 </Text>
               </View>
             )}
@@ -633,25 +634,37 @@ const PaymentScreen: React.FC = () => {
           <View style={styles.qrModalContent}>
             <Text style={styles.qrTitle}>Quét mã để thanh toán</Text>
             <Text style={styles.qrSubtitle}>
-              Vui lòng chuyển khoản với nội dung bên dưới
+              Vui lòng chuyển khoản theo thông tin bên dưới
             </Text>
 
-            <View style={styles.qrPlaceholder}>
-              <AppIcon name="qrcode" size={100} color={COLORS.secondary} />
-              <Text style={{ marginTop: 10, color: COLORS.gray }}>QR Code</Text>
+            {/* VietQR giống giao diện Web */}
+            <View style={styles.qrImageWrapper}>
+              <Image
+                source={{
+                  uri: `https://img.vietqr.io/image/bidv-8639699999-print.png?amount=${
+                    depositOption === "deposit"
+                      ? DEPOSIT_AMOUNT
+                      : invoiceInfo.grandTotal
+                  }&addInfo=${encodeURIComponent(
+                    paymentRef || "Thanh toan dat phong"
+                  )}&accountName=${encodeURIComponent("ROBINS VILLA HOTEL")}`,
+                }}
+                style={styles.qrImage}
+                resizeMode="contain"
+              />
             </View>
 
             <View style={styles.transferInfo}>
               <Text style={styles.transferLabel}>Ngân hàng:</Text>
-              <Text style={styles.transferValue}>MB Bank</Text>
+              <Text style={styles.transferValue}>BIDV</Text>
             </View>
             <View style={styles.transferInfo}>
               <Text style={styles.transferLabel}>Số tài khoản:</Text>
-              <Text style={styles.transferValue}>0000 1234 56789</Text>
+              <Text style={styles.transferValue}>8639699999</Text>
             </View>
             <View style={styles.transferInfo}>
               <Text style={styles.transferLabel}>Chủ tài khoản:</Text>
-              <Text style={styles.transferValue}>HOTEL SYSTEM</Text>
+              <Text style={styles.transferValue}>ROBINS VILLA HOTEL</Text>
             </View>
             <View style={styles.transferInfo}>
               <Text style={styles.transferLabel}>Số tiền:</Text>
@@ -958,14 +971,19 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: "center",
   },
-  qrPlaceholder: {
-    width: 200,
-    height: 200,
+  qrImageWrapper: {
+    width: 220,
+    height: 220,
     backgroundColor: "#F8F9FA",
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 24,
+    overflow: "hidden",
+  },
+  qrImage: {
+    width: "100%",
+    height: "100%",
   },
   transferInfo: {
     flexDirection: "row",
