@@ -2040,6 +2040,7 @@ const handleForceCancelSubmit = async (data: {
 
   const due = useMemo(() => {
     const todayStr = dayjs().format('YYYY-MM-DD');
+    const activeDateStr = (selectedDate ? selectedDate.format('YYYY-MM-DD') : todayStr);
     return (data || []).filter((d: BookingRow) => {
       // Skip already completed ones in general
       if ((d.TrangThai ?? 0) === 4 && viewMode !== 'overdue') return false;
@@ -2067,8 +2068,8 @@ const handleForceCancelSubmit = async (data: {
           // Chỉ có đến ngày, kiểm tra checkout <= đến ngày
           if (checkoutDate.isAfter(filterToDate, 'day')) return false;
         } else {
-          // Không có filter ngày, mặc định hiển thị checkout hôm nay
-          if (checkout !== todayStr) return false;
+          // Nếu không có filter ngày, dùng `selectedDate` nếu có, ngược lại mặc định hôm nay
+          if (checkout !== activeDateStr) return false;
         }
         
         // Hiển thị Đang sử dụng (3), Hoàn tất (4), Quá hạn (5) chung trong "Trả phòng"
