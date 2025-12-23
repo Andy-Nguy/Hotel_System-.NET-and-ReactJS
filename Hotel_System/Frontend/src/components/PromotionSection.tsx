@@ -22,6 +22,10 @@ const PromotionSection: React.FC = () => {
   const [modalLoading, setModalLoading] = useState(false);
   const [promoServices, setPromoServices] = useState<any[] | null>(null);
   const [loadingPromoServices, setLoadingPromoServices] = useState(false);
+  // Lưu tỉ lệ ảnh của từng promotion để tính toán height
+  const [imageAspectRatios, setImageAspectRatios] = useState<Record<string, number>>({});
+  // Track window size để cập nhật height khi resize
+  const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   // Availability check form state
   const [checkIn, setCheckIn] = useState<string>("");
@@ -59,6 +63,15 @@ const PromotionSection: React.FC = () => {
       }
     };
     load();
+  }, []);
+
+  // Handle window resize để cập nhật height
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const openPromo = async (id: string) => {
@@ -251,26 +264,76 @@ const PromotionSection: React.FC = () => {
           width: "100%",
         }}
       >
-        {promotions.map((p) => (
-          <div key={p.idkhuyenMai} style={{ width: "100%" }}>
-            <div
-              style={{
-                height: 450,
-                width: "100%",
-                backgroundImage: `url(${renderImageSrc(p.hinhAnhBanner)})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-start",
-                position: "relative",
-              }}
-            >
+        {promotions.map((p) => {
+          const aspectRatio = imageAspectRatios[p.idkhuyenMai] || null;
+          // Tính height dựa trên width và tỉ lệ ảnh, nhưng giới hạn trong khoảng hợp lý
+          const getContainerHeight = () => {
+            if (!aspectRatio) return 450; // Default height khi chưa load xong ảnh
+            // Lấy width của container (100% viewport width)
+            // Container có padding 20px mỗi bên từ parent, nên width thực tế = viewport width - 40px
+            const containerWidth = Math.max(windowSize.width - 40, 320); // Tối thiểu 320px cho mobile
+            const calculatedHeight = containerWidth * aspectRatio;
+            // Giới hạn chiều cao: tối thiểu 450px, tối đa 70vh
+            const minHeight = 450;
+            const maxHeight = windowSize.height * 0.7;
+            const finalHeight = Math.max(minHeight, Math.min(calculatedHeight, maxHeight));
+            return finalHeight;
+          };
+
+          return (
+            <div key={p.idkhuyenMai} style={{ width: "100%" }}>
+              {/* Ảnh ẩn để load và lấy tỉ lệ */}
+              <img
+                src={renderImageSrc(p.hinhAnhBanner)}
+                alt=""
+                style={{ display: "none" }}
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  if (img.naturalWidth && img.naturalHeight) {
+                    const ratio = img.naturalHeight / img.naturalWidth;
+                    setImageAspectRatios((prev) => ({
+                      ...prev,
+                      [p.idkhuyenMai]: ratio,
+                    }));
+                  }
+                }}
+              />
+              
+              <div
+                style={{
+                  width: "100%",
+                  height: `${getContainerHeight()}px`,
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  overflow: "hidden",
+                  background: "#000",
+                }}
+              >
+                {/* Background Image - full width và height theo tỉ lệ gốc */}
+                <img
+                  src={renderImageSrc(p.hinhAnhBanner)}
+                  alt={p.tenKhuyenMai}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: "center",
+                    zIndex: 0,
+                  }}
+                />
+              
+              {/* Dark gradient overlay - stronger for better text readability */}
               <div
                 style={{
                   position: "absolute",
                   top: 0, left: 0, right: 0, bottom: 0,
                   background: "linear-gradient(135deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.2) 100%)",
+                  zIndex: 1,
                 }}
               />
 
@@ -328,7 +391,8 @@ const PromotionSection: React.FC = () => {
               </div>
             </div>
           </div>
-        ))}
+        );
+        })}
       </Carousel>
 
       {/* Modal Detail */}
