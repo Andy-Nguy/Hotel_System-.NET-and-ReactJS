@@ -38,12 +38,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       const token = res?.token;
       if (token) {
         await login(token);
-        Alert.alert("Thành công", "Đăng nhập thành công!", [
-          {
-            text: "OK",
-            onPress: () => navigation.replace("MainApp"),
-          },
-        ]);
+        Alert.alert("Thành công", "Đăng nhập thành công!");
       } else {
         Alert.alert("Lỗi", "Không nhận được token từ server");
       }

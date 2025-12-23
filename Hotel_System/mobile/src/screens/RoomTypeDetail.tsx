@@ -234,12 +234,17 @@ const RoomTypeDetail: React.FC = () => {
         <TouchableOpacity
           style={styles.searchButton}
           onPress={async () => {
-            if (!idloaiPhong) return Alert.alert("Lỗi", "Không có loại phòng");
-            if (!checkInDate || !checkOutDate)
+            // Validate loaiPhongId
+            if (!idloaiPhong || idloaiPhong.trim() === "") {
+              return Alert.alert("Lỗi", "Không có loại phòng");
+            }
+            
+            if (!checkInDate || !checkOutDate) {
               return Alert.alert(
                 "Lỗi",
                 "Vui lòng chọn ngày check-in và check-out"
               );
+            }
 
             // Validate dates
             const today = new Date();
@@ -259,6 +264,14 @@ const RoomTypeDetail: React.FC = () => {
               );
             }
 
+            // Validate number of guests
+            if (numberGuests <= 0 || numberGuests > 20) {
+              return Alert.alert(
+                "Lỗi",
+                "Số lượng khách phải từ 1 đến 20"
+              );
+            }
+
             setSearching(true);
             setAvailabilityResult(null);
             try {
@@ -269,10 +282,20 @@ const RoomTypeDetail: React.FC = () => {
                 return `${yyyy}-${mm}-${dd}`;
               };
 
+              const checkInStr = fmt(checkInDate);
+              const checkOutStr = fmt(checkOutDate);
+              
+              console.log("Checking availability with:", {
+                loaiPhongId: idloaiPhong,
+                checkIn: checkInStr,
+                checkOut: checkOutStr,
+                numberOfGuests: numberGuests,
+              });
+
               const resRooms = await checkAvailableRoomsByType(
-                idloaiPhong,
-                fmt(checkInDate),
-                fmt(checkOutDate),
+                idloaiPhong.trim(),
+                checkInStr,
+                checkOutStr,
                 numberGuests
               );
               // roomsApi returns array; if empty means no rooms
@@ -294,7 +317,9 @@ const RoomTypeDetail: React.FC = () => {
               }
             } catch (err: any) {
               console.error("check availability error", err);
-              Alert.alert("Lỗi", err.message || "Không thể kiểm tra phòng");
+              const errorMessage = err?.message || "Không thể kiểm tra phòng";
+              setAvailabilityResult({ message: errorMessage });
+              Alert.alert("Lỗi", errorMessage);
             } finally {
               setSearching(false);
             }

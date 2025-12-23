@@ -519,8 +519,34 @@ export async function checkAvailableRoomsByType(
       setCachedData(cacheKey, []);
       return [];
     } else {
-      console.warn(`⚠️ ${baseUrl} returned:`, res.status, res.statusText);
-      throw new Error(`Failed to check availability: ${res.status}`);
+      // Try to read error message from response body
+      let errorMessage = `Failed to check availability: ${res.status}`;
+      try {
+        const errorData = await res.json().catch(() => null);
+        if (errorData) {
+          if (typeof errorData === 'string') {
+            errorMessage = errorData;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.Message) {
+            errorMessage = errorData.Message;
+          } else if (errorData.Error) {
+            errorMessage = errorData.Error;
+          }
+        }
+      } catch (e) {
+        // If JSON parsing fails, try to read as text
+        try {
+          const text = await res.text();
+          if (text) errorMessage = text;
+        } catch (e2) {
+          // Ignore
+        }
+      }
+      console.warn(`⚠️ ${baseUrl} returned:`, res.status, res.statusText, errorMessage);
+      throw new Error(errorMessage);
     }
   } catch (error: any) {
     if (error.name === "AbortError") {
