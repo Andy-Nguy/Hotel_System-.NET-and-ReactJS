@@ -118,9 +118,13 @@ const ProfileScreen: React.FC = () => {
                   {profile?.avatar || profile?.Avatar ? (
                     <Image
                       source={{
-                        uri: (profile?.avatar || profile?.Avatar)?.startsWith("http")
+                        uri: (profile?.avatar || profile?.Avatar)?.startsWith(
+                          "http"
+                        )
                           ? profile?.avatar || profile?.Avatar
-                          : `${API_CONFIG.CURRENT}${profile?.avatar || profile?.Avatar}`,
+                          : `${API_CONFIG.CURRENT}${
+                              profile?.avatar || profile?.Avatar
+                            }`,
                       }}
                       style={styles.avatarImage}
                     />
@@ -365,7 +369,7 @@ const ProfileScreen: React.FC = () => {
                 {
                   iconName: "call",
                   title: "Điện thoại",
-                  value: "+84 28 1234 5678",
+                  value: "(+84) 263 3888 999",
                   description: "Gọi trực tiếp để được hỗ trợ ngay lập tức",
                 },
                 {
@@ -390,13 +394,14 @@ const ProfileScreen: React.FC = () => {
                 {
                   iconName: "globe",
                   title: "Website",
-                  value: "www.robinsvilla.vn",
+                  value: "www.robinsvilla.site",
                   description: "Truy cập website để đặt phòng và xem thông tin",
                 },
                 {
                   iconName: "location",
                   title: "Địa chỉ",
-                  value: "123 Đường ABC, Quận 1, TP.HCM",
+                  value:
+                    "4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng",
                   description:
                     "Địa chỉ khách sạn chính tại trung tâm thành phố",
                 },
