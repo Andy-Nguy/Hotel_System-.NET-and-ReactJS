@@ -111,25 +111,25 @@ namespace Hotel_System.API.Services
         public async Task<(bool success, string? error, UserProfileResponse? profile)> GetUserProfileAsync(int userId)
         {
             try
-            {
+        {
                 var kh = await _db.KhachHangs.FirstOrDefaultAsync(k => k.IdkhachHang == userId);
                 if (kh == null) return (false, "User not found", null);
 
-                // Get account to retrieve VaiTro
+            // Get account to retrieve VaiTro
                 var acc = await _db.TaiKhoanNguoiDungs.FirstOrDefaultAsync(a => a.IdkhachHang == userId);
 
-                var profile = new UserProfileResponse
-                {
-                    IdkhachHang = kh.IdkhachHang,
-                    HoTen = kh.HoTen,
-                    NgaySinh = kh.NgaySinh,
-                    SoDienThoai = kh.SoDienThoai,
-                    Email = kh.Email,
-                    NgayDangKy = kh.NgayDangKy,
-                    TichDiem = kh.TichDiem,
+            var profile = new UserProfileResponse
+            {
+                IdkhachHang = kh.IdkhachHang,
+                HoTen = kh.HoTen,
+                NgaySinh = kh.NgaySinh,
+                SoDienThoai = kh.SoDienThoai,
+                Email = kh.Email,
+                NgayDangKy = kh.NgayDangKy,
+                TichDiem = kh.TichDiem,
                     VaiTro = acc?.VaiTro,  // Include role: 0 = khachhang, 1 = nhanvien
                     Avatar = kh.Avatar ?? null  // Safe access in case column doesn't exist yet
-                };
+            };
 
                 return (true, null, profile);
             }

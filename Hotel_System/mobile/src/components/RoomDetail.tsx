@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import StarRating from "./StarRating";
 import RoomReviews from "./RoomReviews";
 import HeaderScreen from "./HeaderScreen";
+import { getPromotions } from "../api/promotionApi";
 
 interface Props {
   selectedRoom: Room | AvailableRoom | null;
@@ -28,6 +29,9 @@ interface Props {
 
 const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
   // Ensure hooks run on every render (avoid early returns before hooks to satisfy Rules of Hooks)
+
+  const [promotions, setPromotions] = useState<any[]>([]);
+  const [loadingPromotions, setLoadingPromotions] = useState(false);
 
   // Determine base price from whichever field is available (backend may return different schemas)
   const basePrice = Number(
@@ -41,10 +45,7 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
   let discountPrice = basePrice;
   let hasDiscount = false;
 
-  // Safely handle promotions and amenities even when selectedRoom is null
-  const promotions = Array.isArray((selectedRoom as any)?.promotions)
-    ? (selectedRoom as any)!.promotions
-    : [];
+  // Safely handle amenities even when selectedRoom is null
   const amenities = Array.isArray((selectedRoom as any)?.amenities)
     ? (selectedRoom as any)!.amenities
     : [];
@@ -87,6 +88,44 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
     setGalleryIndex(0);
   }, [(selectedRoom as any)?.idphong, (selectedRoom as any)?.roomId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const roomId =
+      (selectedRoom as any)?.roomId || (selectedRoom as any)?.idphong;
+    if (roomId && visible) {
+      setLoadingPromotions(true);
+      const load = async () => {
+        try {
+          const promos = await getPromotions();
+          if (cancelled) return;
+          const found = promos.find(
+            (p) =>
+              Array.isArray(p.khuyenMaiPhongs) &&
+              p.khuyenMaiPhongs.some(
+                (r: any) => String(r.idphong) === String(roomId)
+              )
+          );
+          if (found && !cancelled) {
+            setPromotions([found]);
+          } else if (!cancelled) {
+            setPromotions([]);
+          }
+        } catch (e) {
+          if (!cancelled) setPromotions([]);
+        } finally {
+          if (!cancelled) setLoadingPromotions(false);
+        }
+      };
+      load();
+    } else {
+      setPromotions([]);
+      setLoadingPromotions(false);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [(selectedRoom as any)?.roomId, (selectedRoom as any)?.idphong, visible]);
+
   // Derived display fields to support multiple API shapes
   const displayRoomType = selectedRoom
     ? (selectedRoom as any)?.tenLoaiPhong ||
@@ -105,7 +144,8 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const roomId = (selectedRoom as any)?.idphong || (selectedRoom as any)?.roomId;
+      const roomId =
+        (selectedRoom as any)?.idphong || (selectedRoom as any)?.roomId;
       if (!roomId) return;
       try {
         const s = await reviewApi.getRoomStats(String(roomId));
@@ -134,10 +174,12 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={[
-        styles.modalContainer, 
-        { paddingTop: Platform.OS === 'ios' ? insets.top : 0 }
-      ]}>
+      <View
+        style={[
+          styles.modalContainer,
+          { paddingTop: Platform.OS === "ios" ? insets.top : 0 },
+        ]}
+      >
         <HeaderScreen title="Chi tiết phòng" onClose={onClose} />
 
         <ScrollView
@@ -234,7 +276,11 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
             {/* Room reviews modal (opens when tapping rating text) */}
             {showReviews && (
               <RoomReviews
-                roomId={String((selectedRoom as any)?.idphong || (selectedRoom as any)?.roomId || "")}
+                roomId={String(
+                  (selectedRoom as any)?.idphong ||
+                    (selectedRoom as any)?.roomId ||
+                    ""
+                )}
                 visible={showReviews}
                 onClose={() => setShowReviews(false)}
               />
@@ -255,7 +301,9 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
             <View style={styles.descriptionSection}>
               <Text style={styles.sectionLabel}>Mô tả</Text>
               <Text style={styles.descriptionText}>
-                {(selectedRoom as any)?.moTa || (selectedRoom as any)?.description || "Không có mô tả"}
+                {(selectedRoom as any)?.moTa ||
+                  (selectedRoom as any)?.description ||
+                  "Không có mô tả"}
               </Text>
             </View>
 
@@ -263,8 +311,11 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
               <View style={styles.amenitiesSection}>
                 <Text style={styles.sectionLabel}>Tiện nghi</Text>
                 <View style={styles.amenitiesList}>
-                  {amenities.map((amenity: any) => (
-                    <View key={amenity.id} style={styles.amenityItem}>
+                  {amenities.map((amenity: any, index: number) => (
+                    <View
+                      key={amenity.id || `amenity-${index}`}
+                      style={styles.amenityItem}
+                    >
                       <Text style={styles.amenityBullet}>✓</Text>
                       <Text style={styles.amenityText}>{amenity.name}</Text>
                     </View>
@@ -276,27 +327,31 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
             {promotions.length > 0 && (
               <View style={styles.promotionSection}>
                 <Text style={styles.sectionLabel}>Khuyến mãi</Text>
-                {promotions.map((promo: any) => {
+                {promotions.map((promo: any, index: number) => {
                   const p = promo as any;
                   return (
-                  <View key={promo.id} style={styles.promotionItem}>
-                    <Text style={styles.promotionName}>
-                      {promo.name || p.tenKhuyenMai}
-                    </Text>
-                    {(promo.description || p.moTa) && (
-                      <Text style={styles.promotionDesc}>
-                        {promo.description || p.moTa}
+                    <View
+                      key={promo.id || `promo-${index}`}
+                      style={styles.promotionItem}
+                    >
+                      <Text style={styles.promotionName}>
+                        {promo.name || p.tenKhuyenMai}
                       </Text>
-                    )}
-                    <Text style={styles.promotionValue}>
-                      {promo.type === "percent"
-                        ? `Giảm ${promo.value ?? p.giaTriGiam}%`
-                        : `Giảm ${Number(
-                            promo.value ?? p.giaTriGiam
-                          ).toLocaleString()} VND`}
-                    </Text>
-                  </View>
-                )})}
+                      {(promo.description || p.moTa) && (
+                        <Text style={styles.promotionDesc}>
+                          {promo.description || p.moTa}
+                        </Text>
+                      )}
+                      <Text style={styles.promotionValue}>
+                        {promo.type === "percent"
+                          ? `Giảm ${promo.value ?? p.giaTriGiam}%`
+                          : `Giảm ${Number(
+                              promo.value ?? p.giaTriGiam
+                            ).toLocaleString()} VND`}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             )}
 
@@ -306,9 +361,13 @@ const RoomDetail: React.FC<Props> = ({ selectedRoom, visible, onClose }) => {
                 {hasDiscount && (
                   <Text style={styles.originalPrice}>
                     {(selectedRoom as any)?.giaCoBanMotDem != null
-                      ? Number((selectedRoom as any).giaCoBanMotDem).toLocaleString()
+                      ? Number(
+                          (selectedRoom as any).giaCoBanMotDem
+                        ).toLocaleString()
                       : (selectedRoom as any)?.basePricePerNight != null
-                      ? Number((selectedRoom as any).basePricePerNight).toLocaleString()
+                      ? Number(
+                          (selectedRoom as any).basePricePerNight
+                        ).toLocaleString()
                       : ""}{" "}
                     VND
                   </Text>
