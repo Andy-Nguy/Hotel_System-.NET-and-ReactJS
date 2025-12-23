@@ -1,24 +1,32 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ScrollView,
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   Alert,
   ActivityIndicator,
   Platform,
   Modal,
 } from "react-native";
 import { Image } from "expo-image";
+import { getPrimaryRoomImage, getRoomImages } from "../utils/imageUtils";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import AppIcon from "../components/AppIcon";
-import { checkAvailableRooms, AvailableRoom } from "../api/roomsApi";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  checkAvailableRooms,
+  AvailableRoom,
+  getRoomById,
+} from "../api/roomsApi";
 import AvailableRoomCard from "../components/AvailableRoomCard";
+import RoomDetail from "../components/RoomDetail";
+import HeaderScreen from "../components/HeaderScreen";
+import reviewApi from "../api/reviewApi";
 
 const CheckAvailableRoomsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -32,10 +40,14 @@ const CheckAvailableRoomsScreen: React.FC = () => {
   const [rooms, setRooms] = useState(1);
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedRoomDetail, setSelectedRoomDetail] =
-    useState<AvailableRoom | null>(null);
+  const [selectedRoomDetail, setSelectedRoomDetail] = useState<any | null>(
+    null
+  );
   const [modalVisible, setModalVisible] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [modalImageIndex, setModalImageIndex] = useState(0);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [roomStats, setRoomStats] = useState<any | null>(null);
 
   // Date picker states
   const [isCheckInPickerVisible, setCheckInPickerVisibility] = useState(false);
@@ -51,6 +63,24 @@ const CheckAvailableRoomsScreen: React.FC = () => {
       day: "numeric",
     });
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (modalVisible && selectedRoomDetail) {
+      const load = async () => {
+        try {
+          const s = await reviewApi.getRoomStats(String(selectedRoomDetail.roomId));
+          if (cancelled) return;
+          console.log(`CheckAvailableRoomsScreen: stats for roomId=${selectedRoomDetail.roomId}`, s);
+          setRoomStats(s);
+        } catch (err) {
+          console.debug('CheckAvailableRoomsScreen: failed to load review stats', err);
+        }
+      };
+      load();
+    }
+    return () => { cancelled = true; };
+  }, [modalVisible, selectedRoomDetail?.roomId]);
 
   const formatDateShort = (dateString: string) => {
     const date = new Date(dateString);
@@ -113,9 +143,29 @@ const CheckAvailableRoomsScreen: React.FC = () => {
     }
   };
 
-  const openRoomDetail = (room: AvailableRoom) => {
-    setSelectedRoomDetail(room);
+  const openRoomDetail = async (room: AvailableRoom) => {
+    // Show minimal item immediately (so RoomDetail can render), then try to fetch full details
+    const base = {
+      ...room,
+      idphong: (room as any).idphong || (room as any).roomId,
+    };
+    setSelectedRoomDetail(base);
+    setModalImageIndex(0);
     setModalVisible(true);
+
+    try {
+      const full = await getRoomById(String(room.roomId));
+      // Ensure idphong is present
+      const merged = {
+        ...base,
+        ...full,
+        idphong: full?.idphong ?? base.idphong,
+      };
+      setSelectedRoomDetail(merged);
+    } catch (err) {
+      console.warn("Failed to load full room details, using list item:", err);
+      // keep base item
+    }
   };
 
   const closeRoomDetail = () => {
@@ -148,36 +198,44 @@ const CheckAvailableRoomsScreen: React.FC = () => {
     return stars.join("");
   };
 
+  // Helper to clear old booking data before navigating to SelectRooms
+  const navigateToSelectRooms = async (initialSelectedRoom?: AvailableRoom) => {
+    try {
+      await AsyncStorage.multiRemove(["bookingData", "finalBookingData"]);
+      console.log(
+        "🧹 Cleared old booking data before navigating to SelectRooms"
+      );
+    } catch (e) {
+      console.warn("Failed to clear booking data", e);
+    }
+    (navigation as any).navigate("SelectRooms", {
+      checkIn,
+      checkOut,
+      guests,
+      rooms,
+      availableRooms,
+      ...(initialSelectedRoom && { initialSelectedRoom }),
+    });
+  };
+
   const renderRoomItem = ({ item }: { item: AvailableRoom }) => (
     <AvailableRoomCard
       room={item}
       onOpenDetail={() => openRoomDetail(item)}
-      onSelect={() =>
-        (navigation as any).navigate("SelectRooms", {
-          checkIn,
-          checkOut,
-          guests,
-          rooms,
-          availableRooms,
-          initialSelectedRoom: item,
-        })
-      }
+      onSelect={() => navigateToSelectRooms(item)}
     />
   );
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
+      <HeaderScreen
+        title="Đặt phòng"
+        onClose={() => navigation.goBack()}
+        leftIcon={
           <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Đặt phòng</Text>
-        <View style={{ width: 40 }} />
-      </View>
+        }
+      />
 
       <ScrollView
         style={styles.scrollContent}
@@ -270,7 +328,10 @@ const CheckAvailableRoomsScreen: React.FC = () => {
           </View>
 
           <TouchableOpacity
-            style={[styles.searchButton, loading && styles.searchButtonDisabled]}
+            style={[
+              styles.searchButton,
+              loading && styles.searchButtonDisabled,
+            ]}
             onPress={handleSearchRooms}
             disabled={loading}
           >
@@ -278,7 +339,9 @@ const CheckAvailableRoomsScreen: React.FC = () => {
               <ActivityIndicator color={COLORS.white} />
             ) : (
               <>
-                <Text style={styles.searchButtonText}>Kiểm tra phòng trống</Text>
+                <Text style={styles.searchButtonText}>
+                  Kiểm tra phòng trống
+                </Text>
                 <AppIcon name="arrow-right" size={20} color={COLORS.white} />
               </>
             )}
@@ -319,14 +382,13 @@ const CheckAvailableRoomsScreen: React.FC = () => {
             </View>
 
             {availableRooms.length > 0 ? (
-              <FlatList
-                data={availableRooms}
-                renderItem={renderRoomItem}
-                keyExtractor={(item) => item.roomId}
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ gap: 16 }}
-              />
+              <View style={{ gap: 16 }}>
+                {availableRooms.map((item) => (
+                  <View key={item.roomId} style={{ width: "100%" }}>
+                    {renderRoomItem({ item })}
+                  </View>
+                ))}
+              </View>
             ) : (
               <View style={styles.noResults}>
                 <View style={styles.noResultsIcon}>
@@ -342,15 +404,7 @@ const CheckAvailableRoomsScreen: React.FC = () => {
             {availableRooms.length > 0 && (
               <TouchableOpacity
                 style={styles.continueButton}
-                onPress={() =>
-                  (navigation as any).navigate("SelectRooms", {
-                    checkIn,
-                    checkOut,
-                    guests,
-                    rooms,
-                    availableRooms,
-                  })
-                }
+                onPress={() => navigateToSelectRooms()}
               >
                 <Text style={styles.continueButtonText}>
                   Tiếp tục chọn phòng
@@ -363,103 +417,12 @@ const CheckAvailableRoomsScreen: React.FC = () => {
       </ScrollView>
 
       {/* Room Detail Modal */}
-      <Modal
+      {/* Use shared RoomDetail component for consistency */}
+      <RoomDetail
+        selectedRoom={selectedRoomDetail}
         visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeRoomDetail}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chi tiết phòng</Text>
-              <TouchableOpacity
-                onPress={closeRoomDetail}
-                style={styles.closeButton}
-              >
-                <AppIcon name="close" size={24} color={COLORS.secondary} />
-              </TouchableOpacity>
-            </View>
-
-            {selectedRoomDetail && (
-              <ScrollView style={styles.modalBody}>
-                <View style={styles.modalImageContainer}>
-                  {selectedRoomDetail.roomImageUrl ? (
-                    <Image
-                      source={{ uri: selectedRoomDetail.roomImageUrl }}
-                      style={styles.modalImage}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={styles.modalImagePlaceholder}>
-                      <Text style={styles.modalImagePlaceholderText}>🏨</Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.modalInfo}>
-                  <Text style={styles.modalRoomName}>
-                    {selectedRoomDetail.roomTypeName}
-                  </Text>
-                  <Text style={styles.modalRoomNumber}>
-                    Phòng {selectedRoomDetail.roomNumber}
-                  </Text>
-
-                  <View style={styles.modalRating}>
-                    <Text style={styles.modalStars}>{renderStars(4.5)}</Text>
-                    <Text style={styles.modalRatingText}>4.5/5 Tuyệt vời</Text>
-                  </View>
-
-                  <View style={styles.divider} />
-
-                  <Text style={styles.modalSectionTitle}>Mô tả</Text>
-                  {selectedRoomDetail.description ? (
-                    <Text style={styles.modalDescription}>
-                      {selectedRoomDetail.description}
-                    </Text>
-                  ) : (
-                    <Text style={styles.modalDescription}>
-                      Không có mô tả chi tiết.
-                    </Text>
-                  )}
-
-                  <View style={styles.modalPriceSection}>
-                    <Text style={styles.modalPriceLabel}>Giá mỗi đêm</Text>
-                    <Text style={styles.modalPrice}>
-                      {Number(
-                        selectedRoomDetail.basePricePerNight || 0
-                      ).toLocaleString()}
-                      đ
-                    </Text>
-                  </View>
-
-                  <View style={styles.modalTotalSection}>
-                    <Text style={styles.modalTotalLabel}>
-                      Tổng cộng ({calculateNights()} đêm)
-                    </Text>
-                    <Text style={styles.modalTotalValue}>
-                      {(
-                        Number(selectedRoomDetail.basePricePerNight || 0) *
-                        calculateNights()
-                      ).toLocaleString()}
-                      đ
-                    </Text>
-                  </View>
-                </View>
-              </ScrollView>
-            )}
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={closeRoomDetail}
-              >
-                <Text style={styles.modalCancelText}>Đóng</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={closeRoomDetail}
+      />
     </SafeAreaView>
   );
 };
@@ -468,24 +431,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: SIZES.padding,
-    backgroundColor: COLORS.white,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: "#F5F5F5",
-  },
-  headerTitle: {
-    ...FONTS.h3,
-    color: COLORS.secondary,
-    fontWeight: "700",
   },
   scrollContent: {
     flex: 1,
@@ -727,6 +672,30 @@ const styles = StyleSheet.create({
   },
   modalImagePlaceholderText: {
     fontSize: 64,
+  },
+  imageDotsSmall: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 8,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dotSmall: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.7)",
+    marginHorizontal: 3,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.12)",
+  },
+  dotSmallActive: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
   },
   modalInfo: {
     padding: 24,

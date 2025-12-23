@@ -52,7 +52,10 @@ export type Room = {
   giaCoBanMotDem: number;
   xepHangSao: number;
   trangThai: string;
-  urlAnhPhong: string;
+  urlAnhPhong?: string;
+  roomImageUrls?: string[];
+  // Image coming specifically for room TYPE in some API versions
+  urlAnhLoaiPhong?: string;
   amenities?: Amenity[];
   promotions?: Promotion[];
 };
@@ -73,9 +76,12 @@ export type AvailableRoom = {
   roomNumber: string;
   description: string;
   basePricePerNight: number;
-  roomImageUrl: string;
+  discountedPrice?: number;
+  roomImageUrl?: string | null;
+  roomImageUrls?: string[];
   roomTypeName: string;
   maxOccupancy: number;
+  rating?: number; // average rating / xepHangSao from backend
 };
 
 export type CheckAvailableRoomsRequest = {
@@ -153,10 +159,25 @@ async function tryFetchRooms(): Promise<Room[] | null> {
       }
 
       const processedData = (data || []).map((r: any) => {
-        const normalizedUrl = normalizeImageUrl(
-          r.urlAnhPhong ?? r.UrlAnhPhong,
-          baseUrl
-        );
+        // Support both array (JsonB) and single-string image fields
+        const rawImages =
+          r.UrlAnhPhong ??
+          r.urlAnhPhong ??
+          r.urlAnhLoaiPhong ??
+          r.UrlAnhLoaiPhong ??
+          null;
+        let roomImageUrls: string[] | undefined = undefined;
+        let normalizedUrl: string | undefined = undefined;
+
+        if (Array.isArray(rawImages)) {
+          roomImageUrls = rawImages
+            .map((img: any) => normalizeImageUrl(img, baseUrl))
+            .filter((s): s is string => !!s);
+          normalizedUrl = roomImageUrls.length ? roomImageUrls[0] : undefined;
+        } else {
+          normalizedUrl = normalizeImageUrl(rawImages, baseUrl);
+        }
+
         console.log(
           `🔄 Normalizing URL for ${r.tenPhong}: "${r.urlAnhPhong}" → "${normalizedUrl}"`
         );
@@ -173,7 +194,8 @@ async function tryFetchRooms(): Promise<Room[] | null> {
           giaCoBanMotDem: r.giaCoBanMotDem ?? r.GiaCoBanMotDem,
           xepHangSao: r.xepHangSao ?? r.XepHangSao ?? 0,
           trangThai: r.trangThai ?? r.TrangThai,
-          urlAnhPhong: normalizedUrl, // Force normalized URL last
+          urlAnhPhong: normalizedUrl, // primary image (first in array) for backwards compatibility
+          roomImageUrls: roomImageUrls, // optional array of normalized images
           // Add amenities and promotions from API
           amenities: r.amenities ?? [],
           promotions: r.promotions ?? [],
@@ -241,6 +263,69 @@ export async function getRoomById(id: string): Promise<Room> {
   }
 }
 
+/**
+ * Fetch room types (LoaiPhong) and normalize fields for mobile usage
+ */
+export type RoomTypeMobile = {
+  idloaiPhong: string;
+  tenLoaiPhong?: string | null;
+  moTa?: string | null;
+  urlAnhLoaiPhong?: string | null;
+};
+
+export async function getRoomTypes(): Promise<RoomTypeMobile[]> {
+  const cacheKey = getCacheKey("getRoomTypes");
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
+  const baseUrl = API_CONFIG.CURRENT;
+  try {
+    const res = await fetch(`${baseUrl}/api/LoaiPhong`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      console.warn(`Failed to fetch RoomTypes: ${res.status}`);
+      setCachedData(cacheKey, []);
+      return [];
+    }
+
+    const data = await handleRes(res);
+    const arr = Array.isArray(data)
+      ? data
+      : data && Array.isArray(data.data)
+      ? data.data
+      : [];
+
+    const normalized = (arr || []).map((rt: any) => ({
+      idloaiPhong:
+        rt.idloaiPhong ??
+        rt.idLoaiPhong ??
+        rt.IdloaiPhong ??
+        rt.IdLoaiPhong ??
+        String(rt.id) ??
+        "",
+      tenLoaiPhong: rt.tenLoaiPhong ?? rt.TenLoaiPhong ?? null,
+      moTa: rt.moTa ?? rt.MoTa ?? null,
+      urlAnhLoaiPhong:
+        normalizeImageUrl(
+          rt.urlAnhLoaiPhong ??
+            rt.UrlAnhLoaiPhong ??
+            rt.urlAnhLoaiPhong ??
+            null,
+          baseUrl
+        ) ?? null,
+    }));
+
+    setCachedData(cacheKey, normalized);
+    return normalized;
+  } catch (error) {
+    console.warn("Error fetching room types:", error);
+    setCachedData(cacheKey, []);
+    return [];
+  }
+}
+
 export async function checkAvailableRooms(
   request: CheckAvailableRoomsRequest
 ): Promise<AvailableRoom[]> {
@@ -281,11 +366,48 @@ export async function checkAvailableRooms(
       const data = await handleRes(res);
       console.log(`✅ Available rooms from ${baseUrl}:`, data);
 
-      // Normalize image URLs for mobile app
-      const processedData = (data || []).map((room: any) => ({
-        ...room,
-        roomImageUrl: normalizeImageUrl(room.roomImageUrl, baseUrl),
-      }));
+      // Normalize image URLs for mobile app (support arrays and different field names)
+      const processedData = (data || []).map((room: any) => {
+        // Collect possible image sources
+        const rawArray =
+          room.UrlAnhPhong ??
+          room.urlAnhPhong ??
+          room.RoomImageUrls ??
+          room.roomImageUrls ??
+          null;
+        let roomImageUrls: string[] | undefined = undefined;
+        let primary: string | undefined = undefined;
+
+        if (Array.isArray(rawArray) && rawArray.length) {
+          roomImageUrls = rawArray
+            .map((img: any) => normalizeImageUrl(img, baseUrl))
+            .filter((s): s is string => !!s);
+          primary = roomImageUrls.length ? roomImageUrls[0] : undefined;
+        } else {
+          // Fallbacks: single fields in various names
+          const single =
+            room.roomImageUrl ??
+            room.urlAnhPhong ??
+            room.UrlAnhPhong ??
+            room.urlAnhLoaiPhong ??
+            room.UrlAnhLoaiPhong ??
+            null;
+          primary = normalizeImageUrl(single, baseUrl);
+          if (primary) roomImageUrls = [primary];
+        }
+
+        console.log(
+          `🔄 checkAvailableRooms normalize for ${
+            room.roomTypeName || room.tenPhong
+          }: primary=${primary}`
+        );
+
+        return {
+          ...room,
+          roomImageUrl: primary,
+          roomImageUrls: roomImageUrls,
+        };
+      });
 
       // Cache the result
       setCachedData(cacheKey, processedData || []);
@@ -368,6 +490,7 @@ export async function checkAvailableRoomsByType(
                 r.giaCoBanMotDem ??
                 r.GiaCoBanMotDem ??
                 0,
+              discountedPrice: r.discountedPrice ?? r.DiscountedPrice ?? undefined,
               roomImageUrl: normalizeImageUrl(
                 r.roomImageUrl ?? r.urlAnh ?? r.UrlAnhPhong ?? r.urlAnhPhong,
                 baseUrl
@@ -376,6 +499,7 @@ export async function checkAvailableRoomsByType(
                 r.roomTypeName ?? r.tenLoaiPhong ?? r.TenLoaiPhong ?? "",
               maxOccupancy:
                 r.maxOccupancy ?? r.soNguoiToiDa ?? r.SoNguoiToiDa ?? 1,
+              rating: Number(r.rating ?? r.xepHangSao ?? r.xephangSao ?? r.XepHangSao ?? 0) || 0,
             } as AvailableRoom)
         );
 
@@ -395,8 +519,34 @@ export async function checkAvailableRoomsByType(
       setCachedData(cacheKey, []);
       return [];
     } else {
-      console.warn(`⚠️ ${baseUrl} returned:`, res.status, res.statusText);
-      throw new Error(`Failed to check availability: ${res.status}`);
+      // Try to read error message from response body
+      let errorMessage = `Failed to check availability: ${res.status}`;
+      try {
+        const errorData = await res.json().catch(() => null);
+        if (errorData) {
+          if (typeof errorData === 'string') {
+            errorMessage = errorData;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.Message) {
+            errorMessage = errorData.Message;
+          } else if (errorData.Error) {
+            errorMessage = errorData.Error;
+          }
+        }
+      } catch (e) {
+        // If JSON parsing fails, try to read as text
+        try {
+          const text = await res.text();
+          if (text) errorMessage = text;
+        } catch (e2) {
+          // Ignore
+        }
+      }
+      console.warn(`⚠️ ${baseUrl} returned:`, res.status, res.statusText, errorMessage);
+      throw new Error(errorMessage);
     }
   } catch (error: any) {
     if (error.name === "AbortError") {
@@ -451,18 +601,46 @@ export async function getTopRooms2025(top: number = 5): Promise<TopRoom[]> {
 
       // Handle response structure
       if (Array.isArray(data)) {
-        // Normalize image URLs
-        const normalized = data.map((room: any) => ({
-          ...room,
-          urlAnhPhong: normalizeImageUrl(room.urlAnhPhong, baseUrl),
-        }));
+        // Normalize image URLs and support array JsonB
+        const normalized = data.map((room: any) => {
+          const rawImages = room.UrlAnhPhong ?? room.urlAnhPhong ?? null;
+          let roomImageUrls: string[] | undefined = undefined;
+          let mainUrl: string | undefined = undefined;
+          if (Array.isArray(rawImages)) {
+            roomImageUrls = rawImages
+              .map((img: any) => normalizeImageUrl(img, baseUrl))
+              .filter((s): s is string => !!s);
+            mainUrl = roomImageUrls.length ? roomImageUrls[0] : undefined;
+          } else {
+            mainUrl = normalizeImageUrl(room.urlAnhPhong, baseUrl);
+          }
+          return {
+            ...room,
+            urlAnhPhong: mainUrl,
+            roomImageUrls,
+          };
+        });
         setCachedData(cacheKey, normalized);
         return normalized;
       } else if (data && Array.isArray(data.data)) {
-        const normalized = data.data.map((room: any) => ({
-          ...room,
-          urlAnhPhong: normalizeImageUrl(room.urlAnhPhong, baseUrl),
-        }));
+        const normalized = data.data.map((room: any) => {
+          const rawImages = room.UrlAnhPhong ?? room.urlAnhPhong ?? null;
+          let roomImageUrls: string[] | undefined = undefined;
+          let mainUrl: string | undefined = undefined;
+          if (Array.isArray(rawImages)) {
+            roomImageUrls = rawImages
+              .map((img: any) => normalizeImageUrl(img, baseUrl))
+              .filter((s): s is string => !!s);
+            mainUrl = roomImageUrls.length ? roomImageUrls[0] : undefined;
+          } else {
+            mainUrl = normalizeImageUrl(room.urlAnhPhong, baseUrl);
+          }
+          return {
+            ...room,
+            urlAnhPhong: mainUrl,
+            roomImageUrls,
+          };
+        });
         setCachedData(cacheKey, normalized);
         return normalized;
       } else {
@@ -491,4 +669,5 @@ export default {
   checkAvailableRooms,
   checkAvailableRoomsByType,
   getTopRooms2025,
+  getRoomTypes,
 };

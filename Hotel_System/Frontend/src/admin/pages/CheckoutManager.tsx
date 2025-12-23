@@ -68,6 +68,8 @@ const CheckoutManager: React.FC = () => {
   const [data, setData] = useState<BookingRow[]>([]);
   const [keyword, setKeyword] = useState('');
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(dayjs());
+  const [filterFromDate, setFilterFromDate] = useState<Dayjs | null>(null);
+  const [filterToDate, setFilterToDate] = useState<Dayjs | null>(null);
 
   const [viewMode, setViewMode] = useState<'using' | 'checkout' | 'overdue'>('checkout');
   const [summaryMap, setSummaryMap] = useState<Record<string, any>>({});
@@ -1337,13 +1339,19 @@ const handleForceCancelSubmit = async (data: {
           TenLoaiPhong: room?.tenLoaiPhong ?? room?.TenLoaiPhong ?? room?.roomTypeName ?? '',
           GiaMotDem: room?.giaMotDem ?? room?.GiaMotDem ?? room?.basePricePerNight ?? 0,
           UrlAnhPhong: (() => {
-            const raw = room?.urlAnhPhong ?? room?.UrlAnhPhong ?? room?.roomImageUrl ?? room?.roomImageUrl ?? '';
-            if (!raw) return '';
-            // Absolute URLs or root-relative paths should be used as-is
-            if (raw.startsWith('http') || raw.startsWith('/')) return raw;
-            // If API returned only filename (e.g. "presidential-suite-501.webp"), prefix with expected folder
-            if (raw.includes('/img/')) return raw;
-            return `/img/room/${raw}`;
+            const raw = room?.urlAnhPhong ?? room?.UrlAnhPhong ?? room?.roomImageUrl ?? room?.roomImageUrl ?? room?.tenLoaiPhong ?? room?.TenLoaiPhong ?? '';
+            if (!raw) return null;
+            let urlString = typeof raw === 'string' ? raw.trim() : String(raw).trim();
+            if (!urlString) return null;
+            // Extract first image if comma-separated
+            if (urlString.includes(',')) {
+              urlString = urlString.split(',')[0].trim();
+            }
+            if (urlString.startsWith('http') || urlString.startsWith('/')) return urlString;
+            if (urlString.includes('/img/')) return urlString;
+            // Loại phòng: LP_LP01 hoặc Deluxe Room → /img/loaiphong/LP_LP01.jpg
+            if (urlString.match(/^LP_/i)) return `/img/loaiphong/${urlString.match(/\.(jpg|jpeg|png|webp)$/i) ? urlString : `${urlString}.jpg`}`;
+            return `/img/room/${urlString}`;
           })(),
           SoNguoiToiDa: room?.soNguoiToiDa ?? room?.SoNguoiToiDa ?? room?.maxOccupancy ?? 2,
           TrangThai: room?.TrangThai ?? room?.trangThai ?? room?.status ?? '',
@@ -1447,11 +1455,19 @@ const handleForceCancelSubmit = async (data: {
             TenLoaiPhong: room?.tenLoaiPhong ?? room?.TenLoaiPhong ?? room?.roomTypeName ?? '',
             GiaMotDem: room?.giaMotDem ?? room?.GiaMotDem ?? room?.basePricePerNight ?? 0,
             UrlAnhPhong: (() => {
-              const raw = room?.urlAnhPhong ?? room?.UrlAnhPhong ?? room?.roomImageUrl ?? room?.roomImageUrl ?? '';
-              if (!raw) return '';
-              if (raw.startsWith('http') || raw.startsWith('/')) return raw;
-              if (raw.includes('/img/')) return raw;
-              return `/img/room/${raw}`;
+              const raw = room?.urlAnhPhong ?? room?.UrlAnhPhong ?? room?.roomImageUrl ?? room?.tenLoaiPhong ?? room?.TenLoaiPhong ?? '';
+              if (!raw) return null;
+              let urlString = typeof raw === 'string' ? raw.trim() : String(raw).trim();
+              if (!urlString) return null;
+              // Extract first image if comma-separated
+              if (urlString.includes(',')) {
+                urlString = urlString.split(',')[0].trim();
+              }
+              if (urlString.startsWith('http') || urlString.startsWith('/')) return urlString;
+              if (urlString.includes('/img/')) return urlString;
+              // Loại phòng: LP_LP01 hoặc Deluxe Room → /img/loaiphong/LP_LP01.jpg
+              if (urlString.match(/^LP_/i)) return `/img/loaiphong/${urlString.match(/\.(jpg|jpeg|png|webp)$/i) ? urlString : `${urlString}.jpg`}`;
+              return `/img/room/${urlString}`;
             })(),
             SoNguoiToiDa: room?.soNguoiToiDa ?? room?.SoNguoiToiDa ?? room?.maxOccupancy ?? 2,
             TrangThai: room?.TrangThai ?? room?.trangThai ?? room?.status ?? '',
@@ -2038,6 +2054,7 @@ const handleForceCancelSubmit = async (data: {
 
   const due = useMemo(() => {
     const todayStr = dayjs().format('YYYY-MM-DD');
+    const activeDateStr = (selectedDate ? selectedDate.format('YYYY-MM-DD') : todayStr);
     return (data || []).filter((d: BookingRow) => {
       // Skip already completed ones in general
       if ((d.TrangThai ?? 0) === 4 && viewMode !== 'overdue') return false;
@@ -2048,9 +2065,28 @@ const handleForceCancelSubmit = async (data: {
         // Show only overdue bookings (TrangThai == 5)
         if ((d.TrangThai ?? 0) !== 5) return false;
       } else {
-        // checkout mode: trả phòng hôm nay
-        if (!checkout || checkout !== todayStr) return false;
-        // Hiển thị Đang sử dụng (3), Hoàn tất (4), Quá hạn (5) chung trong "Trả phòng hôm nay"
+        // checkout mode: áp dụng date range filter nếu có, otherwise mặc định hôm nay
+        if (!checkout) return false;
+        
+        const checkoutDate = dayjs(checkout);
+        
+        // Nếu có cả từ ngày và đến ngày, kiểm tra checkout nằm trong khoảng
+        if (filterFromDate && filterToDate) {
+          if (checkoutDate.isBefore(filterFromDate, 'day') || checkoutDate.isAfter(filterToDate, 'day')) {
+            return false;
+          }
+        } else if (filterFromDate) {
+          // Chỉ có từ ngày, kiểm tra checkout >= từ ngày
+          if (checkoutDate.isBefore(filterFromDate, 'day')) return false;
+        } else if (filterToDate) {
+          // Chỉ có đến ngày, kiểm tra checkout <= đến ngày
+          if (checkoutDate.isAfter(filterToDate, 'day')) return false;
+        } else {
+          // Nếu không có filter ngày, dùng `selectedDate` nếu có, ngược lại mặc định hôm nay
+          if (checkout !== activeDateStr) return false;
+        }
+        
+        // Hiển thị Đang sử dụng (3), Hoàn tất (4), Quá hạn (5) chung trong "Trả phòng"
         if (!((d.TrangThai ?? 0) === 3 || (d.TrangThai ?? 0) === 4 || (d.TrangThai ?? 0) === 5)) return false;
       }
       if (keyword && keyword.trim()) {
@@ -2059,7 +2095,7 @@ const handleForceCancelSubmit = async (data: {
       }
       return true;
     });
-  }, [data, keyword, viewMode, selectedDate]);
+  }, [data, keyword, viewMode, selectedDate, filterFromDate, filterToDate]);
 
   const roomLines = useMemo(() => {
     if (!paymentRow) return [] as string[];
@@ -2163,6 +2199,10 @@ const handleForceCancelSubmit = async (data: {
                 setKeyword={setKeyword}
                 selectedDate={selectedDate}
                 setSelectedDate={setSelectedDate}
+                filterFromDate={filterFromDate}
+                setFilterFromDate={setFilterFromDate}
+                filterToDate={filterToDate}
+                setFilterToDate={setFilterToDate}
                 onReload={load}
               />
             </Card>
@@ -2659,10 +2699,11 @@ const handleForceCancelSubmit = async (data: {
                               <div style={{ display: 'flex', gap: 12, width: '100%', alignItems: 'center' }}>
                                 <div style={{ flex: '0 0 100px', height: 70, borderRadius: 8, overflow: 'hidden', background: '#f8fafc' }}>
                                   <Image 
-                                    src={item.UrlAnhPhong ?? item.urlAnhPhong ?? '/img/placeholder.png'} 
+                                    src={item.UrlAnhPhong || item.urlAnhPhong || null} 
                                     width={100} 
                                     height={70} 
-                                    preview={false} 
+                                    preview={false}
+                                    placeholder
                                     style={{ objectFit: 'cover' }}
                                   />
                                 </div>

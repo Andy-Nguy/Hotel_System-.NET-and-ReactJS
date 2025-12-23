@@ -10,7 +10,7 @@
     "Author": "B\u00F9i V\u0103n An",
     "Status": "PUBLISHED",
     "Type": "internal",
-    "ViewCount": 101,
+    "ViewCount": 117,
     "RejectionReason": "",
     "RejectedAt": null,
     "ApprovedAt": null,
@@ -39,7 +39,7 @@
     "Author": "PV Th\u1EDDi ti\u1EBFt",
     "Status": "PUBLISHED",
     "Type": "external",
-    "ViewCount": 8,
+    "ViewCount": 9,
     "RejectionReason": "",
     "RejectedAt": null,
     "ApprovedAt": null,
@@ -63,7 +63,7 @@
     "Image": "https://localhost:5001/img/blog/BlogBanner_123.jpg",
     "Category": "Check-in",
     "Author": "Admin",
-    "Status": "PUBLISHED",
+    "Status": "ARCHIVED",
     "Type": "external",
     "ViewCount": 0,
     "RejectionReason": "",
@@ -75,9 +75,9 @@
     "Tags": "",
     "Date": "December 3, 2025",
     "CreatedAt": "2025-12-03T00:00:00Z",
-    "UpdatedAt": "2025-12-03T14:11:24.5749637Z",
+    "UpdatedAt": "2025-12-14T15:04:14.338086Z",
     "PublishedAt": "2025-12-03T13:07:39.1318338Z",
-    "DisplayOrder": 3,
+    "DisplayOrder": null,
     "AuthorId": ""
   }
 ]

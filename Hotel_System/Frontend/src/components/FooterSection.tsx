@@ -135,7 +135,7 @@ const FooterSection: React.FC = () => {
                 {[
                   {
                     icon: "phone",
-                    text: "0123 456 789",
+                    text: "(+84) 263 3888 999",
                     link: "tel:0123456789",
                   },
                   {
@@ -145,7 +145,7 @@ const FooterSection: React.FC = () => {
                   },
                   {
                     icon: "map-marker",
-                    text: "Hồ Tuyền Lâm, Đà Lạt",
+                    text: "4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng",
                     link: "#",
                   },
                 ].map((item, index) => (

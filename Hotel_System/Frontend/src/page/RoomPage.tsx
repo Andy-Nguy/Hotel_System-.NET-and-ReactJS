@@ -242,7 +242,7 @@ const RoomPage: React.FC = () => {
                   lineHeight: 1.4,
                 }}
               >
-                11 Cong Truong Me Linh, Sai Gon Ward, Ho Chi Minh City, Vietnam
+                4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng
               </p>
             </div>
 

@@ -6,11 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  DeviceEventEmitter,
 } from "react-native";
 import { Image } from "expo-image";
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from "@expo/vector-icons";
+import { getRoomImages } from "../utils/imageUtils";
 import reviewApi from "../api/reviewApi";
-import StarRating from './StarRating';
+import StarRating from "./StarRating";
 import { COLORS, SIZES, SHADOWS } from "../constants/theme";
 import { Room } from "../api/roomsApi";
 
@@ -24,14 +26,16 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
 
   const handleImageScroll = (event: any) => {
     const index = Math.round(
-      event.nativeEvent.contentOffset.x / event.nativeEvent.layoutMeasurement.width
+      event.nativeEvent.contentOffset.x /
+        event.nativeEvent.layoutMeasurement.width
     );
     setActiveImageIndex(index);
   };
 
   // Price calculation: determine promotional price when promotions exist
   const basePrice = Number(room.giaCoBanMotDem) || 0;
-  const promotion = room.promotions && room.promotions.length > 0 ? room.promotions[0] : null;
+  const promotion =
+    room.promotions && room.promotions.length > 0 ? room.promotions[0] : null;
   const getPromoPrice = () => {
     if (!promotion) return basePrice;
     if (promotion.type === "percent") {
@@ -47,8 +51,13 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
   // use shared StarRating component (imports above)
 
   // Simple in-memory cache to avoid refetching stats for the same room repeatedly
-  const statsCache = (global as any).__roomStatsCache ||= new Map<string, any>();
-  const [stats, setStats] = useState<any | null>(() => statsCache.get(String(room.idphong)) ?? null);
+  const statsCache = ((global as any).__roomStatsCache ||= new Map<
+    string,
+    any
+  >());
+  const [stats, setStats] = useState<any | null>(
+    () => statsCache.get(String(room.idphong)) ?? null
+  );
   const [loadingStats, setLoadingStats] = useState(false);
 
   useEffect(() => {
@@ -66,17 +75,36 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
         if (cancelled) return;
         if (s) {
           statsCache.set(key, s);
+          console.log(`[RoomSection] Stats loaded for roomId=${key}:`, s);
           setStats(s);
         }
       } catch (err) {
-        console.debug('RoomSection: failed to load stats', err);
+        console.debug("RoomSection: failed to load stats", err);
       } finally {
         if (!cancelled) setLoadingStats(false);
       }
     };
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [room.idphong]);
+
+  // Format promotion label based on type: percent -> "-10%", amount -> "- 1.000.000 VND"
+  const promoLabel = (() => {
+    if (!promotion) return null;
+    const val = Number(promotion.value ?? 0);
+    if (
+      promotion.type === "percent" ||
+      String(promotion.type).toLowerCase() === "percent"
+    ) {
+      return `-${val}%`;
+    }
+    // treat other types (amount) as currency VND
+    return `- ${val.toLocaleString("vi-VN")} VND`;
+  })();
+
+  const images = getRoomImages(room);
 
   return (
     <TouchableOpacity
@@ -93,36 +121,44 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
           scrollEventThrottle={16}
           onMomentumScrollEnd={handleImageScroll}
         >
-          <Image
-            source={{ uri: room.urlAnhPhong }}
-            style={styles.carouselImage}
-            contentFit="cover"
-          />
-          {room.promotions && room.promotions.length > 0 && (
-            <Image
-              source={{ uri: room.urlAnhPhong }}
-              style={styles.carouselImage}
-              contentFit="cover"
-            />
+          {images.length > 0 ? (
+            images.map((img, idx) => (
+              <Image
+                key={idx}
+                source={{ uri: img }}
+                style={styles.carouselImage}
+                contentFit="cover"
+              />
+            ))
+          ) : (
+            <View
+              style={[
+                styles.carouselImage,
+                { justifyContent: "center", alignItems: "center" },
+              ]}
+            >
+              <Text>Không có ảnh</Text>
+            </View>
           )}
         </ScrollView>
 
         {/* Image Indicators */}
         <View style={styles.indicatorContainer}>
-          <View style={[styles.indicator, activeImageIndex === 0 && styles.indicatorActive]} />
-          {room.promotions && room.promotions.length > 0 && (
-            <View style={[styles.indicator, activeImageIndex === 1 && styles.indicatorActive]} />
-          )}
+          {images.map((_, idx) => (
+            <View
+              key={idx}
+              style={[
+                styles.indicator,
+                activeImageIndex === idx && styles.indicatorActive,
+              ]}
+            />
+          ))}
         </View>
 
         {/* Promotion Badge */}
         {room.promotions && room.promotions.length > 0 && (
           <View style={styles.promotionBadge}>
-            <Text style={styles.promotionBadgeText}>
-              {room.promotions[0].type === 'percent' 
-                ? `-${room.promotions[0].value}%` 
-                : `- ${room.promotions[0].value}`}
-            </Text>
+            <Text style={styles.promotionBadgeText}>{promoLabel}</Text>
           </View>
         )}
       </View>
@@ -132,17 +168,22 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
         <Text style={styles.roomTitle} numberOfLines={2}>
           {room.tenPhong}
         </Text>
-        
+
         <View style={styles.ratingRow}>
           {(() => {
-            const avg = (stats && typeof stats.averageRating === 'number') ? stats.averageRating : (room.xepHangSao ?? 0);
+            const avg =
+              stats && typeof stats.averageRating === "number"
+                ? stats.averageRating
+                : room.xepHangSao ?? 0;
             return (
               <>
                 <StarRating avg={avg} size={14} />
                 <Text style={styles.ratingCount}>
                   {stats?.totalReviews != null
                     ? `${avg.toFixed(1)}/5 · ${stats.totalReviews} đánh giá`
-                    : (room.xepHangSao != null ? `${(room.xepHangSao).toFixed(1)}/5` : '(chưa có đánh giá)')}
+                    : room.xepHangSao != null
+                    ? `${room.xepHangSao.toFixed(1)}/5`
+                    : "(chưa có đánh giá)"}
                 </Text>
               </>
             );
@@ -155,30 +196,35 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
 
         {/* Price & CTA */}
         <View style={styles.priceRow}>
-          <View style={hasPromotion ? styles.priceInfoPromoContainer : styles.priceInfo}>
+          <View
+            style={
+              hasPromotion ? styles.priceInfoPromoContainer : styles.priceInfo
+            }
+          >
             <Text style={styles.priceLabel}>Từ</Text>
 
             {hasPromotion ? (
               <View style={styles.promoStack}>
-                <Text style={styles.originalPrice}>{basePrice.toLocaleString()} VND</Text>
+                <Text style={styles.originalPrice}>
+                  {basePrice.toLocaleString()} VND
+                </Text>
                 <View style={styles.promoRow}>
-                  <Text style={styles.promoPrice}>{displayPrice.toLocaleString()} VND</Text>
+                  <Text style={styles.promoPrice}>
+                    {displayPrice.toLocaleString()} VND
+                  </Text>
                   <Text style={styles.priceUnit}>/ đêm</Text>
                 </View>
               </View>
             ) : (
               <View style={styles.priceInfoRow}>
-                <Text style={styles.price}>{displayPrice.toLocaleString()} VND</Text>
+                <Text style={styles.price}>
+                  {displayPrice.toLocaleString()} VND
+                </Text>
                 <Text style={styles.priceUnit}>/ đêm</Text>
               </View>
             )}
           </View>
-          <TouchableOpacity
-            style={styles.ctaButton}
-            onPress={onPress}
-          >
-            <Text style={styles.ctaButtonText}>Đặt phòng</Text>
-          </TouchableOpacity>
+          
         </View>
       </View>
     </TouchableOpacity>

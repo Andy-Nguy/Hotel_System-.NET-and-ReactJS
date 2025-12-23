@@ -59,6 +59,12 @@ const SelectRoomPage: React.FC = () => {
   const [selectedForDetail, setSelectedForDetail] = useState<any>(null);
 
   useEffect(() => {
+    // IMPORTANT: Clear old booking info when entering this page to prevent stale data
+    try {
+      sessionStorage.removeItem("bookingInfo");
+      console.log("🧹 Cleared old bookingInfo from sessionStorage");
+    } catch {}
+
     // Lấy danh sách phòng từ sessionStorage
     const roomsFromSession = sessionStorage.getItem("bookingResults");
 
@@ -76,10 +82,21 @@ const SelectRoomPage: React.FC = () => {
             promotionName: room.promotionName,
             discountPercent: room.discountPercent,
             urlAnhPhong: room.urlAnhPhong,
-            urlAnhPhongType: Array.isArray(room.urlAnhPhong) ? "array" : typeof room.urlAnhPhong,
+            urlAnhPhongType: Array.isArray(room.urlAnhPhong)
+              ? "array"
+              : typeof room.urlAnhPhong,
           });
         });
         setAvailableRooms(parsed);
+
+        // IMPORTANT: Always reset selected rooms when entering this page
+        // This prevents showing old room selections from previous bookings
+        setSelectedRooms([]);
+        setCurrentRoomNumber(1);
+        setSelectionComplete(false);
+        setSelectedServices([]);
+        setServicesTotal(0);
+
         setLoading(false);
       } catch (e) {
         console.error("Error parsing booking results:", e);
@@ -170,14 +187,23 @@ const SelectRoomPage: React.FC = () => {
     if (!normalized.urlAnhPhong) {
       // fallback checks for common alternatives from API/raw payload
       normalized.urlAnhPhong =
-        room.roomImageUrl ?? room.RoomImageUrl ?? room.imageUrl ?? room.images ?? room.Images ?? room.__raw?.roomImageUrl ?? room.__raw?.RoomImageUrl ?? undefined;
+        room.roomImageUrl ??
+        room.RoomImageUrl ??
+        room.imageUrl ??
+        room.images ??
+        room.Images ??
+        room.__raw?.roomImageUrl ??
+        room.__raw?.RoomImageUrl ??
+        undefined;
     }
     // If images are provided as a comma/semicolon separated string, keep as-is;
     // DetailImage will split and normalize values. If it's an array, pass through.
     console.log("🖼️ handleOpenDetail - Passing to DetailRoom:", {
       tenPhong: normalized.tenPhong,
       urlAnhPhong: normalized.urlAnhPhong,
-      urlAnhPhongType: Array.isArray(normalized.urlAnhPhong) ? "array" : typeof normalized.urlAnhPhong,
+      urlAnhPhongType: Array.isArray(normalized.urlAnhPhong)
+        ? "array"
+        : typeof normalized.urlAnhPhong,
     });
     setSelectedForDetail(normalized);
     setDetailVisible(true);
@@ -401,12 +427,16 @@ const SelectRoomPage: React.FC = () => {
                           <>
                             <br />
                             <Text type="secondary" style={{ fontSize: "13px" }}>
-                              {selected.room.tenPhong || selected.room.roomNumber || `Phòng ${selected.room.idphong}`}
+                              {selected.room.tenPhong ||
+                                selected.room.roomNumber ||
+                                `Phòng ${selected.room.idphong}`}
                             </Text>
                             {selected.room.promotionName && (
                               <>
                                 <br />
-                                <Text style={{ fontSize: "12px", color: "#52c41a" }}>
+                                <Text
+                                  style={{ fontSize: "12px", color: "#52c41a" }}
+                                >
                                   🎉 {selected.room.promotionName}
                                 </Text>
                               </>

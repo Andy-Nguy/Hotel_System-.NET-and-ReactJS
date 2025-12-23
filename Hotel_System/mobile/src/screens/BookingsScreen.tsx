@@ -72,6 +72,13 @@ const getStatusBadgeStyle = (
           textColor: AppColors.success,
         };
         break;
+      case 5: // Overdue
+        style = {
+          backgroundColor: "#fef2f0",
+          borderColor: "#ff7875",
+          textColor: "#ff7875",
+        };
+        break;
     }
   } else if (type === "payment") {
     switch (status) {
@@ -118,6 +125,8 @@ const mapBookingStatusText = (status: number | undefined | null) => {
       return "Đang sử dụng";
     case 4:
       return "Hoàn thành";
+    case 5:
+      return "Quá hạn";
     default:
       return "Không xác định";
   }
@@ -187,6 +196,7 @@ const BookingsScreen: React.FC = () => {
   >(null);
   const refreshTimers = useRef<Array<any>>([]);
   const [completingId, setCompletingId] = useState<string | null>(null);
+  const [reviewStatusMap, setReviewStatusMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     // Enable LayoutAnimation for Android
@@ -234,6 +244,31 @@ const BookingsScreen: React.FC = () => {
         count: sortedData.length,
         sample: sortedData[0],
       });
+
+      // Check review status for all completed bookings
+      const statusMap: Record<string, boolean> = {};
+      for (const booking of sortedData) {
+        const statusCode = getProp(booking, "trangThai", "TrangThai");
+        if (Number(statusCode) === 4) { // Only check for completed bookings
+          const bookingId = getProp(
+            booking,
+            "IddatPhong",
+            "iddatPhong",
+            "IDDatPhong"
+          );
+          if (bookingId) {
+            try {
+              const res = await reviewApi.getReviewStatus(String(bookingId));
+              if (res?.ok && res.data?.hasReview) {
+                statusMap[String(bookingId)] = true;
+              }
+            } catch (err) {
+              console.debug("Error checking review status for booking", bookingId, err);
+            }
+          }
+        }
+      }
+      setReviewStatusMap(statusMap);
     } catch (e: any) {
       // Map backend/internal errors to friendly user-facing messages.
       const rawMsg = (e?.message || "").toString();
@@ -265,51 +300,15 @@ const BookingsScreen: React.FC = () => {
     }
   };
 
-  // When bookings change, schedule refreshes for bookings whose checkout
-  // time is in the future and whose status is not yet 'Completed' (4).
-  // If a booking's checkout time already passed but the server hasn't
-  // updated status to 4, trigger an immediate refresh so the review button
-  // can become enabled.
+  // When bookings change, do NOT auto-refresh based on checkout time.
+  // Only allow manual refresh (pull-to-refresh or reload button) to avoid flickering.
+  // This ensures all statuses (1, 2, 3, 4, 5) display smoothly without constant reloading.
   useEffect(() => {
     // Clear existing timers
     try {
       refreshTimers.current.forEach((t) => clearTimeout(t));
     } catch (e) {}
     refreshTimers.current = [];
-
-    const now = new Date();
-    let shouldRefreshImmediately = false;
-
-    bookings.forEach((item) => {
-      const checkout = item?.ngayTraPhong ? new Date(item.ngayTraPhong) : null;
-      const rawStatus = getProp(item, "trangThai", "TrangThai");
-      const statusCode =
-        rawStatus !== undefined ? Number(rawStatus) : undefined;
-
-      if (!checkout) return;
-
-      const msUntil = checkout.getTime() - now.getTime();
-
-      // If checkout already passed but server hasn't marked completed, refresh now
-      if (msUntil <= 0 && statusCode !== 4) {
-        shouldRefreshImmediately = true;
-        return;
-      }
-
-      // Otherwise schedule a refresh right after checkout time to get latest status
-      if (msUntil > 0 && statusCode !== 4) {
-        const t = setTimeout(() => {
-          loadBookings();
-        }, msUntil + 1000); // +1s buffer
-        refreshTimers.current.push(t as any);
-      }
-    });
-
-    if (shouldRefreshImmediately) {
-      // debounce a short bit to avoid spamming
-      const t = setTimeout(() => loadBookings(), 500);
-      refreshTimers.current.push(t as any);
-    }
 
     return () => {
       try {
@@ -499,8 +498,10 @@ const BookingsScreen: React.FC = () => {
     const checkoutRaw = getProp(item, "ngayTraPhong", "NgayTraPhong");
     const checkoutDate = checkoutRaw ? new Date(checkoutRaw) : null;
     const now = new Date();
-    const canOpenReview =
-      statusCode === 4 || (!!checkoutDate && now >= checkoutDate);
+    // Only allow review when booking status is explicitly 'Hoàn thành' (4)
+    // Previous behavior also allowed review when checkout date passed (now >= checkoutDate)
+    // which caused the button to appear for many non-completed bookings. Restrict to 4.
+    const canOpenReview = statusCode === 4;
 
     const bookingStatusStyle = getStatusBadgeStyle("booking", statusCode);
     const paymentStatusStyle = getStatusBadgeStyle("payment", paymentCode);
@@ -655,8 +656,8 @@ const BookingsScreen: React.FC = () => {
                 // Use bookingId (DB id) for API calls; bookingCode is for display
                 const bId = String(bookingId);
 
-                // If status isn't marked completed, try completing checkout
-                if (statusCode !== 4) {
+                // If status isn't marked completed (4) and not overdue (5), try completing checkout
+                if (statusCode !== 4 && statusCode !== 5) {
                   try {
                     setCompletingId(bId);
                     const r = await reviewApi.completeCheckout(bId);
@@ -692,6 +693,8 @@ const BookingsScreen: React.FC = () => {
 
                   if (res && res.ok && res.data) {
                     if (res.data.hasReview) {
+                      // Cập nhật review status map
+                      setReviewStatusMap(prev => ({ ...prev, [bId]: true }));
                       Alert.alert(
                         "Đã đánh giá",
                         "Bạn đã gửi đánh giá cho đặt phòng này rồi."
@@ -712,7 +715,7 @@ const BookingsScreen: React.FC = () => {
               }}
               disabled={completingId === String(bookingId)}
               style={{
-                backgroundColor: COLORS.primary,
+                backgroundColor: reviewStatusMap[String(bookingId)] ? "#52c41a" : COLORS.primary,
                 paddingVertical: 6,
                 paddingHorizontal: 12,
                 borderRadius: 6,
@@ -723,7 +726,7 @@ const BookingsScreen: React.FC = () => {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={{ color: "#fff", fontWeight: "700" }}>
-                  Đánh giá
+                  {reviewStatusMap[String(bookingId)] ? "Đã đánh giá" : "Đánh giá"}
                 </Text>
               )}
             </TouchableOpacity>

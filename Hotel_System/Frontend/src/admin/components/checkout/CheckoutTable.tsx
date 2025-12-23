@@ -35,6 +35,10 @@ interface Props {
   setKeyword?: (s: string) => void;
   selectedDate?: Dayjs | null;
   setSelectedDate?: (d: Dayjs | null) => void;
+  filterFromDate?: Dayjs | null;
+  setFilterFromDate?: (d: Dayjs | null) => void;
+  filterToDate?: Dayjs | null;
+  setFilterToDate?: (d: Dayjs | null) => void;
   onReload?: () => void;
 }
 
@@ -56,6 +60,10 @@ const CheckoutTable: React.FC<Props> = ({
   setKeyword,
   selectedDate,
   setSelectedDate,
+  filterFromDate,
+  setFilterFromDate,
+  filterToDate,
+  setFilterToDate,
   onReload,
 }) => {
   // track disabled state per booking id to prevent repeated clicks
@@ -63,8 +71,6 @@ const CheckoutTable: React.FC<Props> = ({
   // track when overdue fee has been paid for a booking (local UX state)
   const [overduePaidMap, setOverduePaidMap] = React.useState<Record<string, boolean>>({});
   const [detailsMap, setDetailsMap] = useState<Record<string, any[]>>({});
-  const [filterFromDate, setFilterFromDate] = useState<Dayjs | null>(null);
-  const [filterToDate, setFilterToDate] = useState<Dayjs | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -99,6 +105,12 @@ const CheckoutTable: React.FC<Props> = ({
     try {
       const start = r.NgayNhanPhong ? dayjs(r.NgayNhanPhong) : null;
       const end = r.NgayTraPhong ? dayjs(r.NgayTraPhong) : null;
+
+      // If a specific day is selected, show only bookings that end on that day
+      if (selectedDate) {
+        if (!end) return false;
+        return end.isSame(selectedDate, 'day');
+      }
 
       if (filterFromDate && filterToDate) {
         // include if booking range overlaps [filterFromDate, filterToDate]
@@ -448,32 +460,11 @@ const CheckoutTable: React.FC<Props> = ({
               format="YYYY-MM-DD"
               allowClear={false}
             />
-           
+            <Button onClick={() => onReload?.()}>Tải lại</Button>
           </Space>
         </div>
-
-        {/* Date filters to allow checking future bookings */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{ fontSize: 12, color: '#475569' }}>Từ ngày</div>
-          <DatePicker
-            value={filterFromDate}
-            onChange={(d) => setFilterFromDate(d)}
-            allowClear
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{ fontSize: 12, color: '#475569' }}>Đến ngày</div>
-          <DatePicker
-            value={filterToDate}
-            onChange={(d) => setFilterToDate(d)}
-            allowClear
-          />
-           <Button onClick={() => onReload?.()}>Tải lại</Button>
-        </div>
-
         <div style={{ marginLeft: 'auto' }}>
-          <Button onClick={() => { setFilterFromDate(null); setFilterToDate(null); message.success('Đã xóa bộ lọc ngày'); }}>
+          <Button onClick={() => { setSelectedDate?.(null); setFilterFromDate?.(null); setFilterToDate?.(null); message.success('Đã xóa bộ lọc ngày'); }}>
             Xóa bộ lọc
           </Button>
         </div>

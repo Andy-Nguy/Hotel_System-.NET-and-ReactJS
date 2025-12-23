@@ -268,6 +268,34 @@ const CheckinTable: React.FC<Props> = ({
   // Cache of rooms from Rooms API to enrich room info
   const [roomsMap, setRoomsMap] = useState<Record<string, ApiRoom>>({});
 
+  // Local image resolver to normalize room image values (array, JSON, comma-lists)
+  function resolveImageUrl(u: any, fallback = '/img/room/default.webp') {
+    if (u == null) return fallback;
+    if (Array.isArray(u)) {
+      const first = u.find((x: any) => !!x);
+      return resolveImageUrl(first, fallback);
+    }
+    if (typeof u === 'object') {
+      const candidate = (u && (u.u || u.url || u.src || u.urlAnhPhong)) || null;
+      return resolveImageUrl(candidate, fallback);
+    }
+    let s = String(u).trim();
+    if (!s) return fallback;
+    if (s.startsWith('[')) {
+      try {
+        const arr = JSON.parse(s);
+        if (Array.isArray(arr) && arr.length > 0) return resolveImageUrl(arr[0], fallback);
+      } catch (e) {}
+    }
+    if (s.includes(',') || s.includes(';') || s.includes('|')) {
+      const first = s.split(/[,|;]+/)[0].trim();
+      return resolveImageUrl(first, fallback);
+    }
+    if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return s;
+    if (s.startsWith('/img') || s.startsWith('/')) return s;
+    return `/img/room/${s}`;
+  }
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -447,7 +475,7 @@ const CheckinTable: React.FC<Props> = ({
                                           const id = idPhongFromItem(it);
                                           const roomInfo = id ? roomsMap[String(id)] : null;
                                           const src = roomInfo?.urlAnhPhong ?? null;
-                                          if (src) return (<Image src={src} width={96} height={64} style={{ objectFit: 'cover', borderRadius: 6 }} preview={false} />);
+                                          if (src) return (<Image src={resolveImageUrl(src)} width={96} height={64} style={{ objectFit: 'cover', borderRadius: 6 }} preview={false} />);
                                           return null;
                                         })()}
                                         <div>

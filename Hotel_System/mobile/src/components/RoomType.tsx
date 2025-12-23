@@ -9,9 +9,10 @@ import {
   Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
+import { getPrimaryRoomImage } from "../utils/imageUtils";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
-import { getRooms, Room } from "../api/roomsApi";
+import { getRooms, getRoomTypes, Room } from "../api/roomsApi";
 
 const { width } = Dimensions.get("window");
 import AppIcon from "./AppIcon";
@@ -40,7 +41,14 @@ const RoomType: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const rooms = await getRooms();
+      // Fetch both rooms and room types so we can use UrlAnhLoaiPhong from types
+      const [rooms, types] = await Promise.all([getRooms(), getRoomTypes()]);
+
+      const typesMap = new Map<string, { urlAnhLoaiPhong?: string | null }>();
+      types.forEach((t: any) => {
+        if (t && t.idloaiPhong)
+          typesMap.set(t.idloaiPhong, { urlAnhLoaiPhong: t.urlAnhLoaiPhong });
+      });
 
       // Group rooms by loại phòng and get min price for each type
       const roomTypeMap = new Map<string, RoomTypeData>();
@@ -50,10 +58,14 @@ const RoomType: React.FC = () => {
         const typeName = room.tenLoaiPhong || "Loại phòng";
 
         if (!roomTypeMap.has(typeId)) {
+          // Prefer type image from LoaiPhong (UrlAnhLoaiPhong), fallback to room image
+          const typeImg = typesMap.get(typeId)?.urlAnhLoaiPhong || null;
+
           roomTypeMap.set(typeId, {
             idloaiPhong: typeId,
             tenLoaiPhong: typeName,
-            urlAnhPhong: room.urlAnhPhong,
+            // Use UrlAnhLoaiPhong from LoaiPhong; fallback to room's urlAnhPhong
+            urlAnhPhong: typeImg || room.urlAnhLoaiPhong || room.urlAnhPhong,
             moTa: room.moTa,
             minPrice: room.giaCoBanMotDem || 0,
           });
@@ -90,9 +102,9 @@ const RoomType: React.FC = () => {
     >
       {/* Full image card with rounded corners */}
       <View style={styles.imageContainer}>
-        {item.urlAnhPhong ? (
+        {getPrimaryRoomImage(item) ? (
           <Image
-            source={{ uri: item.urlAnhPhong }}
+            source={{ uri: getPrimaryRoomImage(item) || "" }}
             style={styles.roomImage}
             contentFit="cover"
             onError={(e) => console.log("Image load error:", item.urlAnhPhong)}

@@ -42,6 +42,13 @@ namespace Hotel_System.API.Controllers
         // - Luôn set HoaDon.TienThanhToan rõ ràng
         // - Đồng bộ DatPhong.TongTien & DatPhong.TrangThaiThanhToan (cash/quầy = 1; online = 2)
         // - Gửi email hóa đơn khi đã thanh toán (online) VỚI BODY
+        // 
+        // LOYALTY POINTS SYSTEM:
+        //   - Earning: 500,000 VND = 1 point (cứ 500k tiền thanh toán được +1 điểm)
+        //   - Redeeming: 1 point = 100 VND discount (1 điểm có thể dùng để giảm 100đ)
+        //   - Max redeem: 50% of total invoice amount
+        //   - Points are deducted when payment completes (status = 2 = Đã thanh toán đầy đủ)
+        //   - Points are earned when payment completes (status = 2)
         // ===========================
         [HttpPost("hoa-don")]
         public async Task<IActionResult> CreateInvoice([FromBody] HoaDonPaymentRequest request)
@@ -167,9 +174,13 @@ namespace Hotel_System.API.Controllers
                 // Apply VAT 10% and round to nearest integer
                 decimal tongTien = Math.Round(totalBeforeVat * 1.1m, 0, MidpointRounding.AwayFromZero);
                 _logger.LogInformation("PaymentController: computed tongTien server-side room={Room} services={Services} tongTien={TongTien}", roomTotal, servicesTotal, tongTien);
+                // Keep a copy of the pre-discount total so earned points are calculated
+                // from the invoice total (before applying redeemed points).
+                decimal tongTienBeforePoints = tongTien;
 
                 // ============ LOYALTY POINTS: Validate and apply discount ============
-                const int POINT_VALUE_VND = 100; // 1 point = 100 VND
+                const decimal POINT_VALUE_VND = 10000m; // 1 point redeemed = 10,000 VND discount
+                const decimal POINTS_EARN_RATE = 500000m; // 500,000 VND earned = 1 point awarded
                 const decimal MAX_REDEEM_PERCENT = 0.5m; // Max 50% invoice discount
                 int pointsToUse = request.RedeemPoints ?? 0;
                 int customerCurrentPoints = datPhong.IdkhachHangNavigation?.TichDiem ?? 0;
@@ -199,37 +210,23 @@ namespace Hotel_System.API.Controllers
                 // Persist VAT-inclusive total (after point discount) to booking
                 datPhong.TongTien = tongTien;
 
-                // Lấy tiền cọc hiện có trên DatPhong làm nguồn dữ liệu mặc định
-                decimal tienCoc = datPhong.TienCoc ?? 0m;
-
-                // Nếu client gửi TienCoc trong request (ví dụ chọn đặt cọc 500k),
-                // dùng giá trị đó và cập nhật DatPhong.TienCoc
-                if (request.TienCoc.HasValue && request.TienCoc.Value > 0m)
+                // Lấy tiền cọc từ request (ưu tiên request hơn DatPhong hiện tại)
+                // Mobile sẽ gửi: 0 khi thanh toán toàn bộ, hoặc 500.000 khi đặt cọc
+                decimal tienCoc = request.TienCoc ?? 0m;
+                if (tienCoc > 0m)
                 {
-                    tienCoc = request.TienCoc.Value;
                     datPhong.TienCoc = tienCoc;
                 }
 
-                // Quy tắc xác định trạng thái thanh toán:
-                // - PhuongThucThanhToan == 1 (tiền mặt) -> đã thanh toán ngay (2)
-                // - PhuongThucThanhToan == 2 (online) -> client có thể gửi 0 (cọc), 1 (chưa), hoặc 2 (đã TT)
-                // - PhuongThucThanhToan == 3 (tại quầy) -> chưa thanh toán (1)
-                int trangThaiThanhToan;
-                if (request.PhuongThucThanhToan == 1)
+                // Quy tắc xác định trạng thái thanh toán dựa trên TrangThaiThanhToan từ client:
+                // - 0: Đã đặt cọc (tienCoc > 0)
+                // - 1: Chưa thanh toán (tienCoc = 0)
+                // - 2: Đã thanh toán đầy đủ (tienCoc = 0, thanh toán toàn bộ)
+                int trangThaiThanhToan = request.TrangThaiThanhToan ?? 1; // Default: chưa TT
+                
+                // Validate trangThaiThanhToan values: only 0, 1, 2 are valid
+                if (trangThaiThanhToan != 0 && trangThaiThanhToan != 1 && trangThaiThanhToan != 2)
                 {
-                    // Tiền mặt: đã thanh toán ngay
-                    trangThaiThanhToan = 2;
-                }
-                else if (request.PhuongThucThanhToan == 2)
-                {
-                    // Online: dùng giá trị client gửi nếu hợp lệ, ngược lại mặc định = 2 (đã thanh toán online)
-                    trangThaiThanhToan = request.TrangThaiThanhToan.HasValue ? request.TrangThaiThanhToan.Value : 2;
-                    if (trangThaiThanhToan != 0 && trangThaiThanhToan != 1 && trangThaiThanhToan != 2)
-                        trangThaiThanhToan = 2;
-                }
-                else
-                {
-                    // Tại quầy / tại khách sạn => chưa thanh toán
                     trangThaiThanhToan = 1;
                 }
 
@@ -240,31 +237,22 @@ namespace Hotel_System.API.Controllers
                 decimal tienThanhToan;
                 if (trangThaiThanhToan == 2)
                 {
-                    // Đã thanh toán đầy đủ online
+                    // Đã thanh toán đầy đủ
                     tienThanhToan = tongTien;
                 }
                 else if (trangThaiThanhToan == 0)
                 {
+                    // Đã đặt cọc
                     tienThanhToan = tienCoc;
                 }
                 else
                 {
+                    // Chưa thanh toán (1)
                     tienThanhToan = 0m;
                 }
 
-                // Override trạng thái thanh toán dựa trên số tiền thực tế đã thanh toán
-                if (tienThanhToan >= tongTien)
-                {
-                    trangThaiThanhToan = 2; // Đã thanh toán đầy đủ
-                }
-                else if (tienThanhToan >= tienCoc && tienThanhToan > 0)
-                {
-                    trangThaiThanhToan = 0; // Đã đặt cọc
-                }
-                else
-                {
-                    trangThaiThanhToan = 1; // Chưa thanh toán
-                }
+                _logger.LogInformation("PaymentController: TrangThaiThanhToan={Status}, TienCoc={TienCoc}, TienThanhToan={TienThanhToan}, TongTien={TongTien}",
+                    trangThaiThanhToan, tienCoc, tienThanhToan, tongTien);
 
                 // ========== LƯU GIÁ ĐÃ CHỐT VÀO GHICHU ==========
                 // Format: [PRICE_LOCKED]{"goc":X,"giamKM":Y,"giamDiem":Z,"cuoi":W,"diemDaDung":N}[/PRICE_LOCKED]
@@ -316,6 +304,8 @@ namespace Hotel_System.API.Controllers
 
                         string? comboId = null;
                         string? serviceId = svc.IddichVu?.Trim();
+                        List<string> servicesToSave = new List<string>();
+                        decimal discountPercent = 0m;  // For combo discount calculation
 
                         // Check for combo
                         if (!string.IsNullOrEmpty(serviceId) && serviceId.StartsWith("combo:"))
@@ -323,16 +313,37 @@ namespace Hotel_System.API.Controllers
                             if (serviceId.Length > 6)
                             {
                                 comboId = serviceId.Substring(6).Trim();
-                                // For combos, get the first service ID from the combo
-                                var comboServices = await _context.KhuyenMaiComboDichVus
+                                // For combos, get ALL services in the combo AND discount info
+                                var comboServicesList = await _context.KhuyenMaiComboDichVus
                                     .Where(kmc => kmc.IdkhuyenMaiCombo == comboId)
                                     .OrderBy(kmc => kmc.Id)
-                                    .FirstOrDefaultAsync();
+                                    .Select(kmc => kmc.IddichVu)
+                                    .ToListAsync();
                                 
-                                if (comboServices != null)
+                                // Get combo discount info from KhuyenMaiCombo -> KhuyenMai
+                                var comboRecord = await _context.KhuyenMaiCombos
+                                    .Include(kmc => kmc.IdkhuyenMaiNavigation)
+                                    .FirstOrDefaultAsync(kmc => kmc.IdkhuyenMaiCombo == comboId);
+                                
+                                if (comboRecord?.IdkhuyenMaiNavigation != null)
                                 {
-                                    serviceId = comboServices.IddichVu;
-                                    _logger.LogInformation("PaymentController: combo {ComboId} mapped to service {ServiceId}", comboId, serviceId);
+                                    var comboKhuyenMai = comboRecord.IdkhuyenMaiNavigation;
+                                    if (comboKhuyenMai.GiaTriGiam.HasValue)
+                                    {
+                                        var kind = comboKhuyenMai.LoaiGiamGia ?? string.Empty;
+                                        if (kind.IndexOf("percent", StringComparison.OrdinalIgnoreCase) >= 0 || kind.Contains("%"))
+                                        {
+                                            // Percentage discount
+                                            discountPercent = Math.Min(100m, comboKhuyenMai.GiaTriGiam.Value);
+                                            _logger.LogInformation("PaymentController: combo {ComboId} có giảm giá {Percent}%", comboId, discountPercent);
+                                        }
+                                    }
+                                }
+                                
+                                if (comboServicesList != null && comboServicesList.Any())
+                                {
+                                    servicesToSave = comboServicesList;
+                                    _logger.LogInformation("PaymentController: combo {ComboId} có {Count} dịch vụ, giảm {Discount}%", comboId, servicesToSave.Count, discountPercent);
                                 }
                                 else
                                 {
@@ -355,50 +366,84 @@ namespace Hotel_System.API.Controllers
                                 _logger.LogWarning("PaymentController: dịch vụ {Id} không tồn tại, bỏ qua", serviceId);
                                 continue;
                             }
+                            servicesToSave.Add(serviceId);
                         }
 
-                        // At this point, serviceId MUST be non-null for IddichVu (required field)
-                        if (string.IsNullOrEmpty(serviceId))
+                        // Save all services (either from combo or individual service)
+                        if (servicesToSave.Any())
                         {
-                            _logger.LogWarning("PaymentController: không thể xác định serviceId cho dịch vụ, bỏ qua");
-                            continue;
+                            // Nếu client không gửi thời gian thực hiện, mặc định dùng khoảng đặt phòng (check-in -> check-out)
+                            DateTime? svcTime = svc.ThoiGianThucHien;
+                            DateTime thoiGianThucHien = svcTime ?? DateTime.UtcNow;
+
+                            DateTime thoiGianBatDau;
+                            DateTime thoiGianKetThuc;
+                            try
+                            {
+                                // DatPhong.NgayNhanPhong / NgayTraPhong là DateOnly
+                                var start = datPhong.NgayNhanPhong.ToDateTime(TimeOnly.MinValue);
+                                var end = datPhong.NgayTraPhong.ToDateTime(new TimeOnly(23, 59, 59));
+                                thoiGianBatDau = svcTime ?? start;
+                                thoiGianKetThuc = svcTime != null ? svcTime.Value.AddMinutes(30) : end;
+                            }
+                            catch
+                            {
+                                // Fallback nếu DateOnly->DateTime không khả dụng
+                                thoiGianBatDau = svcTime ?? DateTime.UtcNow;
+                                thoiGianKetThuc = svcTime != null ? svcTime.Value.AddMinutes(30) : DateTime.UtcNow.AddHours(1);
+                            }
+
+                            // Create Cthddv record for EACH service in the list
+                            foreach (var svcId in servicesToSave)
+                            {
+                                // Get individual service price from DichVu table
+                                decimal servicePriceForThisRecord = 0m;
+                                
+                                if (comboId != null)
+                                {
+                                    // For combo: get individual service price and apply discount
+                                    var dichVu = await _context.DichVus.FirstOrDefaultAsync(dv => dv.IddichVu == svcId);
+                                    if (dichVu != null)
+                                    {
+                                        decimal basePrice = dichVu.TienDichVu ?? 0m;
+                                        // Apply combo discount to this service
+                                        if (discountPercent > 0)
+                                        {
+                                            servicePriceForThisRecord = basePrice * (1 - (discountPercent / 100m));
+                                        }
+                                        else
+                                        {
+                                            servicePriceForThisRecord = basePrice;
+                                        }
+                                        _logger.LogInformation("PaymentController: combo service {ServiceId} giá gốc={BasePrice} sau giảm {Discount}% = {DiscountedPrice}", 
+                                            svcId, basePrice, discountPercent, servicePriceForThisRecord);
+                                    }
+                                }
+                                else
+                                {
+                                    // For individual service: use provided price
+                                    servicePriceForThisRecord = svc.TienDichVu != 0m ? svc.TienDichVu : svc.DonGia * Math.Max(1, svc.SoLuong);
+                                }
+
+                                var cthd = new Cthddv
+                                {
+                                    IdhoaDon = idHoaDon,
+                                    IddichVu = svcId,
+                                    IdkhuyenMaiCombo = comboId,  // Same comboId for all services in combo
+                                    TienDichVu = Math.Round(servicePriceForThisRecord, 0, MidpointRounding.AwayFromZero),  // Rounded discounted price
+                                    ThoiGianThucHien = thoiGianThucHien,
+                                    ThoiGianBatDau = thoiGianBatDau,
+                                    ThoiGianKetThuc = thoiGianKetThuc,
+                                    TrangThai = "new"
+                                };
+                                _context.Cthddvs.Add(cthd);
+                                _logger.LogInformation("PaymentController: thêm Cthddv dịch vụ {ServiceId} với giá {Price} và combo {ComboId}", svcId, servicePriceForThisRecord, comboId ?? "null");
+                            }
                         }
-
-                        var tienDichVu = svc.TienDichVu != 0m ? svc.TienDichVu : svc.DonGia * Math.Max(1, svc.SoLuong);
-
-                        // Nếu client không gửi thời gian thực hiện, mặc định dùng khoảng đặt phòng (check-in -> check-out)
-                        DateTime? svcTime = svc.ThoiGianThucHien;
-                        DateTime thoiGianThucHien = svcTime ?? DateTime.UtcNow;
-
-                        DateTime thoiGianBatDau;
-                        DateTime thoiGianKetThuc;
-                        try
+                        else
                         {
-                            // DatPhong.NgayNhanPhong / NgayTraPhong là DateOnly
-                            var start = datPhong.NgayNhanPhong.ToDateTime(TimeOnly.MinValue);
-                            var end = datPhong.NgayTraPhong.ToDateTime(new TimeOnly(23, 59, 59));
-                            thoiGianBatDau = svcTime ?? start;
-                            thoiGianKetThuc = svcTime != null ? svcTime.Value.AddMinutes(30) : end;
+                            _logger.LogWarning("PaymentController: không thể xác định dịch vụ cho item, bỏ qua");
                         }
-                        catch
-                        {
-                            // Fallback nếu DateOnly->DateTime không khả dụng
-                            thoiGianBatDau = svcTime ?? DateTime.UtcNow;
-                            thoiGianKetThuc = svcTime != null ? svcTime.Value.AddMinutes(30) : DateTime.UtcNow.AddHours(1);
-                        }
-
-                        var cthd = new Cthddv
-                        {
-                            IdhoaDon = idHoaDon,
-                            IddichVu = serviceId,  // Always set with valid service ID
-                            IdkhuyenMaiCombo = comboId,
-                            TienDichVu = tienDichVu,
-                            ThoiGianThucHien = thoiGianThucHien,
-                            ThoiGianBatDau = thoiGianBatDau,
-                            ThoiGianKetThuc = thoiGianKetThuc,
-                            TrangThai = "new"
-                        };
-                        _context.Cthddvs.Add(cthd);
                     }
                 }
 
@@ -436,8 +481,10 @@ namespace Hotel_System.API.Controllers
                             pointsToUse, datPhong.IdkhachHangNavigation.IdkhachHang, datPhong.IdkhachHangNavigation.TichDiem);
                     }
 
-                    // Add earned points based on final amount paid (tongTien after discount)
-                    int pointsToAdd = (int)Math.Floor((double)(tongTien / POINT_VALUE_VND));
+                    // Add earned points based on invoice total BEFORE point discount
+                    // (business rule: earn points on total invoice amount)
+                    // 500,000 VND = 1 point
+                    int pointsToAdd = (int)Math.Floor((double)(tongTienBeforePoints / POINTS_EARN_RATE));
                     if (pointsToAdd > 0)
                     {
                         datPhong.IdkhachHangNavigation.TichDiem = (datPhong.IdkhachHangNavigation.TichDiem ?? 0) + pointsToAdd;
@@ -745,8 +792,8 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                         headerRow.RelativeItem().Column(col =>
                         {
                             col.Item().Text("Khách sạn Robins Villa").FontSize(20).SemiBold();
-                            col.Item().Text("Địa chỉ: 123 Đường Ví Dụ, Quận 1, TP. HCM").FontSize(10);
-                            col.Item().Text("Hotline: 1900-xxxx").FontSize(10);
+                            col.Item().Text("Địa chỉ: 4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng").FontSize(10);
+                            col.Item().Text("Hotline: 0123 456 789").FontSize(10);
                         });
 
                         headerRow.ConstantItem(220).Column(col =>
@@ -771,13 +818,6 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                                 c.Item().Text($"SĐT: {booking?.IdkhachHangNavigation?.SoDienThoai ?? "-"}");
                             });
 
-                            row.ConstantItem(220).Column(c =>
-                            {
-                                c.Item().AlignRight().Text("Chi tiết thanh toán").SemiBold();
-                                c.Item().AlignRight().Text($"Tiền phòng: {(hd.TienPhong ?? 0):N0} đ");
-                                c.Item().AlignRight().Text($"Tiền cọc: {(hd.TienCoc ?? 0m):N0} đ");
-                                c.Item().AlignRight().Text($"Tổng phải trả: {hd.TongTien:N0} đ");
-                            });
                         });
 
                         // Rooms table
@@ -834,7 +874,7 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                             }
                         });
 
-                        // Totals and notes
+                       
                         col.Item().PaddingTop(10).AlignRight().Column(totalCol =>
                         {
                             var total = hd.TongTien;
@@ -843,11 +883,11 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                             totalCol.Item().Text($"Đã thanh toán: {paid:N0} đ");
                             var due = Math.Max(0m, total - paid);
                             totalCol.Item().Text($"Còn nợ: {due:N0} đ");
-                            if (!string.IsNullOrWhiteSpace(hd.GhiChu)) totalCol.Item().PaddingTop(6).Text($"Ghi chú: {hd.GhiChu}");
+                            
                         });
                     });
 
-                    page.Footer().AlignCenter().Text(x => x.Span("Khách sạn Robins Villa - Hóa đơn tự động | Hotline: 1900-xxxx"));
+                    page.Footer().AlignCenter().Text(x => x.Span("Khách sạn Robins Villa - Hóa đơn tự động | Hotline: (+84) 263 3888 999"));
                 });
             });
 

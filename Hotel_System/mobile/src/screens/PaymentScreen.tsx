@@ -6,17 +6,18 @@ import {
   Text,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
   Modal,
   ActivityIndicator,
   Platform,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import AppIcon from "../components/AppIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { buildApiUrl } from "../config/apiConfig";
 import BookingProgress from "../components/BookingProgress";
+import HeaderScreen from "../components/HeaderScreen";
 
 interface InvoiceInfo {
   idDatPhong: string;
@@ -32,10 +33,14 @@ interface InvoiceInfo {
   holdExpiresAt?: string;
   customer: any;
   selectedServices?: any[];
+  selectedCombo?: any;
+  pointsUsed?: number;
+  pointsDiscount?: number;
 }
 
 const PaymentScreen: React.FC = () => {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [invoiceInfo, setInvoiceInfo] = useState<InvoiceInfo | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<string>("bank-transfer");
   const [depositOption, setDepositOption] = useState<"deposit" | "full">(
@@ -52,21 +57,46 @@ const PaymentScreen: React.FC = () => {
     loadInvoiceInfo();
   }, []);
 
+  // Refresh data when screen is focused (e.g., when returning from CheckoutScreen)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadInvoiceInfo();
+    }, [])
+  );
+
   const loadInvoiceInfo = async () => {
     try {
       const invoiceData = await AsyncStorage.getItem("finalBookingData");
       if (invoiceData) {
         const parsed = JSON.parse(invoiceData);
-        // Map finalBookingData to InvoiceInfo structure if needed, or just use it directly
-        // Assuming finalBookingData has the necessary fields or we adapt here
+
+        // Calculate service total including combo + individual services
+        let serviceTotal = 0;
+        if (parsed.selectedCombo) {
+          serviceTotal += parsed.selectedCombo.price || 0;
+        }
+        if (parsed.selectedServices && Array.isArray(parsed.selectedServices)) {
+          serviceTotal += parsed.selectedServices.reduce(
+            (sum: number, s: any) => {
+              return sum + (s.price || 0) * (s.quantity || 1);
+            },
+            0
+          );
+        }
+
         setInvoiceInfo({
           ...parsed,
-          grandTotal: parsed.pricing.totalAmount,
-          totalPrice: parsed.pricing.roomTotal + parsed.pricing.serviceTotal,
-          tax: parsed.pricing.tax,
+          grandTotal: parsed.pricing?.totalAmount || parsed.totalAmount || 0,
+          totalPrice: parsed.pricing?.roomTotal || 0 + serviceTotal,
+          tax: parsed.pricing?.tax || 0,
           nights: calculateNights(parsed.checkIn, parsed.checkOut),
           rooms: parsed.selectedRooms,
           customer: parsed.customerInfo,
+          selectedServices: parsed.selectedServices || [],
+          selectedCombo: parsed.selectedCombo || null,
+          // Include points information
+          pointsUsed: parsed.pointsUsed || 0,
+          pointsDiscount: parsed.pointsDiscount || 0,
         });
       } else {
         Alert.alert("Lỗi", "Không tìm thấy thông tin hóa đơn");
@@ -107,30 +137,34 @@ const PaymentScreen: React.FC = () => {
       let tienCoc = 0;
 
       if (selectedMethod === "hotel-payment") {
+        // Thanh toán tại khách sạn: chưa thanh toán
         paymentStatus = "unpaid";
         amountPaid = 0;
-        trangThaiThanhToan = 1;
-        phuongThucThanhToan = 1;
+        trangThaiThanhToan = 1; // 1 = Chưa thanh toán
+        phuongThucThanhToan = 1; // 1 = tiền mặt
         tienCoc = 0;
       } else if (selectedMethod === "bank-transfer") {
         if (depositOption === "deposit") {
+          // Thanh toán cọc tiền 500.000đ
           paymentStatus = "deposit";
           amountPaid = DEPOSIT_AMOUNT;
-          trangThaiThanhToan = 2; // Đã cọc
-          tienCoc = DEPOSIT_AMOUNT;
+          trangThaiThanhToan = 0; // 0 = Đã đặt cọc (không phải 2)
+          tienCoc = DEPOSIT_AMOUNT; // Cọc đúng 500.000đ
         } else {
+          // Thanh toán toàn bộ
           paymentStatus = "paid";
           amountPaid = invoiceInfo.grandTotal;
-          trangThaiThanhToan = 3; // Đã TT
-          tienCoc = invoiceInfo.grandTotal;
+          trangThaiThanhToan = 2; // 2 = Đã thanh toán đầy đủ
+          tienCoc = 0; // Không có cọc khi thanh toán toàn bộ
         }
-        phuongThucThanhToan = 2; // CK
+        phuongThucThanhToan = 2; // 2 = Chuyển khoản
       } else if (selectedMethod === "momo") {
+        // Thanh toán toàn bộ qua Momo
         paymentStatus = "paid";
         amountPaid = invoiceInfo.grandTotal;
-        trangThaiThanhToan = 3;
-        phuongThucThanhToan = 3; // Momo (assuming 3)
-        tienCoc = invoiceInfo.grandTotal;
+        trangThaiThanhToan = 2; // 2 = Đã thanh toán đầy đủ
+        phuongThucThanhToan = 3; // 3 = Momo
+        tienCoc = 0; // Không có cọc khi thanh toán toàn bộ
       }
 
       // Prepare booking payload theo CreateBookingRequest của backend
@@ -173,27 +207,60 @@ const PaymentScreen: React.FC = () => {
         }, 0);
 
         // Tạo payload cho API hóa đơn (giống Web)
+        // Build Services array including combo (if any) and individual services
+        const services: any[] = [];
+
+        // Add combo to services list with special format (combo:COMBOID)
+        if (invoiceInfo.selectedCombo && invoiceInfo.selectedCombo.comboId) {
+          services.push({
+            IddichVu: `combo:${invoiceInfo.selectedCombo.comboId}`,
+            SoLuong: 1,
+            DonGia: invoiceInfo.selectedCombo.price,
+            TienDichVu: invoiceInfo.selectedCombo.price,
+          });
+        }
+
+        // Add individual services
+        if (
+          invoiceInfo.selectedServices &&
+          invoiceInfo.selectedServices.length > 0
+        ) {
+          invoiceInfo.selectedServices.forEach((svc: any) => {
+            services.push({
+              IddichVu: svc.serviceId,
+              SoLuong: svc.quantity || 1,
+              DonGia: svc.price,
+              TienDichVu: svc.price * (svc.quantity || 1),
+            });
+          });
+        }
+
         const invoicePayload = {
           IDDatPhong: idDatPhong,
           TienPhong: Math.round(tienPhong),
           SoLuongNgay: nights,
           TongTien: Math.round(invoiceInfo.grandTotal),
-          TienCoc: tienCoc,
-          TrangThaiThanhToan: trangThaiThanhToan === 3 ? 2 : trangThaiThanhToan, // 3 -> 2 (đã TT)
+          TienCoc: Math.round(tienCoc), // Ensure it's the deposit amount (500k or 0)
+          TrangThaiThanhToan: trangThaiThanhToan,
           PhuongThucThanhToan: phuongThucThanhToan,
           GhiChu: `Mobile - ${selectedMethod}${
             paymentRef ? ` | Mã GD: ${paymentRef}` : ""
           }`,
           PaymentGateway:
             selectedMethod === "bank-transfer" ? "VietQR" : selectedMethod,
-          Services:
-            invoiceInfo.selectedServices?.map((svc: any) => ({
-              IddichVu: svc.serviceId,
-              SoLuong: svc.quantity || 1,
-              DonGia: svc.price,
-              TienDichVu: svc.price * (svc.quantity || 1),
-            })) || [],
+          Services: services,
+          // Send points to backend using the correct field name (RedeemPoints)
+          RedeemPoints: invoiceInfo.pointsUsed || 0,
         };
+
+        console.log("Invoice Payload being sent:", {
+          TongTien: invoicePayload.TongTien,
+          TienCoc: invoicePayload.TienCoc,
+          TrangThaiThanhToan: invoicePayload.TrangThaiThanhToan,
+          RedeemPoints: invoicePayload.RedeemPoints,
+          selectedMethod,
+          depositOption,
+        });
 
         // Gọi API tạo hóa đơn để clear ThoiHan và cập nhật trạng thái
         const invoiceResponse = await fetch(
@@ -253,16 +320,11 @@ const PaymentScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <AppIcon name="arrow-left" size={24} color={COLORS.secondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Thanh toán</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <HeaderScreen
+        title="Thanh toán"
+        onClose={() => navigation.goBack()}
+        leftIcon={<AppIcon name="arrow-left" size={24} color={COLORS.secondary} />}
+      />
 
       <BookingProgress
         currentStage="payment"
@@ -293,36 +355,60 @@ const PaymentScreen: React.FC = () => {
             </View>
             <View style={styles.divider} />
             <View style={styles.invoiceRow}>
-              <Text style={styles.invoiceLabel}>Tổng tiền phòng</Text>
+              <Text style={styles.invoiceLabel}>Tiền phòng</Text>
               <Text style={styles.invoiceValue}>
-                {(
-                  invoiceInfo.totalPrice -
-                  (invoiceInfo.selectedServices?.reduce(
-                    (s: any, i: any) => s + i.price * i.quantity,
-                    0
-                  ) || 0)
-                ).toLocaleString()}
+                {invoiceInfo.rooms
+                  .reduce((sum: number, r: any) => {
+                    const price =
+                      r.room?.discountedPrice || r.room?.basePricePerNight || 0;
+                    return sum + price * invoiceInfo.nights;
+                  }, 0)
+                  .toLocaleString()}
                 đ
               </Text>
             </View>
-            {invoiceInfo.selectedServices &&
-              invoiceInfo.selectedServices.length > 0 && (
-                <View style={styles.invoiceRow}>
-                  <Text style={styles.invoiceLabel}>Dịch vụ thêm</Text>
-                  <Text style={styles.invoiceValue}>
-                    {invoiceInfo.selectedServices
-                      .reduce((s: any, i: any) => s + i.price * i.quantity, 0)
-                      .toLocaleString()}
-                    đ
-                  </Text>
-                </View>
-              )}
+            {((invoiceInfo.selectedCombo &&
+              invoiceInfo.selectedCombo.price > 0) ||
+              (invoiceInfo.selectedServices &&
+                invoiceInfo.selectedServices.length > 0)) && (
+              <View style={styles.invoiceRow}>
+                <Text style={styles.invoiceLabel}>Dịch vụ</Text>
+                <Text style={styles.invoiceValue}>
+                  {(() => {
+                    const comboPrice = invoiceInfo.selectedCombo?.price || 0;
+                    const servicesPrice = invoiceInfo.selectedServices
+                      ? invoiceInfo.selectedServices.reduce(
+                          (s: any, i: any) => s + i.price * i.quantity,
+                          0
+                        )
+                      : 0;
+                    return (comboPrice + servicesPrice).toLocaleString();
+                  })()}
+                  đ
+                </Text>
+              </View>
+            )}
             <View style={styles.invoiceRow}>
               <Text style={styles.invoiceLabel}>Thuế VAT (10%)</Text>
               <Text style={styles.invoiceValue}>
                 {invoiceInfo.tax.toLocaleString()}đ
               </Text>
             </View>
+            {invoiceInfo.pointsDiscount && invoiceInfo.pointsDiscount > 0 && (
+              <View style={styles.invoiceRow}>
+                <Text style={[styles.invoiceLabel, { color: "#16A34A" }]}>
+                  Giảm điểm ({invoiceInfo.pointsUsed} điểm)
+                </Text>
+                <Text
+                  style={[
+                    styles.invoiceValue,
+                    { color: "#16A34A", fontWeight: "700" },
+                  ]}
+                >
+                  -{invoiceInfo.pointsDiscount.toLocaleString()}đ
+                </Text>
+              </View>
+            )}
             <View style={styles.divider} />
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Tổng thanh toán</Text>
@@ -506,7 +592,14 @@ const PaymentScreen: React.FC = () => {
         )}
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[
+        styles.bottomBar,
+        {
+          bottom: Platform.OS === 'ios' 
+            ? insets.bottom + 0
+            : 0,
+        },
+      ]}>
         <View style={styles.totalContainer}>
           <Text style={styles.bottomTotalLabel}>
             {selectedMethod === "bank-transfer" && depositOption === "deposit"
@@ -805,7 +898,6 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: COLORS.white,
     padding: 20,
-    paddingBottom: 100,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...SHADOWS.dark,

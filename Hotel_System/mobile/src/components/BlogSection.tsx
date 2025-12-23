@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  ImageBackground,
+  Image,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
-  Dimensions,
+  Linking,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES, FONTS } from "../constants/theme";
@@ -17,9 +17,9 @@ type BlogData = BlogPost;
 const getCategoryColor = (category?: string): string => {
   const colors: { [key: string]: string } = {
     "Travel Trip": COLORS.primary,
-    "Camping": COLORS.secondary,
-    "Event": COLORS.warning,
-    "Blog": COLORS.primary,
+    Camping: COLORS.secondary,
+    Event: COLORS.warning,
+    Blog: COLORS.primary,
     "Khách sạn Sang Trọng": COLORS.primary,
     "CẢNH BÁO KHẨN CẤP": COLORS.error,
     "Ẩm thực": COLORS.secondary,
@@ -53,50 +53,58 @@ const BlogSection: React.FC = () => {
 
   const handleBlogPress = (blog: BlogData) => {
     if (blog.type === "external" && blog.externalLink) {
-      alert("External link: " + blog.externalLink);
+      Linking.openURL(blog.externalLink).catch((err) => {
+        console.error("Failed to open URL:", err);
+        Alert.alert("Lỗi", "Không thể mở liên kết này");
+      });
     } else {
       navigation.navigate("BlogDetail", { blogId: blog.id });
     }
   };
 
   const renderBlog = ({ item, index }: { item: BlogData; index: number }) => {
-    const isLarge = index === 0 || index === 1;
-    const height = isLarge ? 300 : 200;
-    console.log(`🎨 Rendering blog ${index}: ${item.title}, image: ${item.image}`);
+    console.log(
+      `🎨 Rendering blog ${index}: ${item.title}, image: ${item.image}`
+    );
 
     return (
       <TouchableOpacity
-        activeOpacity={0.8}
-        style={[styles.blogContainer, { height }]}
+        activeOpacity={0.9}
+        style={styles.blogCard}
         onPress={() => handleBlogPress(item)}
       >
-        <ImageBackground
-          source={{ uri: item.image }}
-          style={styles.blogItem}
-          imageStyle={styles.blogImage}
-        >
-          <View style={styles.blogOverlay}>
-            <View style={styles.blogText}>
-              <View
-                style={[
-                  styles.tag,
-                  { backgroundColor: getCategoryColor(item.category) },
-                ]}
-              >
-                <Text style={styles.tagText}>{item.category}</Text>
-              </View>
-              <Text style={styles.blogTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <View style={styles.blogTime}>
-                <Text style={styles.timeIcon}>🕐</Text>
-                <Text style={styles.timeText} numberOfLines={1}>
-                  {item.date}
-                </Text>
-              </View>
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: item.image }}
+            style={styles.blogImage}
+            resizeMode="cover"
+          />
+          <View style={styles.imageDarkOverlay} />
+          <View
+            style={[
+              styles.categoryBadge,
+              { backgroundColor: getCategoryColor(item.category) },
+            ]}
+          >
+            <Text style={styles.categoryText}>{item.category}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.contentContainer}>
+          <Text style={styles.blogTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <View style={styles.blogFooter}>
+            <View style={styles.dateContainer}>
+              <Text style={styles.dateIcon}>📅</Text>
+              <Text style={styles.dateText}>{item.date}</Text>
+            </View>
+            <View style={styles.readMoreContainer}>
+              <Text style={styles.readMoreText}>Xem thêm</Text>
+              <Text style={styles.arrowIcon}>→</Text>
             </View>
           </View>
-        </ImageBackground>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -108,7 +116,11 @@ const BlogSection: React.FC = () => {
           <Text style={styles.span}>Hotel News</Text>
           <Text style={styles.h2}>Our Blog & Event</Text>
         </View>
-        <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
+        <ActivityIndicator
+          size="large"
+          color={COLORS.primary}
+          style={{ marginTop: 40 }}
+        />
       </View>
     );
   }
@@ -123,7 +135,9 @@ const BlogSection: React.FC = () => {
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📰</Text>
           <Text style={styles.emptyText}>Không có bài viết nào</Text>
-          <Text style={styles.emptySubtext}>Vui lòng kiểm tra kết nối mạng và thử lại</Text>
+          <Text style={styles.emptySubtext}>
+            Vui lòng kiểm tra kết nối mạng và thử lại
+          </Text>
         </View>
       </View>
     );
@@ -136,105 +150,148 @@ const BlogSection: React.FC = () => {
         <Text style={styles.h2}>Our Blog & Event</Text>
       </View>
 
-      <FlatList
-        data={blogsData}
-        renderItem={renderBlog}
-        keyExtractor={(item) => item.id.toString()}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContainer}
-        scrollEnabled={true}
-      />
+      <View style={styles.listContainer}>
+        {blogsData.map((item, index) => (
+          <View key={item.id.toString()}>{renderBlog({ item, index })}</View>
+        ))}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   section: {
-    paddingVertical: SIZES.padding * 3,
+    paddingVertical: SIZES.padding * 2.5,
     paddingHorizontal: SIZES.padding,
-    backgroundColor: COLORS.white,
+    backgroundColor: "#F8F9FA",
   },
   sectionTitle: {
-    marginBottom: SIZES.margin * 2,
+    marginBottom: SIZES.margin * 2.5,
     alignItems: "center",
   },
   span: {
     ...FONTS.body5,
     color: COLORS.primary,
-    fontWeight: "700",
+    fontWeight: "600",
     textTransform: "uppercase",
-    letterSpacing: 2,
-    marginBottom: 8,
+    letterSpacing: 1.5,
+    marginBottom: 6,
   },
   h2: {
     ...FONTS.h2,
     color: COLORS.secondary,
-    marginTop: 8,
+    fontWeight: "700",
+    marginTop: 4,
     textAlign: "center",
   },
   listContainer: {
     paddingBottom: SIZES.padding,
   },
-  blogContainer: {
-    marginBottom: SIZES.margin * 1.5,
-    borderRadius: SIZES.radiusLarge,
+  blogCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    marginBottom: SIZES.margin * 2,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  blogItem: {
+  imageContainer: {
     width: "100%",
-    borderRadius: SIZES.radiusLarge,
+    height: 220,
+    position: "relative",
     overflow: "hidden",
-    flex: 1,
+    backgroundColor: "#E8E8E8",
   },
   blogImage: {
-    borderRadius: SIZES.radiusLarge,
+    width: "100%",
+    height: "100%",
   },
-  blogOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.2)",
-    justifyContent: "flex-end",
+  imageDarkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.15)",
   },
-  blogText: {
-    backgroundColor: "rgba(255,255,255,0.95)",
-    padding: SIZES.padding * 1.5,
-    borderBottomLeftRadius: SIZES.radiusLarge,
-    borderBottomRightRadius: SIZES.radiusLarge,
+  categoryBadge: {
+    position: "absolute",
+    top: 16,
+    left: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  tag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: SIZES.radius,
-    alignSelf: "flex-start",
-    marginBottom: SIZES.margin,
-  },
-  tagText: {
+  categoryText: {
     color: COLORS.white,
     ...FONTS.body5,
     fontWeight: "700",
+    fontSize: 11,
     textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  contentContainer: {
+    padding: SIZES.padding * 1.5,
   },
   blogTitle: {
     ...FONTS.h4,
     color: COLORS.secondary,
-    marginBottom: SIZES.margin,
+    fontWeight: "700",
+    lineHeight: 26,
+    marginBottom: SIZES.margin * 1.2,
   },
-  blogTime: {
+  blogFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dateContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  dateIcon: {
+    fontSize: 15,
+    marginRight: 6,
+  },
+  dateText: {
+    ...FONTS.body4,
+    color: COLORS.gray,
+    fontSize: 13,
+  },
+  readMoreContainer: {
     flexDirection: "row",
     alignItems: "center",
   },
-  timeIcon: {
-    fontSize: 14,
-    marginRight: 6,
-  },
-  timeText: {
+  readMoreText: {
     ...FONTS.body4,
-    color: COLORS.gray,
-    flex: 1,
+    color: COLORS.primary,
+    fontWeight: "600",
+    fontSize: 13,
+    marginRight: 4,
+  },
+  arrowIcon: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontWeight: "700",
   },
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: SIZES.padding * 4,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    marginHorizontal: SIZES.margin,
   },
   emptyIcon: {
     fontSize: 60,
