@@ -792,8 +792,8 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                         headerRow.RelativeItem().Column(col =>
                         {
                             col.Item().Text("Khách sạn Robins Villa").FontSize(20).SemiBold();
-                            col.Item().Text("Địa chỉ: 4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng, Việt Nam").FontSize(10);
-                            col.Item().Text("Hotline: (+84) 263 3888 999").FontSize(10);
+                            col.Item().Text("Địa chỉ: 4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng").FontSize(10);
+                            col.Item().Text("Hotline: 0123 456 789").FontSize(10);
                         });
 
                         headerRow.ConstantItem(220).Column(col =>

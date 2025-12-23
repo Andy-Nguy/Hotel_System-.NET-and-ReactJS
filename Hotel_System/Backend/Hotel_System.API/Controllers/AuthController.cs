@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Hotel_System.API.Models;
+using Microsoft.AspNetCore.Hosting;
+using System.IO;
 
 namespace Hotel_System.API.Controllers
 {
@@ -17,12 +19,14 @@ namespace Hotel_System.API.Controllers
         private readonly IAuthService _auth;
         private readonly ILogger<AuthController> _logger;
             private readonly HotelSystemContext _context;
+        private readonly IWebHostEnvironment _env;
 
-            public AuthController(IAuthService auth, ILogger<AuthController> logger, HotelSystemContext context)
+        public AuthController(IAuthService auth, ILogger<AuthController> logger, HotelSystemContext context, IWebHostEnvironment env)
         {
             _auth = auth;
             _logger = logger;
                 _context = context;
+            _env = env;
         }
 
         [HttpPost("register")]
@@ -53,6 +57,8 @@ namespace Hotel_System.API.Controllers
         [HttpGet("profile")]
         public async Task<IActionResult> GetProfile()
         {
+            try
+        {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
                 return Unauthorized(new { error = "Invalid token" });
@@ -60,6 +66,12 @@ namespace Hotel_System.API.Controllers
             var (success, error, profile) = await _auth.GetUserProfileAsync(userId);
             if (!success) return BadRequest(new { error });
             return Ok(profile);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting profile");
+                return StatusCode(500, new { error = "Internal server error", message = ex.Message });
+            }
         }
 
         // [Authorize]
@@ -148,6 +160,96 @@ namespace Hotel_System.API.Controllers
             var (success, error) = await _auth.ResetPasswordAsync(req);
             if (!success) return BadRequest(new { error });
             return Ok(new { message = "Password reset successfully" });
+        }
+
+        [HttpPut("profile")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                return Unauthorized(new { error = "Invalid token" });
+
+            var (success, error, profile) = await _auth.UpdateProfileAsync(userId, request);
+            if (!success) return BadRequest(new { error });
+            return Ok(profile);
+        }
+
+        [HttpPost("upload-avatar")]
+        [Authorize]
+        [DisableRequestSizeLimit]
+        public async Task<IActionResult> UploadAvatar(IFormFile file)
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                    return Unauthorized(new { error = "Invalid token" });
+
+                if (file == null || file.Length == 0)
+                    return BadRequest(new { error = "Không có file được upload" });
+
+                // Validate file type
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+                var fileExtension = Path.GetExtension(file.FileName).ToLower();
+                if (!allowedExtensions.Contains(fileExtension))
+                    return BadRequest(new { error = "Chỉ chấp nhận file ảnh JPG, PNG, WebP" });
+
+                // Validate file size (max 5MB)
+                if (file.Length > 5 * 1024 * 1024)
+                    return BadRequest(new { error = "Kích thước file không được vượt quá 5MB" });
+
+                // Tạo thư mục nếu chưa có
+                var avatarPath = Path.Combine(_env.ContentRootPath, "wwwroot", "img", "avatars");
+                if (!Directory.Exists(avatarPath))
+                    Directory.CreateDirectory(avatarPath);
+
+                // Xóa avatar cũ nếu có
+                var user = await _context.KhachHangs.FindAsync(userId);
+                if (user != null && !string.IsNullOrEmpty(user.Avatar))
+                {
+                    var oldFilePath = Path.Combine(_env.ContentRootPath, "wwwroot", user.Avatar.TrimStart('/'));
+                    if (System.IO.File.Exists(oldFilePath))
+                    {
+                        try
+                        {
+                            System.IO.File.Delete(oldFilePath);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Không thể xóa avatar cũ: {Path}", oldFilePath);
+                        }
+                    }
+                }
+
+                // Tạo tên file unique
+                var fileName = $"avatar_{userId}_{Guid.NewGuid()}{fileExtension}";
+                var filePath = Path.Combine(avatarPath, fileName);
+
+                // Lưu file
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                var relativePath = $"/img/avatars/{fileName}";
+
+                // Cập nhật avatar trong database
+                if (user != null)
+                {
+                    user.Avatar = relativePath;
+                    await _context.SaveChangesAsync();
+                }
+
+                _logger.LogInformation("Upload avatar thành công cho user {UserId}: {Path}", userId, relativePath);
+
+                return Ok(new { avatar = relativePath });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi upload avatar");
+                return StatusCode(500, new { error = "Có lỗi xảy ra khi upload avatar" });
+            }
         }
 
     // login-OTP endpoints removed to keep a simpler register + password login flow

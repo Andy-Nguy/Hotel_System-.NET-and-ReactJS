@@ -108,13 +108,15 @@ namespace Hotel_System.API.Services
             return Task.FromResult<(bool, string?, string?)>((true, null, token));
         }
 
-        public Task<(bool success, string? error, UserProfileResponse? profile)> GetUserProfileAsync(int userId)
+        public async Task<(bool success, string? error, UserProfileResponse? profile)> GetUserProfileAsync(int userId)
         {
-            var kh = _db.KhachHangs.FirstOrDefault(k => k.IdkhachHang == userId);
-            if (kh == null) return Task.FromResult<(bool, string?, UserProfileResponse?)>((false, "User not found", null));
+            try
+        {
+                var kh = await _db.KhachHangs.FirstOrDefaultAsync(k => k.IdkhachHang == userId);
+                if (kh == null) return (false, "User not found", null);
 
             // Get account to retrieve VaiTro
-            var acc = _db.TaiKhoanNguoiDungs.FirstOrDefault(a => a.IdkhachHang == userId);
+                var acc = await _db.TaiKhoanNguoiDungs.FirstOrDefaultAsync(a => a.IdkhachHang == userId);
 
             var profile = new UserProfileResponse
             {
@@ -125,10 +127,73 @@ namespace Hotel_System.API.Services
                 Email = kh.Email,
                 NgayDangKy = kh.NgayDangKy,
                 TichDiem = kh.TichDiem,
-                VaiTro = acc?.VaiTro  // Include role: 0 = khachhang, 1 = nhanvien
+                    VaiTro = acc?.VaiTro,  // Include role: 0 = khachhang, 1 = nhanvien
+                    Avatar = kh.Avatar ?? null  // Safe access in case column doesn't exist yet
             };
 
-            return Task.FromResult<(bool, string?, UserProfileResponse?)>((true, null, profile));
+                return (true, null, profile);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in GetUserProfileAsync for userId: {UserId}", userId);
+                return (false, $"Error retrieving profile: {ex.Message}", null);
+            }
+        }
+
+        public async Task<(bool success, string? error, UserProfileResponse? profile)> UpdateProfileAsync(int userId, UpdateProfileRequest request)
+        {
+            try
+            {
+                var kh = await _db.KhachHangs.FirstOrDefaultAsync(k => k.IdkhachHang == userId);
+                if (kh == null) return (false, "Không tìm thấy người dùng", null);
+
+                // Kiểm tra email trùng nếu có thay đổi
+                if (!string.IsNullOrWhiteSpace(request.Email) && request.Email != kh.Email)
+                {
+                    var existingEmail = await _db.KhachHangs
+                        .FirstOrDefaultAsync(k => k.Email == request.Email && k.IdkhachHang != userId);
+                    if (existingEmail != null)
+                    {
+                        return (false, "Email đã được sử dụng bởi tài khoản khác", null);
+                    }
+                    kh.Email = request.Email;
+                }
+
+                // Cập nhật các trường khác nếu có
+                if (!string.IsNullOrWhiteSpace(request.HoTen))
+                    kh.HoTen = request.HoTen;
+
+                if (request.SoDienThoai != null)
+                    kh.SoDienThoai = request.SoDienThoai;
+
+                if (request.Avatar != null)
+                    kh.Avatar = request.Avatar;
+
+                await _db.SaveChangesAsync();
+
+                // Lấy lại thông tin đầy đủ để trả về
+                var acc = await _db.TaiKhoanNguoiDungs.FirstOrDefaultAsync(a => a.IdkhachHang == userId);
+                var updatedProfile = new UserProfileResponse
+                {
+                    IdkhachHang = kh.IdkhachHang,
+                    HoTen = kh.HoTen,
+                    NgaySinh = kh.NgaySinh,
+                    SoDienThoai = kh.SoDienThoai,
+                    Email = kh.Email,
+                    NgayDangKy = kh.NgayDangKy,
+                    TichDiem = kh.TichDiem,
+                    VaiTro = acc?.VaiTro,
+                    Avatar = kh.Avatar
+                };
+
+                _logger.LogInformation("Đã cập nhật thông tin người dùng ID: {UserId}", userId);
+                return (true, null, updatedProfile);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi cập nhật thông tin người dùng ID: {UserId}", userId);
+                return (false, "Có lỗi xảy ra khi cập nhật thông tin", null);
+            }
         }
 
         public async Task SendOtpEmailAsync(string email, string otp)

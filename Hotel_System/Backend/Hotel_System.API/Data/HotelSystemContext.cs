@@ -463,6 +463,9 @@ public partial class HotelSystemContext : DbContext
             entity.Property(e => e.NgayDangKy).HasDefaultValueSql("CURRENT_DATE").HasColumnType("date");
             entity.Property(e => e.SoDienThoai).HasMaxLength(20);
             entity.Property(e => e.TichDiem).HasDefaultValue(0);
+            entity.Property(e => e.Avatar)
+                .HasMaxLength(500)
+                .HasColumnName("Avatar"); // Explicit column name to preserve case
         });
 
         modelBuilder.Entity<KhuyenMai>(entity =>
@@ -753,13 +756,22 @@ public partial class HotelSystemContext : DbContext
                     entityType.SetTableName(tableName.ToLower());
                 }
 
-                // Lowercase column names
+                // Lowercase column names (except for explicitly preserved columns)
                 foreach (var property in entityType.GetProperties())
                 {
                     var columnName = property.GetColumnName();
                     if (!string.IsNullOrEmpty(columnName))
                     {
+                        // Preserve case for Avatar column (database uses "Avatar" with capital A)
+                        // Check by property name to ensure we catch it regardless of current column name
+                        if (property.Name.Equals("Avatar", StringComparison.OrdinalIgnoreCase))
+                        {
+                            property.SetColumnName("Avatar");
+                        }
+                        else
+                    {
                         property.SetColumnName(columnName.ToLower());
+                        }
                     }
                 }
             }

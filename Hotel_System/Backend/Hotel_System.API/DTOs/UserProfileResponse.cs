@@ -10,5 +10,6 @@ namespace Hotel_System.API.DTOs
         public DateOnly? NgayDangKy { get; set; }
         public int? TichDiem { get; set; }
         public byte? VaiTro { get; set; }  // 0 = khachhang, 1 = nhanvien
+        public string? Avatar { get; set; }
     }
 }

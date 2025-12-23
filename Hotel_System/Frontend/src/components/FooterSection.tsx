@@ -145,7 +145,7 @@ const FooterSection: React.FC = () => {
                   },
                   {
                     icon: "map-marker",
-                    text: "Hồ Tuyền Lâm, Đà Lạt",
+                    text: "4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng",
                     link: "#",
                   },
                 ].map((item, index) => (

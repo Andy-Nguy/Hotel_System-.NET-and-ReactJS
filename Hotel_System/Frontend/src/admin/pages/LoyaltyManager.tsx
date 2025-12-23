@@ -273,7 +273,7 @@ const LoyaltyManager: React.FC = () => {
       <Slidebar />
       <div style={{ marginLeft: 280 }}>
         <HeaderSection showStats={false} />
-        <main style={{ padding: "24px 36px" }}>
+        <main style={{ padding: "0px 60px" }}>
           <Tabs
             defaultActiveKey="customers"
             items={[
