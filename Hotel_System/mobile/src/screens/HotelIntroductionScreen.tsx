@@ -362,7 +362,7 @@ const HotelIntroductionScreen: React.FC = () => {
             </View>
             <View style={styles.infoRow}>
               <Ionicons name="call" size={24} color={COLORS.primary} />
-              <Text style={styles.infoText}>+84 123 456 789</Text>
+              <Text style={styles.infoText}>(+84) 263 3888 999</Text>
             </View>
             <View style={styles.infoRow}>
               <Ionicons name="mail" size={24} color={COLORS.primary} />

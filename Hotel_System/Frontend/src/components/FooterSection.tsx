@@ -135,7 +135,7 @@ const FooterSection: React.FC = () => {
                 {[
                   {
                     icon: "phone",
-                    text: "0123 456 789",
+                    text: "(+84) 263 3888 999",
                     link: "tel:0123456789",
                   },
                   {

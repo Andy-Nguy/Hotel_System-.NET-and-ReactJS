@@ -887,7 +887,7 @@ public async Task<IActionResult> GetInvoicePdf(string id)
                         });
                     });
 
-                    page.Footer().AlignCenter().Text(x => x.Span("Khách sạn Robins Villa - Hóa đơn tự động | Hotline: 0123 456 789"));
+                    page.Footer().AlignCenter().Text(x => x.Span("Khách sạn Robins Villa - Hóa đơn tự động | Hotline: (+84) 263 3888 999"));
                 });
             });
 
