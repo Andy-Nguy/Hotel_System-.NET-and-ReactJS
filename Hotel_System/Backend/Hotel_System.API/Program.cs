@@ -61,8 +61,6 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<RoomService>();
 // Room image service (manages multiple images per room)
 builder.Services.AddScoped<RoomImageService>();
-// Email service
-builder.Services.AddScoped<IEmailService, EmailService>();
 // Nhân viên service (quản lý nhân viên cho admin)
 builder.Services.AddScoped<INhanVienService, NhanVienService>();
 
@@ -120,6 +118,7 @@ builder.Services.AddCors(options =>
                 "http://localhost:3000",    // React dev server
                 "http://10.0.2.2:8080",    // Android emulator accessing host
                 "http://172.16.120.106:8080", // Physical device on same network
+                "http://172.19.176.1:8080", // Physical device on same network (alternative)
                 "http://localhost:19006",  // Expo dev server
                 "http://localhost:19000"   // Expo dev tools
             };

@@ -103,7 +103,7 @@ const BookingSection: React.FC = () => {
     try {
       await updateBooking(id, { trangThai: 2 });
       await loadBookings();
-      alert("Đã xác nhận và gửi mail (nếu cấu hình SMTP).");
+      alert("Đã xác nhận và gửi mail ");
     } catch (error) {
       console.error("Failed to confirm booking", error);
       alert("Lỗi khi xác nhận đặt phòng.");
@@ -114,7 +114,7 @@ const BookingSection: React.FC = () => {
     try {
       await updateBooking(id, { trangThai: 0 });
       await loadBookings();
-      alert("Đã huỷ đặt phòng và gửi mail (nếu cấu hình SMTP).");
+      alert("Đã huỷ đặt phòng và gửi mail ");
     } catch (error) {
       console.error("Failed to cancel booking", error);
       alert("Lỗi khi huỷ đặt phòng.");
