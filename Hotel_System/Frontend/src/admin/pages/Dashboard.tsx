@@ -245,7 +245,7 @@ const Dashboard: React.FC = () => {
             const statusMap: Record<string, string> = {
               empty: "Trống",
               booked: "Đã đặt",
-              "in-use": "Đang dùng",
+              "in-use": "Đang sử dụng",
               maintenance: "Sửa chữa",
             };
             return statusMap[s] || s;

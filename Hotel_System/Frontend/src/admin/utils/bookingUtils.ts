@@ -7,7 +7,7 @@ export const getStatusLabel = (status: number) => {
     case 2:
       return "Đã xác nhận";
     case 3:
-      return "Đang dùng";
+      return "Đang sử dụng";
     case 4:
       return "Hoàn thành";
     default:

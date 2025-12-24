@@ -3505,7 +3505,7 @@ Chúng tôi đã tiến hành hủy lưu trú cho đặt phòng của anh/chị.
 
 Các chi phí phát sinh (nếu có) sẽ được khấu trừ vào tiền cọc hoặc cập nhật vào công nợ của anh/chị theo chính sách của khách sạn.
 
-Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ hotline 1900-xxxx.
+Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ hotline (+84) 263 3888 999.
 
 Trân trọng,
 Robins Villa

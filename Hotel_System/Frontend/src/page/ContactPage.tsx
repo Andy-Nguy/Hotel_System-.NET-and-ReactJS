@@ -153,8 +153,7 @@ const ContactPage: React.FC = () => {
                 <div>
                   <h4 style={{ margin: "0 0 5px 0", fontSize: "18px", color: "#222", fontWeight: 600 }}>Địa chỉ</h4>
                   <p style={infoTextStyle}>
-                    123 Đường Hùng Vương, Phường 10, <br />
-                    Thành phố Đà Lạt, Lâm Đồng
+                    4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng
                   </p>
                 </div>
               </div>
@@ -163,9 +162,9 @@ const ContactPage: React.FC = () => {
                 <span style={infoIconStyle}>📞</span>
                 <div>
                   <h4 style={{ margin: "0 0 5px 0", fontSize: "18px", color: "#222", fontWeight: 600 }}>Điện thoại</h4>
-                  <p style={infoTextStyle}>
+                    <p style={infoTextStyle}>
                     Lễ tân: (+84) 263 3888 999 <br />
-                    Đặt phòng: (+84) 909 123 456
+                    Đặt phòng: (+84) 263 3888 999
                   </p>
                 </div>
               </div>

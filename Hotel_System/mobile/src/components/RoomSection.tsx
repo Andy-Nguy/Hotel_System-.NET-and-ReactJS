@@ -13,6 +13,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { getRoomImages } from "../utils/imageUtils";
 import reviewApi from "../api/reviewApi";
 import StarRating from "./StarRating";
+import AppIcon from "./AppIcon";
 import { COLORS, SIZES, SHADOWS } from "../constants/theme";
 import { Room } from "../api/roomsApi";
 
@@ -50,43 +51,42 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
 
   // use shared StarRating component (imports above)
 
-  // Simple in-memory cache to avoid refetching stats for the same room repeatedly
-  const statsCache = ((global as any).__roomStatsCache ||= new Map<
-    string,
-    any
-  >());
-  const [stats, setStats] = useState<any | null>(
-    () => statsCache.get(String(room.idphong)) ?? null
-  );
+  const [stats, setStats] = useState<any | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
 
+  // Load stats function - always fetch fresh data
+  const loadStats = async () => {
+    const key = String(room.idphong);
+    setLoadingStats(true);
+    try {
+      const s = await reviewApi.getRoomStats(key);
+      if (s) {
+        console.log(`[RoomSection] Stats loaded for roomId=${key}:`, s);
+        setStats(s);
+      }
+    } catch (err) {
+      console.debug("RoomSection: failed to load stats", err);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const key = String(room.idphong);
-      const cached = statsCache.get(key);
-      if (cached) {
-        setStats(cached);
-        return;
-      }
-      setLoadingStats(true);
-      try {
-        const s = await reviewApi.getRoomStats(key);
-        if (cancelled) return;
-        if (s) {
-          statsCache.set(key, s);
-          console.log(`[RoomSection] Stats loaded for roomId=${key}:`, s);
-          setStats(s);
+    loadStats();
+
+    // Listen for review updates to refresh stats in real-time
+    const subscription = DeviceEventEmitter.addListener(
+      'reviewSubmitted',
+      (data: { roomId: string }) => {
+        if (data.roomId === String(room.idphong)) {
+          console.log(`[RoomSection] Review submitted for room ${room.idphong}, refreshing stats`);
+          loadStats();
         }
-      } catch (err) {
-        console.debug("RoomSection: failed to load stats", err);
-      } finally {
-        if (!cancelled) setLoadingStats(false);
       }
-    };
-    load();
+    );
+
     return () => {
-      cancelled = true;
+      subscription.remove();
     };
   }, [room.idphong]);
 
@@ -110,10 +110,10 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
     <TouchableOpacity
       style={styles.roomCard}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.9}
     >
-      {/* Image Carousel */}
-      <View style={styles.carouselContainer}>
+      {/* Image Container */}
+      <View style={styles.imageContainer}>
         <ScrollView
           horizontal
           pagingEnabled
@@ -131,100 +131,110 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
               />
             ))
           ) : (
-            <View
-              style={[
-                styles.carouselImage,
-                { justifyContent: "center", alignItems: "center" },
-              ]}
-            >
-              <Text>Không có ảnh</Text>
+            <View style={styles.imagePlaceholder}>
+              <AppIcon name="image" size={40} color={COLORS.gray} />
             </View>
           )}
         </ScrollView>
 
         {/* Image Indicators */}
-        <View style={styles.indicatorContainer}>
-          {images.map((_, idx) => (
-            <View
-              key={idx}
-              style={[
-                styles.indicator,
-                activeImageIndex === idx && styles.indicatorActive,
-              ]}
-            />
-          ))}
-        </View>
-
-        {/* Promotion Badge */}
-        {room.promotions && room.promotions.length > 0 && (
-          <View style={styles.promotionBadge}>
-            <Text style={styles.promotionBadgeText}>{promoLabel}</Text>
+        {images.length > 1 && (
+          <View style={styles.indicatorContainer}>
+            {images.map((_, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.indicator,
+                  activeImageIndex === idx && styles.indicatorActive,
+                ]}
+              />
+            ))}
           </View>
         )}
+
+        {/* Promotion Badge */}
+        {hasPromotion && promotion && (
+          <View style={styles.badgeContainer}>
+            <View style={styles.promoBadge}>
+              <AppIcon name="tag" size={12} color={COLORS.white} />
+              <Text style={styles.promoText}>{promoLabel}</Text>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.imageOverlay} />
       </View>
 
       {/* Room Info */}
       <View style={styles.roomInfo}>
-        <Text style={styles.roomTitle} numberOfLines={2}>
-          {room.tenPhong}
-        </Text>
-
-        <View style={styles.ratingRow}>
+        <View style={styles.headerRow}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.roomTitle} numberOfLines={1}>
+              {room.tenPhong}
+            </Text>
+            <Text style={styles.roomNumber}>Phòng {room.soPhong}</Text>
+          </View>
+          
           {(() => {
             const avg =
               stats && typeof stats.averageRating === "number"
                 ? stats.averageRating
                 : room.xepHangSao ?? 0;
-            return (
-              <>
-                <StarRating avg={avg} size={14} />
-                <Text style={styles.ratingCount}>
-                  {stats?.totalReviews != null
-                    ? `${avg.toFixed(1)}/5 · ${stats.totalReviews} đánh giá`
-                    : room.xepHangSao != null
-                    ? `${room.xepHangSao.toFixed(1)}/5`
-                    : "(chưa có đánh giá)"}
-                </Text>
-              </>
-            );
+            if (avg > 0) {
+              return (
+                <View style={styles.ratingContainer}>
+                  <AppIcon name="star" size={14} color="#FFD700" />
+                  <Text style={styles.ratingText}>{avg.toFixed(1)}</Text>
+                </View>
+              );
+            }
+            return null;
           })()}
         </View>
 
-        <Text style={styles.roomDescription} numberOfLines={2}>
-          {room.moTa || "Phòng tiêu chuẩn với đầy đủ tiện ích"}
-        </Text>
+        {room.moTa && (
+          <Text style={styles.roomDescription} numberOfLines={2}>
+            {room.moTa}
+          </Text>
+        )}
 
-        {/* Price & CTA */}
-        <View style={styles.priceRow}>
-          <View
-            style={
-              hasPromotion ? styles.priceInfoPromoContainer : styles.priceInfo
-            }
-          >
-            <Text style={styles.priceLabel}>Từ</Text>
+        <View style={styles.divider} />
 
+        {/* Price Section */}
+        <View style={styles.footer}>
+          <View style={styles.priceWrapper}>
             {hasPromotion ? (
-              <View style={styles.promoStack}>
-                <Text style={styles.originalPrice}>
-                  {basePrice.toLocaleString()} VND
-                </Text>
-                <View style={styles.promoRow}>
-                  <Text style={styles.promoPrice}>
-                    {displayPrice.toLocaleString()} VND
+              <View style={styles.priceContainer}>
+                <View style={styles.discountTag}>
+                  <Text style={styles.discountText}>
+                    -
+                    {Math.round(
+                      (1 - displayPrice / (basePrice || 1)) * 100
+                    )}
+                    %
                   </Text>
-                  <Text style={styles.priceUnit}>/ đêm</Text>
+                </View>
+                <View>
+                  <Text style={styles.originalPrice}>
+                    {basePrice.toLocaleString()}đ
+                  </Text>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.finalPrice}>
+                      {displayPrice.toLocaleString()}đ
+                    </Text>
+                    <Text style={styles.perNight}>/đêm</Text>
+                  </View>
                 </View>
               </View>
             ) : (
-              <View style={styles.priceInfoRow}>
-                <Text style={styles.price}>
-                  {displayPrice.toLocaleString()} VND
+              <View style={styles.priceRow}>
+                <Text style={styles.finalPrice}>
+                  {displayPrice.toLocaleString()}đ
                 </Text>
-                <Text style={styles.priceUnit}>/ đêm</Text>
+                <Text style={styles.perNight}>/đêm</Text>
               </View>
             )}
           </View>
-          
         </View>
       </View>
     </TouchableOpacity>
@@ -234,28 +244,51 @@ const RoomSection: React.FC<RoomSectionProps> = ({ room, onPress }) => {
 const styles = StyleSheet.create({
   roomCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    overflow: "hidden",
-    // increase spacing between room cards for more even layout
-    marginBottom: SIZES.padding * 1.5,
+    borderRadius: 20,
+    marginBottom: 20,
     ...SHADOWS.medium,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    overflow: "visible",
   },
-  carouselContainer: {
-    position: "relative",
+  imageContainer: {
+    height: 220,
     width: "100%",
-    height: 200,
-    backgroundColor: "#f0f0f0",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#F0F0F0",
   },
   carouselImage: {
     width: Dimensions.get("window").width - SIZES.padding * 2,
-    height: 200,
+    height: 220,
+  },
+  imagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#E0E0E0",
+  },
+  imageOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+    backgroundColor: "transparent",
   },
   indicatorContainer: {
     position: "absolute",
-    bottom: 10,
-    left: "50%",
-    transform: [{ translateX: -10 }],
+    bottom: 12,
+    left: 0,
+    right: 0,
     flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     gap: 6,
   },
   indicator: {
@@ -266,110 +299,122 @@ const styles = StyleSheet.create({
   },
   indicatorActive: {
     backgroundColor: "#ffffff",
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  promotionBadge: {
+  badgeContainer: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    backgroundColor: "#FF6B6B",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    top: 16,
+    left: 16,
+    flexDirection: "row",
+    gap: 8,
   },
-  promotionBadgeText: {
-    color: COLORS.white,
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  roomInfo: {
-    padding: SIZES.padding,
-  },
-  roomTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.secondary,
-    marginBottom: 8,
-  },
-  ratingRow: {
+  promoBadge: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
-    gap: 6,
+    backgroundColor: "#FF4757",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
   },
-  stars: {
-    fontSize: 14,
-  },
-  ratingCount: {
+  promoText: {
+    color: COLORS.white,
     fontSize: 12,
-    color: "#888",
+    fontWeight: "700",
+  },
+  roomInfo: {
+    padding: 20,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  titleContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  roomTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.secondary,
+    marginBottom: 4,
+  },
+  roomNumber: {
+    fontSize: 13,
+    color: COLORS.gray,
+    fontWeight: "500",
+  },
+  ratingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF9F2",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.secondary,
   },
   roomDescription: {
-    fontSize: 13,
-    color: "#666",
-    lineHeight: 18,
-    marginBottom: 12,
+    fontSize: 14,
+    color: COLORS.gray,
+    lineHeight: 20,
+    marginBottom: 16,
   },
-  priceRow: {
+  divider: {
+    height: 1,
+    backgroundColor: "#F1F3F5",
+    marginBottom: 16,
+  },
+  footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  priceLabel: {
-    fontSize: 11,
-    color: "#999",
-    marginRight: 6,
+  priceWrapper: {
+    flex: 1,
   },
-  price: {
-    fontSize: 18,
+  priceContainer: {
+    alignItems: "flex-start",
+  },
+  discountTag: {
+    backgroundColor: "#FFE3E3",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  discountText: {
+    color: "#FF4757",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  originalPrice: {
+    fontSize: 13,
+    color: COLORS.gray,
+    textDecorationLine: "line-through",
+    marginBottom: 2,
+  },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  finalPrice: {
+    fontSize: 20,
     fontWeight: "700",
     color: COLORS.primary,
   },
-  priceUnit: {
-    fontSize: 11,
-    color: "#999",
-  },
-  originalPrice: {
-    fontSize: 12,
-    color: "#999",
-    textDecorationLine: "line-through",
-    marginLeft: 0,
-    alignSelf: "flex-start",
-  },
-  priceInfo: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-  priceInfoRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-  priceInfoPromoContainer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  promoStack: {
-    flexDirection: "column",
-    marginLeft: 6,
-  },
-  promoRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-  promoPrice: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#E53935",
-  },
-  ctaButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  ctaButtonText: {
-    color: COLORS.white,
-    fontWeight: "700",
+  perNight: {
     fontSize: 13,
+    color: COLORS.gray,
+    marginLeft: 4,
   },
 });
 

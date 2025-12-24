@@ -18,14 +18,14 @@ namespace Hotel_System.API.Controllers
     {
         private readonly IAuthService _auth;
         private readonly ILogger<AuthController> _logger;
-        private readonly HotelSystemContext _context;
+            private readonly HotelSystemContext _context;
         private readonly IWebHostEnvironment _env;
 
         public AuthController(IAuthService auth, ILogger<AuthController> logger, HotelSystemContext context, IWebHostEnvironment env)
         {
             _auth = auth;
             _logger = logger;
-            _context = context;
+                _context = context;
             _env = env;
         }
 
@@ -58,14 +58,14 @@ namespace Hotel_System.API.Controllers
         public async Task<IActionResult> GetProfile()
         {
             try
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
-                    return Unauthorized(new { error = "Invalid token" });
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                return Unauthorized(new { error = "Invalid token" });
 
-                var (success, error, profile) = await _auth.GetUserProfileAsync(userId);
-                if (!success) return BadRequest(new { error });
-                return Ok(profile);
+            var (success, error, profile) = await _auth.GetUserProfileAsync(userId);
+            if (!success) return BadRequest(new { error });
+            return Ok(profile);
             }
             catch (Exception ex)
             {

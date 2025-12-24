@@ -606,8 +606,8 @@ const UnifiedInvoiceModal: React.FC<Props> = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 18 }}>Khách sạn Robins Villa</div>
-              <div style={{ color: '#6b7280' }}>Địa chỉ: Số 1, Đường ABC, Quận XYZ</div>
-              <div style={{ color: '#6b7280' }}>Hotline: 1900-xxxx</div>
+              <div style={{ color: '#6b7280' }}>4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng</div>
+              <div style={{ color: '#6b7280' }}>Hotline: (+84) 263 3888 999</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div><strong>Hóa đơn:</strong> {invoiceId}</div>

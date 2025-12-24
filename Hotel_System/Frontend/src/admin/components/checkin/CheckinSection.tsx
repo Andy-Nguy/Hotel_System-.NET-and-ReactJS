@@ -40,7 +40,7 @@
 //       // Call CheckInController to mark Booking as 'Đang sử dụng' (TrangThai = 3)
 //       await confirmCheckIn(id);
 //       await loadBookings();
-//       alert("Đã xác nhận và gửi mail (nếu cấu hình SMTP).");
+//       alert("Đã xác nhận và gửi mail ");
 //     } catch (error) {
 //       console.error("Failed to BookingBooking", error);
 //       // extract server message if axios-style error
@@ -63,7 +63,7 @@
 //       // Call CheckInController cancel endpoint so room status is freed on server
 //       await cancelCheckIn(id);
 //       await loadBookings();
-//       alert("Đã huỷ đặt phòng và gửi mail (nếu cấu hình SMTP).");
+//       alert("Đã huỷ đặt phòng và gửi mail ");
 //     } catch (error) {
 //       console.error("Failed to cancel Booking", error);
 //       alert("Lỗi khi huỷ đặt phòng.");

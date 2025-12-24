@@ -85,9 +85,103 @@ const getCurrentRoute = () => {
   return "#";
 };
 
-const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
+// Icon components
+const Icons = {
+  Users: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  ),
+  Dashboard: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M3 13h8V3H3v10zM3 21h8v-6H3v6zM13 21h8V11h-8v10zM13 3v6h8V3h-8z" fill={active ? "#3b82f6" : "#6b7280"}/>
+    </svg>
+  ),
+  Bed: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <path d="M2 4v16"/>
+      <path d="M2 8h18a2 2 0 0 1 2 2v10"/>
+      <path d="M2 17h20"/>
+      <path d="M6 8V4"/>
+      <circle cx="7" cy="6" r="1"/>
+    </svg>
+  ),
+  Star: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill={active ? "#3b82f6" : "#6b7280"}>
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    </svg>
+  ),
+  Service: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"/>
+    </svg>
+  ),
+  Calendar: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+  ),
+  Login: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+      <polyline points="10 17 15 12 10 7"/>
+      <line x1="15" y1="12" x2="3" y2="12"/>
+    </svg>
+  ),
+  Logout: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </svg>
+  ),
+  Invoice: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
+    </svg>
+  ),
+  Tag: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+      <line x1="7" y1="7" x2="7.01" y2="7"/>
+    </svg>
+  ),
+  Trophy: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+      <path d="M4 22h16"/>
+      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+      <path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/>
+    </svg>
+  ),
+  Document: ({ active }: { active: boolean }) => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? "#3b82f6" : "#6b7280"} strokeWidth="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <line x1="10" y1="9" x2="8" y2="9"/>
+    </svg>
+  ),
+};
+
+const NavItem: React.FC<{ routeFragment: string; label: string; icon?: keyof typeof Icons }> = ({
   routeFragment,
   label,
+  icon = "Dashboard",
 }) => {
   const [route, setRoute] = useState<string>(getCurrentRoute());
 
@@ -102,6 +196,7 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
   }, []);
 
   const active = route.includes(routeFragment);
+  const IconComponent = Icons[icon];
 
   const baseStyle: React.CSSProperties = {
     padding: "10px",
@@ -176,17 +271,24 @@ const NavItem: React.FC<{ routeFragment: string; label: string }> = ({
           justifyContent: "center",
         }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M3 13h8V3H3v10zM3 21h8v-6H3v6zM13 21h8V11h-8v10zM13 3v6h8V3h-8z"
-            fill={active ? "#3b82f6" : "#6b7280"}
-          />
-        </svg>
+        <IconComponent active={active} />
       </div>
       <div>{label}</div>
     </div>
   );
 };
+
+// Small helper component to render section titles inside the sidebar.
+const NavGroup: React.FC<{ title: string }> = ({ title }) => (
+  <div className="nav-group-title" style={{
+    padding: "8px 12px",
+    color: "#6b7280",
+    fontSize: 13,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  }}>{title}</div>
+);
 
 const Slidebar: React.FC = () => {
   const [userRole, setUserRole] = useState<number | null>(getUserRole());
@@ -291,9 +393,24 @@ const Slidebar: React.FC = () => {
     <aside className="slidebar-aside">
       <div
         className="slidebar-header"
-        style={{ position: "sticky", top: 0, zIndex: 30, background: "#fff", padding: "4px 0", display: "flex", justifyContent: "center" }}
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
+          background: "#fff",
+          padding: "4px 0",
+          display: "flex",
+          justifyContent: "center",
+        }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+          }}
+        >
           <div
             className="logo-container"
             style={{
@@ -307,7 +424,7 @@ const Slidebar: React.FC = () => {
               justifyContent: "center",
               overflow: "hidden",
               boxShadow: "none",
-              position: "relative"
+              position: "relative",
             }}
           >
             <img
@@ -322,7 +439,7 @@ const Slidebar: React.FC = () => {
                 width: "auto",
                 objectFit: "contain",
                 display: "block",
-                background: "#ffffff"
+                background: "#ffffff",
               }}
               onError={(e) => {
                 // fallback to letter M if logo not found
@@ -346,85 +463,100 @@ const Slidebar: React.FC = () => {
         role="navigation"
         aria-label="Admin navigation"
       >
-        {/* Chỉ hiển thị menu Quản lý nhân viên khi role = 2 (Admin) - ĐẶT LÊN ĐẦU */}
+        {/* ===== HỆ THỐNG ===== */}
         {isAdmin && (
-          <NavItem
-            key="nhanvien"
-            routeFragment="admin/nhanvien"
-            label="Quản lý Nhân viên"
-          />
+          <>
+            <NavGroup title="Hệ thống" />
+            <NavItem
+              key="nhanvien"
+              routeFragment="admin/nhanvien"
+              label="Quản lý Nhân viên"
+              icon="Users"
+            />
+          </>
         )}
 
-        {/* Dashboard link */}
+        {/* ===== TỔNG QUAN ===== */}
+        <NavGroup title="Tổng quan" />
         <NavItem
           key="dashboard"
           routeFragment="admin/dashboard"
           label="Dashboard"
+          icon="Dashboard"
         />
 
-        {/* Room manager link */}
+        {/* ===== VẬN HÀNH KHÁCH SẠN ===== */}
+        <NavGroup title="Vận hành khách sạn" />
         <NavItem
           key="rooms"
           routeFragment="admin/rooms"
           label="Quản lý phòng"
+          icon="Bed"
         />
-
-        {/* Amenities manager link */}
         <NavItem
           key="amenities"
           routeFragment="admin/amenities"
           label="Quản lý tiện nghi"
+          icon="Star"
         />
-
-        {/* Services manager link */}
         <NavItem
           key="services"
           routeFragment="admin/services"
           label="Quản lý dịch vụ"
+          icon="Service"
         />
 
-        {/* Promotions manager link */}
-        <NavItem
-          key="promotions"
-          routeFragment="admin/promotions"
-          label="Quản lý khuyến mãi"
-        />
-
-        {/* Bookings manager link */}
+        {/* ===== ĐẶT PHÒNG & LƯU TRÚ ===== */}
+        <NavGroup title="Đặt phòng & Lưu trú" />
         <NavItem
           key="bookings"
           routeFragment="admin/bookings"
           label="Quản lý đặt phòng"
-        />
-        <NavItem
-          key="invoices"
-          routeFragment="admin/invoices"
-          label="Quản lý hoá đơn"
-        />
-        <NavItem
-          key="checkout"
-          routeFragment="admin/checkout"
-          label="Quản lý Checkout"
+          icon="Calendar"
         />
         <NavItem
           key="checkin"
           routeFragment="admin/checkin"
           label="Quản lý Check-in"
+          icon="Login"
         />
-        {/* === THÊM: NavItem loyalty (giữ nguyên như bạn viết) === */}
+        <NavItem
+          key="checkout"
+          routeFragment="admin/checkout"
+          label="Quản lý Checkout"
+          icon="Logout"
+        />
+
+        {/* ===== TÀI CHÍNH & KHÁCH HÀNG ===== */}
+        <NavGroup title="Tài chính & Khách hàng" />
+        <NavItem
+          key="invoices"
+          routeFragment="admin/invoices"
+          label="Quản lý hoá đơn"
+          icon="Invoice"
+        />
+        <NavItem
+          key="promotions"
+          routeFragment="admin/promotions"
+          label="Quản lý khuyến mãi"
+          icon="Tag"
+        />
         <NavItem
           key="loyalty"
           routeFragment="admin/loyalty"
           label="Điểm tích lũy & Cấp bậc"
+          icon="Trophy"
         />
 
+        {/* ===== NỘI DUNG & PHẢN HỒI ===== */}
+        <NavGroup title="Nội dung & Phản hồi" />
         <NavItem
           key="review"
           routeFragment="admin/review"
           label="Quản lý đánh giá"
+          icon="Star"
         />
-
-        <NavItem key="blog" routeFragment="admin/blog" label="Quản lý Blog" />
+        <NavItem key="blog" routeFragment="admin/blog" label="Quản lý Blog" icon="Document" />
       </div>
 
       <div

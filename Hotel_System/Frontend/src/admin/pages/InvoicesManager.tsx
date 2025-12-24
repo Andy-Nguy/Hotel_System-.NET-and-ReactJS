@@ -87,11 +87,13 @@ const InvoicesManager: React.FC = () => {
   const [status, setStatus] = useState<number | undefined>(undefined);
   const [keyword, setKeyword] = useState("");
   const [roomTypes, setRoomTypes] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<{ value: string; label: string }[]>([]);
   const [selectedRoomType, setSelectedRoomType] = useState<string | undefined>(
     undefined
   );
   const [staff, setStaff] = useState<string | undefined>(undefined);
-  const [selectedCustomer, setSelectedCustomer] = useState<number | undefined>(
+  // store selected customer's email so server can filter by email
+  const [selectedCustomer, setSelectedCustomer] = useState<string | undefined>(
     undefined
   );
   const [summary, setSummary] = useState<{
@@ -111,7 +113,10 @@ const InvoicesManager: React.FC = () => {
       if (status != null) qs.set("status", String(status));
       if (selectedRoomType) qs.set("roomType", selectedRoomType);
       if (staff) qs.set("staff", staff);
-      if (selectedCustomer) qs.set("customer", String(selectedCustomer));
+      if (selectedCustomer) {
+        // send selected customer's email to backend so it filters by Email
+        qs.set("customer", selectedCustomer);
+      }
       const listRes = await fetchJson(
         `/api/Invoices/invoices?${qs.toString()}`
       );
@@ -141,6 +146,22 @@ const InvoicesManager: React.FC = () => {
       try {
         const types = await getRoomTypes();
         setRoomTypes(types || []);
+      } catch (e) {
+        // ignore
+      }
+
+      // load customers for customer filter
+      try {
+        const res = await fetchJson(`/api/KhachHang`);
+        const list = Array.isArray(res) ? res : res.data || [];
+        const opts = list
+          .map((c: any) => ({
+            // use Email as the option value and label so Select shows emails only
+            value: String(c.Email ?? c.email ?? ""),
+            label: String(c.Email ?? c.email ?? ""),
+          }))
+          .filter((o: any) => o.value);
+        setCustomers(opts);
       } catch (e) {
         // ignore
       }
@@ -398,20 +419,7 @@ const InvoicesManager: React.FC = () => {
             >
               Tải hóa đơn PDF
             </Button>
-            <Select
-              size="small"
-              value={r.trangThaiThanhToan}
-              style={{ width: 140 }}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(val, opt) => {
-                updateStatus(r, val as number);
-              }}
-              options={[
-                { value: 0, label: "Đã cọc" },
-                { value: 1, label: "Chưa thanh toán" },
-                { value: 2, label: "Đã thanh toán" },
-              ]}
-            />
+            {/* status-change control removed per user request */}
           </Space>
         </div>
       ),
@@ -454,10 +462,15 @@ const InvoicesManager: React.FC = () => {
                 />
                 <Select
                   allowClear
+                  showSearch
                   placeholder="Khách hàng"
                   style={{ width: 220 }}
                   value={selectedCustomer}
-                  onChange={(v) => setSelectedCustomer(v)}
+                  options={customers}
+                  filterOption={(input, option) =>
+                    (option?.value || "").toLowerCase().includes(input.toLowerCase())
+                  }
+                  onChange={(v) => setSelectedCustomer(v ? String(v) : undefined)}
                 />
                 <Select
                   allowClear

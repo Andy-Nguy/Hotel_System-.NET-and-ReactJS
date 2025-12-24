@@ -550,7 +550,7 @@ namespace Hotel_System.API.Controllers
                     .Replace("{{CheckOutDate}}", booking?.NgayTraPhong.ToString("dd/MM/yyyy") ?? "N/A")
                     .Replace("{{SenderName}}", request.SenderName ?? "Quản lý Chăm sóc Khách hàng")
                     .Replace("{{BookingLink}}", _configuration["Frontend:BaseUrl"] ?? "http://localhost:5173")
-                    .Replace("{{HotelPhone}}", _configuration["Hotel:Phone"] ?? "1900 xxxx")
+                    .Replace("{{HotelPhone}}", _configuration["Hotel:Phone"] ?? "(+84) 263 3888 999")
                     .Replace("{{HotelEmail}}", _configuration["Hotel:Email"] ?? "support@robinsvilla.com")
                     .Replace("{{HotelAddress}}", _configuration["Hotel:Address"] ?? "Robins Villa")
                     .Replace("{{CurrentYear}}", DateTime.Now.Year.ToString());
@@ -681,7 +681,7 @@ namespace Hotel_System.API.Controllers
                     .Replace("{{TotalAmount}}", booking.TongTien.ToString("N0"))
                     .Replace("{{ReviewLink}}", reviewLink)
                     .Replace("{{HotelAddress}}", _configuration["Hotel:Address"] ?? _configuration["Smtp:From"] ?? "Khách sạn")
-                    .Replace("{{HotelPhone}}", _configuration["Hotel:Phone"] ?? "1900 xxxx")
+                    .Replace("{{HotelPhone}}", _configuration["Hotel:Phone"] ?? "(+84) 263 3888 999")
                     .Replace("{{HotelEmail}}", _configuration["Hotel:Email"] ?? _configuration["Smtp:From"] ?? "")
                     .Replace("{{HotelName}}", _configuration["Hotel:Name"] ?? "Khách sạn");
 

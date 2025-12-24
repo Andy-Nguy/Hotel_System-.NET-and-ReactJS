@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   ImageBackground,
   Modal,
   Image,
+  Animated,
+  Easing,
+  RefreshControl,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -25,9 +28,60 @@ import { COLORS, SIZES, FONTS, SHADOWS } from "../constants/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { API_CONFIG } from "../config/apiConfig";
 
+// Skeleton Loading Component với text "Robins Villa"
+const SkeletonLoading: React.FC = () => {
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 2000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [shimmerAnim]);
+
+  const translateX = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-300, 300],
+  });
+
+  return (
+    <View style={skeletonStyles.container}>
+      <View style={skeletonStyles.textContainer}>
+        <Text style={skeletonStyles.text}>ROBIN'S VILLA</Text>
+        <Animated.View
+          style={[
+            skeletonStyles.shimmerContainer,
+            {
+              transform: [{ translateX }],
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={[
+              "transparent",
+              "rgba(255, 255, 255, 0.8)",
+              "rgba(255, 255, 255, 0.9)",
+              "rgba(255, 255, 255, 0.8)",
+              "transparent",
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={skeletonStyles.shimmer}
+          />
+        </Animated.View>
+      </View>
+    </View>
+  );
+};
+
 const ProfileScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [loyaltyModalVisible, setLoyaltyModalVisible] = useState(false);
@@ -36,22 +90,49 @@ const ProfileScreen: React.FC = () => {
   const isFocused = useIsFocused();
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (isFocused && isLoggedIn) loadProfile();
   }, [isFocused, isLoggedIn]);
 
-  const loadProfile = async () => {
-    setLoading(true);
+  const loadProfile = async (isRefresh = false) => {
+    if (!isRefresh) {
+      setLoading(true);
+    }
     try {
       const data = await authApi.getProfile();
       setProfile(data);
     } catch (e) {
       console.log("Load profile error");
     } finally {
-      setLoading(false);
+      if (!isRefresh) {
+        setLoading(false);
+      }
     }
   };
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    // Fade in overlay
+    Animated.timing(overlayOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    loadProfile(true)
+      .finally(() => {
+        // Fade out overlay
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          setRefreshing(false);
+        });
+      });
+  }, [overlayOpacity]);
 
   const getDisplayName = () =>
     profile?.name || profile?.hoTen || userInfo?.name || "Khách hàng";
@@ -97,7 +178,31 @@ const ProfileScreen: React.FC = () => {
       <ScrollView
         style={styles.scrollContent}
         contentContainerStyle={{ paddingBottom: tabBarHeight + 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={false}
+            onRefresh={onRefresh}
+            tintColor="transparent"
+            colors={["transparent"]}
+            progressBackgroundColor="transparent"
+            style={{ backgroundColor: "transparent", height: 0 }}
+          />
+        }
       >
+        {/* Skeleton Loading ở phía trên */}
+        {refreshing && (
+          <Animated.View
+            style={[
+              skeletonStyles.topContainer,
+              {
+                opacity: overlayOpacity,
+              },
+            ]}
+          >
+            <SkeletonLoading />
+          </Animated.View>
+        )}
+        
         {/* Header sang trọng */}
         <LinearGradient
           colors={[COLORS.secondary, COLORS.primary]}
@@ -118,9 +223,13 @@ const ProfileScreen: React.FC = () => {
                   {profile?.avatar || profile?.Avatar ? (
                     <Image
                       source={{
-                        uri: (profile?.avatar || profile?.Avatar)?.startsWith("http")
+                        uri: (profile?.avatar || profile?.Avatar)?.startsWith(
+                          "http"
+                        )
                           ? profile?.avatar || profile?.Avatar
-                          : `${API_CONFIG.CURRENT}${profile?.avatar || profile?.Avatar}`,
+                          : `${API_CONFIG.CURRENT}${
+                              profile?.avatar || profile?.Avatar
+                            }`,
                       }}
                       style={styles.avatarImage}
                     />
@@ -365,7 +474,7 @@ const ProfileScreen: React.FC = () => {
                 {
                   iconName: "call",
                   title: "Điện thoại",
-                  value: "+84 28 1234 5678",
+                  value: "(+84) 263 3888 999",
                   description: "Gọi trực tiếp để được hỗ trợ ngay lập tức",
                 },
                 {
@@ -390,13 +499,14 @@ const ProfileScreen: React.FC = () => {
                 {
                   iconName: "globe",
                   title: "Website",
-                  value: "www.robinsvilla.vn",
+                  value: "www.robinsvilla.site",
                   description: "Truy cập website để đặt phòng và xem thông tin",
                 },
                 {
                   iconName: "location",
                   title: "Địa chỉ",
-                  value: "123 Đường ABC, Quận 1, TP.HCM",
+                  value:
+                    "4 Đường Dã Tượng, Phường 6, Thành phố Đà Lạt, Lâm Đồng",
                   description:
                     "Địa chỉ khách sạn chính tại trung tâm thành phố",
                 },
@@ -997,6 +1107,48 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     flex: 1,
     lineHeight: 20,
+  },
+});
+
+// Skeleton Loading Styles
+const skeletonStyles = StyleSheet.create({
+  topContainer: {
+    paddingVertical: 20,
+    paddingHorizontal: SIZES.padding,
+    backgroundColor: COLORS.background,
+    justifyContent: "center",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  container: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  textContainer: {
+    position: "relative",
+    overflow: "hidden",
+    paddingHorizontal: 20,
+  },
+  text: {
+    ...FONTS.h2,
+    fontSize: 32,
+    fontWeight: "700" as const,
+    color: COLORS.secondary,
+    letterSpacing: 3,
+    textAlign: "center",
+  },
+  shimmerContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: 250,
+  },
+  shimmer: {
+    flex: 1,
+    width: "100%",
   },
 });
 

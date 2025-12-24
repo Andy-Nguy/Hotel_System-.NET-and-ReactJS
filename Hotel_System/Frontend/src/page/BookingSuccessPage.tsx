@@ -293,21 +293,39 @@ const BookingSuccessPage: React.FC = () => {
                   title="Danh sách phòng đã đặt"
                   style={{ marginTop: 24 }}
                 >
-                  {bookingData.rooms.map((item: any, index: number) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: "12px 0",
-                        borderBottom:
-                          index < bookingData.rooms!.length - 1
-                            ? "1px solid #f0f0f0"
-                            : "none",
-                      }}
-                    >
-                      <Text strong>Phòng {item.roomNumber || index + 1}: </Text>
-                      <Text>{item.room?.tenLoaiPhong || "Standard Room"}</Text>
-                    </div>
-                  ))}
+                  {bookingData.rooms.map((item: any, index: number) => {
+                    const rn = item.roomNumber || index + 1;
+                    const room = item.room || {};
+                    const rawName =
+                      room.TenPhong || room.tenPhong || room.tenLoaiPhong || room.TenLoaiPhong || room.name || room.roomType || null;
+                    let displayName = rawName || "Standard Room";
+                    // append room number if not already present and name has no digits
+                    try {
+                      const numStr = String(rn);
+                      const hasDigits = /\d/.test(displayName);
+                      if (!hasDigits && !displayName.includes(numStr)) {
+                        displayName = `${displayName} ${numStr}`;
+                      }
+                    } catch (e) {
+                      /* ignore */
+                    }
+
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          padding: "12px 0",
+                          borderBottom:
+                            index < bookingData.rooms!.length - 1
+                              ? "1px solid #f0f0f0"
+                              : "none",
+                        }}
+                      >
+                        <Text strong>Phòng {rn}: </Text>
+                        <Text>{displayName}</Text>
+                      </div>
+                    );
+                  })}
                 </Card>
               )}
 
@@ -421,7 +439,7 @@ const BookingSuccessPage: React.FC = () => {
                       marginRight: 8,
                     }}
                   />
-                  Nếu có thắc mắc, vui lòng liên hệ: <strong>1900-xxxx</strong>
+                    Nếu có thắc mắc, vui lòng liên hệ: <strong>(+84) 263 3888 999</strong>
                 </Paragraph>
               </Card>
 
