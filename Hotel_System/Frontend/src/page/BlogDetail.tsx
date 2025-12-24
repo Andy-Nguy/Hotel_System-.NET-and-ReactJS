@@ -220,7 +220,7 @@ const BlogDetail: React.FC = () => {
         {/* Content Body */}
         <div style={{ color: '#333' }}>
           {post.content ? (
-            renderContent(post.content)
+            <div dangerouslySetInnerHTML={{ __html: post.content }} />
           ) : (
             <p className="italic text-gray-600">{post.excerpt || 'Nội dung đang được cập nhật. Hãy quay lại sau để xem bài viết chi tiết.'}</p>
           )}
